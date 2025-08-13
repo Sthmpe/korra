@@ -7,8 +7,19 @@ environment:
   sdk: ^3.8.1
 
 dependencies:
+  connectivity_plus: ^6.1.5
+  firebase_auth: ^6.0.1
+  firebase_core: ^4.0.0
   flutter:
     sdk: flutter
+  flutter_bloc: ^9.1.1
+  flutter_screenutil: ^5.9.3
+  flutter_secure_storage: ^9.2.4
+  get: ^4.7.2
+  google_fonts: ^6.3.0
+  iconsax: ^0.0.8
+  local_auth: ^2.3.0
+  material_design_icons_flutter: ^7.0.7296
 
 dev_dependencies:
   flutter_test:

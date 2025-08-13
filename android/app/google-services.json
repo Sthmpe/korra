@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "618221423421",
+    "project_id": "korra-9ab95",
+    "storage_bucket": "korra-9ab95.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:618221423421:android:d5f8f0ff64d406e2961354",
+        "android_client_info": {
+          "package_name": "com.example.korra"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkHDolChc2tgbBR6mL102FG4nSw0i7vy8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
