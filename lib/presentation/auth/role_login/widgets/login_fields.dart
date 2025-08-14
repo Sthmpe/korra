@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/presentation/auth/forgot_password/forgot_password_screen.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 // import '../../../../config/constants/sizes.dart';
@@ -122,7 +123,7 @@ class _LoginFieldsState extends State<LoginFields> {
           Row(
             children: [
               TextButton(
-                onPressed: () {},
+                onPressed: () => Get.to(() => const ForgotPasswordScreen()),
                 child: Text('Forgot password?',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13.5.sp)),
               ),
