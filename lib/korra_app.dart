@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import 'config/theme/app_theme.dart';
 
@@ -10,13 +11,13 @@ class KorraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-      designSize: const Size(390, 844),
+      designSize: const Size(430, 932),
       minTextAdapt: true,
       builder: (_, __) => GetMaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Korra',
         theme: AppTheme.light(),
-        home: const Placeholder(), // replace with your LoginScreen
+        home: const RoleLoginScreen(),
       ),
     );
   }
