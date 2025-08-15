@@ -18,6 +18,11 @@ class KorraApp extends StatelessWidget {
         title: 'Korra',
         theme: AppTheme.light(),
         home: const RoleLoginScreen(),
+        builder: (context, child) => GestureDetector(
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          behavior: HitTestBehavior.translucent, // allows taps to pass through
+          child: child,
+        ),
       ),
     );
   }

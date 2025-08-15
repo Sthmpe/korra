@@ -56,11 +56,18 @@ class _LinkInputState extends State<LinkInput> {
               onSubmitted: widget.onSubmit,
             ),
           ),
-          SizedBox(width: 8.w),
-          IconButton.filledTonal(
-            splashRadius: 22.r,
+          SizedBox(width: 4.w),
+          IconButton(
+            splashRadius: 30.r,
+            color: const Color(0xFFA54600).withOpacity(0.055),
             onPressed: widget.onScan,
-            icon: Icon(Icons.qr_code_scanner, size: 18.sp),
+            icon: Container(
+              padding: EdgeInsets.all(8.r),
+              decoration: BoxDecoration(
+                color: const Color(0xFFA54600).withOpacity(0.055),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Icon(Icons.qr_code_scanner, size: 24.sp, color: Color(0xFFA54600),)),
           ),
         ],
       ),

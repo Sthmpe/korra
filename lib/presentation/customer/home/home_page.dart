@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../data/models/activity_item.dart';
+// import '../../../data/models/activity_item.dart';
 import '../../../data/repository/home_repository.dart';
 import '../../../logic/bloc/customer_shell/home/home_bloc.dart';
 import '../../../logic/bloc/customer_shell/home/home_event.dart';
 import '../../../logic/bloc/customer_shell/home/home_state.dart';
 
+// import 'widgets/activity_list.dart';
+import 'widgets/activity_timeline.dart';
 import 'widgets/korra_header.dart';
 import 'widgets/plan_carousel_slider.dart';
 // import 'widgets/plan_media_shape.dart';
@@ -17,7 +19,6 @@ import 'widgets/section_header.dart';
 // import 'widgets/plan_carousel.dart';
 import 'widgets/link_input.dart';
 import 'widgets/vendor_chip.dart';
-import 'widgets/activity_bubble.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -46,141 +47,125 @@ class HomePage extends StatelessWidget {
 
           return RefreshIndicator(
             onRefresh: () async => bloc.add(HomeStarted()),
-            child: Scaffold(
-              appBar: KorraHeader(
-                title: 'Home',
-                onHistory: () {
-                  // Get.to(() => const HistoryPage());
-                },
-                onSupport: () {
-                  // Get.to(() => const SupportChatPage());
-                },
-                showHistoryDot: true, // set based on bloc later
-              ),
-              body: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Wallet summary
-                        WalletCard(
-                          balanceText: state.walletBalance,
-                          methodMasked: state.defaultMethodMasked,
-                          onTopUp: () {},
-                          onManageMethod: () {},
-                        ),
-
-                        // Plans
-                        SectionHeader(
-                          title: 'Your reserve plans',
-                          actionText: state.plans.isEmpty ? null : 'View all',
-                          topPadding: 0,
-                          onAction: () {},
-                        ),
-                        
-                        if (state.plans.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 8.h),
-                            child: Container(
-                              padding: EdgeInsets.all(16.r),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16.r),
-                                border: Border.all(
-                                  color: const Color(0xFFEAE6E2),
+            child: GestureDetector(
+               behavior: HitTestBehavior.translucent, // still lets inner widgets get taps
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Scaffold(
+                appBar: KorraHeader(
+                  title: 'Home',
+                  onHistory: () {
+                    // Get.to(() => const HistoryPage());
+                  },
+                  onSupport: () {
+                    // Get.to(() => const SupportChatPage());
+                  },
+                  showHistoryDot: true, // set based on bloc later
+                ),
+                body: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Wallet summary
+                          WalletCard(
+                            balanceText: state.walletBalance,
+                            methodMasked: state.defaultMethodMasked,
+                            onTopUp: () {},
+                            onManageMethod: () {},
+                          ),
+              
+                          // Plans
+                          SectionHeader(
+                            title: 'Your reserve plans',
+                            actionText: state.plans.isEmpty ? null : 'View all',
+                            topPadding: 0,
+                            onAction: () {},
+                          ),
+                          
+                          if (state.plans.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 8.h),
+                              child: Container(
+                                padding: EdgeInsets.all(16.r),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  border: Border.all(
+                                    color: const Color(0xFFEAE6E2),
+                                  ),
+                                ),
+                                child: Text(
+                                  'No active plans yet.\nPaste or scan a reserve link to start.',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF5E5E5E),
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                'No active plans yet.\nPaste or scan a reserve link to start.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  fontSize: 14.sp,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF5E5E5E),
-                                ),
-                              ),
+                            )
+                          else
+                            PlanCarouselSlider(plans: state.plans),
+              
+                          // New plan input
+                          SectionHeader(title: 'Start a new plan', topPadding: 12, actionText: '',),
+                          LinkInput(
+                            onSubmit: (v) => bloc.add(PasteLinkSubmitted(v)),
+                            onScan: () {}, // TODO
+                          ),
+              
+                          SizedBox(height: 16.h),
+              
+                          // Saved vendors
+                          SectionHeader(title: 'Your vendors', actionText: '',),
+                          SizedBox(
+                            height: 82.h,
+                            child: ListView.separated(
+                              padding: EdgeInsets.symmetric(horizontal: 16.w),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: state.vendors.length,
+                              separatorBuilder: (_, __) => SizedBox(width: 12.w),
+                              itemBuilder: (_, i) {
+                                final v = state.vendors[i];
+                                return VendorChip(
+                                  name: v.name,
+                                  avatarUrl: v.avatarUrl,
+                                  onOpen: () {},
+                                  onRemove: () {},
+                                  onWhatsapp: () {},
+                                  onInstagram: () {},
+                                  onWeb: () {},
+                                );
+                              },
                             ),
-                          )
-                        else
-                          PlanCarouselSlider(plans: state.plans),
-
-                        // New plan input
-                        SectionHeader(title: 'Start a new plan'),
-                        LinkInput(
-                          onSubmit: (v) => bloc.add(PasteLinkSubmitted(v)),
-                          onScan: () {}, // TODO
-                        ),
-
-                        SizedBox(height: 16.h),
-
-                        // Saved vendors
-                        SectionHeader(title: 'Your vendors'),
-                        SizedBox(
-                          height: 120.h,
-                          child: ListView.separated(
-                            padding: EdgeInsets.symmetric(horizontal: 16.w),
-                            scrollDirection: Axis.horizontal,
-                            itemCount: state.vendors.length,
-                            separatorBuilder: (_, __) => SizedBox(width: 12.w),
-                            itemBuilder: (_, i) {
-                              final v = state.vendors[i];
-                              return VendorChip(
-                                name: v.name,
-                                avatarUrl: v.avatarUrl,
-                                onOpen: () {},
-                                onRemove: () {},
-                                onWhatsapp: () {},
-                                onInstagram: () {},
-                                onWeb: () {},
-                              );
-                            },
                           ),
-                        ),
-
-                        // Activity (clean list-style bubbles)
-                        SectionHeader(title: 'Activity'),
-                        Padding(
-                          padding: EdgeInsets.only(bottom: 24.h),
-                          child: Column(
-                            children: state.activity.map((a) {
-                              return ActivityBubble(
-                                icon: _iconFor(a.type),
-                                title: a.title,
-                                subtitle: a.subtitle,
-                                actions: const [],
-                              );
-                            }).toList(),
+              
+                          // Activity (clean list-style bubbles)
+                          SectionHeader(title: 'Activity', actionText: ''),
+                          ActivityTimeline(
+                            items: state.activity,
+                            onPayNow: (a) {}, // Get.to(PayPage(...))
+                            onViewPlan: (a) {}, // Get.to(PlanDetails(...))
+                            onViewReceipt: (a) {}, // open receipt
+                            onReviewLink: (a) {}, // link review flow
+                            onEnableAutopay: (a) {}, // setup autopay
                           ),
-                        ),
-
-                        // Keep content above bottom bar
-                        SizedBox(height: kBottomNavigationBarHeight + 16.h),
-                      ],
+              
+                          // Keep content above bottom bar
+                          SizedBox(height: 8.h),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
     );
-  }
-
-  IconData _iconFor(ActivityType type) {
-    switch (type) {
-      case ActivityType.payment:
-        return Icons.check_circle_outline;
-      case ActivityType.dueSoon:
-        return Icons.warning_amber_outlined;
-      case ActivityType.link:
-        return Icons.link_outlined;
-      case ActivityType.autopay:
-        return Icons.autorenew;
-      case ActivityType.expired:
-        return Icons.timer_off_outlined;
-    }
   }
 }

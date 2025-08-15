@@ -1,6 +1,7 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 import '../../../../data/models/plan.dart'; // adjust if your path differs
 import 'plan_card_compact.dart';
 
@@ -15,7 +16,7 @@ class PlanCarouselSlider extends StatefulWidget {
 class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
   final CarouselSliderController _controller = CarouselSliderController();
 
-  static const double _viewport = 0.88;
+  static const double _viewport = 0.7;
   static const double _aspect = 4 / 3; // product-friendly
 
   @override
@@ -24,9 +25,9 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
 
     final screenW = MediaQuery.sizeOf(context).width;
     final itemW = screenW * _viewport;
-    final imageH = itemW / _aspect; // height = width / (w/h)
-    final metaH  = 120.h;           // title + summary + CTA (tuned)
-    final totalH = imageH + metaH + 24.h; // + internal paddings
+    final imageH = itemW / _aspect; // keeps 4:3 image
+    final metaH  = 136.h;           // was ~120.h; gives comfy room for new strip
+    final totalH = imageH + metaH + 24.h;
 
     return SizedBox(
       height: totalH,
@@ -35,9 +36,14 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
         options: CarouselOptions(
           viewportFraction: _viewport,
           height: totalH,
+          autoPlay: true,
+          pauseAutoPlayOnTouch: true,
+          autoPlayInterval: const Duration(seconds: 3),
+          autoPlayAnimationDuration: const Duration(milliseconds: 800),
+          autoPlayCurve: Curves.easeInOut,
           enableInfiniteScroll: widget.plans.length > 1,
           enlargeCenterPage: true,
-          enlargeFactor: 0.08,
+          enlargeFactor: 0.2,
           padEnds: false,
           scrollPhysics: const BouncingScrollPhysics(),
         ),
