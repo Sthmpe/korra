@@ -44,6 +44,7 @@ class LoginButton extends StatelessWidget {
               onTap: isLoading
                   ? null
                   : () {
+                      FocusScope.of(context).unfocus();
                       if (formKey.currentState?.validate() ?? false) {
                         context.read<RoleLoginBloc>().add(SubmitPressed());
                       }

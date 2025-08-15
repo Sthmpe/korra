@@ -30,3 +30,5 @@ class TogglePasswordVisibility extends RoleLoginEvent {}
 class SubmitPressed extends RoleLoginEvent {}
 
 class BiometricsPressed extends RoleLoginEvent {}
+
+class FailureAcknowledged extends RoleLoginEvent {}

@@ -15,7 +15,6 @@ import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
 import '../../signup_customer/signup_customer_screen.dart';
 import '../../signup_vendor/signup_vendor_screen.dart';
 
-
 class LoginFields extends StatefulWidget {
   final GlobalKey<FormState> formKey;
   const LoginFields({super.key, required this.formKey});
@@ -33,11 +32,13 @@ class _LoginFieldsState extends State<LoginFields> {
     super.initState();
     final s = context.read<RoleLoginBloc>().state;
     _emailCtl = TextEditingController(text: s.email);
-    _passCtl  = TextEditingController(text: s.password);
-    _emailCtl.addListener(() =>
-        context.read<RoleLoginBloc>().add(EmailChanged(_emailCtl.text)));
-    _passCtl.addListener(() =>
-        context.read<RoleLoginBloc>().add(PasswordChanged(_passCtl.text)));
+    _passCtl = TextEditingController(text: s.password);
+    _emailCtl.addListener(
+      () => context.read<RoleLoginBloc>().add(EmailChanged(_emailCtl.text)),
+    );
+    _passCtl.addListener(
+      () => context.read<RoleLoginBloc>().add(PasswordChanged(_passCtl.text)),
+    );
   }
 
   @override
@@ -61,13 +62,14 @@ class _LoginFieldsState extends State<LoginFields> {
   }
 
   void _goToCreateAccount(BuildContext context) {
+    FocusScope.of(context).unfocus();
     final role = context.read<RoleLoginBloc>().state.role;
     if (role == KorraRole.customer) {
       Get.to(() => const SignupCustomerScreen());
     } else {
       Get.to(() => const SignupVendorScreen());
     }
-}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +93,7 @@ class _LoginFieldsState extends State<LoginFields> {
             textInputAction: TextInputAction.next,
           ),
           SizedBox(height: 12.h),
-      
+
           BlocBuilder<RoleLoginBloc, RoleLoginState>(
             buildWhen: (p, c) => p.passwordHidden != c.passwordHidden,
             builder: (context, state) {
@@ -107,7 +109,9 @@ class _LoginFieldsState extends State<LoginFields> {
                   errorStyle: GoogleFonts.inter(fontSize: 12.sp),
                   suffixIcon: IconButton(
                     splashRadius: 20,
-                    onPressed: () => context.read<RoleLoginBloc>().add(TogglePasswordVisibility()),
+                    onPressed: () => context.read<RoleLoginBloc>().add(
+                      TogglePasswordVisibility(),
+                    ),
                     icon: Icon(
                       state.passwordHidden ? Iconsax.eye_slash : Iconsax.eye,
                       size: 18.sp,
@@ -115,23 +119,39 @@ class _LoginFieldsState extends State<LoginFields> {
                   ),
                 ),
                 validator: _validatePassword,
-                onFieldSubmitted: (_) => HapticFeedback.selectionClick(),
+                onFieldSubmitted: (_) {
+                  HapticFeedback.selectionClick();
+                  FocusScope.of(context).unfocus();
+                },
               );
             },
           ),
-            
+
           Row(
             children: [
               TextButton(
-                onPressed: () => Get.to(() => const ForgotPasswordScreen()),
-                child: Text('Forgot password?',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13.5.sp)),
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  Get.to(() => const ForgotPasswordScreen());
+                },
+                child: Text(
+                  'Forgot password?',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5.sp,
+                  ),
+                ),
               ),
               const Spacer(),
               TextButton(
                 onPressed: () => _goToCreateAccount(context),
-                child: Text('Create account',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13.5.sp)),
+                child: Text(
+                  'Create account',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5.sp,
+                  ),
+                ),
               ),
             ],
           ),

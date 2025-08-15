@@ -51,7 +51,10 @@ class ForgotPasswordScreen extends StatelessWidget {
               SizedBox(height: 12.h),
               Center(
                 child: TextButton(
-                  onPressed: () => Get.back(),
+                  onPressed: () {
+                    FocusScope.of(context).unfocus();
+                    Get.back();
+                  },
                   child: Text(
                     'Back to sign in',
                     style: GoogleFonts.inter(
@@ -149,7 +152,10 @@ class _PrimaryCTA extends StatelessWidget {
           width: double.infinity,
           child: FilledButton(
             onPressed: enabled
-                ? () => context.read<ForgotPasswordBloc>().add(const FPSubmit())
+                ? () {
+                    FocusScope.of(context).unfocus();
+                    context.read<ForgotPasswordBloc>().add(const FPSubmit());
+                  }
                 : null,
             style: FilledButton.styleFrom(
               padding: EdgeInsets.symmetric(vertical: 14.h),

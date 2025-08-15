@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import '../../../config/constants/sizes.dart';
 
@@ -14,7 +15,7 @@ class ResetLinkSentScreen extends StatelessWidget {
     final p = e.split('@');
     if (p.length != 2) return e;
     final n = p[0];
-    final masked = n.length <= 5 ? '*' * n.length : '${n[0]}***${n[n.length - 1]}';
+    final masked = n.length <= 5 ? '*' * n.length : '${n.substring(0, 3)}***${n[n.length - 1]}';
     return '$masked@${p[1]}';
   }
 
@@ -41,9 +42,12 @@ class ResetLinkSentScreen extends StatelessWidget {
             Text(
               'We sent a password reset link to ${_mask(email)}.',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
+              style: GoogleFonts.inter(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            SizedBox(height: 28.h),
+            SizedBox(height: 60.h),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -54,17 +58,35 @@ class ResetLinkSentScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
                   ),
                 ),
-                child: const Text('Open mail app'),
+                child: Text(
+                  'Open mail app',
+                  style: GoogleFonts.inter(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-            SizedBox(height: 12.h),
+            SizedBox(height: 20.h),
             TextButton(
               onPressed: () => Get.back(),
-              child: const Text('Use a different email'),
+              child: Text(
+                'Use a different email',
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
             TextButton(
-              onPressed: () => Get.offAllNamed('/login'),
-              child: const Text('Back to sign in'),
+              onPressed: () => Get.offAll(() => RoleLoginScreen()),
+              child: Text(
+                'Back to sign in',
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
