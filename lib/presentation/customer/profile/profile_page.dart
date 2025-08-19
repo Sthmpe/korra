@@ -372,7 +372,7 @@ class ProfilePage extends StatelessWidget {
                                 ),
                                 const Divider(
                                   height: 1,
-                                  color: Color(0xFFEAE6E2),
+                                  color: Color(0xFFEAE6E2),    
                                 ),
                                 RowWithChevron(
                                   icon: Icons.balance_outlined,

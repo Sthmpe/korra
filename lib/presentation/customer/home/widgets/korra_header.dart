@@ -58,9 +58,9 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
                 Row(
                   children: trailingActions ??
                     [
-                      _IconBtn(icon: MdiIcons.history, onTap: onHistory, dot: showHistoryDot),
+                      _IconBtn(icon: MdiIcons.history, onTap: onHistory,),
                       SizedBox(width: 8.w),
-                      _IconBtn(icon: Iconsax.notification, onTap: onSupport),
+                      _IconBtn(icon: Iconsax.notification, onTap: onSupport, dot: showHistoryDot),
                     ],
                 ),
               ],
