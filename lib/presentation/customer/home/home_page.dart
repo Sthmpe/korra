@@ -11,11 +11,11 @@ import '../../../logic/bloc/customer_shell/home/home_state.dart';
 
 // import 'widgets/activity_list.dart';
 import 'widgets/activity_timeline.dart';
-import 'widgets/korra_header.dart';
+import '../../shared/widgets/korra_header.dart';
 import 'widgets/plan_carousel_slider.dart';
 // import 'widgets/plan_media_shape.dart';
 import 'widgets/wallet_card.dart';
-import 'widgets/section_header.dart';
+import '../../shared/widgets/section_header.dart';
 // import 'widgets/plan_carousel.dart';
 import 'widgets/link_input.dart';
 import 'widgets/vendor_chip.dart';
@@ -48,7 +48,7 @@ class HomePage extends StatelessWidget {
           return RefreshIndicator(
             onRefresh: () async => bloc.add(HomeStarted()),
             child: GestureDetector(
-               behavior: HitTestBehavior.translucent, // still lets inner widgets get taps
+              behavior: HitTestBehavior.translucent, // still lets inner widgets get taps
               onTap: () => FocusScope.of(context).unfocus(),
               child: Scaffold(
                 appBar: KorraHeader(

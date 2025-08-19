@@ -6,7 +6,7 @@ import '../../../data/repository/home_repository.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_bloc.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_event.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_state.dart';
-import '../home/widgets/korra_header.dart';
+import '../../shared/widgets/korra_header.dart';
 import 'widgets/plan_card.dart';
 import 'widgets/plans_filter_sheet.dart';
 import 'widgets/segmented_tabs.dart';

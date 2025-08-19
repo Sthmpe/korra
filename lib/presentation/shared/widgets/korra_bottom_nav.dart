@@ -58,7 +58,7 @@ class KorraBottomNav extends StatelessWidget {
                         },
                         borderRadius: BorderRadius.circular(12.r),
                         child: Padding(
-                          padding: EdgeInsets.only(top: 6.h, bottom: 10.h),
+                          padding: EdgeInsets.only(top: 6.h, bottom: 8.h),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [

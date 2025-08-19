@@ -8,7 +8,7 @@ import '../../../logic/bloc/customer_shell/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer_shell/profile/profile_event.dart';
 import '../../../logic/bloc/customer_shell/profile/profile_state.dart';
 import '../../shared/notify/korra_notify.dart';
-import '../home/widgets/korra_header.dart';
+import '../../shared/widgets/korra_header.dart';
 import 'widgets/identity_header_card.dart';
 import 'widgets/rows.dart';
 import 'widgets/section_card.dart';

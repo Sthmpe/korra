@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../customer/customer_shell.dart';
+import '../../vendor/vendor_shell.dart';
 import 'widgets/login_button.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../logic/bloc/auth/role_login/role_login_bloc.dart';
@@ -34,10 +35,10 @@ class RoleLoginScreen extends StatelessWidget {
           // SUCCESS → navigate using GetX
           if (state.status == LoginStatus.success) {
             if (state.role == KorraRole.vendor) {
-              // Get.to(() => const VendorShell());
-              Get.snackbar('Logged in', 'Vendor shell placeholder',
-                  snackPosition: SnackPosition.BOTTOM,
-                  margin: EdgeInsets.all(12.w));
+              Get.to(() => const VendorShell());
+              // Get.snackbar('Logged in', 'Vendor shell placeholder',
+              //     snackPosition: SnackPosition.BOTTOM,
+              //     margin: EdgeInsets.all(12.w));
             } else {
                Get.to(() => const CustomerShell());
               // Get.snackbar('Logged in', 'Customer shell placeholder',
