@@ -1,5 +1,5 @@
 import 'dart:async';
-import '../models/user_profile.dart';
+import '../../models/customer/user_profile.dart';
 
 class ProfileRepository {
   Future<UserProfile> fetchProfile() async {

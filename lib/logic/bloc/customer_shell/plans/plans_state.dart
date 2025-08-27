@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../../data/models/plan.dart';
+import '../../../../data/models/customer/plan.dart';
 import 'plans_event.dart';
 
 class PlansState extends Equatable {

@@ -1,7 +1,7 @@
 // lib/presentation/customer/home/widgets/activity_list.dart
 import 'package:flutter/widgets.dart';
 
-import '../../../../data/models/activity_item.dart';
+import '../../../../data/models/customer/activity_item.dart';
 import 'activity_tile.dart';
 
 class ActivityList extends StatelessWidget {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../data/repository/home_repository.dart';
+import '../../../data/repository/customer/home_repository.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_bloc.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_event.dart';
 import '../../../logic/bloc/customer_shell/plans/plans_state.dart';

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../data/models/activity_item.dart';
+import '../../../../data/models/customer/activity_item.dart';
 
 class ActivityTile extends StatelessWidget {
   final ActivityItem item;

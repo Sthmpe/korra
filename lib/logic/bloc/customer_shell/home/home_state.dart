@@ -1,8 +1,8 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../../data/models/activity_item.dart';
-import '../../../../data/models/plan.dart';
-import '../../../../data/models/vendor.dart';
+import '../../../../data/models/customer/activity_item.dart';
+import '../../../../data/models/customer/plan.dart';
+import '../../../../data/models/customer/vendor.dart';
 
 enum HomeStatus { idle, loading, loaded, failure }
 

@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../../data/models/vendor_activity.dart';
+import '../../../../data/models/vendor/vendor_activity.dart';
 
 enum ResvFilter { newRes, ongoing, completed, cancelled }
 

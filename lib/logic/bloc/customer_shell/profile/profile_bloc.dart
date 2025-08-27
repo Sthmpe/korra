@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../data/models/user_profile.dart';
-import '../../../../data/repository/profile_repository.dart';
+import '../../../../data/models/customer/user_profile.dart';
+import '../../../../data/repository/customer/profile_repository.dart';
 
 import 'profile_event.dart';
 import 'profile_state.dart';

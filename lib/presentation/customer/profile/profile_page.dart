@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../data/repository/profile_repository.dart';
+import '../../../data/repository/customer/profile_repository.dart';
 import '../../../logic/bloc/customer_shell/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer_shell/profile/profile_event.dart';
 import '../../../logic/bloc/customer_shell/profile/profile_state.dart';

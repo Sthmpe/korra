@@ -1,7 +1,7 @@
 import 'dart:async';
-import '../models/plan.dart';
-import '../models/vendor.dart';
-import '../models/activity_item.dart';
+import '../../models/customer/plan.dart';
+import '../../models/customer/vendor.dart';
+import '../../models/customer/activity_item.dart';
 
 class HomeRepository {
   Future<String> fetchWalletBalance() async {

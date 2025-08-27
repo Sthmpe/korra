@@ -4,7 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // import '../../../data/models/activity_item.dart';
-import '../../../data/repository/home_repository.dart';
+import '../../../data/repository/customer/home_repository.dart';
 import '../../../logic/bloc/customer_shell/home/home_bloc.dart';
 import '../../../logic/bloc/customer_shell/home/home_event.dart';
 import '../../../logic/bloc/customer_shell/home/home_state.dart';

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import 'package:korra/config/constants/sizes.dart';
 
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
@@ -12,7 +10,6 @@ import '../../shared/widgets/section_header.dart';
 import 'widgets/vendor_withdrawable_card.dart';
 // ▼ add these two imports
 import 'widgets/vendor_hold_vault.dart';
-import 'widgets/vendor_hold_strip.dart';
 
 import 'widgets/vendor_kpi_block.dart';
 import 'widgets/vendor_activity_timeline.dart';

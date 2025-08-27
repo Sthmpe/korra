@@ -1,0 +1,1 @@
+enum ResvFilter { newRes, ongoing, completed, cancelled }

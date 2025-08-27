@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../data/models/vendor_activity.dart';
+import '../../../../data/models/vendor/vendor_activity.dart';
 
 part 'vendor_activity_tile_pro.dart';
 

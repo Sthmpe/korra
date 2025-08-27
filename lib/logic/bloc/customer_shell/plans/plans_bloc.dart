@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../data/models/plan.dart';
-import '../../../../data/repository/home_repository.dart';
+import '../../../../data/models/customer/plan.dart';
+import '../../../../data/repository/customer/home_repository.dart';
 import 'plans_event.dart';
 import 'plans_state.dart';
 
