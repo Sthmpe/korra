@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import 'config/theme/app_theme.dart';
+import 'logic/core/net/korra_offline_gate.dart';
 
 class KorraApp extends StatelessWidget {
   const KorraApp({super.key});
@@ -18,10 +19,12 @@ class KorraApp extends StatelessWidget {
         title: 'Korra',
         theme: AppTheme.light(),
         home: const RoleLoginScreen(),
-        builder: (context, child) => GestureDetector(
-          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-          behavior: HitTestBehavior.translucent, // allows taps to pass through
-          child: child,
+        builder: (context, child) => KorraOfflineGate(
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: child ?? const SizedBox(),
+          ),
         ),
       ),
     );

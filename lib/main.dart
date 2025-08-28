@@ -1,8 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'firebase_options.dart';
 import 'korra_app.dart';
+import 'logic/core/net/net_cubit.dart';
 
 
 Future<void> main() async {
@@ -12,6 +14,11 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  runApp(const KorraApp());
+  runApp(
+     BlocProvider(
+      create: (_) => NetCubit()..start(),
+      child: const KorraApp(),
+    ),
+  );
 }
 
