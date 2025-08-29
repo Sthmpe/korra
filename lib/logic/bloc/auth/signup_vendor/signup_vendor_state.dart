@@ -2,8 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'signup_vendor_event.dart';
 
 class SignupVendorState extends Equatable {
-  final int pageIndex;            // 0..4
-  final int totalPages;           // 5
+  final int pageIndex; // 0..4
+  final int totalPages; // 5
   final bool loading;
 
   // V1
@@ -28,7 +28,6 @@ class SignupVendorState extends Equatable {
   final String ownerOther;
   final String ownerPhone;
 
- 
   // New-V4
   final String email;
   final DateTime? dob;
@@ -43,6 +42,21 @@ class SignupVendorState extends Equatable {
   final String confirm;
   final bool hidePass;
   final bool hideConf;
+
+  // KYC flags
+  final bool bvnVerifying;
+  final bool ninVerifying;
+  final bool bvnVerified;
+  final bool ninVerified;
+
+  // NEW: remember which exact values passed verification
+  final String? lastVerifiedNin;
+  final String? lastVerifiedBvn;
+
+  // NEW: per-field server errors (to show next to inputs)
+  final String? ninError;
+  final String? bvnError;
+  final String? kycError;
 
   const SignupVendorState({
     this.pageIndex = 0,
@@ -71,19 +85,52 @@ class SignupVendorState extends Equatable {
     this.confirm = '',
     this.hidePass = true,
     this.hideConf = true,
+    this.bvnVerifying = false,
+    this.ninVerifying = false,
+    this.bvnVerified = false,
+    this.ninVerified = false,
+    this.lastVerifiedNin,
+    this.lastVerifiedBvn,
+    this.ninError,
+    this.bvnError,
+    this.kycError,
   });
 
   SignupVendorState copyWith({
-    int? pageIndex, bool? loading,
-    bool? registered, String? cac, String? legalName,
-    String? storeName, Presence? presence, List<String>? categories,
-    String? address, String? city, String? stateName, String? mapsLink,
-    String? ownerFirst, String? ownerLast, String? ownerPhone,
+    int? pageIndex,
+    bool? loading,
+    bool? registered,
+    String? cac,
+    String? legalName,
+    String? storeName,
+    Presence? presence,
+    List<String>? categories,
+    String? address,
+    String? city,
+    String? stateName,
+    String? mapsLink,
+    String? ownerFirst,
+    String? ownerLast,
+    String? ownerPhone,
     String? ownerOther,
-    String? email, DateTime? dob, Gender? gender,
-    String? nin, String? bvn,
-    String? password, String? confirm,
-    bool? hidePass, bool? hideConf,
+    String? email,
+    DateTime? dob,
+    Gender? gender,
+    String? nin,
+    String? bvn,
+    String? password,
+    String? confirm,
+    bool? hidePass,
+    bool? hideConf,
+    bool? bvnVerifying,
+    bool? ninVerifying,
+    bool? bvnVerified,
+    bool? ninVerified,
+    String? lastVerifiedNin, 
+    String? lastVerifiedBvn,
+    String? ninError, 
+    String? bvnError,
+    String? kycError,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -112,12 +159,54 @@ class SignupVendorState extends Equatable {
       confirm: confirm ?? this.confirm,
       hidePass: hidePass ?? this.hidePass,
       hideConf: hideConf ?? this.hideConf,
+      bvnVerifying: bvnVerifying ?? this.bvnVerifying,
+      ninVerifying: ninVerifying ?? this.ninVerifying,
+      bvnVerified: bvnVerified ?? this.bvnVerified,
+      ninVerified: ninVerified ?? this.ninVerified,
+      lastVerifiedNin: lastVerifiedNin ?? this.lastVerifiedNin,
+      lastVerifiedBvn: lastVerifiedBvn ?? this.lastVerifiedBvn,
+      ninError: ninError ?? this.ninError,
+      bvnError: bvnError ?? this.bvnError,
+      kycError: kycError ?? this.kycError,
     );
   }
 
   @override
   List<Object?> get props => [
-    pageIndex,totalPages,loading,registered,cac,legalName,storeName,presence,categories,
-    address,city,stateName,mapsLink,ownerFirst,ownerLast,ownerPhone,email,password,confirm,hidePass,hideConf
+    pageIndex,
+    totalPages,
+    loading,
+    registered,
+    cac,
+    legalName,
+    storeName,
+    presence,
+    categories,
+    address,
+    city,
+    stateName,
+    mapsLink,
+    ownerFirst,
+    ownerLast,
+    ownerOther,
+    ownerPhone,
+    email,
+    dob,
+    gender,
+    nin,
+    bvn,
+    password,
+    confirm,
+    hidePass,
+    hideConf,
+    bvnVerifying,
+    ninVerifying,
+    bvnVerified,
+    ninVerified,
+    lastVerifiedNin,
+    lastVerifiedBvn,
+    ninError,
+    bvnError,
+    kycError,
   ];
 }

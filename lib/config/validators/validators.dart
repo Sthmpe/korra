@@ -15,9 +15,23 @@ class KorraValidators {
 
   static String? phoneNg(String? v) {
     if (v == null || v.trim().isEmpty) return 'Phone is required';
-    final ok = RegExp(r'^(?:\+234|0)\d{10}$').hasMatch(v.trim());
-    return ok ? null : 'Enter a valid Nigerian phone';
+
+    // remove spaces/dashes etc. but keep leading '+'
+    final s = v.trim().replaceAll(RegExp(r'[^\d\+]'), '');
+
+    final rx = RegExp(
+      r'^(?:' // start group
+      r'0(?:70|71|80|81|90|91)\d{8}' // local: 0 + (70/71/80/81/90/91) + 8 digits
+      r'|' // OR
+      r'(?:\+234|234)(?:70|71|80|81|90|91)\d{8}' // intl: +234/234 + (70/71/80/81/90/91) + 8 digits
+      r')$',
+    );
+
+    return rx.hasMatch(s)
+        ? null
+        : 'Enter a valid Nigerian phone (e.g. 070..., 080..., +23470..., 23470...)';
   }
+
 
   static String? email(String? v) {
     if (v == null || v.trim().isEmpty) return 'Email is required';

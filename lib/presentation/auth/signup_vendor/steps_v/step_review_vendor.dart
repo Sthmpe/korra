@@ -75,13 +75,13 @@ class StepReviewVendor extends StatelessWidget {
                   TextSpan(
                     text: 'Terms',
                     style: TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
-                    recognizer: TapGestureRecognizer()..onTap = () => showKorraTermsSheet(context),
+                    recognizer: TapGestureRecognizer()..onTap = () => showKorraVendorTermsSheet(context),
                   ),
                   const TextSpan(text: ' and '),
                   TextSpan(
                     text: 'Privacy Policy',
                     style: TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
-                    recognizer: TapGestureRecognizer()..onTap = () => showKorraPrivacySheet(context),
+                    recognizer: TapGestureRecognizer()..onTap = () => showKorraVendorPrivacySheet(context),
                   ),
                   const TextSpan(text: '.'),
                 ],

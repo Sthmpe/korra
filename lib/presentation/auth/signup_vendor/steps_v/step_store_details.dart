@@ -25,10 +25,16 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
   void initState() {
     super.initState();
     final s = context.read<SignupVendorBloc>().state;
-    _storeCtl = TextEditingController(text: s.storeName)..addListener(() => _on(StoreNameChanged(_storeCtl.text)));
+    _storeCtl = TextEditingController(text: s.storeName)
+      ..addListener(() => _on(StoreNameChanged(_storeCtl.text)));
   }
+
   void _on(SignupVendorEvent e) => context.read<SignupVendorBloc>().add(e);
-  @override void dispose() { _storeCtl.dispose(); super.dispose(); }
+  @override
+  void dispose() {
+    _storeCtl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +54,15 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Store details', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700)),
+              Text(
+                'Store details',
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               SizedBox(height: 12.h),
-          
+
               TextFormField(
                 controller: _storeCtl,
                 validator: (v) => KorraValidators.name(v, field: 'Store name'),
@@ -64,8 +76,14 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
                 ),
               ),
               SizedBox(height: 12.h),
-          
-              Text('Presence', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600)),
+
+              Text(
+                'Presence',
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               SizedBox(height: 8.h),
               Row(
                 children: [
@@ -77,29 +95,73 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
                 ],
               ),
               SizedBox(height: 14.h),
-          
-              Text('Product categories (select 1–5)', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600)),
-              SizedBox(height: 8.h),
-              Wrap(
-                spacing: 8.w, runSpacing: 8.h,
-                children: [
-                  for (final c in korraVendorCategories)
-                    FilterChip(
-                      showCheckmark: false,
-                      label: Text(c, style: GoogleFonts.inter(fontSize: 12.5.sp)),
-                      selected: s.categories.contains(c),
-                      onSelected: (sel) {
-                        if (!sel && !s.categories.contains(c)) return;
-                        if (sel && s.categories.length >= 5 && !s.categories.contains(c)) return;
-                        _on(CategoryToggled(c));
-                      },
-                    ),
-                ],
+
+              // --- Product categories (select 1–5) ---
+              Text(
+                'Product categories (select 1–5)',
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              SizedBox(height: 4.h),
-              if (s.categories.isEmpty)
-                Text('Pick at least one category.',
-                  style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.red)),
+              SizedBox(height: 8.h),
+
+              FormField<List<String>>(
+                initialValue: s.categories,
+                validator: (val) {
+                  final v = val ?? const <String>[];
+                  if (v.isEmpty) return 'Pick at least one category.';
+                  if (v.length > 5) return 'Max 5 categories.';
+                  return null;
+                },
+                builder: (field) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8.w,
+                        runSpacing: 8.h,
+                        children: [
+                          for (final c in korraVendorCategories)
+                            FilterChip(
+                              showCheckmark: false,
+                              label: Text(
+                                c,
+                                style: GoogleFonts.inter(fontSize: 12.5.sp),
+                              ),
+                              selected: s.categories.contains(c),
+                              onSelected: (sel) {
+                                // compute next list for validator
+                                final next = List<String>.from(s.categories);
+                                if (sel) {
+                                  if (!next.contains(c) && next.length < 5)
+                                    next.add(c);
+                                } else {
+                                  next.remove(c);
+                                }
+
+                                // update the FormField (so formKey.validate() sees it)
+                                field.didChange(next);
+
+                                // update Bloc as you already do
+                                _on(CategoryToggled(c));
+                              },
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: 4.h),
+                      if (field.hasError)
+                        Text(
+                          field.errorText!,
+                          style: GoogleFonts.inter(
+                            fontSize: 12.sp,
+                            color: Colors.red,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -116,10 +178,18 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(color: selected ? Colors.black87 : Colors.grey.shade300),
+          border: Border.all(
+            color: selected ? Colors.black87 : Colors.grey.shade300,
+          ),
           color: selected ? Colors.grey.shade50 : Colors.white,
         ),
-        child: Text(label, style: GoogleFonts.inter(fontSize: 12.5.sp, fontWeight: FontWeight.w600)),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12.5.sp,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

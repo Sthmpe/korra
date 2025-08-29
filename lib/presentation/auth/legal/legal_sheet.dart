@@ -3,6 +3,144 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../config/constants/colors.dart';
 
+Future<void> showKorraVendorTermsSheet(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18.r)),
+    ),
+    builder: (_) => const _LegalSheet(
+      title: 'Vendor Terms',
+      sections: [
+        _Section(
+          heading: 'About Korra Vendor Program',
+          items: [
+            'Korra enables vendors to offer layaway purchases where customers can reserve items and complete payments over time.',
+            'Vendors agree to reserve items securely until Korra confirms that full payment is complete or cancellation occurs within the allowed window.',
+          ],
+        ),
+        _Section(
+          heading: 'Payments & Settlement',
+          items: [
+            'Vendor payouts are processed after the 10-day refund window following the customer’s first reservation payment.',
+            'If a customer cancels within the 10-day window, no payout is made to the vendor.',
+            'Once settlement has been made after the 10-day window, Korra does not reclaim or request refunds from vendors if customers later fail to complete their payments.',
+            'All payouts are made directly to the vendor’s registered Korra account details.',
+          ],
+        ),
+        _Section(
+          heading: 'Refunds & Cancellation',
+          items: [
+            'Vendors must not release goods until Korra explicitly notifies them that full payment is completed.',
+            'Customers may request a refund only within the initial 10-day window. Vendors must comply with Korra’s refund instructions during this period.',
+            'After settlement is made to the vendor, customer defaults or cancellations do not affect vendor payouts.',
+          ],
+        ),
+        _Section(
+          heading: 'Vendor Responsibilities',
+          items: [
+            'Keep reserved items safe, undamaged, and available until delivery is authorized.',
+            'Ensure timely delivery once Korra confirms full payment from the customer.',
+            'Do not accept direct cash or off-platform payments from customers for Korra layaway purchases.',
+            'Vendors may be considered fraudulent if products are tampered with, delivered damaged, or unavailable at the time of confirmed delivery.',
+          ],
+        ),
+        _Section(
+          heading: 'Compliance & Fair Use',
+          items: [
+            'Vendors must provide accurate business, identity, and banking details for KYC verification.',
+            'Vendors must not misuse Korra’s platform or engage in fraudulent, deceptive, or misleading practices.',
+          ],
+        ),
+        _Section(
+          heading: 'Changes to Vendor Terms',
+          items: [
+            'Korra may update these Vendor Terms as needed. Continued participation in the Vendor Program means acceptance of the revised Terms.',
+          ],
+        ),
+        _Section(
+          heading: 'Contact',
+          items: [
+            'Need help with your vendor account? Contact Korra Support via the Vendor Help section in the app.',
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> showKorraVendorPrivacySheet(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18.r)),
+    ),
+    builder: (_) => const _LegalSheet(
+      title: 'Vendor Privacy Policy',
+      sections: [
+        _Section(
+          heading: 'What We Collect',
+          items: [
+            'Business data (CAC certificate, TIN, bank account information, contact details).',
+            'Vendor activity data (transactions, payout history, compliance records).',
+          ],
+        ),
+        _Section(
+          heading: 'How We Use It',
+          items: [
+            'To verify vendor identity and business legitimacy.',
+            'To process payouts securely and manage refund windows.',
+            'To ensure compliance with regulatory and financial requirements.',
+          ],
+        ),
+        _Section(
+          heading: 'Sharing',
+          items: [
+            'We share vendor information only with payment processors, regulators, and trusted service providers as required.',
+            'We may disclose data to regulators or law enforcement when legally required.',
+          ],
+        ),
+        _Section(
+          heading: 'Vendor Obligations',
+          items: [
+            'Keep your business and banking information up to date.',
+            'Protect customer goods during the reservation period.',
+            'Do not bypass Korra by collecting payments directly from customers.',
+          ],
+        ),
+        _Section(
+          heading: 'Security',
+          items: [
+            'We use strict measures to safeguard vendor data and transactions. No system is 100% secure, but we continuously enhance protection.',
+          ],
+        ),
+        _Section(
+          heading: 'Retention',
+          items: [
+            'We retain vendor information only as long as necessary for regulatory compliance, dispute resolution, and business operations.',
+          ],
+        ),
+        _Section(
+          heading: 'Updates',
+          items: [
+            'We may update this Vendor Privacy Policy. Significant changes will be communicated via the app.',
+          ],
+        ),
+        _Section(
+          heading: 'Contact',
+          items: [
+            'For vendor privacy requests, contact us via the Vendor Help section.',
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
 Future<void> showKorraTermsSheet(BuildContext context) {
   return showModalBottomSheet(
     context: context,
@@ -64,9 +202,7 @@ Future<void> showKorraTermsSheet(BuildContext context) {
         ),
         _Section(
           heading: 'Contact',
-          items: [
-            'Questions? Reach out from the Help section in the app.',
-          ],
+          items: ['Questions? Reach out from the Help section in the app.'],
         ),
       ],
     ),
@@ -132,9 +268,7 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
         ),
         _Section(
           heading: 'Contact',
-          items: [
-            'For privacy requests, contact us via the Help section.',
-          ],
+          items: ['For privacy requests, contact us via the Help section.'],
         ),
       ],
     ),
@@ -178,7 +312,10 @@ class _LegalSheet extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.inter(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -218,30 +355,43 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(heading, style: GoogleFonts.inter(fontSize: 14.5.sp, fontWeight: FontWeight.w700)),
+          Text(
+            heading,
+            style: GoogleFonts.inter(
+              fontSize: 14.5.sp,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           SizedBox(height: 8.h),
-          ...items.map((t) => Padding(
-                padding: EdgeInsets.symmetric(vertical: 6.h),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      margin: EdgeInsets.only(top: 6.h, right: 8.w),
-                      width: 6.r, height: 6.r,
-                      decoration: BoxDecoration(
-                        color: KorraColors.brand,
-                        borderRadius: BorderRadius.circular(999),
+          ...items.map(
+            (t) => Padding(
+              padding: EdgeInsets.symmetric(vertical: 6.h),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: EdgeInsets.only(top: 6.h, right: 8.w),
+                    width: 6.r,
+                    height: 6.r,
+                    decoration: BoxDecoration(
+                      color: KorraColors.brand,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      t,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.sp,
+                        height: 1.42,
+                        color: Colors.black87,
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        t,
-                        style: GoogleFonts.inter(fontSize: 13.sp, height: 1.42, color: Colors.black87),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

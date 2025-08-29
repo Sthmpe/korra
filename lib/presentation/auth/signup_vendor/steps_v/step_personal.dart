@@ -29,31 +29,43 @@ class _StepPersonalState extends State<StepPersonal> {
   void initState() {
     super.initState();
     final s = context.read<SignupVendorBloc>().state;
-    _firstCtl = TextEditingController(text: s.ownerFirst)..addListener(() => _on(OwnerFirstChanged(_firstCtl.text)));
-    _lastCtl  = TextEditingController(text: s.ownerLast)..addListener(() => _on(OwnerLastChanged(_lastCtl.text)));
-    _otherCtl = TextEditingController(text: s.ownerOther)..addListener(() => _on(OwnerOtherChanged(_otherCtl.text)));
-    _phoneCtl = TextEditingController(text: s.ownerPhone)..addListener(() => _on(OwnerPhoneChanged(_phoneCtl.text)));
-    _emailCtl = TextEditingController(text: s.email)..addListener(() => _on(VendorEmailChanged(_emailCtl.text)));
+    _firstCtl = TextEditingController(text: s.ownerFirst)
+      ..addListener(() => _on(OwnerFirstChanged(_firstCtl.text)));
+    _lastCtl = TextEditingController(text: s.ownerLast)
+      ..addListener(() => _on(OwnerLastChanged(_lastCtl.text)));
+    _otherCtl = TextEditingController(text: s.ownerOther)
+      ..addListener(() => _on(OwnerOtherChanged(_otherCtl.text)));
+    _phoneCtl = TextEditingController(text: s.ownerPhone)
+      ..addListener(() => _on(OwnerPhoneChanged(_phoneCtl.text)));
+    _emailCtl = TextEditingController(text: s.email)
+      ..addListener(() => _on(VendorEmailChanged(_emailCtl.text)));
   }
 
   void _on(SignupVendorEvent e) => context.read<SignupVendorBloc>().add(e);
 
   @override
-  void dispose() { _firstCtl.dispose(); _lastCtl.dispose(); _otherCtl.dispose(); _phoneCtl.dispose(); _emailCtl.dispose(); super.dispose(); }
-
-  Future<void> _pickDob() async {
-    final s = context.read<SignupVendorBloc>().state;
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: s.dob ?? DateTime(now.year - 20, now.month, now.day),
-      firstDate: DateTime(now.year - 100),
-      lastDate: DateTime(now.year - 18, now.month, now.day),
-      helpText: 'Select date of birth',
-      builder: (ctx, child) => Theme(data: Theme.of(ctx), child: child!),
-    );
-    if (picked != null) _on(DobChanged(picked));
+  void dispose() {
+    _firstCtl.dispose();
+    _lastCtl.dispose();
+    _otherCtl.dispose();
+    _phoneCtl.dispose();
+    _emailCtl.dispose();
+    super.dispose();
   }
+
+  // Future<void> _pickDob() async {
+  //   final s = context.read<SignupVendorBloc>().state;
+  //   final now = DateTime.now();
+  //   final picked = await showDatePicker(
+  //     context: context,
+  //     initialDate: s.dob ?? DateTime(now.year - 20, now.month, now.day),
+  //     firstDate: DateTime(now.year - 100),
+  //     lastDate: DateTime(now.year - 18, now.month, now.day),
+  //     helpText: 'Select date of birth',
+  //     builder: (ctx, child) => Theme(data: Theme.of(ctx), child: child!),
+  //   );
+  //   if (picked != null) _on(DobChanged(picked));
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -72,26 +84,38 @@ class _StepPersonalState extends State<StepPersonal> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tell us about you', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700)),
+              Text(
+                'Tell us about you',
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               SizedBox(height: 12.h),
-          
+
               Row(
                 children: [
-                  Expanded(child: _field(
-                    controller: _firstCtl,
-                    label: 'First name',
-                    icon: Iconsax.user,
-                    validator: (v) => KorraValidators.name(v, field: 'First name'),
-                    type: TextInputType.name,
-                  )),
+                  Expanded(
+                    child: _field(
+                      controller: _firstCtl,
+                      label: 'First name',
+                      icon: Iconsax.user,
+                      validator: (v) =>
+                          KorraValidators.name(v, field: 'First name'),
+                      type: TextInputType.name,
+                    ),
+                  ),
                   SizedBox(width: 10.w),
-                  Expanded(child: _field(
-                    controller: _lastCtl,
-                    label: 'Last name',
-                    icon: Iconsax.user,
-                    validator: (v) => KorraValidators.name(v, field: 'Last name'),
-                    type: TextInputType.name,
-                  )),
+                  Expanded(
+                    child: _field(
+                      controller: _lastCtl,
+                      label: 'Last name',
+                      icon: Iconsax.user,
+                      validator: (v) =>
+                          KorraValidators.name(v, field: 'Last name'),
+                      type: TextInputType.name,
+                    ),
+                  ),
                 ],
               ),
               SizedBox(height: 10.h),
@@ -118,82 +142,180 @@ class _StepPersonalState extends State<StepPersonal> {
                 validator: KorraValidators.email,
                 type: TextInputType.emailAddress,
               ),
-          
+
               SizedBox(height: 12.h),
-          
+
               BlocBuilder<SignupVendorBloc, SignupVendorState>(
                 buildWhen: (p, c) => p.dob != c.dob || p.gender != c.gender,
-                builder: (_, s) {
+                builder: (context, s) {
                   return Row(
                     children: [
-                      // DOB picker
+                      // ---- DOB (required) ----
                       Expanded(
-                        child: InkWell(
-                          onTap: _pickDob,
-                          borderRadius: BorderRadius.circular(12.r),
-                          child: Container(
-                            height: 54.h,
-                            padding: EdgeInsets.symmetric(horizontal: 12.w),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12.r),
-                              border: Border.all(color: Colors.grey.shade300),
-                              color: Colors.grey.shade50,
-                            ),
-                            alignment: Alignment.centerLeft,
-                            child: Row(
+                        child: FormField<DateTime?>(
+                          key: ValueKey(s.dob), // <— force re-init with state
+                          initialValue: s.dob, // <— use state directly
+                          validator: (val) {
+                            if (val == null) return 'Date of birth is required';
+                            final now = DateTime.now();
+                            final age =
+                                now.year -
+                                val.year -
+                                ((now.month < val.month ||
+                                        (now.month == val.month &&
+                                            now.day < val.day))
+                                    ? 1
+                                    : 0);
+                            if (age < 13) return 'Must be at least 13';
+                            if (age > 100) return 'Please enter a valid age';
+                            return null;
+                          },
+                          builder: (field) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Iconsax.calendar, size: 18.sp),
-                                SizedBox(width: 8.w),
-                                Text(
-                                  s.dob == null  ? 'Date of birth' : KorraValidators.formatDate(s.dob!),
-                                  style: GoogleFonts.inter(fontSize: 13.5.sp, color: s.dob == null ? Colors.black54 : Colors.black87),
+                                InkWell(
+                                  onTap: () async {
+                                    final now = DateTime.now();
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate:
+                                          s.dob ??
+                                          DateTime(
+                                            now.year - 20,
+                                            now.month,
+                                            now.day,
+                                          ),
+                                      firstDate: DateTime(now.year - 100),
+                                      lastDate: DateTime(
+                                        now.year - 18,
+                                        now.month,
+                                        now.day,
+                                      ),
+                                      helpText: 'Select date of birth',
+                                      builder: (ctx, child) => Theme(
+                                        data: Theme.of(ctx),
+                                        child: child!,
+                                      ),
+                                    );
+                                    if (picked != null) {
+                                      context.read<SignupVendorBloc>().add(DobChanged(picked),);
+                                      field.didChange(
+                                        picked,
+                                      ); // keep FormField in sync
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  child: Container(
+                                    height: 54.h,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 12.w,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12.r),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                      ),
+                                      color: Colors.grey.shade50,
+                                    ),
+                                    alignment: Alignment.centerLeft,
+                                    child: Row(
+                                      children: [
+                                        Icon(Iconsax.calendar, size: 18.sp),
+                                        SizedBox(width: 8.w),
+                                        Text(
+                                          s.dob == null
+                                              ? 'Date of birth'
+                                              : KorraValidators.formatDate(
+                                                  s.dob!,
+                                                ),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13.5.sp,
+                                            color: s.dob == null
+                                                ? Colors.black54
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
+                                if (field.hasError)
+                                  Padding(
+                                    padding: EdgeInsets.only(top: 4.h),
+                                    child: Text(
+                                      field.errorText!,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12.sp,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
                               ],
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                       SizedBox(width: 10.w),
-                      // Gender
+
+                      // ---- Gender (required) ----
                       Expanded(
-                        child: Container(
-                          height: 54.h,
-                          padding: EdgeInsets.symmetric(horizontal: 12.w),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(color: Colors.grey.shade300),
-                            color: Colors.grey.shade50,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<Gender>(
-                              value: s.gender == Gender.undisclosed ? null : s.gender,
-                              dropdownColor: Colors.grey.shade200,
-                              style: GoogleFonts.inter(fontSize: 13.5.sp, color: Colors.black87),
-                              hint: Text('Gender', style: GoogleFonts.inter(fontSize: 13.5.sp)),
-                              items: const [
-                                DropdownMenuItem(value: Gender.male, child: Text('Male')),
-                                DropdownMenuItem(value: Gender.female, child: Text('Female'))
-                              ],
-                              onChanged: (g) { if (g != null) _on(GenderChanged(g)); },
+                        child: DropdownButtonFormField<Gender>(
+                          key: ValueKey(
+                            s.gender,
+                          ), // <— force re-init with state
+                          value: s.gender == Gender.undisclosed
+                              ? null
+                              : s.gender,
+                          validator: (g) => g == null ? 'Select gender' : null,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12.w,
+                              vertical: 14.h,
+                            ),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            errorStyle: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              color: Colors.red,
                             ),
                           ),
+                          dropdownColor: Colors.grey.shade200,
+                          style: GoogleFonts.inter(
+                            fontSize: 13.5.sp,
+                            color: Colors.black87,
+                          ),
+                          hint: Text(
+                            'Gender',
+                            style: GoogleFonts.inter(fontSize: 13.5.sp),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: Gender.male,
+                              child: Text('Male'),
+                            ),
+                            DropdownMenuItem(
+                              value: Gender.female,
+                              child: Text('Female'),
+                            ),
+                            DropdownMenuItem(
+                              value: Gender.other,
+                              child: Text('Other'),
+                            ),
+                          ],
+                          onChanged: (g) {
+                            if (g != null) context.read<SignupVendorBloc>().add(GenderChanged(g),);
+                          },
                         ),
                       ),
                     ],
                   );
-                },
-              ),
-              SizedBox(height: 6.h),
-              // inline validator for DOB
-              BlocBuilder<SignupVendorBloc, SignupVendorState>(
-                buildWhen: (p, c) => p.dob != c.dob,
-                builder: (_, s) {
-                  final err = KorraValidators.dob(s.dob);
-                  return err == null ? const SizedBox.shrink()
-                    : Padding(
-                        padding: EdgeInsets.only(top: 4.h),
-                        child: Text(err, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.red)),
-                      );
                 },
               ),
             ],

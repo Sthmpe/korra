@@ -134,3 +134,7 @@ class VendorConfirmChanged extends SignupVendorEvent {
 class ToggleVendorPassHidden extends SignupVendorEvent {}
 class ToggleVendorConfHidden extends SignupVendorEvent {}
 
+// signup_vendor_event.dart
+class VerifyBvnRequested extends SignupVendorEvent {}
+class VerifyNinRequested extends SignupVendorEvent {}
+class ClearKycError extends SignupVendorEvent {}
