@@ -233,7 +233,7 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Future<void> _handleNext() async {
+    Future<void> handleNext() async {
       final ok = formKey.currentState?.validate() ?? true;
       if (!ok) return;
 
@@ -294,7 +294,7 @@ class _BottomNav extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                 ),
-                onPressed: loading ? null : _handleNext,
+                onPressed: loading ? null : handleNext,
                 child: Text(
                   isLast ? 'Create account' : 'Next',
                   style: GoogleFonts.inter(
