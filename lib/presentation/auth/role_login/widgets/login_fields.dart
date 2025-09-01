@@ -12,6 +12,8 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
+import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
+import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 import '../../signup_customer/signup_customer_screen.dart';
 import '../../signup_vendor/signup_vendor_screen.dart';
 
@@ -67,7 +69,10 @@ class _LoginFieldsState extends State<LoginFields> {
     if (role == KorraRole.customer) {
       Get.to(() => const SignupCustomerScreen());
     } else {
-      Get.to(() => const SignupVendorScreen());
+      Get.to(() => BlocProvider(
+          create: (_) => SignupVendorBloc()..add(SignupVendorInit()),
+          child: const SignupVendorScreen()
+        ));
     }
   }
 

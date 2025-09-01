@@ -49,113 +49,111 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => SignupVendorBloc()..add(SignupVendorInit()),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Create vendor account',
-            style: GoogleFonts.inter(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w700,
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Create vendor account',
+          style: GoogleFonts.inter(
+            fontSize: 16.sp,
+            fontWeight: FontWeight.w700,
           ),
-          centerTitle: true,
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: KorraSizes.gutter.w),
-            child: Column(
-              children: [
-                SizedBox(height: 12.h),
-                const _StepperBar(),
-                SizedBox(height: 16.h),
-
-                Expanded(
-                  child: MultiBlocListener(
-                    listeners: [
-                      // Close sheet & animate on successful page change
-                      BlocListener<SignupVendorBloc, SignupVendorState>(
-                        listenWhen: (p, c) => p.pageIndex != c.pageIndex,
-                        listener: (context, s) {
-                          if (_kycSheetOpen) {
-                            Navigator.of(
-                              context,
-                              rootNavigator: true,
-                            ).maybePop();
-                            _kycSheetOpen = false;
-                          }
-                          _animateTo(s.pageIndex);
-                        },
-                      ),
-                      // Close sheet on identity failure (stay on Identity page)
-                      BlocListener<SignupVendorBloc, SignupVendorState>(
-                        listenWhen: (p, c) =>
-                            p.ninVerifying != c.ninVerifying ||
-                            p.bvnVerifying != c.bvnVerifying ||
-                            p.ninError != c.ninError ||
-                            p.bvnError != c.bvnError,
-                        listener: (context, s) {
-                          final failedNow =
-                              (!s.ninVerifying && s.ninError != null) ||
-                              (!s.bvnVerifying && s.bvnError != null);
-                          if (failedNow && _kycSheetOpen) {
-                            Navigator.of(
-                              context,
-                              rootNavigator: true,
-                            ).maybePop();
-                            _kycSheetOpen = false;
-                          }
-                        },
-                      ),
-                    ],
-                    child: PageView(
-                      controller: _controller,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        StepBusinessType(formKey: _formKeys[0]),
-                        StepStoreDetails(formKey: _formKeys[1]),
-                        StepLocation(formKey: _formKeys[2]),
-                        StepPersonal(formKey: _formKeys[3]),
-                        StepIdentity(formKey: _formKeys[4]),
-                        StepSecurity(formKey: _formKeys[5]),
-                        StepReviewVendor(formKey: _formKeys[6]),
-                      ],
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: KorraSizes.gutter.w),
+          child: Column(
+            children: [
+              SizedBox(height: 12.h),
+              const _StepperBar(),
+              SizedBox(height: 16.h),
+    
+              Expanded(
+                child: MultiBlocListener(
+                  listeners: [
+                    // Close sheet & animate on successful page change
+                    BlocListener<SignupVendorBloc, SignupVendorState>(
+                      listenWhen: (p, c) => p.pageIndex != c.pageIndex,
+                      listener: (context, s) {
+                        if (_kycSheetOpen) {
+                          Navigator.of(
+                            context,
+                            rootNavigator: true,
+                          ).maybePop();
+                          _kycSheetOpen = false;
+                        }
+                        _animateTo(s.pageIndex);
+                      },
                     ),
+                    // Close sheet on identity failure (stay on Identity page)
+                    BlocListener<SignupVendorBloc, SignupVendorState>(
+                      listenWhen: (p, c) =>
+                          p.ninVerifying != c.ninVerifying ||
+                          p.bvnVerifying != c.bvnVerifying ||
+                          p.ninError != c.ninError ||
+                          p.bvnError != c.bvnError,
+                      listener: (context, s) {
+                        final failedNow =
+                            (!s.ninVerifying && s.ninError != null) ||
+                            (!s.bvnVerifying && s.bvnError != null);
+                        if (failedNow && _kycSheetOpen) {
+                          Navigator.of(
+                            context,
+                            rootNavigator: true,
+                          ).maybePop();
+                          _kycSheetOpen = false;
+                        }
+                      },
+                    ),
+                  ],
+                  child: PageView(
+                    controller: _controller,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      StepBusinessType(formKey: _formKeys[0]),
+                      StepStoreDetails(formKey: _formKeys[1]),
+                      StepLocation(formKey: _formKeys[2]),
+                      StepPersonal(formKey: _formKeys[3]),
+                      StepIdentity(formKey: _formKeys[4]),
+                      StepSecurity(formKey: _formKeys[5]),
+                      StepReviewVendor(formKey: _formKeys[6]),
+                    ],
                   ),
                 ),
-
-                SizedBox(height: 12.h),
-                BlocBuilder<SignupVendorBloc, SignupVendorState>(
-                  buildWhen: (p, c) =>
-                      p.pageIndex != c.pageIndex || p.loading != c.loading,
-                  builder: (_, s) => _BottomNav(
-                    formKey: _formKeys[s.pageIndex],
-                    isLast: s.pageIndex == s.totalPages - 1,
-                    loading: s.loading,
-                    pageIndex: s.pageIndex, // pass current step
-                    openKycSheet: () {
-                      if (!_kycSheetOpen) {
-                        _kycSheetOpen = true;
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          isDismissible: false,
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(16.r),
-                            ),
-                          ),
-                          builder: (_) => const _KycProgressSheet(),
-                        );
-                      }
-                    },
-                  ),
+              ),
+    
+              SizedBox(height: 12.h),
+              BlocBuilder<SignupVendorBloc, SignupVendorState>(
+                buildWhen: (p, c) =>
+                    p.pageIndex != c.pageIndex || p.loading != c.loading,
+                builder: (_, s) => _BottomNav(
+                  formKey: _formKeys[s.pageIndex],
+                  isLast: s.pageIndex == s.totalPages - 1,
+                  loading: s.loading,
+                  pageIndex: s.pageIndex, // pass current step
+                  openKycSheet: () {
+                    if (!_kycSheetOpen) {
+                      _kycSheetOpen = true;
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        isDismissible: false,
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                        ),
+                        builder: (_) => BlocProvider.value(
+                          value: context.read<SignupVendorBloc>(),
+                          child: const _KycProgressSheet(),
+                        ),
+                      );
+                    }
+                  },
                 ),
-                SizedBox(height: 14.h),
-              ],
-            ),
+              ),
+              SizedBox(height: 14.h),
+            ],
           ),
         ),
       ),
@@ -234,6 +232,8 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Future<void> handleNext() async {
+      FocusScope.of(context).unfocus();
+
       final ok = formKey.currentState?.validate() ?? true;
       if (!ok) return;
 
@@ -342,6 +342,10 @@ class _KycProgressSheet extends StatelessWidget {
               p.ninError != c.ninError ||
               p.bvnError != c.bvnError,
           builder: (_, s) {
+            final allVerified = s.ninVerified && s.bvnVerified;
+            final anyError = s.ninError != null || s.bvnError != null;
+
+            
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,13 +385,33 @@ class _KycProgressSheet extends StatelessWidget {
                 ),
 
                 SizedBox(height: 10.h),
-                Text(
-                  'This won’t take long…',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    color: Colors.black54,
-                  ),
-                ),
+
+                if (allVerified) ...[
+                  Text(
+                    'Done',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                ] else if (anyError) ...[
+                    Text(
+                      'There was an issue',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                      ),
+                    )
+                 ] else ...[
+                    Text(
+                      'This won’t take long…',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.sp,
+                        color: Colors.black54,
+                      ),
+                    )
+                 ],
                 SizedBox(height: 6.h),
               ],
             );
@@ -434,7 +458,7 @@ class _KycProgressSheet extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18.sp, color: color),
+        Icon(icon, size: 16.sp, color: color),
         SizedBox(width: 8.w),
         Expanded(
           child: Column(
@@ -443,15 +467,15 @@ class _KycProgressSheet extends StatelessWidget {
               Text(
                 title,
                 style: GoogleFonts.inter(
-                  fontSize: 13.5.sp,
+                  fontSize: 13.sp,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               Text(
-                err ?? subtitle,
+                ok ? subtitle : err!,
                 style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: err != null ? Colors.red : Colors.black54,
+                  fontSize: 11.sp,
+                  color: ok ? Colors.green : err != null ? Colors.red : Colors.black54,
                 ),
               ),
             ],

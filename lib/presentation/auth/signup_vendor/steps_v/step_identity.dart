@@ -45,7 +45,7 @@ class _StepIdentityState extends State<StepIdentity> {
     final s = context.watch<SignupVendorBloc>().state;
 
     // suffix icons (✅ if verified for the exact value, ❌ if server error)
-    Widget? _ninSuffix() {
+    Widget? ninSuffix() {
       if (s.ninVerified && s.lastVerifiedNin == s.nin) {
         return Icon(Icons.check_circle, color: Colors.green, size: 18.sp);
       }
@@ -55,7 +55,7 @@ class _StepIdentityState extends State<StepIdentity> {
       return null;
     }
 
-    Widget? _bvnSuffix() {
+    Widget? bvnSuffix() {
       if (s.bvnVerified && s.lastVerifiedBvn == s.bvn) {
         return Icon(Icons.check_circle, color: Colors.green, size: 18.sp);
       }
@@ -89,8 +89,8 @@ class _StepIdentityState extends State<StepIdentity> {
                 'NIN (11 digits)',
                 Iconsax.card,
                 KorraValidators.nin,
-                suffix: _ninSuffix(),
-                serverError: s.ninError,
+                suffix: ninSuffix(),
+                serverError: s.ninVerified ? null : s.ninError,
               ),
               SizedBox(height: 12.h),
 
@@ -100,8 +100,8 @@ class _StepIdentityState extends State<StepIdentity> {
                 'BVN (11 digits)',
                 Iconsax.finger_scan,
                 KorraValidators.bvn,
-                suffix: _bvnSuffix(),
-                serverError: s.bvnError,
+                suffix: bvnSuffix(),
+                serverError: s.bvnVerified ? null : s.bvnError,
               ),
 
               SizedBox(height: 8.h),
