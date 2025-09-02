@@ -59,39 +59,39 @@ class MonnifyRepository {
     String? accessToken
   }) async {
     try {
-      // final token = accessToken ?? await getAccessToken();
+      final token = accessToken ?? await getAccessToken();
 
-      // final response = await _dio.post(
-      //   '$_baseUrl/api/v1/vas/bvn-details-match',
-      //   data: {
-      //     "bvn": bvn,
-      //     "name": name,
-      //     "dateOfBirth": dateOfBirth, // Format: "03-Oct-1993"
-      //     "mobileNo": mobileNo,
-      //   },
-      //   options: Options(headers: {
-      //     'Authorization': 'Bearer $token',
-      //     'Content-Type': 'application/json',
-      //   }),
-      // );
+      final response = await _dio.post(
+        '$_baseUrl/api/v1/vas/bvn-details-match',
+        data: {
+          "bvn": bvn,
+          "name": name,
+          "dateOfBirth": dateOfBirth, // Format: "03-Oct-1993"
+          "mobileNo": mobileNo,
+        },
+        options: Options(headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        }),
+      );
 
-      // final data = response.data;
+      final data = response.data;
 
-      // if (data['requestSuccessful'] != true) {
-      //   throw Exception(data['responseMessage'] ?? 'Invalid BVN provided');
-      // }
+      if (data['requestSuccessful'] != true) {
+        throw Exception(data['responseMessage'] ?? 'Invalid BVN provided');
+      }
 
-      // final body = data['responseBody'];
-      // if (body == null || body.isEmpty) {
-      //   throw Exception('BVN verification failed: Empty response body');
-      // }
+      final body = data['responseBody'];
+      if (body == null || body.isEmpty) {
+        throw Exception('BVN verification failed: Empty response body');
+      }
 
-      // final matchPercent = body['name']?['matchPercentage'] ?? 0;
+      final matchPercent = body['name']?['matchPercentage'] ?? 0;
 
-      // if (matchPercent < 50) {
-      //   throw Exception(
-      //       'Name match too low: $matchPercent%. Minimum required is 50%.');
-      // }
+      if (matchPercent < 50) {
+        throw Exception(
+            'Name match too low: $matchPercent%. Minimum required is 50%.');
+      }
     } catch (e) {
       throw Exception('Error verifying BVN: $e');
     }
@@ -100,23 +100,23 @@ class MonnifyRepository {
   /// Verify NIN
   Future<void> verifyNIN(String nin, {String? accessToken}) async {
     try {
-      // final token = accessToken ?? await getAccessToken();
+      final token = accessToken ?? await getAccessToken();
 
-      // final response = await _dio.post(
-      //   '$_baseUrl/api/v1/vas/nin-details',
-      //   data: {'nin': nin},
-      //   options: Options(headers: {
-      //     'Authorization': 'Bearer $token',
-      //     'Content-Type': 'application/json',
-      //   }),
-      // );
+      final response = await _dio.post(
+        '$_baseUrl/api/v1/vas/nin-details',
+        data: {'nin': nin},
+        options: Options(headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        }),
+      );
 
-      // final data = response.data;
-      // debugPrint('NIN verification response: $data');
+      final data = response.data;
+      debugPrint('NIN verification response: $data');
 
-      // if (data['requestSuccessful'] != true) {
-      //   throw Exception(data['responseMessage'] ?? 'NIN not found.');
-      // }
+      if (data['requestSuccessful'] != true) {
+        throw Exception(data['responseMessage'] ?? 'NIN not found.');
+      }
     } catch (e) {
       debugPrint('Error verifying NIN: $e');
       throw Exception('Error verifying NIN: $e');
