@@ -1,23 +1,22 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'signup_vendor_event.dart';
 import 'signup_vendor_state.dart';
-
-import '../../../../data/repository/monnify_repository.dart';
-import '../../../../data/repository/vendors/vendor_repository.dart';
 
 typedef Emit = Emitter<SignupVendorState>;
 
 class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
-  final MonnifyRepository monnify;
+  // Gateways
   final VendorRepository vendors;
+  final FunctionsClient fx;
 
-  SignupVendorBloc({
-    MonnifyRepository? monnifyRepo,
-    VendorRepository? vendorRepo,
-  })  : monnify = monnifyRepo ?? MonnifyRepository(),
-        vendors = vendorRepo ?? VendorRepository(),
+  SignupVendorBloc({VendorRepository? vendorRepo, FunctionsClient? functions})
+      : vendors = vendorRepo ?? VendorRepository(),
+        fx = functions ?? Supabase.instance.client.functions,
         super(const SignupVendorState()) {
     // Navigation
     on<SignupVendorInit>(_onInit);
@@ -27,36 +26,36 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     // V1 — Business type
     on<RegisteredToggled>((e, emit) => emit(state.copyWith(registered: e.registered)));
-    on<CacChanged>((e, emit)        => emit(state.copyWith(cac: e.value)));
-    on<LegalNameChanged>((e, emit)  => emit(state.copyWith(legalName: e.value)));
+    on<CacChanged>((e, emit) => emit(state.copyWith(cac: e.value)));
+    on<LegalNameChanged>((e, emit) => emit(state.copyWith(legalName: e.value)));
 
     // V2 — Store details
-    on<StoreNameChanged>((e, emit)  => emit(state.copyWith(storeName: e.value)));
-    on<PresenceChanged>((e, emit)   => emit(state.copyWith(presence: e.value)));
+    on<StoreNameChanged>((e, emit) => emit(state.copyWith(storeName: e.value)));
+    on<PresenceChanged>((e, emit) => emit(state.copyWith(presence: e.value)));
     on<CategoryToggled>(_onCategoryToggled);
 
     // V3 — Location
-    on<AddressChanged>((e, emit)    => emit(state.copyWith(address: e.value)));
-    on<CityChanged>((e, emit)       => emit(state.copyWith(city: e.value)));
-    on<StateChangedVD>((e, emit)    => emit(state.copyWith(stateName: e.value)));
-    on<MapsLinkChanged>((e, emit)   => emit(state.copyWith(mapsLink: e.value)));
+    on<AddressChanged>((e, emit) => emit(state.copyWith(address: e.value)));
+    on<CityChanged>((e, emit) => emit(state.copyWith(city: e.value)));
+    on<StateChangedVD>((e, emit) => emit(state.copyWith(stateName: e.value)));
+    on<MapsLinkChanged>((e, emit) => emit(state.copyWith(mapsLink: e.value)));
 
     // V4 — Personal
     on<OwnerFirstChanged>((e, emit) => emit(state.copyWith(ownerFirst: e.value)));
-    on<OwnerLastChanged>((e, emit)  => emit(state.copyWith(ownerLast: e.value)));
+    on<OwnerLastChanged>((e, emit) => emit(state.copyWith(ownerLast: e.value)));
     on<OwnerOtherChanged>((e, emit) => emit(state.copyWith(ownerOther: e.value)));
     on<OwnerPhoneChanged>((e, emit) => emit(state.copyWith(ownerPhone: e.value)));
-    on<DobChanged>((e, emit)        => emit(state.copyWith(dob: e.value)));
-    on<GenderChanged>((e, emit)     => emit(state.copyWith(gender: e.value)));
+    on<DobChanged>((e, emit) => emit(state.copyWith(dob: e.value)));
+    on<GenderChanged>((e, emit) => emit(state.copyWith(gender: e.value)));
 
     // V5 — Identity & security
     on<NinChanged>(_onNinChanged);
     on<BvnChanged>(_onBvnChanged);
-    on<VendorEmailChanged>((e, emit)    => emit(state.copyWith(email: e.value)));
+    on<VendorEmailChanged>((e, emit) => emit(state.copyWith(email: e.value)));
     on<VendorPasswordChanged>((e, emit) => emit(state.copyWith(password: e.value)));
-    on<VendorConfirmChanged>((e, emit)  => emit(state.copyWith(confirm: e.value)));
-    on<ToggleVendorPassHidden>((_, emit)=> emit(state.copyWith(hidePass: !state.hidePass)));
-    on<ToggleVendorConfHidden>((_, emit)=> emit(state.copyWith(hideConf: !state.hideConf)));
+    on<VendorConfirmChanged>((e, emit) => emit(state.copyWith(confirm: e.value)));
+    on<ToggleVendorPassHidden>((_, emit) => emit(state.copyWith(hidePass: !state.hidePass)));
+    on<ToggleVendorConfHidden>((_, emit) => emit(state.copyWith(hideConf: !state.hideConf)));
 
     // KYC (explicit triggers if you keep standalone Verify buttons)
     on<VerifyBvnRequested>(_onVerifyBvn);
@@ -76,18 +75,17 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
   /// On Identity step, verify only fields that need it; otherwise just advance.
   Future<void> _onNext(SignupVendorNextPressed event, Emit emit) async {
     const identityStepIndex = 4;
+    final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
 
     if (state.pageIndex != identityStepIndex) {
-      final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
       emit(state.copyWith(pageIndex: next));
       return;
     }
 
-    final ninNeeds = !(state.ninVerified && state.lastVerifiedNin == state.nin);
-    final bvnNeeds = !(state.bvnVerified && state.lastVerifiedBvn == state.bvn);
+    final ninNeedsVerification = !(state.ninVerified && state.lastVerifiedNin == state.nin);
+    final bvnNeedsVerification = !(state.bvnVerified && state.lastVerifiedBvn == state.bvn);
 
-    if (!ninNeeds && !bvnNeeds) {
-      final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
+    if (!ninNeedsVerification && !bvnNeedsVerification) {
       emit(state.copyWith(pageIndex: next));
       return;
     }
@@ -96,19 +94,19 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
-    if (ninNeeds && state.nin.trim().length != 11) {
+    if (ninNeedsVerification && state.nin.trim().length != 11) {
       emit(state.copyWith(ninError: 'Enter a valid 11-digit NIN'));
       return;
     }
-    if (bvnNeeds && state.bvn.trim().length != 11) {
+    if (bvnNeedsVerification && state.bvn.trim().length != 11) {
       emit(state.copyWith(bvnError: 'Enter a valid 11-digit BVN'));
       return;
     }
 
     try {
-      if (ninNeeds) {
+      if (ninNeedsVerification) {
         emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
-        await monnify.verifyNIN(state.nin.trim());
+        await _verifyNinViaFx(state.nin.trim());
         emit(state.copyWith(
           ninVerifying: false,
           ninVerified: true,
@@ -116,20 +114,23 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         ));
       }
 
-      if (bvnNeeds) {
+      if (bvnNeedsVerification) {
         emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
-
         final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
-        final dobForBvn = _formatDobForBvn(state.dob!); // "DD-MMM-YYYY"
+        final dobForBvn = _formatDobForBvn(state.dob);
         final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
 
-        await monnify.verifyBVN(
+        if (dobForBvn == null) {
+          emit(state.copyWith(kycError: 'Date of birth is missing'));
+          return;
+        }
+
+        await _verifyBvnViaFx(
           bvn: state.bvn.trim(),
           name: fullName,
-          dateOfBirth: dobForBvn,
+          dateOfBirthIso: dobForBvn,
           mobileNo: localPhone,
         );
-
         emit(state.copyWith(
           bvnVerifying: false,
           bvnVerified: true,
@@ -137,9 +138,9 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         ));
       }
 
-      final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
       emit(state.copyWith(pageIndex: next));
     } catch (error) {
+      debugPrint('Error during KYC verification: $error');
       if (state.ninVerifying) {
         emit(state.copyWith(
           ninVerifying: false,
@@ -171,6 +172,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       await vendors.createVendorFromState(state);
       emit(state.copyWith(loading: false));
     } catch (error) {
+      debugPrint('Error submitting vendor: $error');
       emit(state.copyWith(loading: false, kycError: error.toString()));
     }
   }
@@ -209,8 +211,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     ));
   }
 
-  // ── Explicit KYC triggers (if you keep Verify buttons) ─────────────────────
-
+  // ── Optional explicit KYC triggers (if you keep buttons) ───────────────────
   Future<void> _onVerifyNin(VerifyNinRequested event, Emit emit) async {
     if (state.nin.trim().isEmpty) {
       emit(state.copyWith(kycError: 'Enter NIN'));
@@ -223,10 +224,19 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      await monnify.verifyNIN(state.nin.trim());
-      emit(state.copyWith(ninVerifying: false, ninVerified: true, lastVerifiedNin: state.nin.trim()));
+      await _verifyNinViaFx(state.nin.trim());
+      emit(state.copyWith(
+        ninVerifying: false,
+        ninVerified: true,
+        lastVerifiedNin: state.nin.trim(),
+      ));
     } catch (error) {
-      emit(state.copyWith(ninVerifying: false, ninVerified: false, kycError: error.toString()));
+      debugPrint('Error verifying NIN: $error');
+      emit(state.copyWith(
+        ninVerifying: false,
+        ninVerified: false,
+        kycError: error.toString(),
+      ));
     }
   }
 
@@ -243,26 +253,87 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     emit(state.copyWith(bvnVerifying: true, kycError: null));
     try {
       final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
-      final dobForBvn = _formatDobForBvn(state.dob!);
+      final dobIso = _formatDobForBvn(state.dob);
       final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
 
-      await monnify.verifyBVN(
+      if (dobIso == null) {
+        emit(state.copyWith(kycError: 'Date of birth is missing'));
+        return;
+      }
+
+      await _verifyBvnViaFx(
         bvn: state.bvn.trim(),
         name: fullName,
-        dateOfBirth: dobForBvn,
+        dateOfBirthIso: dobIso,
         mobileNo: localPhone,
       );
-
-      emit(state.copyWith(bvnVerifying: false, bvnVerified: true, lastVerifiedBvn: state.bvn.trim()));
+      emit(state.copyWith(
+        bvnVerifying: false,
+        bvnVerified: true,
+        lastVerifiedBvn: state.bvn.trim(),
+      ));
     } catch (error) {
-      emit(state.copyWith(bvnVerifying: false, bvnVerified: false, kycError: error.toString()));
+      debugPrint('Error verifying BVN: $error');
+      emit(state.copyWith(
+        bvnVerifying: false,
+        bvnVerified: false,
+        kycError: error.toString(),
+      ));
     }
+  }
+
+  // ── Supabase Functions calls ───────────────────────────────────────────────
+  Future<void> _verifyNinViaFx(String nin) async {
+    // final res = await fx.invoke('nin-verify', body: {'nin': nin});
+    // final data = res.data;
+    // if (data is Map && data['ok'] == true) return;
+    // throw Exception(
+    //   (data is Map ? data['message'] ?? data['error'] : null) ??
+    //       'NIN verification failed',
+    // );
+  }
+
+  Future<void> _verifyBvnViaFx({
+    required String bvn,
+    required String name,
+    required String dateOfBirthIso, // "YYYY-MM-DD"
+    required String mobileNo,
+  }) async {
+    // final res = await fx.invoke(
+    //   'bvn-verify',
+    //   body: {
+    //     'bvn': bvn,
+    //     'name': name,
+    //     'dateOfBirth': dateOfBirthIso, // function will convert to "DD-MMM-YYYY"
+    //     'mobileNo': mobileNo,
+    //   },
+    // );
+    // final data = res.data;
+    // if (data is Map && data['ok'] == true) return;
+    // throw Exception(
+    //   (data is Map ? data['message'] ?? data['error'] : null) ??
+    //       'BVN verification failed',
+    // );
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  String _formatDobForBvn(DateTime date) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  String? _formatDobForBvn(DateTime? date) {
+    if (date == null) return null;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final dd = date.day.toString().padLeft(2, '0');
     final mmm = months[date.month - 1];
     final yyyy = date.year.toString().padLeft(4, '0');

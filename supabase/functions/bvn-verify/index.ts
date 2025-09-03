@@ -21,14 +21,34 @@ async function getAccessToken(): Promise<string> {
   return token;
 }
 
+// Helper to convert date to Monnify format "03-Oct-1993"
+function toMonnifyDate(date: string | Date): string {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) throw new Error("Invalid date");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const month = monthNames[d.getUTCMonth()];
+  const year = d.getUTCFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 async function verifyBVN(body: any) {
   const { bvn, name, dateOfBirth, mobileNo } = body ?? {};
   if (!bvn || !name || !dateOfBirth || !mobileNo) return new Response("Missing fields", { status: 400 });
 
   const token = await getAccessToken();
+
+  // Convert dateOfBirth to Monnify format
+  let dob: string;
+  try {
+    dob = toMonnifyDate(dateOfBirth);
+  } catch (e) {
+    return new Response((e as Error).message, { status: 400 });
+  }
+
   const res = await fetch(`${BASE_URL}/api/v1/vas/bvn-details-match`, {
     method: "POST",
-    body: JSON.stringify({ bvn, name, dateOfBirth, mobileNo }),
+    body: JSON.stringify({ bvn, name, dateOfBirth: dob, mobileNo }),
     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
   });
   const data = await res.json();

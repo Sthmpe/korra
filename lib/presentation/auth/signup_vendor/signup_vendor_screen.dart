@@ -75,8 +75,10 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                     // Close sheet & animate on successful page change
                     BlocListener<SignupVendorBloc, SignupVendorState>(
                       listenWhen: (p, c) => p.pageIndex != c.pageIndex,
-                      listener: (context, s) {
+                      listener: (context, s) async {
+                        
                         if (_kycSheetOpen) {
+                          await Future.delayed(const Duration(seconds: 3));
                           Navigator.of(
                             context,
                             rootNavigator: true,
@@ -93,11 +95,13 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                           p.bvnVerifying != c.bvnVerifying ||
                           p.ninError != c.ninError ||
                           p.bvnError != c.bvnError,
-                      listener: (context, s) {
+                      listener: (context, s) async {
                         final failedNow =
                             (!s.ninVerifying && s.ninError != null) ||
                             (!s.bvnVerifying && s.bvnError != null);
+
                         if (failedNow && _kycSheetOpen) {
+                          await Future.delayed(const Duration(seconds: 3));
                           Navigator.of(
                             context,
                             rootNavigator: true,
@@ -289,6 +293,7 @@ class _BottomNav extends StatelessWidget {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   minimumSize: Size.fromHeight(48.h),
+                  overlayColor: KorraColors.brand,
                   backgroundColor: KorraColors.brand,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.r),
@@ -472,7 +477,7 @@ class _KycProgressSheet extends StatelessWidget {
                 ),
               ),
               Text(
-                ok ? subtitle : err!,
+                ok ? subtitle : (err ?? 'Pending'),
                 style: GoogleFonts.inter(
                   fontSize: 11.sp,
                   color: ok ? Colors.green : err != null ? Colors.red : Colors.black54,

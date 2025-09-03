@@ -36,14 +36,8 @@ class RoleLoginScreen extends StatelessWidget {
           if (state.status == LoginStatus.success) {
             if (state.role == KorraRole.vendor) {
               Get.to(() => const VendorShell());
-              // Get.snackbar('Logged in', 'Vendor shell placeholder',
-              //     snackPosition: SnackPosition.BOTTOM,
-              //     margin: EdgeInsets.all(12.w));
             } else {
                Get.to(() => const CustomerShell());
-              // Get.snackbar('Logged in', 'Customer shell placeholder',
-              //     snackPosition: SnackPosition.BOTTOM,
-              //     margin: EdgeInsets.all(12.w));
             }
           }
 

@@ -1,72 +1,147 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'role_login_event.dart';
 import 'role_login_state.dart';
 
 class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
-  RoleLoginBloc() : super(const RoleLoginState()) {
-    on<RoleSelected>((e, emit) => emit(state.copyWith(role: e.role, failure: null, status: LoginStatus.idle)));
-    on<EmailChanged>((e, emit) => emit(state.copyWith(email: e.email, failure: null, status: LoginStatus.idle)));
-    on<PasswordChanged>((e, emit) => emit(state.copyWith(password: e.password, failure: null, status: LoginStatus.idle)));
-    on<TogglePasswordVisibility>((e, emit) => emit(state.copyWith(passwordHidden: !state.passwordHidden)));
+  final VendorRepository _vendorRepo;
+
+  RoleLoginBloc({VendorRepository? vendorRepo})
+    : _vendorRepo = vendorRepo ?? VendorRepository(),
+      super(const RoleLoginState()) {
+    on<RoleSelected>(
+      (e, emit) => emit(
+        state.copyWith(role: e.role, failure: null, status: LoginStatus.idle),
+      ),
+    );
+
+    on<EmailChanged>(
+      (e, emit) => emit(
+        state.copyWith(email: e.email, failure: null, status: LoginStatus.idle),
+      ),
+    );
+
+    on<PasswordChanged>(
+      (e, emit) => emit(
+        state.copyWith(
+          password: e.password,
+          failure: null,
+          status: LoginStatus.idle,
+        ),
+      ),
+    );
+
+    on<TogglePasswordVisibility>(
+      (e, emit) => emit(state.copyWith(passwordHidden: !state.passwordHidden)),
+    );
 
     on<SubmitPressed>(_onSubmitPressed);
     on<BiometricsPressed>(_onBiometricsPressed);
-    on<FailureAcknowledged>((e, emit) => emit(state.copyWith(failure: null, status: LoginStatus.idle)));
+    on<FailureAcknowledged>(
+      (e, emit) =>
+          emit(state.copyWith(failure: null, status: LoginStatus.idle)),
+    );
   }
 
-  Future<void> _onSubmitPressed(SubmitPressed e, Emitter<RoleLoginState> emit) async {
+  Future<void> _onSubmitPressed(
+    SubmitPressed e,
+    Emitter<RoleLoginState> emit,
+  ) async {
     if (state.loading || !state.isFormValid) return;
-    emit(state.copyWith(loading: true, status: LoginStatus.submitting, failure: null));
 
-    await Future.delayed(const Duration(milliseconds: 900));
+    emit(
+      state.copyWith(
+        loading: true,
+        status: LoginStatus.submitting,
+        failure: null,
+      ),
+    );
 
-    final email = state.email.toLowerCase();
-
-    if (email.contains('fail')) {
-      emit(state.copyWith(
-        loading: false,
-        status: LoginStatus.failure,
-        failure: const KorraFailure(
-          code: 'invalid_credentials',
-          title: 'We couldn’t sign you in',
-          message: 'Your email or password is incorrect. Double-check and try again, or reset your password.',
+    try {
+      if (state.role == KorraRole.vendor) {
+        final uid = await _vendorRepo.signInVendor(
+          state.email.trim(),
+          state.password.trim(),
+        );
+        if (uid.isNotEmpty) {
+          emit(
+            state.copyWith(
+              loading: false,
+              status: LoginStatus.success,
+              role: KorraRole.vendor,
+            ),
+          );
+          return;
+        }
+      } else {
+        // Mock customer login for now
+        await Future.delayed(const Duration(seconds: 1));
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.success,
+            role: KorraRole.customer,
+          ),
+        );
+        return;
+      }
+    } on FirebaseAuthException catch (ex) {
+      emit(
+        state.copyWith(
+          loading: false,
+          status: LoginStatus.failure,
+          failure: _mapAuthError(ex),
         ),
-      ));
-      return;
+      );
+    } on Exception catch (err) {
+      final msg = err.toString();
+      if (msg.contains('customer')) {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'role_mismatch',
+              title: 'Check role selected',
+              message: 'This account is not registered as a vendor.',
+            ),
+          ),
+        );
+      } else if (msg.contains('vendor')) {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'role_mismatch',
+              title: 'Check role selected',
+              message: 'This account is not registered as a customer.',
+            ),
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'unknown',
+              title: 'We couldn’t sign you in',
+              message: 'Please try again in a moment.',
+            ),
+          ),
+        );
+      }
     }
-
-    if (email.contains('offline')) {
-      emit(state.copyWith(
-        loading: false,
-        status: LoginStatus.failure,
-        failure: const KorraFailure(
-          code: 'network_unavailable',
-          title: 'No connection',
-          message: 'We can’t reach Korra right now. Check your internet connection and try again.',
-        ),
-      ));
-      return;
-    }
-
-    if (email.contains('blocked')) {
-      emit(state.copyWith(
-        loading: false,
-        status: LoginStatus.failure,
-        failure: const KorraFailure(
-          code: 'too_many_attempts',
-          title: 'Account temporarily locked',
-          message: 'For your security, sign-in is paused. Try again in a few minutes or reset your password.',
-        ),
-      ));
-      return;
-    }
-
-    // success
-    emit(state.copyWith(loading: false, status: LoginStatus.success));
   }
 
-  Future<void> _onBiometricsPressed(BiometricsPressed e, Emitter<RoleLoginState> emit) async {
+  Future<void> _onBiometricsPressed(
+    BiometricsPressed e,
+    Emitter<RoleLoginState> emit,
+  ) async {
     if (state.bioUi == BiometricUi.inProgress) return;
     emit(state.copyWith(bioUi: BiometricUi.pressed));
     await Future.delayed(const Duration(milliseconds: 120));
@@ -77,5 +152,36 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
     emit(state.copyWith(bioUi: BiometricUi.success));
     await Future.delayed(const Duration(milliseconds: 600));
     emit(state.copyWith(bioUi: BiometricUi.idle));
+  }
+
+  KorraFailure _mapAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-email':
+      case 'user-not-found':
+      case 'wrong-password':
+        return const KorraFailure(
+          code: 'invalid_credentials',
+          title: 'Incorrect email or password',
+          message: 'Double-check your credentials and try again.',
+        );
+      case 'user-disabled':
+        return const KorraFailure(
+          code: 'user_disabled',
+          title: 'Account disabled',
+          message: 'Contact support if this is unexpected.',
+        );
+      case 'too-many-requests':
+        return const KorraFailure(
+          code: 'too_many_requests',
+          title: 'Too many attempts',
+          message: 'Try again in a little while.',
+        );
+      default:
+        return KorraFailure(
+          code: e.code,
+          title: 'Authentication Failed',
+          message: e.message ?? 'An unknown error occurred. Please try again.',
+        );
+    }
   }
 }
