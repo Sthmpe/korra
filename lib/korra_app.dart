@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import 'config/theme/app_theme.dart';
 import 'logic/core/net/korra_offline_gate.dart';
 
 class KorraApp extends StatelessWidget {
-  const KorraApp({super.key});
+  const KorraApp({
+    super.key,
+    required this.startScreen,
+  });
+
+  final Widget startScreen;
 
   @override
   Widget build(BuildContext context) {
@@ -18,12 +22,11 @@ class KorraApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'Korra',
         theme: AppTheme.light(),
-        home: const RoleLoginScreen(),
-        builder: (context, child) => KorraOfflineGate(
+        home: KorraOfflineGate(
           child: GestureDetector(
             onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
             behavior: HitTestBehavior.translucent,
-            child: child ?? const SizedBox(),
+            child: startScreen,
           ),
         ),
       ),

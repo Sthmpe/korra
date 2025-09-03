@@ -4,21 +4,18 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../customer/customer_shell.dart';
-import '../../vendor/vendor_shell.dart';
-import 'widgets/login_button.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../logic/bloc/auth/role_login/role_login_bloc.dart';
-import '../../../logic/bloc/auth/role_login/role_login_state.dart';
 import '../../../logic/bloc/auth/role_login/role_login_event.dart';
-import 'widgets/login_header.dart';
-import 'widgets/role_selector.dart';
-import 'widgets/role_divider.dart';
-import 'widgets/login_fields.dart';
+import '../../../logic/bloc/auth/role_login/role_login_state.dart';
+import '../../customer/customer_shell.dart';
+import '../../vendor/vendor_shell.dart';
 import 'widgets/biometric_button.dart';
-
-// import '../../customer/customer_shell.dart';
-// import '../../vendor/vendor_shell.dart';
+import 'widgets/login_button.dart';
+import 'widgets/login_fields.dart';
+import 'widgets/login_header.dart';
+import 'widgets/role_divider.dart';
+import 'widgets/role_selector.dart';
 
 class RoleLoginScreen extends StatelessWidget {
   const RoleLoginScreen({super.key});
@@ -32,16 +29,13 @@ class RoleLoginScreen extends StatelessWidget {
       child: BlocListener<RoleLoginBloc, RoleLoginState>(
         listenWhen: (p, c) => p.status != c.status || p.failure != c.failure,
         listener: (context, state) async {
-          // SUCCESS → navigate using GetX
           if (state.status == LoginStatus.success) {
-            if (state.role == KorraRole.vendor) {
-              Get.to(() => const VendorShell());
-            } else {
-               Get.to(() => const CustomerShell());
-            }
+            final Widget destination =
+                state.role == KorraRole.vendor ? const VendorShell() : const CustomerShell();
+            // Using Get.offAll to prevent returning to the login screen.
+            Get.offAll(() => destination);
           }
 
-          // FAILURE → show premium sheet
           if (state.status == LoginStatus.failure && state.failure != null) {
             await showModalBottomSheet(
               context: context,
@@ -52,7 +46,6 @@ class RoleLoginScreen extends StatelessWidget {
               ),
               builder: (_) => _KorraFailureSheet(f: state.failure!),
             );
-            // user dismissed
             if (context.mounted) {
               context.read<RoleLoginBloc>().add(FailureAcknowledged());
             }
@@ -76,7 +69,7 @@ class RoleLoginScreen extends StatelessWidget {
                   SizedBox(height: 40.h),
                   LoginFields(formKey: formKey),
                   SizedBox(height: 16.h),
-                  RoleDivider(),
+                  const RoleDivider(),
                   SizedBox(height: 40.h),
                   const Center(child: BiometricButton()),
                   SizedBox(height: 14.h),
@@ -101,7 +94,6 @@ class RoleLoginScreen extends StatelessWidget {
   }
 }
 
-/// Premium failure UX (bottom sheet)
 class _KorraFailureSheet extends StatelessWidget {
   final KorraFailure f;
   const _KorraFailureSheet({required this.f});
@@ -113,43 +105,91 @@ class _KorraFailureSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 40.w, height: 4.h, decoration: BoxDecoration(color: const Color(0xFFEAE6E2), borderRadius: BorderRadius.circular(2.r))),
+          Container(
+            width: 40.w,
+            height: 4.h,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAE6E2),
+              borderRadius: BorderRadius.circular(2.r),
+            ),
+          ),
           SizedBox(height: 16.h),
-          Icon(Icons.error_outline, size: 36.sp, color: const Color(0xFFA54600)),
+          Icon(
+            Icons.error_outline,
+            size: 36.sp,
+            color: const Color(0xFFA54600),
+          ),
           SizedBox(height: 12.h),
-          Text(f.title, textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF1B1B1B))),
+          Text(
+            f.title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1B1B1B),
+            ),
+          ),
           SizedBox(height: 8.h),
-          Text(f.message, textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w400, color: const Color(0xFF5E5E5E))),
+          Text(
+            f.message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF5E5E5E),
+            ),
+          ),
           SizedBox(height: 20.h),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size.fromHeight(48.h),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                  side: const BorderSide(color: Color(0xFFA54600)),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: Size.fromHeight(48.h),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    side: const BorderSide(color: Color(0xFFA54600)),
+                  ),
+                  child: Text(
+                    'Try again',
+                    style: GoogleFonts.inter(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFA54600),
+                    ),
+                  ),
                 ),
-                child: Text('Try again', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFFA54600))),
               ),
-            ),
-          ]),
+            ],
+          ),
           SizedBox(height: 10.h),
-          Row(children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  // Get.to(() => const ForgotPasswordScreen());
-                },
-                child: Text('Forgot password?', style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Forgot password?',
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1B1B1B),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
           SizedBox(height: 6.h),
-          Text('Need help? Contact support', style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF8B8B8B))),
+          Text(
+            'Need help? Contact support',
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: const Color(0xFF8B8B8B),
+            ),
+          ),
           SizedBox(height: 6.h),
         ],
       ),

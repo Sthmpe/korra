@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'role_login_event.dart';
@@ -74,6 +76,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
               role: KorraRole.vendor,
             ),
           );
+          await _persistUserSession(uid, 'vendor');
           return;
         }
       } else {
@@ -86,6 +89,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
             role: KorraRole.customer,
           ),
         );
+        //await _persistUserSession(uid, 'customer');
         return;
       }
     } on FirebaseAuthException catch (ex) {
@@ -136,6 +140,13 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         );
       }
     }
+  }
+
+  Future<void> _persistUserSession(String uid, String role) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('user_uid', uid);
+    await prefs.setString('user_role', role);
   }
 
   Future<void> _onBiometricsPressed(
