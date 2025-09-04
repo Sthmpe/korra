@@ -1,22 +1,60 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'; // Required for debugPrint
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FunctionsClient;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, FunctionsClient;
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 import 'package:korra/data/models/vendor/vendor_model.dart';
+
+import '../remote/monnify_functions.dart';
 
 class VendorRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _db;
   final FunctionsClient _fx;
+  final MonnifyFunctions _monnify;
 
   VendorRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? db,
     FunctionsClient? functions,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _db = db ?? FirebaseFirestore.instance,
-        _fx = functions ?? Supabase.instance.client.functions;
+    MonnifyFunctions? monnify,
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _db = db ?? FirebaseFirestore.instance,
+       _fx = functions ?? Supabase.instance.client.functions,
+       _monnify = monnify ?? MonnifyFunctions();
+
+  /// ✅ Verify BVN through Monnify
+  Future<void> verifyBvn({
+    required String bvn,
+    required String name,
+    required String dateOfBirthIso,
+    required String mobileNo,
+  }) async {
+    try {
+      final result = await _monnify.verifyBvn(
+        bvn: bvn,
+        name: name,
+        dateOfBirthIso: dateOfBirthIso,
+        mobileNo: mobileNo,
+      );
+
+      // Business rule: must not be NO_MATCH
+      final nameMatch = result['nameMatch'] as String? ?? "NO_MATCH";
+      final mobileMatch = result['mobileMatch'] as String? ?? "NO_MATCH";
+
+      if (nameMatch == "NO_MATCH" || mobileMatch == "NO_MATCH") {
+        throw Exception(
+          "BVN verification failed: Name or Mobile did not match",
+        );
+      }
+
+      debugPrint("✅ BVN verified successfully for $name");
+    } catch (e) {
+      debugPrint("❌ BVN verification failed: $e");
+      throw Exception("BVN verification failed: $e");
+    }
+  }
 
   /// Creates a new vendor account with Firebase Auth, a Monnify wallet,
   /// and a Firestore document.
@@ -26,7 +64,7 @@ class VendorRepository {
     }
 
     final email = state.email.trim().toLowerCase();
-    
+
     final customerExists = await _checkIfCustomerExists(email);
     if (customerExists) {
       throw Exception('Email is already used by a customer.');
@@ -49,14 +87,16 @@ class VendorRepository {
         accountName: walletData['accountName'] as String?,
         status: 'active',
       );
-      debugPrint('Monnify wallet created successfully for vendor: ${vendor.storeName}');
+      debugPrint(
+        'Monnify wallet created successfully for vendor: ${vendor.storeName}',
+      );
     } catch (err) {
       debugPrint('Wallet creation failed: $err');
     }
 
     await _saveVendorToFirestore(vendor);
     debugPrint('Vendor data saved to Firestore.');
-    
+
     await _sendWelcomeEmail(vendor);
     debugPrint('Welcome email function triggered.');
 
@@ -65,7 +105,9 @@ class VendorRepository {
 
   /// Authenticates a vendor using email and password.
   Future<String> signInVendor(String email, String password) async {
-    final customerExists = await _checkIfCustomerExists(email.trim().toLowerCase());
+    final customerExists = await _checkIfCustomerExists(
+      email.trim().toLowerCase(),
+    );
     if (customerExists) {
       throw Exception('Email is already used by a customer.');
     }
@@ -74,7 +116,9 @@ class VendorRepository {
       email: email.trim().toLowerCase(),
       password: password,
     );
-    debugPrint('Vendor signed in successfully with UID: ${credential.user!.uid}');
+    debugPrint(
+      'Vendor signed in successfully with UID: ${credential.user!.uid}',
+    );
     return credential.user!.uid;
   }
 
@@ -89,9 +133,13 @@ class VendorRepository {
   }
 
   /// Calls the Supabase Edge Function to create a Monnify wallet.
-  Future<Map<String, dynamic>> _createWalletViaFx(Vendor vendor, String uid) async {
-    final walletRef = 'korra_${uid.substring(0, 6)}_${DateTime.now().millisecondsSinceEpoch}';
-    
+  Future<Map<String, dynamic>> _createWalletViaFx(
+    Vendor vendor,
+    String uid,
+  ) async {
+    final walletRef =
+        'korra_${uid.substring(0, 6)}_${DateTime.now().millisecondsSinceEpoch}';
+
     final res = await _fx.invoke(
       'create-wallet',
       body: {
@@ -104,11 +152,15 @@ class VendorRepository {
       },
     );
 
-    if (res.data is Map && res.data['ok'] == true && res.data['result'] is Map) {
+    if (res.data is Map &&
+        res.data['ok'] == true &&
+        res.data['result'] is Map) {
       return Map<String, dynamic>.from(res.data['result'] as Map);
     }
 
-    final message = res.data is Map ? (res.data['message'] ?? res.data['error']) : 'Wallet creation failed';
+    final message = res.data is Map
+        ? (res.data['message'] ?? res.data['error'])
+        : 'Wallet creation failed';
     throw Exception(message);
   }
 

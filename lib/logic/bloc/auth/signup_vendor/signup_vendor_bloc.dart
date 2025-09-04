@@ -125,7 +125,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
           return;
         }
 
-        await _verifyBvnViaFx(
+        await vendors.verifyBvn(
           bvn: state.bvn.trim(),
           name: fullName,
           dateOfBirthIso: dobForBvn,
@@ -261,7 +261,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         return;
       }
 
-      await _verifyBvnViaFx(
+      await vendors.verifyBvn(
         bvn: state.bvn.trim(),
         name: fullName,
         dateOfBirthIso: dobIso,
@@ -293,28 +293,6 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     // );
   }
 
-  Future<void> _verifyBvnViaFx({
-    required String bvn,
-    required String name,
-    required String dateOfBirthIso, // "YYYY-MM-DD"
-    required String mobileNo,
-  }) async {
-    // final res = await fx.invoke(
-    //   'bvn-verify',
-    //   body: {
-    //     'bvn': bvn,
-    //     'name': name,
-    //     'dateOfBirth': dateOfBirthIso, // function will convert to "DD-MMM-YYYY"
-    //     'mobileNo': mobileNo,
-    //   },
-    // );
-    // final data = res.data;
-    // if (data is Map && data['ok'] == true) return;
-    // throw Exception(
-    //   (data is Map ? data['message'] ?? data['error'] : null) ??
-    //       'BVN verification failed',
-    // );
-  }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 

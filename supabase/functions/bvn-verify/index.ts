@@ -16,12 +16,15 @@ async function getAccessToken(): Promise<string> {
   });
   const data = await res.json();
   if (!data.requestSuccessful) throw new Error("Auth failed");
-  const token = data.responseBody.accessToken;
-  cachedToken = { value: token, exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000) };
-  return token;
+
+  cachedToken = {
+    value: data.responseBody.accessToken,
+    exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000),
+  };
+  return cachedToken.value;
 }
 
-// Helper to convert date to Monnify format "03-Oct-1993"
+// --- Helper: Convert to Monnify DOB format "03-Oct-1993"
 function toMonnifyDate(date: string | Date): string {
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) throw new Error("Invalid date");
@@ -32,36 +35,65 @@ function toMonnifyDate(date: string | Date): string {
   return `${day}-${month}-${year}`;
 }
 
-async function verifyBVN(body: any) {
+// --- BVN Verification ---
+async function handleVerifyBVN(body: any) {
   const { bvn, name, dateOfBirth, mobileNo } = body ?? {};
-  if (!bvn || !name || !dateOfBirth || !mobileNo) return new Response("Missing fields", { status: 400 });
+  if (!bvn || !name || !dateOfBirth || !mobileNo) {
+    return new Response(JSON.stringify({ ok: false, message: "Missing fields" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const token = await getAccessToken();
 
-  // Convert dateOfBirth to Monnify format
   let dob: string;
   try {
     dob = toMonnifyDate(dateOfBirth);
   } catch (e) {
-    return new Response((e as Error).message, { status: 400 });
+    return new Response(JSON.stringify({ ok: false, message: (e as Error).message }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const res = await fetch(`${BASE_URL}/api/v1/vas/bvn-details-match`, {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ bvn, name, dateOfBirth: dob, mobileNo }),
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
   });
+
   const data = await res.json();
-  if (!data.requestSuccessful) return new Response(data.responseMessage || "BVN failed", { status: 400 });
+  if (!res.ok || !data.requestSuccessful) {
+    return new Response(JSON.stringify({ ok: false, message: data.responseMessage || "BVN verification failed" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  const matchPercent = data.responseBody?.name?.matchPercentage ?? 0;
-  if (matchPercent < 50) return new Response(`Name match too low: ${matchPercent}%`, { status: 422 });
-
-  return new Response(JSON.stringify({ ok: true, result: data.responseBody }), { headers: { "Content-Type": "application/json" } });
+  const r = data.responseBody;
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      message: "BVN verification completed",
+      bvn: r.bvn,
+      nameMatch: r.name?.matchStatus ?? "NO_MATCH",
+      nameMatchPercent: r.name?.matchPercentage ?? 0,
+      dobMatch: r.dateOfBirth ?? "NO_MATCH",
+      mobileMatch: r.mobileNo ?? "NO_MATCH",
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );
 }
 
+// --- Entry Point ---
 serve(async (req) => {
-  if (req.method !== "POST") return new Response("Only POST", { status: 405 });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: false, message: "Only POST allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const body = await req.json();
-  return await verifyBVN(body);
+  return await handleVerifyBVN(body);
 });
