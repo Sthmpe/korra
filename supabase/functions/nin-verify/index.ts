@@ -1,3 +1,4 @@
+// supabase/functions/nin-verify/index.ts
 import { serve } from "https://deno.land/std/http/server.ts";
 
 const BASE_URL = Deno.env.get("MONNIFY_BASE_URL")!;
@@ -12,34 +13,78 @@ async function getAccessToken(): Promise<string> {
   const basic = btoa(`${API_KEY}:${SECRET_KEY}`);
   const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
     method: "POST",
-    headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/json",
+    },
   });
+
   const data = await res.json();
   if (!data.requestSuccessful) throw new Error("Auth failed");
+
   const token = data.responseBody.accessToken;
-  cachedToken = { value: token, exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000) };
+  cachedToken = {
+    value: token,
+    exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000),
+  };
   return token;
 }
 
-async function verifyNIN(body: any) {
-  const { nin } = body ?? {};
-  if (!nin) return new Response("nin is required", { status: 400 });
-
+async function verifyNIN(nin: string) {
   const token = await getAccessToken();
+
   const res = await fetch(`${BASE_URL}/api/v1/vas/nin-details`, {
     method: "POST",
     body: JSON.stringify({ nin }),
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
   });
 
   const data = await res.json();
-  if (!data.requestSuccessful) return new Response(data.responseMessage || "NIN not found", { status: 404 });
 
-  return new Response(JSON.stringify({ ok: true, result: data.responseBody }), { headers: { "Content-Type": "application/json" } });
+  if (!data.requestSuccessful) {
+    return {
+      ok: false,
+      message: data.responseMessage || "NIN verification failed",
+    };
+  }
+
+  const r = data.responseBody;
+  return {
+    ok: true,
+    nin: r.nin,
+    firstName: r.firstName,
+    middleName: r.middleName,
+    lastName: r.lastName,
+    dateOfBirth: r.dateOfBirth,
+    gender: r.gender,
+    mobileNumber: r.mobileNumber,
+  };
 }
 
 serve(async (req) => {
-  if (req.method !== "POST") return new Response("Only POST", { status: 405 });
-  const body = await req.json();
-  return await verifyNIN(body);
+  try {
+    if (req.method !== "POST") {
+      return new Response("Only POST allowed", { status: 405 });
+    }
+    const { nin } = await req.json();
+    if (!nin) {
+      return new Response(
+        JSON.stringify({ ok: false, message: "nin is required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const result = await verifyNIN(nin);
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ ok: false, message: (e as Error).message }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
 });

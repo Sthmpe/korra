@@ -11,7 +11,7 @@ class VendorHoldVault extends StatelessWidget {
   final int daysRemaining;        // e.g. 9
   final String nextRelease;       // e.g. 'Aug 27'
   final List<HoldEntry> entries;  // upcoming releases (date/amount/released)
-  final VoidCallback onViewSchedule;
+  final VoidCallback? onViewSchedule;
 
   const VendorHoldVault({
     super.key,

@@ -166,7 +166,7 @@ class _VendorActivityTileProState extends State<_VendorActivityTilePro>
     }
   }
 
-  Widget _primary(String text, VoidCallback onTap) {
+  Widget _primary(String text, VoidCallback? onTap) {
     return SizedBox(
       height: 36.h,
       child: FilledButton(

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
+import '../../../../config/constants/prefs_keys.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'role_login_event.dart';
 import 'role_login_state.dart';
@@ -145,8 +146,8 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
   Future<void> _persistUserSession(String uid, String role) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString('user_uid', uid);
-    await prefs.setString('user_role', role);
+    await prefs.setString(PrefsKeys.userUid, uid);
+    await prefs.setString(PrefsKeys.userRole, role);
   }
 
   Future<void> _onBiometricsPressed(

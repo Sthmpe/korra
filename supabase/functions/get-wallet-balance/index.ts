@@ -1,3 +1,4 @@
+// supabase/functions/get-wallet-balance/index.ts
 import { serve } from "https://deno.land/std/http/server.ts";
 
 const BASE_URL = Deno.env.get("MONNIFY_BASE_URL")!;
@@ -16,25 +17,56 @@ async function getAccessToken(): Promise<string> {
   });
   const data = await res.json();
   if (!data.requestSuccessful) throw new Error("Auth failed");
-  const token = data.responseBody.accessToken;
-  cachedToken = { value: token, exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000) };
-  return token;
+
+  cachedToken = {
+    value: data.responseBody.accessToken,
+    exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000),
+  };
+  return cachedToken.value;
 }
 
-serve(async (req) => {
-  if (req.method !== "GET") return new Response("Only GET", { status: 405 });
-  const url = new URL(req.url);
-  const accountNumber = url.searchParams.get("accountNumber");
-  if (!accountNumber) return new Response("accountNumber required", { status: 400 });
+async function getWalletBalance(body: any) {
+  const { accountNumber } = body ?? {};
+  if (!accountNumber) {
+    return new Response(JSON.stringify({ ok: false, message: "Missing accountNumber" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const token = await getAccessToken();
+
   const res = await fetch(`${BASE_URL}/api/v1/disbursements/wallet/balance?accountNumber=${accountNumber}`, {
     method: "GET",
-    headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
   });
 
   const data = await res.json();
-  if (!data.requestSuccessful) return new Response(data.responseMessage || "Failed to fetch balance", { status: 400 });
+  if (!res.ok || !data.requestSuccessful) {
+    return new Response(JSON.stringify({ ok: false, message: data.responseMessage || "Wallet balance failed" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  return new Response(JSON.stringify({ ok: true, availableBalance: data.responseBody?.availableBalance }), { headers: { "Content-Type": "application/json" } });
+  const r = data.responseBody;
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      availableBalance: r.availableBalance,
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+}
+
+// --- Entry Point ---
+serve(async (req) => {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: false, message: "Only POST allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const body = await req.json();
+  return await getWalletBalance(body);
 });

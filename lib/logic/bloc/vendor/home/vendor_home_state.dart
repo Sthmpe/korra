@@ -2,9 +2,13 @@ import 'package:equatable/equatable.dart';
 
 import '../../../../data/models/vendor/vendor_activity.dart';
 
+enum VendorHomeStatus { initial, loading, success, failure }
+
 enum ResvFilter { newRes, ongoing, completed, cancelled }
 
 class VendorHomeState extends Equatable {
+  final VendorHomeStatus status;
+
   final String withdrawable;         // formatted: ₦4,800,000
   final int withdrawableMinor;       // enable/disable payout button
   final String payoutMethodMasked;   // e.g. 'GTB ••1234' or 'Add method'
@@ -17,6 +21,7 @@ class VendorHomeState extends Equatable {
   final List<VendorActivity> activities;
 
   const VendorHomeState({
+    required this.status,
     required this.withdrawable,
     required this.withdrawableMinor,
     required this.payoutMethodMasked,
@@ -29,42 +34,23 @@ class VendorHomeState extends Equatable {
     required this.activities,
   });
 
-  factory VendorHomeState.mock() => VendorHomeState(
-        withdrawable: '₦4,800,000',
-        withdrawableMinor: 480000000,
-        payoutMethodMasked: 'GTB ••1289',
-        onHold: '₦1,300,000',
-        nextReleaseDate: 'Aug 27',
-        newCount: '3',
-        ongoingCount: '12',
-        completedCount: '28',
-        cancelledCount: '2',
-        activities: const [
-          VendorActivity(
-            id: 'a1',
-            refId: 'r_102',
-            type: VendorActivityType.newReservation,
-            title: 'New reservation • Bose 700',
-            subtitle: 'Hold ends in 9 days',
-          ),
-          VendorActivity(
-            id: 'a2',
-            refId: 'r_087',
-            type: VendorActivityType.paymentMissed,
-            title: 'Missed payment • John D.',
-            subtitle: 'Due Aug 17 — system will retry',
-          ),
-          VendorActivity(
-            id: 'a3',
-            refId: 'p_002',
-            type: VendorActivityType.lowStock,
-            title: 'Low stock • AirPods Pro 2',
-            subtitle: 'Only 2 left — update stock',
-          ),
-        ],
-      );
+factory VendorHomeState.initial() => const VendorHomeState(
+      status: VendorHomeStatus.initial,
+      // ▼ Use more descriptive placeholders
+      withdrawable: '₦--',
+      withdrawableMinor: 0,
+      payoutMethodMasked: '...',
+      onHold: '₦--',
+      nextReleaseDate: '--',
+      newCount: '-',
+      ongoingCount: '-',
+      completedCount: '-',
+      cancelledCount: '-',
+      activities: [],
+    );
 
   VendorHomeState copyWith({
+    VendorHomeStatus? status,
     String? withdrawable,
     int? withdrawableMinor,
     String? payoutMethodMasked,
@@ -77,6 +63,7 @@ class VendorHomeState extends Equatable {
     List<VendorActivity>? activities,
   }) {
     return VendorHomeState(
+      status: status ?? this.status,
       withdrawable: withdrawable ?? this.withdrawable,
       withdrawableMinor: withdrawableMinor ?? this.withdrawableMinor,
       payoutMethodMasked: payoutMethodMasked ?? this.payoutMethodMasked,
@@ -92,6 +79,7 @@ class VendorHomeState extends Equatable {
 
   @override
   List<Object?> get props => [
+        status, 
         withdrawable,
         withdrawableMinor,
         payoutMethodMasked,

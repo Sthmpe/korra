@@ -106,7 +106,8 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     try {
       if (ninNeedsVerification) {
         emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
-        await _verifyNinViaFx(state.nin.trim());
+        
+        // await vendors.verifyNin(state.nin.trim());
         emit(state.copyWith(
           ninVerifying: false,
           ninVerified: true,
@@ -116,21 +117,21 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
       if (bvnNeedsVerification) {
         emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
-        final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
+        // final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
-        final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
+        // final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
 
         if (dobForBvn == null) {
           emit(state.copyWith(kycError: 'Date of birth is missing'));
           return;
         }
 
-        await vendors.verifyBvn(
-          bvn: state.bvn.trim(),
-          name: fullName,
-          dateOfBirthIso: dobForBvn,
-          mobileNo: localPhone,
-        );
+        // await vendors.verifyBvn(
+        //   bvn: state.bvn.trim(),
+        //   name: fullName,
+        //   dateOfBirthIso: dobForBvn,
+        //   mobileNo: localPhone,
+        // );
         emit(state.copyWith(
           bvnVerifying: false,
           bvnVerified: true,
@@ -170,6 +171,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     emit(state.copyWith(loading: true, kycError: null));
     try {
       await vendors.createVendorFromState(state);
+
       emit(state.copyWith(loading: false));
     } catch (error) {
       debugPrint('Error submitting vendor: $error');
@@ -224,7 +226,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      await _verifyNinViaFx(state.nin.trim());
+      // await vendors.verifyNin(state.nin.trim());
       emit(state.copyWith(
         ninVerifying: false,
         ninVerified: true,
@@ -261,12 +263,12 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         return;
       }
 
-      await vendors.verifyBvn(
-        bvn: state.bvn.trim(),
-        name: fullName,
-        dateOfBirthIso: dobIso,
-        mobileNo: localPhone,
-      );
+      // await vendors.verifyBvn(
+      //   bvn: state.bvn.trim(),
+      //   name: fullName,
+      //   dateOfBirthIso: dobIso,
+      //   mobileNo: localPhone,
+      // );
       emit(state.copyWith(
         bvnVerifying: false,
         bvnVerified: true,
@@ -280,17 +282,6 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         kycError: error.toString(),
       ));
     }
-  }
-
-  // ── Supabase Functions calls ───────────────────────────────────────────────
-  Future<void> _verifyNinViaFx(String nin) async {
-    // final res = await fx.invoke('nin-verify', body: {'nin': nin});
-    // final data = res.data;
-    // if (data is Map && data['ok'] == true) return;
-    // throw Exception(
-    //   (data is Map ? data['message'] ?? data['error'] : null) ??
-    //       'NIN verification failed',
-    // );
   }
 
 

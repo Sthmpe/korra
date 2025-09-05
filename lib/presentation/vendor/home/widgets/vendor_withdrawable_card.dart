@@ -7,15 +7,16 @@ import 'package:iconsax/iconsax.dart';
 class VendorWithdrawableCard extends StatelessWidget {
   final String balanceText;          // withdrawable only
   final String methodMasked;         // e.g., 'GTB ••1289' or 'Add payout method'
-  final VoidCallback onPayout;
-  final VoidCallback onManageMethod;
+  final VoidCallback? onPayout;
+  final VoidCallback? onManageMethod;
+  
 
   const VendorWithdrawableCard({
     super.key,
     required this.balanceText,
     required this.methodMasked,
     required this.onPayout,
-    required this.onManageMethod,
+    required this.onManageMethod, 
   });
 
   static const _brand = Color(0xFFA54600);
@@ -89,6 +90,7 @@ class VendorWithdrawableCard extends StatelessWidget {
                         padding: EdgeInsets.symmetric(horizontal: 16.w),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                         backgroundColor: _brand,
+                        disabledBackgroundColor: _brand.withOpacity(0.8),
                       ),
                       child: Text('Payout',
                         style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: Colors.white)),

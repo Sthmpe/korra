@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'config/constants/prefs_keys.dart';
 import 'firebase_options.dart';
 import 'korra_app.dart';
 import 'logic/core/net/net_cubit.dart';
@@ -44,8 +45,9 @@ Future<Widget> _getStartScreen() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final uid = prefs.getString('uid');
-  final role = prefs.getString('role');
+  final uid = prefs.getString(PrefsKeys.userUid);
+  final role = prefs.getString(PrefsKeys.userRole);
+
 
   // Check for a mismatch between the current Firebase user and the saved local data.
   if (uid == null || role == null || uid != user.uid) {
@@ -54,7 +56,7 @@ Future<Widget> _getStartScreen() async {
 
   // A match is found, route to the correct role-based shell.
   if (role == 'vendor') {
-    return const VendorShell();
+    return VendorShell();
   } else {
     return const CustomerShell();
   }

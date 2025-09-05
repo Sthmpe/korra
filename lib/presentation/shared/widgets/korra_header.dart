@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -10,6 +11,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onHistory;
   final VoidCallback? onSupport;
   final bool showHistoryDot;
+  final bool showLeadingIcon;
   final List<Widget>? trailingActions; // NEW
 
   const KorraHeader({
@@ -18,6 +20,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
     this.onHistory,
     this.onSupport,
     this.showHistoryDot = false,
+    this.showLeadingIcon = false,
     this.trailingActions,
   });
 
@@ -38,30 +41,65 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
             height: 56.h,
             padding: EdgeInsets.symmetric(horizontal: 16.w),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFEAE6E2), width: 1)),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFEAE6E2), width: 1),
+              ),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 28.w, height: 28.w,
-                  decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(8.r)),
-                  child: Icon(MdiIcons.crown, size: 16.sp, color: Colors.white),
-                ),
+                showLeadingIcon
+                    ? IconButton(
+                        onPressed: () => Get.back(),
+                        style: IconButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size(32.w, 32.w),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          alignment: Alignment.centerLeft,
+                        ),
+                        icon: Icon(
+                          MdiIcons.arrowLeft,
+                          size: 24.sp,
+                          color: const Color(0xFF1B1B1B),
+                        ),
+                      )
+                    : Container(
+                        width: 28.w,
+                        height: 28.w,
+                        decoration: BoxDecoration(
+                          color: _brand,
+                          borderRadius: BorderRadius.circular(8.r),
+                        ),
+                        child: Icon(
+                          MdiIcons.crown,
+                          size: 16.sp,
+                          color: Colors.white,
+                        ),
+                      ),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
                     title,
-                    style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF1B1B1B)),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1B1B1B),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Row(
-                  children: trailingActions ??
-                    [
-                      _IconBtn(icon: MdiIcons.history, onTap: onHistory,),
-                      SizedBox(width: 8.w),
-                      _IconBtn(icon: Iconsax.notification, onTap: onSupport, dot: showHistoryDot),
-                    ],
+                  children:
+                      trailingActions ??
+                      [
+                        _IconBtn(icon: MdiIcons.history, onTap: onHistory),
+                        SizedBox(width: 8.w),
+                        _IconBtn(
+                          icon: Iconsax.notification,
+                          onTap: onSupport,
+                          dot: showHistoryDot,
+                        ),
+                      ],
                 ),
               ],
             ),
@@ -73,7 +111,9 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _IconBtn extends StatelessWidget {
-  final IconData icon; final VoidCallback? onTap; final bool dot;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool dot;
   const _IconBtn({required this.icon, this.onTap, this.dot = false});
   @override
   Widget build(BuildContext context) {
@@ -81,13 +121,25 @@ class _IconBtn extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         SizedBox(
-          width: 45.w, height: 45.w,
-          child: IconButton(onPressed: onTap, icon: Icon(icon, size: 22.sp, color: const Color(0xFF1B1B1B))),
+          width: 45.w,
+          height: 45.w,
+          child: IconButton(
+            onPressed: onTap,
+            icon: Icon(icon, size: 22.sp, color: const Color(0xFF1B1B1B)),
+          ),
         ),
         if (dot)
           Positioned(
-            right: 6.w, top: 6.h,
-            child: Container(width: 8.w, height: 8.w, decoration: const BoxDecoration(color: Color(0xFFA54600), shape: BoxShape.circle)),
+            right: 6.w,
+            top: 6.h,
+            child: Container(
+              width: 8.w,
+              height: 8.w,
+              decoration: const BoxDecoration(
+                color: Color(0xFFA54600),
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
       ],
     );

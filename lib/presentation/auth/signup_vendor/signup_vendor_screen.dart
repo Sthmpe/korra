@@ -245,7 +245,7 @@ class _BottomNav extends StatelessWidget {
         context.read<SignupVendorBloc>().add(SignupVendorSubmitPressed());
         await Future.delayed(const Duration(milliseconds: 950));
         if (!context.mounted) return;
-        Get.offAll(() => const VendorShell());
+        Get.offAll(() => VendorShell());
         return;
       }
 

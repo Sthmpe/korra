@@ -10,50 +10,71 @@ async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.exp > Date.now()) return cachedToken.value;
 
   const basic = btoa(`${API_KEY}:${SECRET_KEY}`);
-  const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+  const res = await fetch(`${BASE_URL}/api/v2/bank-transfer/reserved-accounts`, {
     method: "POST",
     headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/json" },
   });
   const data = await res.json();
   if (!data.requestSuccessful) throw new Error("Auth failed");
-  const token = data.responseBody.accessToken;
-  cachedToken = { value: token, exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000) };
-  return token;
+
+  cachedToken = {
+    value: data.responseBody.accessToken,
+    exp: Date.now() + (data.responseBody.expiresIn * 1000 - 5000),
+  };
+  return cachedToken.value;
 }
 
-async function createWallet(body: any) {
-  const { walletReference, walletName, customerName, customerEmail, bvn, bvnDateOfBirth } = body ?? {};
-  if (!walletReference || !walletName || !customerName || !customerEmail || !bvn || !bvnDateOfBirth)
-    return new Response("Missing fields", { status: 400 });
+async function createReservedAccount(body: any) {
+  const { accountReference, accountName, currencyCode, contractCode, customerEmail, customerName, bvn, nin, incomeSplitConfig } = body ?? {};
+  if (!accountReference || !accountName || !currencyCode || !contractCode || !customerEmail || (!bvn && !nin)) {
+    return new Response(JSON.stringify({ ok: false, message: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  }
 
   const token = await getAccessToken();
-  const res = await fetch(`${BASE_URL}/api/v1/disbursements/wallet`, {
+
+  const res = await fetch(`${BASE_URL}/api/v2/bank-transfer/reserved-accounts`, {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      walletReference,
-      walletName,
-      customerName,
+      accountReference,
+      accountName,
+      currencyCode,
+      contractCode,
       customerEmail,
-      bvnDetails: { bvn, bvnDateOfBirth },
+      customerName,
+      bvn,
+      nin,
+      getAllAvailableBanks: true,
+      incomeSplitConfig: incomeSplitConfig ?? [],
     }),
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
   });
 
   const data = await res.json();
-  if (!data.requestSuccessful) return new Response(data.responseMessage || "Create wallet failed", { status: 400 });
+  if (!res.ok || !data.requestSuccessful) {
+    return new Response(JSON.stringify({ ok: false, message: data.responseMessage || "Reserved account creation failed" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  }
 
   const r = data.responseBody;
+  const firstAccount = Array.isArray(r.accounts) && r.accounts.length > 0 ? r.accounts[0] : null;
+
   return new Response(JSON.stringify({
     ok: true,
-    walletName: r.walletName,
-    walletReference: r.walletReference,
-    accountNumber: r.accountNumber,
+    accountReference: r.accountReference,
     accountName: r.accountName,
+    accountNumber: firstAccount?.accountNumber ?? "",
+    bankName: firstAccount?.bankName ?? "",
+    bankCode: firstAccount?.bankCode ?? "",
+    currencyCode: r.currencyCode,
+    customerEmail: r.customerEmail,
+    status: r.status,
   }), { headers: { "Content-Type": "application/json" } });
 }
 
+// --- Entry Point ---
 serve(async (req) => {
-  if (req.method !== "POST") return new Response("Only POST", { status: 405 });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: false, message: "Only POST allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
+  }
   const body = await req.json();
-  return await createWallet(body);
+  return await createReservedAccount(body);
 });
