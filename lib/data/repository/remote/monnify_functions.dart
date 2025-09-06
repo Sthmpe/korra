@@ -1,10 +1,60 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../logic/bloc/vendor/payout/bank.dart';
+
 class MonnifyFunctions {
   final FunctionsClient _fx;
   MonnifyFunctions({FunctionsClient? fx})
     : _fx = fx ?? Supabase.instance.client.functions;
+
+  /// 🏦 Fetches the curated list of banks from the Supabase database.
+  ///
+  /// This function calls the `get-banks-supabase` Edge Function, which reads
+  /// directly from the `banks` table that is periodically updated by the
+  /// `sync-banks` scheduled job. This approach ensures a fast, efficient,
+  /// and reliable data fetch for the client application.
+  ///
+  /// Response format on success:
+  /// ```json
+  /// {
+  ///   "ok": true,
+  ///   "banks": [
+  ///     {
+  ///       "name": "Access Bank",
+  ///       "code": "000014",
+  ///       "logo_url": "[https://example.com/logo.png](https://example.com/logo.png)"
+  ///     },
+  ///     ...
+  ///   ]
+  /// }
+  /// ```
+  Future<List<Bank>> getBankList() async {
+    try {
+      final res = await _fx.invoke(
+        'get-banks-supabase', // The name of your new, fast function
+        method: HttpMethod.get,
+      );
+
+      final data = res.data;
+
+      // Rigorous checking ensures data integrity, a hallmark of a world-class app.
+      if (data == null || data['ok'] != true || data['banks'] is! List) {
+        throw Exception('Failed to retrieve bank list');
+      }
+
+      // We safely cast and map the raw data into a strongly-typed list
+      // of Bank objects, ensuring type safety throughout the app.
+      final bankData = List<Map<String, dynamic>>.from(data['banks']);
+      final banks = bankData.map((map) => Bank.fromMap(map)).toList();
+
+      return banks;
+    } catch (e) {
+      debugPrint("Error fetching bank list: $e");
+      // Re-throwing allows the BLoC layer to catch and handle the error gracefully.
+      rethrow;
+    }
+  }
 
   /// Get Wallets
   /// Response:
@@ -26,7 +76,6 @@ class MonnifyFunctions {
   ///     }
   ///   ]
   /// }
-  // Your Flutter API service
   Future<List<Map<String, dynamic>>> fetchWallets({
     int pageSize = 10,
     int pageNo = 0,

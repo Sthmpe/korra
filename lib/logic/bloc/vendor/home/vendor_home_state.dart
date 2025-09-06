@@ -18,6 +18,8 @@ class VendorHomeState extends Equatable {
   final String ongoingCount;
   final String completedCount;
   final String cancelledCount;
+   final bool navigateToPayout;
+
   final List<VendorActivity> activities;
 
   const VendorHomeState({
@@ -32,6 +34,7 @@ class VendorHomeState extends Equatable {
     required this.completedCount,
     required this.cancelledCount,
     required this.activities,
+    this.navigateToPayout = false,
   });
 
 factory VendorHomeState.initial() => const VendorHomeState(
@@ -61,6 +64,7 @@ factory VendorHomeState.initial() => const VendorHomeState(
     String? completedCount,
     String? cancelledCount,
     List<VendorActivity>? activities,
+    bool? navigateToPayout,
   }) {
     return VendorHomeState(
       status: status ?? this.status,
@@ -74,6 +78,7 @@ factory VendorHomeState.initial() => const VendorHomeState(
       completedCount: completedCount ?? this.completedCount,
       cancelledCount: cancelledCount ?? this.cancelledCount,
       activities: activities ?? this.activities,
+      navigateToPayout: navigateToPayout ?? this.navigateToPayout,
     );
   }
 
@@ -90,5 +95,6 @@ factory VendorHomeState.initial() => const VendorHomeState(
         completedCount,
         cancelledCount,
         activities,
+        navigateToPayout,
       ];
 }

@@ -4,18 +4,18 @@ import 'package:equatable/equatable.dart';
 class Bank extends Equatable {
   final String name;
   final String code;
-  final String? imageUrl;
+  final String? logoUrl;
 
-  const Bank({required this.name, required this.code, this.imageUrl});
+  const Bank({required this.name, required this.code, this.logoUrl});
 
   factory Bank.fromMap(Map<String, dynamic> map) {
     return Bank(
       name: map['name'] ?? '',
       code: map['code'] ?? '',
-      imageUrl: map['imageUrl'],
+      logoUrl: map['logo_url'] ?? '',
     );
   }
 
   @override
-  List<Object?> get props => [name, code, imageUrl];
+  List<Object?> get props => [name, code, logoUrl];
 }

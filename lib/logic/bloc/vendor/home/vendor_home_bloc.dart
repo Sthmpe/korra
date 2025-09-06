@@ -36,7 +36,7 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
 
   Future<void> _loadHomeData(Emitter<VendorHomeState> emit) async {
     final online = await net.preflight();
-    if (!online) return; // Skips loading if offline; the gate will show.
+    if (!online) return; 
 
 
     try {
@@ -72,8 +72,8 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
     Get.snackbar('Payout', 'Starting payout…', snackPosition: SnackPosition.BOTTOM);
   }
 
-  void _onManagePayoutMethod(ManagePayoutMethod event, Emitter<VendorHomeState> emit) {
-    Get.to(() => PayoutScreen( vendors: vendors,  vendorUid: vendorUid));
+  Future<void> _onManagePayoutMethod(ManagePayoutMethod event, Emitter<VendorHomeState> emit) async {
+    emit(state.copyWith(navigateToPayout: true));
   }
 
   void _onViewHoldSchedule(ViewHoldSchedule event, Emitter<VendorHomeState> emit) {

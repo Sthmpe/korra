@@ -12,6 +12,12 @@ class PayoutStarted extends PayoutEvent {
   const PayoutStarted();
 }
 
+class PayoutBankListLoaded extends PayoutEvent {
+  final List<Bank> bankList;
+  
+  const PayoutBankListLoaded(this.bankList);
+}
+
 class AmountChanged extends PayoutEvent {
   final String amount;
   const AmountChanged(this.amount);
@@ -39,3 +45,10 @@ class AccountNumberChanged extends PayoutEvent {
 }
 
 class ConfirmAndSaveMethodTapped extends PayoutEvent {}
+
+class PinSubmitted extends PayoutEvent {
+  final String pin;
+  const PinSubmitted(this.pin);
+  @override
+  List<Object?> get props => [pin];
+}

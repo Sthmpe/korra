@@ -8,6 +8,17 @@ enum PayoutStatus { initial, loading, loaded, updating, success, failure }
 
 enum BankDetailsVerificationStatus { idle, verifying, verified, error }
 
+enum PayoutNavigation { none, toCreatePin }
+
+enum PayoutFlowStatus {
+  idle, // The default state
+  requiresPin, // The UI must now ask for the user's PIN
+  pinInvalid, // The entered PIN was incorrect
+  sending, // The multi-stage sending animation is active
+  success, // The transaction is complete
+  failure, // The transaction failed
+}
+
 class PayoutState extends Equatable {
   final PayoutStatus status;
   final PayoutDetails payoutDetails;
@@ -20,6 +31,10 @@ class PayoutState extends Equatable {
   final String tempAccountNumber;
   final BankDetailsVerificationStatus bankDetailsVerificationStatus;
   final String? verifiedAccountName;
+  final PayoutFlowStatus payoutFlowStatus;
+  final String transactionStatusMessage;
+  final PayoutNavigation navigateTo;
+
 
   const PayoutState({
     required this.status,
@@ -33,6 +48,9 @@ class PayoutState extends Equatable {
     this.tempAccountNumber = '',
     this.bankDetailsVerificationStatus = BankDetailsVerificationStatus.idle,
     this.verifiedAccountName,
+    this.payoutFlowStatus = PayoutFlowStatus.idle,
+    this.transactionStatusMessage = '',
+    this.navigateTo = PayoutNavigation.none,
   });
 
   factory PayoutState.initial() => PayoutState(
@@ -53,6 +71,9 @@ class PayoutState extends Equatable {
     String? tempAccountNumber,
     BankDetailsVerificationStatus? bankDetailsVerificationStatus,
     String? verifiedAccountName,
+    PayoutFlowStatus? payoutFlowStatus,
+    String? transactionStatusMessage,
+    PayoutNavigation? navigateTo,
   }) {
     return PayoutState(
       status: status ?? this.status,
@@ -66,6 +87,9 @@ class PayoutState extends Equatable {
       tempAccountNumber: tempAccountNumber ?? this.tempAccountNumber,
       bankDetailsVerificationStatus: bankDetailsVerificationStatus ?? this.bankDetailsVerificationStatus,
       verifiedAccountName: verifiedAccountName ?? this.verifiedAccountName,
+      payoutFlowStatus: payoutFlowStatus ?? this.payoutFlowStatus,
+      transactionStatusMessage: transactionStatusMessage ?? this.transactionStatusMessage,
+      navigateTo: navigateTo ?? this.navigateTo,
     );
   }
 
@@ -82,5 +106,8 @@ class PayoutState extends Equatable {
     tempAccountNumber,
     bankDetailsVerificationStatus,
     verifiedAccountName,
+    payoutFlowStatus,
+    transactionStatusMessage,
+    navigateTo,
   ];
 }

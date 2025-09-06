@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
-import 'bank.dart';
 import 'payout_event.dart';
 import 'payout_state.dart';
 
@@ -13,31 +12,59 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
   final VendorRepository vendors;
 
   PayoutBloc({required this.vendorUid, required this.vendors})
-      : super(PayoutState.initial()) {
+    : super(PayoutState.initial()) {
     on<PayoutStarted>(_onStarted);
+    on<PayoutBankListLoaded>(_onBankListLoaded);
     on<AmountChanged>(_onAmountChanged);
     on<UpdateMethodTapped>(_onUpdateMethod);
-    on<WithdrawTapped>(_onWithdraw);
+    on<WithdrawTapped>(_onWithdrawTapped);
+    on<PinSubmitted>(_onPinSubmitted);
     on<EditMethodToggled>(_onEditMethodToggled);
     on<BankSelected>(_onBankSelected);
     on<AccountNumberChanged>(_onAccountNumberChanged);
     on<ConfirmAndSaveMethodTapped>(_onConfirmAndSave);
   }
 
-  Future<void> _onStarted(PayoutStarted event, Emitter<PayoutState> emit) async {
+  void _onBankListLoaded(
+    PayoutBankListLoaded event,
+    Emitter<PayoutState> emit,
+  ) {
+    emit(state.copyWith(bankList: event.bankList));
+  }
+
+  Future<void> _onStarted(
+    PayoutStarted event,
+    Emitter<PayoutState> emit,
+  ) async {
     emit(state.copyWith(status: PayoutStatus.loading));
     debugPrint('PayoutStarted: $event');
     try {
       final details = await vendors.getPayoutDetails(vendorUid);
+      vendors.getBankList().then((value) {
+        debugPrint('Bank List: $value');
+        add(PayoutBankListLoaded(value));
+      });
+
       debugPrint('Details: $details');
       if (details != null) {
-        emit(state.copyWith(status: PayoutStatus.loaded, payoutDetails: details));
+        emit(
+          state.copyWith(status: PayoutStatus.loaded, payoutDetails: details),
+        );
       } else {
-        emit(state.copyWith(
-            status: PayoutStatus.failure, errorMessage: 'Could not load payout details.'));
+        emit(
+          state.copyWith(
+            status: PayoutStatus.failure,
+            errorMessage: 'Could not load payout details.',
+          ),
+        );
       }
     } catch (e) {
-      emit(state.copyWith(status: PayoutStatus.failure, errorMessage: e.toString()));
+      emit(
+        state.copyWith(
+          status: PayoutStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -49,121 +76,205 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     emit(state.copyWith(isEditingMethod: true));
   }
 
-  void _onWithdraw(WithdrawTapped event, Emitter<PayoutState> emit) {
-    // TODO: Add validation and call the repository to initiate the payout.
-    // This would call your 'transfer-single' Supabase function.
-    final amount = state.amountToWithdraw;
-    Get.snackbar('Payout Initiated', 'Withdrawing ₦$amount...');
-  }
-  
-  Future<void> _onEditMethodToggled(EditMethodToggled event, Emitter<PayoutState> emit) async {
-    final currentlyEditing = state.isEditingMethod;
-    // When entering edit mode, fetch the bank list.
-    if (!currentlyEditing) {
-      // TODO: Fetch bank list from repository
-      // final banks = await vendors.getBankList();
-      // For now, we'll use mock data.
-      const banks = [Bank(name: 'Kuda Bank', code: '090267'), Bank(name: 'GTBank', code: '000013')];
-      
-      emit(state.copyWith(
-        isEditingMethod: true,
-        bankList: banks,
-        selectedBank: null,
-        tempAccountNumber: '',
-        bankDetailsVerificationStatus: BankDetailsVerificationStatus.idle,
-        verifiedAccountName: '',
-      ));
+   Future<void> _onWithdrawTapped(
+    WithdrawTapped event,
+    Emitter<PayoutState> emit,
+  ) async {
+    // 1. Check if a PIN is required.
+    final bool hasPin = true; // TODO: Replace with `await vendors.hasTransactionPin()`
+
+    if (hasPin) {
+      // If a PIN exists, we signal the UI to ask for it. This is unchanged.
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
     } else {
-      // Exiting edit mode resets everything.
-      emit(state.copyWith(isEditingMethod: false));
+      // ▼ THIS IS THE ARCHITECTURAL FIX ▼
+      // Instead of navigating, the BLoC emits a state that signals
+      // the navigation intent to the UI layer.
+      emit(state.copyWith(navigateTo: PayoutNavigation.toCreatePin));
+      // We immediately reset the signal to prevent re-navigation on rebuilds.
+      emit(state.copyWith(navigateTo: PayoutNavigation.none));
     }
+  }
+
+
+  Future<void> _onPinSubmitted(
+    PinSubmitted event,
+    Emitter<PayoutState> emit,
+  ) async {
+    // 2. Validate the PIN.
+    // TODO: Replace with a real call to `vendors.validateTransactionPin(event.pin)`
+    final bool isPinValid = event.pin == '1234'; // Mocking a valid PIN
+
+    if (!isPinValid) {
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.pinInvalid));
+      // Reset after a moment to allow the UI to show an error.
+      await Future.delayed(const Duration(seconds: 1));
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
+      return;
+    }
+
+    // 3. PIN is valid, begin the multi-stage sending process.
+    emit(
+      state.copyWith(
+        payoutFlowStatus: PayoutFlowStatus.sending,
+        transactionStatusMessage: 'Connecting to payment gateway...',
+      ),
+    );
+
+    try {
+      // Simulate the stages of the transaction
+      await Future.delayed(const Duration(seconds: 2));
+      emit(state.copyWith(transactionStatusMessage: 'Processing transfer...'));
+
+      // TODO: Make the actual API call to initiate the transfer
+      // await vendors.initiateTransfer(...)
+
+      await Future.delayed(const Duration(seconds: 3));
+      emit(
+        state.copyWith(
+          transactionStatusMessage: 'Checking transaction status...',
+        ),
+      );
+
+      await Future.delayed(const Duration(seconds: 2));
+      emit(state.copyWith(transactionStatusMessage: 'Done'));
+
+      // 4. Transaction is complete. Signal final success.
+      await Future.delayed(const Duration(milliseconds: 500));
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.success));
+    } catch (e) {
+      emit(
+        state.copyWith(
+          payoutFlowStatus: PayoutFlowStatus.failure,
+          errorMessage: 'Transaction Failed.',
+        ),
+      );
+    } finally {
+      // Reset the flow status after a delay.
+      await Future.delayed(const Duration(seconds: 5));
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.idle));
+    }
+  }
+
+  Future<void> _onEditMethodToggled(
+    EditMethodToggled event,
+    Emitter<PayoutState> emit,
+  ) async {
+    final currentlyEditing = state.isEditingMethod;
+    emit(state.copyWith(isEditingMethod: !currentlyEditing));
   }
 
   void _onBankSelected(BankSelected event, Emitter<PayoutState> emit) {
     emit(state.copyWith(selectedBank: event.bank));
   }
 
-  Future<void> _onAccountNumberChanged(AccountNumberChanged event, Emitter<PayoutState> emit) async {
-    emit(state.copyWith(
-      tempAccountNumber: event.accountNumber,
-      bankDetailsVerificationStatus: BankDetailsVerificationStatus.idle,
-      verifiedAccountName: '',
-    ));
+  Future<void> _onAccountNumberChanged(
+    AccountNumberChanged event,
+    Emitter<PayoutState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        tempAccountNumber: event.accountNumber,
+        bankDetailsVerificationStatus: BankDetailsVerificationStatus.idle,
+        verifiedAccountName: '',
+      ),
+    );
 
     // Auto-verify when 10 digits are entered (standard for Nigeria)
     if (event.accountNumber.length == 10 && state.selectedBank != null) {
-      emit(state.copyWith(bankDetailsVerificationStatus: BankDetailsVerificationStatus.verifying));
+      emit(
+        state.copyWith(
+          bankDetailsVerificationStatus:
+              BankDetailsVerificationStatus.verifying,
+        ),
+      );
       try {
-        // TODO: Call repository to verify account
-        // final accountName = await vendors.verifyBankAccount(
-        //   accountNumber: event.accountNumber,
-        //   bankCode: state.selectedBank!.code,
-        // );
-        
-        // Simulate a successful verification
-        await Future.delayed(const Duration(milliseconds: 1500));
-        const accountName = 'JOHN DOE'; // Mocked name
+        final accountName = await vendors.verifyBankAccount(
+          accountNumber: event.accountNumber,
+          bankCode: state.selectedBank!.code,
+        );
 
-        emit(state.copyWith(
-          bankDetailsVerificationStatus: BankDetailsVerificationStatus.verified,
-          verifiedAccountName: accountName,
-        ));
+        emit(
+          state.copyWith(
+            bankDetailsVerificationStatus:
+                BankDetailsVerificationStatus.verified,
+            verifiedAccountName: accountName,
+          ),
+        );
       } catch (e) {
-        emit(state.copyWith(bankDetailsVerificationStatus: BankDetailsVerificationStatus.error));
+        emit(
+          state.copyWith(
+            bankDetailsVerificationStatus: BankDetailsVerificationStatus.error,
+          ),
+        );
       }
     }
   }
-  
-  /// Orchestrates the final save operation after user confirmation.
+
+  /// Orchestrates the final, critical save operation after user confirmation.
+  /// This method is engineered for clarity, security, and robust state management.
   Future<void> _onConfirmAndSave(
     ConfirmAndSaveMethodTapped event,
     Emitter<PayoutState> emit,
   ) async {
-    // 1. Final validation before proceeding. This check ensures data integrity.
-    if (state.selectedBank == null ||
+    // 1. Final Integrity Check: A world-class application never trusts; it verifies.
+    //    We ensure the account has been successfully verified before proceeding.
+    if (state.bankDetailsVerificationStatus !=
+            BankDetailsVerificationStatus.verified ||
+        state.selectedBank == null ||
         state.verifiedAccountName == null ||
-        state.tempAccountNumber.isEmpty) {
-      emit(state.copyWith(
-        status: PayoutStatus.failure,
-        errorMessage: 'Verification data is missing. Please try again.',
-      ));
+        state.verifiedAccountName!.isEmpty) {
+      // This is a programmatic error state; we do not proceed.
       return;
     }
 
-    // 2. Emit 'updating' status to show loading feedback on the "Confirm" button.
+    // 2. Intentional State Transition: 'updating'
+    //    This provides a clear signal to the UI to enter a loading state,
+    //    disabling the button and showing a progress indicator.
     emit(state.copyWith(status: PayoutStatus.updating));
 
     try {
-      // 3. Create the new, updated PayoutDetails object from the verified state data.
+      // 3. Create the Authoritative Data Model.
+      //    This is the single source of truth for the new payout details.
       final updatedDetails = state.payoutDetails.copyWith(
         bankName: state.selectedBank!.name,
         bankCode: state.selectedBank!.code,
         bankAccountNumber: state.tempAccountNumber,
         bankAccountName: state.verifiedAccountName,
-        // Any other relevant fields from verification would be mapped here.
       );
 
-      // 4. Persist the updated details to your backend (Firestore).
-      //await vendors.savePayoutDetails(vendorUid, updatedDetails);
+      // 4. Persist to Backend.
+      //    This is the point of commitment where the new data is saved.
+      await vendors.savePayoutDetails(vendorUid, updatedDetails);
 
-      // 5. Success: Transition UI back to display mode.
-      // We emit the 'loaded' status, set 'isEditingMethod' to false,
-      // pass the new details to update the UI, and reset temporary fields.
-      emit(state.copyWith(
-        status: PayoutStatus.loaded,
-        isEditingMethod: false,
-        payoutDetails: updatedDetails,
-        bankDetailsVerificationStatus: BankDetailsVerificationStatus.idle,
-        verifiedAccountName: '',
-        tempAccountNumber: '',
-      ));
-      
+      // 5. Intentional Success Transition: 'loaded'
+      //    On success, we perform a full state reset. This is critical for
+      //    preventing stale data and ensuring the UI returns to a clean,
+      //    predictable state.
+      emit(
+        state.copyWith(
+          status: PayoutStatus.loaded,
+          payoutDetails: updatedDetails,
+          isEditingMethod: false, // Exit the editing UI
+          // Reset all temporary and verification-related fields
+          bankDetailsVerificationStatus: BankDetailsVerificationStatus.idle,
+          verifiedAccountName: '',
+          tempAccountNumber: '',
+          selectedBank: null,
+        ),
+      );
     } catch (e) {
-      // 6. Failure: Report the error to the user.
-      emit(state.copyWith(
-        status: PayoutStatus.failure,
-        errorMessage: 'Failed to save changes. Please try again.',
-      ));
+      // 6. Graceful Failure Handling.
+      //    If the save operation fails, we provide a specific, user-facing
+      //    error message and transition the UI back to a stable state.
+      emit(
+        state.copyWith(
+          status: PayoutStatus.loaded, // Return to a non-loading state
+          isEditingMethod:
+              true, // Keep the user in the editing view to allow a retry
+          errorMessage: 'Failed to save changes. Please try again.',
+        ),
+      );
     }
   }
 }

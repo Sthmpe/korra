@@ -65,11 +65,15 @@ class VendorWithdrawableCard extends StatelessWidget {
                         )),
                       SizedBox(height: 6.h),
                       Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(
-                          (methodMasked.trim().isEmpty)
-                              ? 'Add payout method'
-                              : 'Default  $methodMasked',
-                          style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E))),
+                        SizedBox(
+                          width: 150.w,
+                          child: Text(
+                            (methodMasked.trim().isEmpty)
+                                ? 'Add payout method'
+                                : 'Default  $methodMasked',
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E))),
+                        ),
                         SizedBox(width: 4.w),
                         Icon(Icons.chevron_right, size: 18.sp, color: const Color(0xFF5E5E5E)),
                       ]),
