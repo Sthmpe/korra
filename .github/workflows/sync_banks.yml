@@ -1,0 +1,30 @@
+# A descriptive name for your automated job
+name: Sync Monnify Banks Daily
+
+on:
+  # ▼ ADD THIS SECTION ▼
+  # This will run the workflow automatically when you push this file to the main branch.
+  push:
+    branches:
+      - main # Or your default branch name (e.g., master)
+    paths:
+      - '.github/workflows/sync_banks.yml'
+
+  # This allows you to run the job manually from the GitHub Actions tab for testing.
+  workflow_dispatch:
+
+  # This is the automated schedule, which will continue to run as planned.
+  schedule:
+    # This specific syntax means "run at 00:00 UTC (midnight) every day."
+    - cron: '0 0 * * *'
+
+jobs:
+  # The rest of the file remains exactly the same.
+  sync-banks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Supabase Edge Function
+        run: |
+          curl -X POST \
+            '${{ secrets.SUPABASE_URL }}/functions/v1/sync-banks?save=true' \
+            -H 'Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}'
