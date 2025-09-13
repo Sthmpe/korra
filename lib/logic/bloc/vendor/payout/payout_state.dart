@@ -11,13 +11,15 @@ enum BankDetailsVerificationStatus { idle, verifying, verified, error }
 enum PayoutNavigation { none, toCreatePin }
 
 enum PayoutFlowStatus {
-  idle, // The default state
-  requiresPin, // The UI must now ask for the user's PIN
-  pinInvalid, // The entered PIN was incorrect
-  sending, // The multi-stage sending animation is active
-  success, // The transaction is complete
-  failure, // The transaction failed
+  idle,          // The default, ready state
+  requiresPin,   // The UI must now ask for the user's PIN
+  pinInvalid,    // The entered PIN was incorrect
+  sending,       // The transaction is in progress (controls the overlay)
+  success,       // The transaction is complete and successful
+  failure,       // The transaction has failed
 }
+
+enum CreatePinStep { idle, entering, confirming, success, error }
 
 class PayoutState extends Equatable {
   final PayoutStatus status;
@@ -34,6 +36,11 @@ class PayoutState extends Equatable {
   final PayoutFlowStatus payoutFlowStatus;
   final String transactionStatusMessage;
   final PayoutNavigation navigateTo;
+  final String? amountError;
+  final CreatePinStep createPinStep;
+  final String newPin;
+  final String confirmPin;
+  final String? createPinError;
 
 
   const PayoutState({
@@ -51,6 +58,11 @@ class PayoutState extends Equatable {
     this.payoutFlowStatus = PayoutFlowStatus.idle,
     this.transactionStatusMessage = '',
     this.navigateTo = PayoutNavigation.none,
+    this.amountError,
+    this.createPinStep = CreatePinStep.idle,
+    this.newPin = '',
+    this.confirmPin = '',
+    this.createPinError,
   });
 
   factory PayoutState.initial() => PayoutState(
@@ -74,6 +86,11 @@ class PayoutState extends Equatable {
     PayoutFlowStatus? payoutFlowStatus,
     String? transactionStatusMessage,
     PayoutNavigation? navigateTo,
+    String? amountError,
+    CreatePinStep? createPinStep,
+    String? newPin,
+    String? confirmPin,
+    String? createPinError,
   }) {
     return PayoutState(
       status: status ?? this.status,
@@ -90,8 +107,14 @@ class PayoutState extends Equatable {
       payoutFlowStatus: payoutFlowStatus ?? this.payoutFlowStatus,
       transactionStatusMessage: transactionStatusMessage ?? this.transactionStatusMessage,
       navigateTo: navigateTo ?? this.navigateTo,
+      amountError: amountError ?? this.amountError,
+      createPinStep: createPinStep ?? this.createPinStep,
+      newPin: newPin ?? this.newPin,
+      confirmPin: confirmPin ?? this.confirmPin,
+      createPinError: createPinError ?? this.createPinError,
     );
   }
+
 
   @override
   List<Object?> get props => [
@@ -109,5 +132,13 @@ class PayoutState extends Equatable {
     payoutFlowStatus,
     transactionStatusMessage,
     navigateTo,
+    amountError,
+    createPinStep,
+    newPin,
+    confirmPin,
+    createPinError,
   ];
 }
+
+
+

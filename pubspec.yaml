@@ -26,6 +26,7 @@ dependencies:
   iconsax: ^0.0.8
   intl: ^0.20.2
   local_auth: ^2.3.0
+  lottie: ^3.3.1
   material_design_icons_flutter: ^7.0.7296
   pin_code_fields: ^8.0.1
   pinput: ^5.0.2
@@ -39,3 +40,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+#----Loacal Assest----#
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/

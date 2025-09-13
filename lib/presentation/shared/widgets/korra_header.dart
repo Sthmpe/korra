@@ -52,7 +52,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
                         onPressed: () => Get.back(),
                         style: IconButton.styleFrom(
                           padding: EdgeInsets.zero,
-                          minimumSize: Size(32.w, 32.w),
+                          minimumSize: Size(40.w, 40.w),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           alignment: Alignment.centerLeft,
                         ),

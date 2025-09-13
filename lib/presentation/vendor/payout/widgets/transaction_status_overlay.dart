@@ -1,92 +1,96 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../logic/bloc/vendor/payout/payout_bloc.dart';
 import '../../../../logic/bloc/vendor/payout/payout_state.dart';
 
 class TransactionStatusOverlay extends StatefulWidget {
-  final PayoutState state;
-  const TransactionStatusOverlay({super.key, required this.state});
+  const TransactionStatusOverlay({super.key});
 
   @override
   State<TransactionStatusOverlay> createState() => _TransactionStatusOverlayState();
 }
 
 class _TransactionStatusOverlayState extends State<TransactionStatusOverlay> with TickerProviderStateMixin {
-  // Controllers for each distinct animation
   late final AnimationController _progressController;
   late final AnimationController _successController;
-  late final AnimationController _dotController;
 
   @override
   void initState() {
     super.initState();
     _progressController = AnimationController(vsync: this, duration: const Duration(seconds: 7))..forward();
     _successController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _dotController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
   }
   
   @override
   void dispose() {
     _progressController.dispose();
     _successController.dispose();
-    _dotController.dispose();
     super.dispose();
   }
 
   @override
-  void didUpdateWidget(covariant TransactionStatusOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // When the BLoC signals "Done", we trigger the success animation.
-    if (widget.state.transactionStatusMessage == 'Done' && oldWidget.state.transactionStatusMessage != 'Done') {
-      _progressController.stop();
-      _successController.forward();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: EdgeInsets.all(24.r),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24.r),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                child: widget.state.transactionStatusMessage == 'Done'
-                    ? _buildSuccessIcon()
-                    : _buildProgressIndicator(),
+    // This overlay listens to the PayoutBloc to get status updates.
+    return BlocConsumer<PayoutBloc, PayoutState>(
+      listener: (context, state) {
+        // When the BLoC signals "Done", we trigger the success animation.
+        if (state.transactionStatusMessage == 'Done') {
+          _progressController.stop();
+          _successController.forward();
+        }
+      },
+      builder: (context, state) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                margin: EdgeInsets.symmetric(horizontal: 40.w),
+                width: 320.w,
+                height: 155.h,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24.r),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 100),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: state.transactionStatusMessage == 'Done'
+                          ? _buildSuccessIcon()
+                          : _buildProgressIndicator(),
+                    ),
+                    SizedBox(height: 20.h),
+                    _AnimatingDots(),
+                    SizedBox(height: 12.h),
+                    Text(
+                      state.transactionStatusMessage,
+                      style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w800, color: KorraColors.textMuted),
+                    ),
+                  ],
+                ),
               ),
-              SizedBox(height: 20.h),
-              _buildAnimatingDots(),
-              SizedBox(height: 12.h),
-              Text(
-                widget.state.transactionStatusMessage,
-                style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w500, color: KorraColors.textMuted),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  // The main delayed progress indicator
   Widget _buildProgressIndicator() {
     return SizedBox(
       key: const ValueKey('progress'),
-      width: 72.w,
-      height: 72.w,
+      width: 64.w,
+      height: 64.w,
       child: AnimatedBuilder(
         animation: _progressController,
         builder: (context, child) {
@@ -102,29 +106,51 @@ class _TransactionStatusOverlayState extends State<TransactionStatusOverlay> wit
     );
   }
   
-  // The expanding/shrinking success checkmark
   Widget _buildSuccessIcon() {
     return ScaleTransition(
       key: const ValueKey('success'),
       scale: Tween<double>(begin: 0.5, end: 1.0).animate(CurvedAnimation(parent: _successController, curve: Curves.elasticOut)),
       child: Container(
-        width: 72.w,
-        height: 72.w,
+        width: 64.w,
+        height: 64.w,
         decoration: const BoxDecoration(shape: BoxShape.circle, color: KorraColors.brand),
-        child: Icon(Iconsax.tick_circle, color: Colors.white, size: 36.sp),
+        child: Icon(Iconsax.tick_circle, color: Colors.white, size: 64.sp),
       ),
     );
   }
+}
 
-  // The three animating dots
-  Widget _buildAnimatingDots() {
+// A dedicated widget for the three animating dots.
+class _AnimatingDots extends StatefulWidget {
+  @override
+  __AnimatingDotsState createState() => __AnimatingDotsState();
+}
+
+class __AnimatingDotsState extends State<_AnimatingDots> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _dotController,
+      animation: _controller,
       builder: (context, child) {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(3, (index) {
-            final dotProgress = (_dotController.value - (index * 0.2)).clamp(0.0, 1.0);
+            // This creates the color-chasing effect.
+            final dotProgress = (_controller.value - (index * 0.2)).clamp(0.0, 1.0);
             final color = Color.lerp(KorraColors.border, KorraColors.brand, dotProgress)!;
             return Padding(
               padding: EdgeInsets.symmetric(horizontal: 4.w),

@@ -1,7 +1,6 @@
 // lib/logic/bloc/vendor/payout/payout_bloc.dart
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get/get.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'payout_event.dart';
@@ -23,6 +22,92 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     on<BankSelected>(_onBankSelected);
     on<AccountNumberChanged>(_onAccountNumberChanged);
     on<ConfirmAndSaveMethodTapped>(_onConfirmAndSave);
+    on<ResetPayoutFlow>(
+      (event, emit) => emit(
+        state.copyWith(
+          payoutFlowStatus: PayoutFlowStatus.idle,
+          transactionStatusMessage: '',
+        ),
+      ),
+    );
+    on<CreatePinDigitAdded>((event, emit) {
+      if (state.createPinStep == CreatePinStep.idle ||
+          state.createPinStep == CreatePinStep.entering) {
+        final updated = state.newPin + event.digit;
+        if (updated.length == 4) {
+          emit(
+            state.copyWith(
+              createPinStep: CreatePinStep.confirming,
+              newPin: updated,
+            ),
+          );
+        } else {
+          emit(
+            state.copyWith(
+              createPinStep: CreatePinStep.entering,
+              newPin: updated,
+            ),
+          );
+        }
+      } else if (state.createPinStep == CreatePinStep.confirming) {
+        final updated = state.confirmPin + event.digit;
+        if (updated.length == 4) {
+          if (updated == state.newPin) {
+            // ✅ success, PINs match
+            emit(
+              state.copyWith(
+                createPinStep: CreatePinStep.success,
+                confirmPin: updated,
+              ),
+            );
+            // TODO: vendors.saveTransactionPin(updated);
+          } else {
+            // ❌ mismatch
+            emit(
+              state.copyWith(
+                createPinStep: CreatePinStep.error,
+                createPinError: 'PINs do not match. Try again.',
+                confirmPin: '',
+              ),
+            );
+          }
+        } else {
+          emit(state.copyWith(confirmPin: updated));
+        }
+      }
+    });
+
+    on<CreatePinDigitDeleted>((event, emit) {
+      if (state.createPinStep == CreatePinStep.entering &&
+          state.newPin.isNotEmpty) {
+        emit(
+          state.copyWith(
+            newPin: state.newPin.substring(0, state.newPin.length - 1),
+          ),
+        );
+      } else if (state.createPinStep == CreatePinStep.confirming &&
+          state.confirmPin.isNotEmpty) {
+        emit(
+          state.copyWith(
+            confirmPin: state.confirmPin.substring(
+              0,
+              state.confirmPin.length - 1,
+            ),
+          ),
+        );
+      }
+    });
+
+    on<ResetCreatePin>((event, emit) {
+      emit(
+        state.copyWith(
+          createPinStep: CreatePinStep.idle,
+          newPin: '',
+          confirmPin: '',
+          createPinError: null,
+        ),
+      );
+    });
   }
 
   void _onBankListLoaded(
@@ -69,19 +154,44 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
   }
 
   void _onAmountChanged(AmountChanged event, Emitter<PayoutState> emit) {
-    emit(state.copyWith(amountToWithdraw: event.amount));
+    final unformattedValue = event.amount.replaceAll(',', '');
+    final amount = unformattedValue.isNotEmpty
+        ? int.parse(unformattedValue)
+        : 0;
+
+    final available = state.payoutDetails.withdrawableBalance;
+
+    debugPrint('AmountChanged: $amount, Available: $available');
+
+    if (amount == 0) {
+      // Default state → show helper text
+      emit(state.copyWith(amountToWithdraw: '', amountError: ''));
+    } else if (amount > available) {
+      debugPrint('Amount exceeds available balance');
+      // Invalid → show error
+      emit(
+        state.copyWith(
+          amountToWithdraw: event.amount,
+          amountError: 'Amount exceeds withdrawable balance',
+        ),
+      );
+    } else {
+      // Valid → no error, no helper
+      emit(state.copyWith(amountToWithdraw: event.amount, amountError: ''));
+    }
   }
 
   void _onUpdateMethod(UpdateMethodTapped event, Emitter<PayoutState> emit) {
     emit(state.copyWith(isEditingMethod: true));
   }
 
-   Future<void> _onWithdrawTapped(
+  Future<void> _onWithdrawTapped(
     WithdrawTapped event,
     Emitter<PayoutState> emit,
   ) async {
     // 1. Check if a PIN is required.
-    final bool hasPin = true; // TODO: Replace with `await vendors.hasTransactionPin()`
+    final bool hasPin =
+        true; // TODO: Replace with `await vendors.hasTransactionPin()`
 
     if (hasPin) {
       // If a PIN exists, we signal the UI to ask for it. This is unchanged.
@@ -96,50 +206,42 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     }
   }
 
-
   Future<void> _onPinSubmitted(
     PinSubmitted event,
     Emitter<PayoutState> emit,
   ) async {
-    // 2. Validate the PIN.
-    // TODO: Replace with a real call to `vendors.validateTransactionPin(event.pin)`
-    final bool isPinValid = event.pin == '1234'; // Mocking a valid PIN
+    final bool isPinValid = event.pin == '1234'; // mock
 
     if (!isPinValid) {
       emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.pinInvalid));
-      // Reset after a moment to allow the UI to show an error.
-      await Future.delayed(const Duration(seconds: 1));
-      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
       return;
     }
 
-    // 3. PIN is valid, begin the multi-stage sending process.
     emit(
       state.copyWith(
         payoutFlowStatus: PayoutFlowStatus.sending,
-        transactionStatusMessage: 'Connecting to payment gateway...',
+        transactionStatusMessage: 'Connecting with API...',
       ),
     );
 
     try {
-      // Simulate the stages of the transaction
       await Future.delayed(const Duration(seconds: 2));
-      emit(state.copyWith(transactionStatusMessage: 'Processing transfer...'));
+      emit(state.copyWith(transactionStatusMessage: 'Processing Transfer...'));
 
-      // TODO: Make the actual API call to initiate the transfer
+      // TODO: Make the actual API call here
       // await vendors.initiateTransfer(...)
 
       await Future.delayed(const Duration(seconds: 3));
       emit(
         state.copyWith(
-          transactionStatusMessage: 'Checking transaction status...',
+          transactionStatusMessage: 'Checking Transaction Status...',
         ),
       );
 
       await Future.delayed(const Duration(seconds: 2));
       emit(state.copyWith(transactionStatusMessage: 'Done'));
 
-      // 4. Transaction is complete. Signal final success.
+      // 3. Emit the final success state.
       await Future.delayed(const Duration(milliseconds: 500));
       emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.success));
     } catch (e) {
@@ -150,7 +252,6 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
         ),
       );
     } finally {
-      // Reset the flow status after a delay.
       await Future.delayed(const Duration(seconds: 5));
       emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.idle));
     }

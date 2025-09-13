@@ -21,5 +21,6 @@
     "fs",
     "http",
     "net"
-  ]
+  ],
+  "editor.fontSize": 12
 }
