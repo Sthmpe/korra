@@ -16,11 +16,12 @@ import '../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../logic/bloc/vendor/payout/payout_state.dart';
 import '../../../logic/utils/currency_formatters.dart';
 import '../../shared/widgets/korra_header.dart';
+import 'widgets/create_pin_input_sheet.dart';
+import 'widgets/create_pin_success_screen.dart';
 import 'widgets/payout_balance_card.dart';
 import 'widgets/payout_method_card.dart';
 import 'widgets/pin_input_sheet.dart';
-import 'widgets/pin_input_sheet.dart';
-import 'widgets/result_sheets.dart' hide showPinInputSheet;
+import 'widgets/result_sheets.dart';
 import 'widgets/transaction_status_overlay.dart';
 
 class PayoutScreen extends StatelessWidget {
@@ -50,6 +51,15 @@ class PayoutScreen extends StatelessWidget {
               ..add(PayoutStarted()),
         child: BlocListener<PayoutBloc, PayoutState>(
           listener: (context, state) {
+            if (state.createPinStep == CreatePinStep.success) {
+              closeAllOverlays();
+              Get.to(() => BlocProvider.value(
+                value: context.read<PayoutBloc>(),
+                child: const CreatePinSuccessScreen())
+              );
+              return;
+            }
+               
             switch (state.payoutFlowStatus) {
               case PayoutFlowStatus.requiresPin:
                 closeAllOverlays();
@@ -57,9 +67,12 @@ class PayoutScreen extends StatelessWidget {
                   showPinInputSheet(context);
                 });
                 break;
-              // case PayoutFlowStatus.pinInvalid:
-              //   closeAllOverlays();
-              //   break;
+              case PayoutFlowStatus.createPin:
+                closeAllOverlays();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  showCreatePinSheet(context);
+                });
+                break;
               case PayoutFlowStatus.sending:
                 closeAllOverlays();
                 Get.dialog(
@@ -83,22 +96,25 @@ class PayoutScreen extends StatelessWidget {
                   title: 'Transaction Failed',
                   message: state.errorMessage ?? 'An unknown error occurred.',
                 );
-                break;
+                break;  
               default:
-                break;
+                // No action needed for other states
+                break;  
             }
           },
           child: Scaffold(
             backgroundColor: KorraColors.bg,
-            appBar: const KorraHeader(
+            appBar: KorraHeader(
               title: 'Manage Payout',
-              trailingActions: [],
+              trailingActions: const [],
               showLeadingIcon: true,
+              onBackpressed: () {
+                context.read<VendorHomeBloc>().add(const VendorHomeRefresh());
+                Get.back();
+              }
             ),
             body: BlocBuilder<PayoutBloc, PayoutState>(
               builder: (context, state) {
-                debugPrint('PayoutState: $state');
-                debugPrint('vendorUid: $vendorUid');
                 if (state.status == PayoutStatus.loading ||
                     state.status == PayoutStatus.initial) {
                   return const Center(
@@ -111,7 +127,6 @@ class PayoutScreen extends StatelessWidget {
                     child: Text(state.errorMessage ?? 'An error occurred.'),
                   );
                 }
-                debugPrint('Payout Details: ${state.payoutDetails.toMap()}');
                 return ListView(
                   padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
                   children: [

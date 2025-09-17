@@ -22,10 +22,6 @@ class OpenReservations extends VendorHomeEvent {
   List<Object?> get props => [filter];
 }
 
-class StartPayout extends VendorHomeEvent {
-  const StartPayout();
-}
-
 class ManagePayoutMethod extends VendorHomeEvent {
   const ManagePayoutMethod();
 }

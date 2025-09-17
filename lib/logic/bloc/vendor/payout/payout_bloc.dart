@@ -1,6 +1,7 @@
 // lib/logic/bloc/vendor/payout/payout_bloc.dart
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:korra/data/repository/vendors/bank_repository.dart';
+import 'package:korra/data/repository/vendors/payout_repository.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'payout_event.dart';
@@ -26,88 +27,30 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
       (event, emit) => emit(
         state.copyWith(
           payoutFlowStatus: PayoutFlowStatus.idle,
+          createPinStep: CreatePinStep.idle,
           transactionStatusMessage: '',
         ),
       ),
     );
-    on<CreatePinDigitAdded>((event, emit) {
-      if (state.createPinStep == CreatePinStep.idle ||
-          state.createPinStep == CreatePinStep.entering) {
-        final updated = state.newPin + event.digit;
-        if (updated.length == 4) {
-          emit(
-            state.copyWith(
-              createPinStep: CreatePinStep.confirming,
-              newPin: updated,
-            ),
-          );
-        } else {
-          emit(
-            state.copyWith(
-              createPinStep: CreatePinStep.entering,
-              newPin: updated,
-            ),
-          );
-        }
-      } else if (state.createPinStep == CreatePinStep.confirming) {
-        final updated = state.confirmPin + event.digit;
-        if (updated.length == 4) {
-          if (updated == state.newPin) {
-            // ✅ success, PINs match
-            emit(
-              state.copyWith(
-                createPinStep: CreatePinStep.success,
-                confirmPin: updated,
-              ),
-            );
-            // TODO: vendors.saveTransactionPin(updated);
-          } else {
-            // ❌ mismatch
-            emit(
-              state.copyWith(
-                createPinStep: CreatePinStep.error,
-                createPinError: 'PINs do not match. Try again.',
-                confirmPin: '',
-              ),
-            );
-          }
-        } else {
-          emit(state.copyWith(confirmPin: updated));
-        }
-      }
-    });
+    on<NewPinCreated>(_onNewPinCreated);
+  }
 
-    on<CreatePinDigitDeleted>((event, emit) {
-      if (state.createPinStep == CreatePinStep.entering &&
-          state.newPin.isNotEmpty) {
-        emit(
-          state.copyWith(
-            newPin: state.newPin.substring(0, state.newPin.length - 1),
-          ),
-        );
-      } else if (state.createPinStep == CreatePinStep.confirming &&
-          state.confirmPin.isNotEmpty) {
-        emit(
-          state.copyWith(
-            confirmPin: state.confirmPin.substring(
-              0,
-              state.confirmPin.length - 1,
-            ),
-          ),
-        );
-      }
-    });
+  Future<void> _onNewPinCreated(
+    NewPinCreated event,
+    Emitter<PayoutState> emit,
+  ) async {
+    // Here you can securely save PIN, trigger payout, etc.
+    // For now, just update state.
+    emit(
+      state.copyWith(
+        createPinStep: CreatePinStep.success,
+        newPin: event.pin,
+        createPinError: null,
+      ),
+    );
 
-    on<ResetCreatePin>((event, emit) {
-      emit(
-        state.copyWith(
-          createPinStep: CreatePinStep.idle,
-          newPin: '',
-          confirmPin: '',
-          createPinError: null,
-        ),
-      );
-    });
+    // If you want to continue with payout flow:
+    // emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
   }
 
   void _onBankListLoaded(
@@ -122,15 +65,12 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     Emitter<PayoutState> emit,
   ) async {
     emit(state.copyWith(status: PayoutStatus.loading));
-    debugPrint('PayoutStarted: $event');
     try {
       final details = await vendors.getPayoutDetails(vendorUid);
       vendors.getBankList().then((value) {
-        debugPrint('Bank List: $value');
         add(PayoutBankListLoaded(value));
       });
 
-      debugPrint('Details: $details');
       if (details != null) {
         emit(
           state.copyWith(status: PayoutStatus.loaded, payoutDetails: details),
@@ -161,13 +101,11 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
 
     final available = state.payoutDetails.withdrawableBalance;
 
-    debugPrint('AmountChanged: $amount, Available: $available');
 
     if (amount == 0) {
       // Default state → show helper text
       emit(state.copyWith(amountToWithdraw: '', amountError: ''));
     } else if (amount > available) {
-      debugPrint('Amount exceeds available balance');
       // Invalid → show error
       emit(
         state.copyWith(
@@ -190,8 +128,7 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     Emitter<PayoutState> emit,
   ) async {
     // 1. Check if a PIN is required.
-    final bool hasPin =
-        true; // TODO: Replace with `await vendors.hasTransactionPin()`
+    final bool hasPin = false; // TODO: Replace with `await vendors.hasTransactionPin()`
 
     if (hasPin) {
       // If a PIN exists, we signal the UI to ask for it. This is unchanged.
@@ -200,9 +137,7 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
       // ▼ THIS IS THE ARCHITECTURAL FIX ▼
       // Instead of navigating, the BLoC emits a state that signals
       // the navigation intent to the UI layer.
-      emit(state.copyWith(navigateTo: PayoutNavigation.toCreatePin));
-      // We immediately reset the signal to prevent re-navigation on rebuilds.
-      emit(state.copyWith(navigateTo: PayoutNavigation.none));
+      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.createPin));
     }
   }
 

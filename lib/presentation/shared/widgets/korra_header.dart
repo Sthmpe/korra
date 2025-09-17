@@ -10,6 +10,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback? onHistory;
   final VoidCallback? onSupport;
+  final VoidCallback? onBackpressed;
   final bool showHistoryDot;
   final bool showLeadingIcon;
   final List<Widget>? trailingActions; // NEW
@@ -19,6 +20,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.onHistory,
     this.onSupport,
+    this.onBackpressed,
     this.showHistoryDot = false,
     this.showLeadingIcon = false,
     this.trailingActions,
@@ -49,7 +51,14 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 showLeadingIcon
                     ? IconButton(
-                        onPressed: () => Get.back(),
+                        onPressed: onBackpressed ??
+                            () {
+                              if (Get.isOverlaysOpen) {
+                                Get.back();
+                              } else {
+                                Get.back();
+                              }
+                            },
                         style: IconButton.styleFrom(
                           padding: EdgeInsets.zero,
                           minimumSize: Size(40.w, 40.w),

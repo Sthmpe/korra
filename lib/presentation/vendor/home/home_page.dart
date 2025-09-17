@@ -20,7 +20,7 @@ class VendorHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    vendors.fetchWallets();
+    // vendors.fetchWallets();
 
     return BlocProvider(
       create: (_) => VendorHomeBloc(

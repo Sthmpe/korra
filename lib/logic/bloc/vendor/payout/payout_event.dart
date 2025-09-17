@@ -55,15 +55,11 @@ class PinSubmitted extends PayoutEvent {
 
 class ResetPayoutFlow extends PayoutEvent {}
 
-class CreatePinDigitAdded extends PayoutEvent {
-  final String digit;
-  const CreatePinDigitAdded(this.digit);
+class NewPinCreated extends PayoutEvent {
+  final String pin;
+
+  const NewPinCreated(this.pin);
+
   @override
-  List<Object?> get props => [digit];
+  List<Object?> get props => [pin];
 }
-
-class CreatePinDigitDeleted extends PayoutEvent {}
-
-class CreatePinSubmitted extends PayoutEvent {}
-
-class ResetCreatePin extends PayoutEvent {}

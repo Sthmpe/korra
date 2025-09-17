@@ -68,11 +68,6 @@ class VendorHomeBody extends StatelessWidget {
                         balanceText: s.withdrawable,
                         methodMasked: s.payoutMethodMasked,
                         onPayout: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const StartPayout(),
-                              )
-                            : null,
-                        onManageMethod: isEnabled
                             ? () {
                                 final bloc = context.read<VendorHomeBloc>();
                                 Get.to(

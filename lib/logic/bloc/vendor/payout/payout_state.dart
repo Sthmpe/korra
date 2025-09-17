@@ -8,18 +8,17 @@ enum PayoutStatus { initial, loading, loaded, updating, success, failure }
 
 enum BankDetailsVerificationStatus { idle, verifying, verified, error }
 
-enum PayoutNavigation { none, toCreatePin }
-
 enum PayoutFlowStatus {
   idle,          // The default, ready state
   requiresPin,   // The UI must now ask for the user's PIN
+  createPin,    // The UI must now guide the user to create a PIN
   pinInvalid,    // The entered PIN was incorrect
   sending,       // The transaction is in progress (controls the overlay)
   success,       // The transaction is complete and successful
   failure,       // The transaction has failed
 }
 
-enum CreatePinStep { idle, entering, confirming, success, error }
+enum CreatePinStep { idle, success, error }
 
 class PayoutState extends Equatable {
   final PayoutStatus status;
@@ -35,11 +34,9 @@ class PayoutState extends Equatable {
   final String? verifiedAccountName;
   final PayoutFlowStatus payoutFlowStatus;
   final String transactionStatusMessage;
-  final PayoutNavigation navigateTo;
   final String? amountError;
   final CreatePinStep createPinStep;
   final String newPin;
-  final String confirmPin;
   final String? createPinError;
 
 
@@ -57,11 +54,9 @@ class PayoutState extends Equatable {
     this.verifiedAccountName,
     this.payoutFlowStatus = PayoutFlowStatus.idle,
     this.transactionStatusMessage = '',
-    this.navigateTo = PayoutNavigation.none,
     this.amountError,
     this.createPinStep = CreatePinStep.idle,
     this.newPin = '',
-    this.confirmPin = '',
     this.createPinError,
   });
 
@@ -85,11 +80,9 @@ class PayoutState extends Equatable {
     String? verifiedAccountName,
     PayoutFlowStatus? payoutFlowStatus,
     String? transactionStatusMessage,
-    PayoutNavigation? navigateTo,
     String? amountError,
     CreatePinStep? createPinStep,
     String? newPin,
-    String? confirmPin,
     String? createPinError,
   }) {
     return PayoutState(
@@ -106,11 +99,9 @@ class PayoutState extends Equatable {
       verifiedAccountName: verifiedAccountName ?? this.verifiedAccountName,
       payoutFlowStatus: payoutFlowStatus ?? this.payoutFlowStatus,
       transactionStatusMessage: transactionStatusMessage ?? this.transactionStatusMessage,
-      navigateTo: navigateTo ?? this.navigateTo,
       amountError: amountError ?? this.amountError,
       createPinStep: createPinStep ?? this.createPinStep,
       newPin: newPin ?? this.newPin,
-      confirmPin: confirmPin ?? this.confirmPin,
       createPinError: createPinError ?? this.createPinError,
     );
   }
@@ -131,11 +122,9 @@ class PayoutState extends Equatable {
     verifiedAccountName,
     payoutFlowStatus,
     transactionStatusMessage,
-    navigateTo,
     amountError,
     createPinStep,
     newPin,
-    confirmPin,
     createPinError,
   ];
 }

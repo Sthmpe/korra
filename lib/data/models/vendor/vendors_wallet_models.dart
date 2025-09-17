@@ -45,7 +45,6 @@ class VendorDashboardData {
     this.payoutMethod,
   });
 
-  @override
   List<Object?> get props => [
     withdrawable,
     onHold,

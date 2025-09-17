@@ -1,11 +1,10 @@
 // lib/logic/bloc/vendor/home/vendor_home_bloc.dart
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
+import 'package:korra/data/repository/vendors/payout_repository.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
-import '../../../../presentation/vendor/payout/payout_screen.dart';
 import '../../../core/net/net_cubit.dart';
 import '../../../utils/currency_formatters.dart';
 import 'vendor_home_event.dart';
@@ -21,7 +20,6 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
       : super(VendorHomeState.initial()) {
     on<VendorHomeStarted>(_onStarted);
     on<VendorHomeRefresh>(_onRefresh);
-    on<StartPayout>(_onStartPayout);
     on<ManagePayoutMethod>(_onManagePayoutMethod);
     on<ViewHoldSchedule>(_onViewHoldSchedule);
   }
@@ -62,14 +60,9 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
         // You would also fetch and update counts and activities here
       ));
     } catch (e) {
-      debugPrint('Failed to load vendor home data: $e');
       // ▼ EMIT failure state on error
       emit(state.copyWith(status: VendorHomeStatus.failure));
     }
-  }
-
-  void _onStartPayout(StartPayout event, Emitter<VendorHomeState> emit) {
-    Get.snackbar('Payout', 'Starting payout…', snackPosition: SnackPosition.BOTTOM);
   }
 
   Future<void> _onManagePayoutMethod(ManagePayoutMethod event, Emitter<VendorHomeState> emit) async {
