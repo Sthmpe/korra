@@ -8,6 +8,48 @@ class MonnifyFunctions {
   MonnifyFunctions({FunctionsClient? fx})
     : _fx = fx ?? Supabase.instance.client.functions;
 
+  /// Call the OTP authorization function
+  Future<Map<String, dynamic>> authorizeTransferOtp({
+    required String reference,
+    required String authorizationCode,
+  }) async {
+    final res = await _fx.invoke(
+      'authorize-transfer-otp',
+      body: {'reference': reference, 'authorizationCode': authorizationCode},
+    );
+
+    final data = res.data;
+    if (data == null) {
+      throw Exception('No response from server');
+    }
+
+    return data; // { ok: true, status: "SUCCESS", message: ... }
+  }
+
+  /// Resend OTP for transfer
+  Future<Map<String, dynamic>> resendTransferOtp({
+    required String reference,
+  }) async {
+    final res = await _fx.invoke(
+      'resend-transfer-otp',
+      body: {'reference': reference},
+    );
+
+    final data = res.data;
+    if (data == null || data['ok'] != true) {
+      final message = data != null && data.containsKey('message')
+          ? data['message']
+          : 'Resend OTP failed';
+      throw Exception(message);
+    }
+
+    // Return normalized response
+    return {
+      'status': data['status'], // e.g. "SUCCESS"
+      'message': data['message'], // e.g. "Authorization code will be processed..."
+    };
+  }
+
   /// 🏦 Fetches the curated list of banks from the Supabase database.
   ///
   /// This function calls the `get-banks-supabase` Edge Function, which reads
@@ -293,7 +335,7 @@ class MonnifyFunctions {
     required String sourceAccountNumber,
   }) async {
     final res = await _fx.invoke(
-      'initiate-transfer',
+      'initiate-transfer-single',
       body: {
         "amount": amount,
         "reference": reference,
@@ -353,8 +395,8 @@ class MonnifyFunctions {
   }) async {
     final res = await _fx.invoke(
       'get-wallet-balance',
-      method: HttpMethod.get,
-      queryParameters: {"accountNumber": accountNumber},
+      method: HttpMethod.post,
+      body: {"accountNumber": accountNumber},
     );
 
     if (res.data == null || res.data['ok'] != true) {

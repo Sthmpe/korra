@@ -63,7 +63,7 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
                           padding: EdgeInsets.zero,
                           minimumSize: Size(40.w, 40.w),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          alignment: Alignment.centerLeft,
+                          alignment: Alignment.center,
                         ),
                         icon: Icon(
                           MdiIcons.arrowLeft,

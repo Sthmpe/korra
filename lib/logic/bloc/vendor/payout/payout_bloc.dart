@@ -1,11 +1,21 @@
 // lib/logic/bloc/vendor/payout/payout_bloc.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:korra/data/models/vendor/payout/pin_model.dart';
 import 'package:korra/data/repository/vendors/bank_repository.dart';
 import 'package:korra/data/repository/vendors/payout_repository.dart';
+import 'package:korra/data/repository/vendors/pin_repository.dart';
+import 'package:korra/data/repository/vendors/transfer_repository.dart';
+import 'package:korra/data/repository/vendors/wallet_repository.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'payout_event.dart';
 import 'payout_state.dart';
+
+final _uuid = const Uuid();
 
 class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
   final String vendorUid;
@@ -19,6 +29,8 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     on<UpdateMethodTapped>(_onUpdateMethod);
     on<WithdrawTapped>(_onWithdrawTapped);
     on<PinSubmitted>(_onPinSubmitted);
+    on<OtpSubmitted>(_onOtpSubmitted);
+    on<OtpResendRequested>(_onOtpResendRequested);
     on<EditMethodToggled>(_onEditMethodToggled);
     on<BankSelected>(_onBankSelected);
     on<AccountNumberChanged>(_onAccountNumberChanged);
@@ -29,6 +41,14 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
           payoutFlowStatus: PayoutFlowStatus.idle,
           createPinStep: CreatePinStep.idle,
           transactionStatusMessage: '',
+          amountToWithdraw: '',
+          amountError: '',
+          otpHasError: false,
+          transactionRef: '',
+          errorTitle: '',
+          errorMessage: '',
+          transactionTime: null,
+          transactionFee: null,
         ),
       ),
     );
@@ -39,16 +59,34 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     NewPinCreated event,
     Emitter<PayoutState> emit,
   ) async {
-    // Here you can securely save PIN, trigger payout, etc.
-    // For now, just update state.
-    emit(
-      state.copyWith(
-        createPinStep: CreatePinStep.success,
-        newPin: event.pin,
-        createPinError: null,
-      ),
-    );
+    try {
+      final hashed = await vendors.hashPin(event.pin);
 
+      // 2. Create PinModel
+      final newPinModel = PinModel(
+        userId: vendorUid,
+        pinHash: hashed,
+        createdAt: DateTime.now(),
+      );
+
+      // 3. Save to Firestore
+      await vendors.savePin(newPinModel);
+
+      // 4. Emit only step update (no need to carry pin in state)
+      emit(
+        state.copyWith(
+          createPinStep: CreatePinStep.success,
+          createPinError: null,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          createPinStep: CreatePinStep.error,
+          createPinError: e.toString(),
+        ),
+      );
+    }
     // If you want to continue with payout flow:
     // emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
   }
@@ -101,7 +139,6 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
 
     final available = state.payoutDetails.withdrawableBalance;
 
-
     if (amount == 0) {
       // Default state → show helper text
       emit(state.copyWith(amountToWithdraw: '', amountError: ''));
@@ -128,9 +165,9 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     Emitter<PayoutState> emit,
   ) async {
     // 1. Check if a PIN is required.
-    final bool hasPin = false; // TODO: Replace with `await vendors.hasTransactionPin()`
+    final hasPin = await vendors.getPin(vendorUid);
 
-    if (hasPin) {
+    if (hasPin != null) {
       // If a PIN exists, we signal the UI to ask for it. This is unchanged.
       emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresPin));
     } else {
@@ -145,50 +182,278 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     PinSubmitted event,
     Emitter<PayoutState> emit,
   ) async {
-    final bool isPinValid = event.pin == '1234'; // mock
+    final storedHash = await vendors.getPinHash(vendorUid);
+
+    bool isPinValid = await vendors.verifyPin(event.pin, storedHash!);
 
     if (!isPinValid) {
       emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.pinInvalid));
       return;
     }
 
+    emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.pinValid));
+
+    // Step 1: Generate transaction reference
+    final prefix = "PAYOUT"; // or "LAYAWAY"
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = _uuid.v4().split("-").first; // short chunk
+    final ref = "$prefix-$timestamp-$random";
+
+    final transactionId = ref;
+
+    await vendors.saveTransaction(vendorUid, transactionId, {
+      "reference": ref,
+      "amount": double.parse(state.amountToWithdraw.replaceAll(',', '')),
+      "vendorWalletAccount": state.payoutDetails.walletAccountNumber,
+      "recipientBank": state.payoutDetails.bankName,
+      "recipientBankCode": state.payoutDetails.bankCode,
+      "recipientAccountNumber": state.payoutDetails.bankAccountNumber,
+      "status": "not_initiated",
+      "createdAt": FieldValue.serverTimestamp(),
+      "updatedAt": FieldValue.serverTimestamp(),
+    });
+
     emit(
       state.copyWith(
         payoutFlowStatus: PayoutFlowStatus.sending,
         transactionStatusMessage: 'Connecting with API...',
+        transactionRef: ref,
       ),
     );
 
     try {
-      await Future.delayed(const Duration(seconds: 2));
-      emit(state.copyWith(transactionStatusMessage: 'Processing Transfer...'));
-
-      // TODO: Make the actual API call here
-      // await vendors.initiateTransfer(...)
-
-      await Future.delayed(const Duration(seconds: 3));
-      emit(
-        state.copyWith(
-          transactionStatusMessage: 'Checking Transaction Status...',
-        ),
+      await vendors.initiateTransfer(
+        amount: double.parse(state.amountToWithdraw.replaceAll(',', '')),
+        sourceAccountNumber: state.payoutDetails.walletAccountNumber,
+        destinationAccountNumber: state.payoutDetails.bankAccountNumber,
+        destinationBankCode: state.payoutDetails.bankCode,
+        narration: 'Korra vendors payout',
+        reference: ref,
       );
 
-      await Future.delayed(const Duration(seconds: 2));
-      emit(state.copyWith(transactionStatusMessage: 'Done'));
+      // Update status after API call
+      await vendors.updateTransactionStatus(
+        vendorUid,
+        transactionId,
+        "initiated",
+      );
 
-      // 3. Emit the final success state.
-      await Future.delayed(const Duration(milliseconds: 500));
-      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.success));
+      emit(state.copyWith(
+        payoutFlowStatus: PayoutFlowStatus.requiresOTP,
+      ));
+    } catch (e) {
+      debugPrint(e.toString());
+
+      await vendors.updateTransactionStatus(
+        vendorUid,
+        transactionId,
+        "failure",
+      );
+
+      emit(
+        state.copyWith(
+          payoutFlowStatus: PayoutFlowStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onOtpSubmitted(
+    OtpSubmitted event,
+    Emitter<PayoutState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        payoutFlowStatus: PayoutFlowStatus.sending,
+        transactionStatusMessage: "Authorizing transfer...",
+      ),
+    );
+
+    try {
+      final result = await vendors.authorizeTransferOtp(
+        reference: state.transactionRef!,
+        authorizationCode: event.otp,
+      );
+
+      if (result == "SUCCESS") {
+        await vendors.updateTransactionStatus(
+          vendorUid,
+          state.transactionRef!,
+          "authorized",
+        );
+
+        emit(
+          state.copyWith(
+            transactionStatusMessage: 'Checking Transaction Status...',
+          ),
+        );
+
+        final statusMap = await vendors.checkTransferStatus(state.transactionRef!);
+        final status = statusMap["status"];
+
+        switch (status) {
+          case "SUCCESS":
+          case "COMPLETED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "completed",
+            );
+
+            await vendors.updateWithdrawableBalance(vendorUid, state.payoutDetails.walletAccountNumber);
+
+            final details = await vendors.getPayoutDetails(vendorUid);
+
+            emit(
+              state.copyWith(
+                transactionStatusMessage: 'Payout successful!',
+                payoutDetails: details,
+                transactionTime: DateTime.tryParse(statusMap["createdOn"] ?? ""),
+                transactionFee: statusMap["fee"],
+              ),
+            );
+
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.success));
+            break;
+          case "PENDING":
+          case "AWAITING_PROCESSING":
+          case "IN_PROGRESS":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "pending",
+            );
+
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Pending',
+                errorMessage: "Transaction is still processing...",
+                payoutFlowStatus: PayoutFlowStatus.pending,
+              ),
+            );
+
+            break;
+          case "PENDING_AUTHORIZATION":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "re-authorize",
+            );
+
+            emit(
+              state.copyWith(
+                transactionStatusMessage: 'Additional authorization required.',
+              ),
+            );
+
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            emit(
+              state.copyWith(payoutFlowStatus: PayoutFlowStatus.requiresOTP),
+            );
+            break;
+
+          case "OTP_EMAIL_DISPATCH_FAILED":
+            emit(
+              state.copyWith(
+                payoutFlowStatus: PayoutFlowStatus.failure,
+                errorMessage: "OTP dispatch failed. Please try again.",
+                errorTitle: 'OTP Dispatch Failed',
+                otpHasError: true,
+              ),
+            );
+            break;
+          case "FAILED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Failed',
+                errorMessage: "Payout was not successful",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+
+            break;
+          case "REVERSED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Reversed',
+                errorMessage: "Payout was reversed",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+
+            break;
+          case "EXPIRED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Expired',
+                errorMessage: "Payout has expired",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+
+            break;
+        }
+      } else {
+        emit(
+          state.copyWith(
+            payoutFlowStatus: PayoutFlowStatus.failure,
+            errorMessage: result,
+            otpHasError: true,
+          ),
+        );
+      }
     } catch (e) {
       emit(
         state.copyWith(
           payoutFlowStatus: PayoutFlowStatus.failure,
-          errorMessage: 'Transaction Failed.',
+          errorMessage: e.toString(),
+          otpHasError: true,
         ),
       );
-    } finally {
-      await Future.delayed(const Duration(seconds: 5));
-      emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.idle));
+    }
+  }
+
+  Future<void> _onOtpResendRequested(
+    OtpResendRequested event,
+    Emitter<PayoutState> emit,
+  ) async {
+    try {
+      await vendors.resendTransferOtp(
+        reference: state.transactionRef!,
+      ); // vendor repo handles Monnify resend API
+    } catch (e) {
+      emit(
+        state.copyWith(
+          payoutFlowStatus: PayoutFlowStatus.failure,
+          errorTitle: 'OTP Resend Failed',
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 

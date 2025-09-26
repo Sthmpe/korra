@@ -13,7 +13,10 @@ enum PayoutFlowStatus {
   requiresPin,   // The UI must now ask for the user's PIN
   createPin,    // The UI must now guide the user to create a PIN
   pinInvalid,    // The entered PIN was incorrect
+  pinValid,      // The entered PIN was correct
+  requiresOTP,   // The UI must now ask for the user's OTP
   sending,       // The transaction is in progress (controls the overlay)
+  pending,       // The transaction is still processing
   success,       // The transaction is complete and successful
   failure,       // The transaction has failed
 }
@@ -36,8 +39,13 @@ class PayoutState extends Equatable {
   final String transactionStatusMessage;
   final String? amountError;
   final CreatePinStep createPinStep;
-  final String newPin;
   final String? createPinError;
+  final String? transactionRef;
+  final String? errorTitle;
+  final bool? otpHasError;
+  final DateTime? transactionTime;
+  final num? transactionFee;
+
 
 
   const PayoutState({
@@ -56,8 +64,12 @@ class PayoutState extends Equatable {
     this.transactionStatusMessage = '',
     this.amountError,
     this.createPinStep = CreatePinStep.idle,
-    this.newPin = '',
     this.createPinError,
+    this.transactionRef,
+    this.errorTitle,
+    this.otpHasError,
+    this.transactionTime,
+    this.transactionFee ,
   });
 
   factory PayoutState.initial() => PayoutState(
@@ -82,8 +94,12 @@ class PayoutState extends Equatable {
     String? transactionStatusMessage,
     String? amountError,
     CreatePinStep? createPinStep,
-    String? newPin,
     String? createPinError,
+    String? transactionRef,
+    String? errorTitle,
+    bool? otpHasError,
+    DateTime? transactionTime,
+    num? transactionFee,
   }) {
     return PayoutState(
       status: status ?? this.status,
@@ -101,8 +117,12 @@ class PayoutState extends Equatable {
       transactionStatusMessage: transactionStatusMessage ?? this.transactionStatusMessage,
       amountError: amountError ?? this.amountError,
       createPinStep: createPinStep ?? this.createPinStep,
-      newPin: newPin ?? this.newPin,
       createPinError: createPinError ?? this.createPinError,
+      transactionRef: transactionRef ?? this.transactionRef,
+      errorTitle: errorTitle ?? this.errorTitle,
+      otpHasError: otpHasError ?? this.otpHasError,
+      transactionTime: transactionTime ?? this.transactionTime,
+      transactionFee: transactionFee ?? this.transactionFee,
     );
   }
 
@@ -124,8 +144,12 @@ class PayoutState extends Equatable {
     transactionStatusMessage,
     amountError,
     createPinStep,
-    newPin,
     createPinError,
+    transactionRef,
+    errorTitle,
+    otpHasError,
+    transactionTime,
+    transactionFee,
   ];
 }
 

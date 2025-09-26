@@ -1,12 +1,11 @@
 // lib/logic/bloc/vendor/home/vendor_home_bloc.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
-import 'package:korra/data/repository/vendors/payout_repository.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../core/net/net_cubit.dart';
-import '../../../utils/currency_formatters.dart';
 import 'vendor_home_event.dart';
 import 'vendor_home_state.dart';
 
@@ -41,8 +40,6 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
       // ▼ EMIT loading state first
       emit(state.copyWith(status: VendorHomeStatus.loading));
 
-      // Fetch payout details
-      final payout = await vendors.getPayoutDetails(vendorUid);
 
 
       // On-hold & next release (optional, you can fetch from your system)
@@ -52,15 +49,13 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
       // ▼ EMIT success state with the fetched data
       emit(state.copyWith(
         status: VendorHomeStatus.success,
-        withdrawable: '₦${formatToCurrency(payout?.withdrawableBalance ?? 0)}',
-        payoutMethodMasked: payout?.masked ?? 'Add method',
-        withdrawableMinor: payout?.withdrawableBalance.toInt() ?? 0,
         onHold: onHold,
         nextReleaseDate: nextRelease,
         // You would also fetch and update counts and activities here
       ));
     } catch (e) {
       // ▼ EMIT failure state on error
+      debugPrint('Error loading home data: ${e.toString()}');
       emit(state.copyWith(status: VendorHomeStatus.failure));
     }
   }

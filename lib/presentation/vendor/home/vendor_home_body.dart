@@ -7,7 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
+import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
+import '../../../logic/bloc/vendor/payout/payout_state.dart';
 import '../../../logic/core/net/net_cubit.dart';
+import '../../../logic/utils/currency_formatters.dart';
 import '../../shared/widgets/section_header.dart';
 import '../payout/payout_screen.dart';
 import 'widgets/vendor_withdrawable_card.dart';
@@ -64,23 +67,23 @@ class VendorHomeBody extends StatelessWidget {
                         ),
 
                       // WALLET (withdrawable)
-                      VendorWithdrawableCard(
-                        balanceText: s.withdrawable,
-                        methodMasked: s.payoutMethodMasked,
-                        onPayout: isEnabled
-                            ? () {
-                                final bloc = context.read<VendorHomeBloc>();
-                                Get.to(
-                                  () => BlocProvider.value(
-                                    value: bloc,
-                                    child: PayoutScreen(
-                                      vendors: bloc.vendors,
-                                      vendorUid: bloc.vendorUid,
-                                    ),
-                                  ),
-                                );
-                              }
-                            : null,
+                      BlocBuilder<PayoutBloc, PayoutState>(
+                        builder: (context, payoutState) {
+                          return VendorWithdrawableCard(
+                            balanceText: '₦${formatToCurrency(payoutState.payoutDetails.withdrawableBalance)}',
+                            methodMasked: payoutState.payoutDetails.masked.isEmpty ? 'Add method' : payoutState.payoutDetails.masked,
+                            onPayout: isEnabled
+                                ? () {
+                                    final payoutBloc = context.read<PayoutBloc>();
+                                    Get.to(
+                                      () => BlocProvider.value(
+                                        value: payoutBloc,
+                                        child: PayoutScreen(),                                      ),
+                                    );
+                                  }
+                                : null,
+                          );
+                        }
                       ),
 
                       // =======================

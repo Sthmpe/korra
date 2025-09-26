@@ -14,7 +14,7 @@ class PayoutStarted extends PayoutEvent {
 
 class PayoutBankListLoaded extends PayoutEvent {
   final List<Bank> bankList;
-  
+
   const PayoutBankListLoaded(this.bankList);
 }
 
@@ -35,13 +35,15 @@ class EditMethodToggled extends PayoutEvent {}
 class BankSelected extends PayoutEvent {
   final Bank bank;
   const BankSelected(this.bank);
-  @override List<Object?> get props => [bank];
+  @override
+  List<Object?> get props => [bank];
 }
 
 class AccountNumberChanged extends PayoutEvent {
   final String accountNumber;
   const AccountNumberChanged(this.accountNumber);
-  @override List<Object?> get props => [accountNumber];
+  @override
+  List<Object?> get props => [accountNumber];
 }
 
 class ConfirmAndSaveMethodTapped extends PayoutEvent {}
@@ -62,4 +64,15 @@ class NewPinCreated extends PayoutEvent {
 
   @override
   List<Object?> get props => [pin];
+}
+
+class OtpSubmitted extends PayoutEvent {
+  final String otp;
+  const OtpSubmitted(this.otp);
+  @override
+  List<Object?> get props => [otp];
+}
+
+class OtpResendRequested extends PayoutEvent {
+  OtpResendRequested();
 }

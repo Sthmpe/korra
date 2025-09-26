@@ -9,9 +9,6 @@ enum ResvFilter { newRes, ongoing, completed, cancelled }
 class VendorHomeState extends Equatable {
   final VendorHomeStatus status;
 
-  final String withdrawable;         // formatted: ₦4,800,000
-  final int withdrawableMinor;       // enable/disable payout button
-  final String payoutMethodMasked;   // e.g. 'GTB ••1234' or 'Add method'
   final String onHold;               // e.g. ₦1,300,000
   final String nextReleaseDate;      // e.g. Aug 27
   final String newCount;
@@ -24,9 +21,6 @@ class VendorHomeState extends Equatable {
 
   const VendorHomeState({
     required this.status,
-    required this.withdrawable,
-    required this.withdrawableMinor,
-    required this.payoutMethodMasked,
     required this.onHold,
     required this.nextReleaseDate,
     required this.newCount,
@@ -39,10 +33,6 @@ class VendorHomeState extends Equatable {
 
 factory VendorHomeState.initial() => const VendorHomeState(
       status: VendorHomeStatus.initial,
-      // ▼ Use more descriptive placeholders
-      withdrawable: '₦--',
-      withdrawableMinor: 0,
-      payoutMethodMasked: '...',
       onHold: '₦--',
       nextReleaseDate: '--',
       newCount: '-',
@@ -68,9 +58,6 @@ factory VendorHomeState.initial() => const VendorHomeState(
   }) {
     return VendorHomeState(
       status: status ?? this.status,
-      withdrawable: withdrawable ?? this.withdrawable,
-      withdrawableMinor: withdrawableMinor ?? this.withdrawableMinor,
-      payoutMethodMasked: payoutMethodMasked ?? this.payoutMethodMasked,
       onHold: onHold ?? this.onHold,
       nextReleaseDate: nextReleaseDate ?? this.nextReleaseDate,
       newCount: newCount ?? this.newCount,
@@ -84,10 +71,7 @@ factory VendorHomeState.initial() => const VendorHomeState(
 
   @override
   List<Object?> get props => [
-        status, 
-        withdrawable,
-        withdrawableMinor,
-        payoutMethodMasked,
+        status,
         onHold,
         nextReleaseDate,
         newCount,

@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
+import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
+import '../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'vendor_home_body.dart';
@@ -22,12 +24,22 @@ class VendorHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     // vendors.fetchWallets();
 
-    return BlocProvider(
-      create: (_) => VendorHomeBloc(
-        vendors: vendors,
-        vendorUid: vendorUid,
-        net: context.read<NetCubit>(),
-      )..add(const VendorHomeStarted()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (_) => VendorHomeBloc(
+            vendors: vendors,
+            vendorUid: vendorUid,
+            net: context.read<NetCubit>(),
+          )..add(const VendorHomeStarted()),
+        ),
+        BlocProvider(
+          create: (_) =>
+              PayoutBloc(vendors: vendors, vendorUid: vendorUid)
+                ..add(const PayoutStarted()),
+        ),
+        // Add more blocs here if needed
+      ],
       child: const Scaffold(
         backgroundColor: Colors.white,
         appBar: KorraHeader(title: 'Home'),

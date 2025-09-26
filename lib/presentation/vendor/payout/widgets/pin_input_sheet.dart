@@ -85,8 +85,13 @@ class _PinInputSheetState extends State<_PinInputSheet> {
             context,
             title: 'Incorrect PIN',
             message: 'The PIN you entered is incorrect. Please try again.',
+            retryCallback: () => showPinInputSheet(context),
+            showForgetButton: true,
           );
           context.read<PayoutBloc>().add(ResetPayoutFlow());
+        }
+        if (state.payoutFlowStatus == PayoutFlowStatus.pinValid) {
+          if (!Get.isOverlaysOpen) Get.back();
         }
       },
       child: Container(
