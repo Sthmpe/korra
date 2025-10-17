@@ -1,27 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/logic/bloc/multi_bloc_builder.dart';
+import 'package:korra/logic/bloc/vendor/profile/profile_event.dart';
 
+import '../../../data/repository/vendors/vendor_repository.dart';
+import '../../../logic/bloc/vendor/profile/profile_bloc.dart';
+import '../../../logic/bloc/vendor/profile/profile_state.dart';
+import '../../../logic/core/net/net_cubit.dart';
 import '../../../logic/cubit/vendor/vendor_profile_cubit.dart';
+import '../../auth/role_login/role_login_screen.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/vendor_identity_header_card.dart';
 import 'widgets/v_section_card.dart';
 import 'widgets/v_rows.dart';
 
 class VendorProfilePage extends StatelessWidget {
-  const VendorProfilePage({super.key});
+  final VendorRepository vendors;
+  final String vendorUid;
+  const VendorProfilePage({super.key, required this.vendors, required this.vendorUid});
 
   static const _brand = Color(0xFFA54600);
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => VendorProfileCubit()..load(),
-      child: BlocBuilder<VendorProfileCubit, VendorProfileState>(
-        builder: (context, s) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => VendorProfileCubit()..load()),
+        BlocProvider(create: (_) => ProfileBloc(vendors: vendors, vendorUid: vendorUid, net: context.read<NetCubit>(),)),
+      ],
+      child: MultiBlocBuilder2<VendorProfileCubit, VendorProfileState, ProfileBloc, ProfileState>(
+        builder: (context, s, profileState) {
           final cubit = context.read<VendorProfileCubit>();
+          final bloc = context.read<ProfileBloc>();
 
           return Scaffold(
             backgroundColor: Colors.white,
@@ -224,7 +238,10 @@ class VendorProfilePage extends StatelessWidget {
                           child: Row(children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () {},
+                                onPressed: () {
+                                  bloc.add(LogoutRequested());
+                                  Get.offAll(() => const RoleLoginScreen());
+                                },
                                 style: OutlinedButton.styleFrom(
                                   side: const BorderSide(color: _brand),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),

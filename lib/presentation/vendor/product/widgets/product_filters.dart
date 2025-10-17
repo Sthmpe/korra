@@ -22,7 +22,7 @@ class ProductFilters extends StatelessWidget {
           ProductFilter.approved => 'Approved',
           ProductFilter.pending => 'Pending',
           ProductFilter.outOfStock => 'Out of stock',
-          ProductFilter.hidden => 'Hidden',
+          ProductFilter.rejected => 'Rejected',
         };
 
     return SizedBox(

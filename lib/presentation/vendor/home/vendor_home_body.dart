@@ -10,7 +10,7 @@ import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
 import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
 import '../../../logic/bloc/vendor/payout/payout_state.dart';
 import '../../../logic/core/net/net_cubit.dart';
-import '../../../logic/utils/currency_formatters.dart';
+import '../../../config/utils/currency_formatters.dart';
 import '../../shared/widgets/section_header.dart';
 import '../payout/payout_screen.dart';
 import 'widgets/vendor_withdrawable_card.dart';

@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 class ProductEmptyState extends StatelessWidget {
-  const ProductEmptyState({super.key});
+  final String message;
+
+  const ProductEmptyState({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -17,19 +19,29 @@ class ProductEmptyState extends StatelessWidget {
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(color: const Color(0xFFEAE6E2)),
         ),
-        child: Row(children: [
-          Container(
-            width: 44.w, height: 44.w,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F2F1), borderRadius: BorderRadius.circular(12.r)),
-            child: const Icon(Iconsax.box, color: Color(0xFFA54600)),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Text('You haven’t added any products yet.',
-              style: GoogleFonts.inter(fontSize: 13.5.sp, color: const Color(0xFF5E5E5E))),
-          ),
-        ]),
+        child: Row(
+          children: [
+            Container(
+              width: 44.w,
+              height: 44.w,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F2F1),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: const Icon(Iconsax.box, color: Color(0xFFA54600)),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.inter(
+                  fontSize: 13.5.sp,
+                  color: const Color(0xFF5E5E5E),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -11,7 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/vendor/payout/payout_history.dart';
 import '../../../../logic/bloc/vendor/payout/payout_state.dart';
-import '../../../../logic/utils/currency_formatters.dart';
+import '../../../../config/utils/currency_formatters.dart';
 
 class PayoutBalanceCard extends StatelessWidget {
   final PayoutState state;

@@ -1,40 +1,60 @@
 import 'package:equatable/equatable.dart';
 
-enum ProductStatus { approved, pending, rejected, hidden, outOfStock }
-enum ProductFilter { all, approved, pending, outOfStock, hidden }
+enum ProductStatus { approved, pending, rejected, outOfStock }
+enum ProductFilter { all, approved, pending, outOfStock, rejected }
+enum ProductFlow { create, edit, idle}
 
 class ProductItem extends Equatable {
   final String id;
+  final String code;
   final String name;
+  final String description;
+  final String category;
   final String priceText; // formatted
   final int stock;
   final ProductStatus status;
-  final String imageUrl; // '' => fallback letter tile
+  final List<String> imageUrl; // '' => fallback letter tile
+  final DateTime createdAt;
 
   const ProductItem({
     required this.id,
     required this.name,
+    required this.code,
     required this.priceText,
+    required this.category,
     required this.stock,
     required this.status,
-    this.imageUrl = '',
+    required this.description,
+    required this.createdAt,
+
+    this.imageUrl = const [],
   });
 
   bool get shareable => status == ProductStatus.approved && stock > 0;
 
   @override
-  List<Object?> get props => [id, name, priceText, stock, status, imageUrl];
+  List<Object?> get props => [id, name, priceText, stock, status, imageUrl, code, description];
 }
 
 class VendorProductsState extends Equatable {
   final String query;
   final ProductFilter filter;
   final List<ProductItem> items;
+  final ProductFlow? flow;
+  final bool? isSubmitting;
+  final bool? success;
+  final String? errorMessage;
+  final Map<ProductFilter, int> statusCounts;
 
   const VendorProductsState({
     required this.query,
     required this.filter,
     required this.items,
+    this.flow,
+    this.isSubmitting,
+    this.success,
+    this.errorMessage,
+    this.statusCounts = const {},
   });
 
   List<ProductItem> get visibleItems {
@@ -46,61 +66,65 @@ class VendorProductsState extends Equatable {
         ProductFilter.approved => p.status == ProductStatus.approved,
         ProductFilter.pending => p.status == ProductStatus.pending,
         ProductFilter.outOfStock => p.status == ProductStatus.outOfStock,
-        ProductFilter.hidden => p.status == ProductStatus.hidden,
+        ProductFilter.rejected => p.status == ProductStatus.rejected,
       };
       return passQ && passF;
     }).toList();
   }
 
-  String get totalCountLabel => '${items.length} total';
+  String get totalCountLabel {
+    if (filter == ProductFilter.all) {
+      return "All (${items.length})";
+    } else {
+      final filteredCount = items.where((p) {
+        if (filter == ProductFilter.approved) {
+          return p.status == ProductStatus.approved;
+        } else if (filter == ProductFilter.pending) {
+          return p.status == ProductStatus.pending;
+        } else if (filter == ProductFilter.rejected) {
+          return p.status == ProductStatus.rejected;
+        } else if (filter == ProductFilter.outOfStock) {
+          return p.status == ProductStatus.outOfStock;
+        }
+        return true;
+      }).length;
+
+      final filterName = filter.name[0].toUpperCase() + filter.name.substring(1);
+      return "$filterName ($filteredCount)";
+    }
+  }
 
   VendorProductsState copyWith({
     String? query,
     ProductFilter? filter,
-    List<ProductItem>? items,
+    List<ProductItem>? items, 
+    bool? success,
+    bool? isSubmitting,
+    String? errorMessage,
+    Map<ProductFilter, int>? statusCounts,
   }) {
     return VendorProductsState(
       query: query ?? this.query,
       filter: filter ?? this.filter,
       items: items ?? this.items,
+      flow: flow ?? this.flow,
+      success: success ?? this.success,
+      isSubmitting: isSubmitting ?? this.isSubmitting,
+      errorMessage: errorMessage ?? this.errorMessage,
+      statusCounts: statusCounts ?? this.statusCounts,
     );
   }
 
-  factory VendorProductsState.mock() => VendorProductsState(
-        query: '',
-        filter: ProductFilter.all,
-        items: const [
-          ProductItem(
-            id: 'p1',
-            name: 'Bose 700',
-            priceText: '₦420,000',
-            stock: 8,
-            status: ProductStatus.approved,
-          ),
-          ProductItem(
-            id: 'p2',
-            name: 'AirPods Pro 2',
-            priceText: '₦360,000',
-            stock: 0,
-            status: ProductStatus.outOfStock,
-          ),
-          ProductItem(
-            id: 'p3',
-            name: 'LG OLED C2 55″',
-            priceText: '₦2,150,000',
-            stock: 3,
-            status: ProductStatus.pending,
-          ),
-          ProductItem(
-            id: 'p4',
-            name: 'PS5 Slim',
-            priceText: '₦790,000',
-            stock: 12,
-            status: ProductStatus.hidden,
-          ),
-        ],
-      );
+  factory VendorProductsState.initial() => VendorProductsState(
+    isSubmitting: false,
+    success: false,
+    errorMessage: null,
+    query: '',
+    filter: ProductFilter.all,
+    items: [],
+    statusCounts: {}
+  );
 
   @override
-  List<Object?> get props => [query, filter, items];
+  List<Object?> get props => [query, filter, items, isSubmitting, success, errorMessage, flow, statusCounts];
 }

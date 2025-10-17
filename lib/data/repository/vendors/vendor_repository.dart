@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 import 'package:korra/data/models/vendor/vendor_model.dart';
 
+import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../models/vendor/payout/payout_details.dart';
 import '../remote/monnify_functions.dart';
 
@@ -29,6 +30,85 @@ class VendorRepository {
        firestore = firestore ?? FirebaseFirestore.instance,
        fx = functions ?? Supabase.instance.client.functions,
        monnify = monnify ?? MonnifyFunctions();
+
+  // 🔹 Local in-memory cache (lives with the repository instance)
+  // 🔹 Local cache for ProductItems
+  final List<ProductItem> productItemCache = [];
+
+  final supabase = Supabase.instance.client;
+
+  /// Optional helpers
+  void clearProductCache() => productItemCache.clear();
+
+  void updateProductCache(List<ProductItem> products) {
+    productItemCache
+      ..clear()
+      ..addAll(products);
+  }
+
+  Future<void> updateVendorUsedAmount(
+    String vendorId, {
+    required double amount,
+    required bool increase,
+    double? newCurrent,
+  }) async {
+    try {
+      final docRef = firestore.collection('vendor_limits').doc(vendorId);
+      final docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        debugPrint('No vendor limit found for $vendorId');
+        return;
+      }
+
+      final data = docSnap.data()!;
+      double current = (data['currentUsedAmount'] ?? 0).toDouble();
+
+      if (newCurrent != null) {
+        current = newCurrent;
+      } else if (increase) {
+        current += amount; // vendor adds a product worth "amount"
+      } else {
+        current = current - amount < 0
+            ? 0
+            : current - amount; // vendor completes a reservation
+      }
+
+      await docRef.update({'currentUsedAmount': current});
+      debugPrint('Vendor used amount updated for $vendorId');
+    } catch (e) {
+      debugPrint('Error updating vendor used amount: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getVendorLimit(String vendorId) async {
+    try {
+      final doc = await firestore.collection('vendor_limits').doc(vendorId).get();
+
+      if (doc.exists && doc.data() != null) {
+        return doc.data();
+      } else {
+        debugPrint('No vendor limit found for $vendorId');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Error getting vendor limit: $e');
+      return null;
+    }
+  }
+
+  Future<void> createVendorWithLimit(Vendor vendor) async {
+    final vendorDoc = firestore.collection('vendors').doc(vendor.uid);
+    await vendorDoc.set(vendor.toMap());
+
+    final vendorLimitDoc = firestore.collection('vendor_limits').doc(vendor.uid);
+    await vendorLimitDoc.set({
+      'vendorId': vendor.uid,
+      'reservationLimit': 100000, // default limit for new vendor
+      'currentUsedAmount': 0,
+    });
+  }
+
 
   /// Creates a new vendor account with Firebase Auth, a Monnify wallet,
   /// and a Firestore document.
@@ -79,6 +159,7 @@ class VendorRepository {
       );
       await savePayoutDetails(uid, payout);
       await updateWithdrawableBalance(uid, vendor.accountNumber ?? '');
+      await createVendorWithLimit(vendor);
       debugPrint('Payout details initialized in Firestore.');
     } catch (err) {
       debugPrint('Wallet creation failed: $err');
@@ -110,6 +191,15 @@ class VendorRepository {
       'Vendor signed in successfully with UID: ${credential.user!.uid}',
     );
     return credential.user!.uid;
+  }
+
+  /// Logs out the current vendor.
+  Future<void> logout() async {
+    try {
+      await auth.signOut();
+    } catch (e) {
+      throw Exception('Logout failed: $e');
+    }
   }
 
   /// Checks if an email is already associated with a customer account.

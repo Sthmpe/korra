@@ -11,7 +11,7 @@ import '../../../config/constants/colors.dart';
 import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
 import '../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../logic/bloc/vendor/payout/payout_state.dart';
-import '../../../logic/utils/currency_formatters.dart';
+import '../../../config/utils/currency_formatters.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/create_pin_input_sheet.dart';
 import 'widgets/create_pin_success_screen.dart';

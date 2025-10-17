@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum FPStatus { idle, editing, submitting, sent, error }
+enum FPStatus { idle, editing, submitting, sent, resend, error }
 
 class ForgotPasswordState extends Equatable {
   const ForgotPasswordState({

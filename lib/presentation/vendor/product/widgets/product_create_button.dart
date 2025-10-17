@@ -17,11 +17,19 @@ class ProductCreateButton extends StatelessWidget {
           onPressed: onTap,
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFFA54600),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14.r),
+            ),
             elevation: 0,
           ),
-          child: Text('Create product',
-            style: GoogleFonts.inter(fontSize: 14.5.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+          child: Text(
+            'Create product',
+            style: GoogleFonts.inter(
+              fontSize: 14.5.sp,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );

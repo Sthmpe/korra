@@ -96,9 +96,9 @@ class VendorShell extends StatelessWidget {
             // All pages now receive the same repository instance.
             final pages = [
               VendorHomePage(vendors: repo, vendorUid: uid),
-              VendorProductsPage(),
+              VendorProductsPage(vendors: repo, vendorUid: uid),
               VendorReservationsPage(),
-              VendorProfilePage(),
+              VendorProfilePage(vendors: repo, vendorUid: uid),
             ];
 
             return Scaffold(

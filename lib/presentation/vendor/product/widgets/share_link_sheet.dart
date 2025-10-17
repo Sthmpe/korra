@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ShareLinkSheet extends StatefulWidget {
   final String productName;
@@ -36,11 +37,12 @@ class ShareLinkSheet extends StatefulWidget {
 
 class _ShareLinkSheetState extends State<ShareLinkSheet> {
   static const _brand = Color(0xFFA54600);
-  static const _hair  = Color(0xFFEAE6E2);
+  static const _hair = Color(0xFFEAE6E2);
 
   bool _copied = false;
 
-  String get _code => 'KORRA:${widget.token}';
+  String get _code => 'KORRA: ${widget.token}';
+  String get _shareUrl => widget.token;
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: _code));
@@ -49,6 +51,18 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
     setState(() => _copied = true);
     await Future.delayed(const Duration(milliseconds: 1100));
     if (mounted) setState(() => _copied = false);
+  }
+
+  Future<void> _share() async {
+    final message =
+        'Reserve this product now on Korra!\nProduct: ${widget.productName}\nCode: $_shareUrl';
+
+    final param = ShareParams(
+      text: message,
+      title: 'Share Reservation Product Link',
+    );
+
+    await SharePlus.instance.share(param);
   }
 
   @override
@@ -62,12 +76,14 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // drag handle
-          Container(
-            width: 40.w,
-            height: 4.h,
-            decoration: BoxDecoration(
-              color: _hair,
-              borderRadius: BorderRadius.circular(2.r),
+          Center(
+            child: Container(
+              width: 40.w,
+              height: 4.h,
+              decoration: BoxDecoration(
+                color: _hair,
+                borderRadius: BorderRadius.circular(2.r),
+              ),
             ),
           ),
           SizedBox(height: 12.h),
@@ -98,7 +114,11 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
               // optional close (kept subtle)
               IconButton(
                 splashRadius: 22.r,
-                icon: Icon(MdiIcons.close, size: 20.sp, color: const Color(0xFF1B1B1B)),
+                icon: Icon(
+                  MdiIcons.close,
+                  size: 20.sp,
+                  color: const Color(0xFF1B1B1B),
+                ),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -107,7 +127,11 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
           SizedBox(height: 6.h),
           Text(
             widget.productName,
-            style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w700,color: const Color(0xFF5E5E5E)),
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF5E5E5E),
+            ),
           ),
 
           // token field (tap anywhere to copy)
@@ -141,28 +165,40 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
                   SizedBox(width: 8.w),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 140),
-                    transitionBuilder: (c, a) => FadeTransition(opacity: a, child: c),
+                    transitionBuilder: (c, a) =>
+                        FadeTransition(opacity: a, child: c),
                     child: _copied
-                        ? Row(
-                            key: const ValueKey('copied'),
-                            children: [
-                              Icon(MdiIcons.clipboardCheckOutline,
-                                  size: 18.sp, color: const Color(0xFF1B5E20)),
-                              SizedBox(width: 6.w),
-                              Text('Copied',
+                        ? IconButton(
+                            onPressed: null,
+                            icon: Row(
+                              key: const ValueKey('copied'),
+                              children: [
+                                Icon(
+                                  MdiIcons.clipboardCheckOutline,
+                                  size: 18.sp,
+                                  color: const Color(0xFF1B5E20),
+                                ),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  'Copied',
                                   style: GoogleFonts.inter(
                                     fontSize: 12.5.sp,
                                     fontWeight: FontWeight.w700,
                                     color: const Color(0xFF1B5E20),
-                                  )),
-                            ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           )
                         : IconButton(
                             key: const ValueKey('copy'),
                             constraints: const BoxConstraints(),
                             padding: EdgeInsets.zero,
-                            icon: Icon(MdiIcons.contentCopy,
-                                size: 18.sp, color: const Color(0xFF1B1B1B)),
+                            icon: Icon(
+                              MdiIcons.contentCopy,
+                              size: 18.sp,
+                              color: const Color(0xFF1B1B1B),
+                            ),
                             onPressed: _copy,
                           ),
                   ),
@@ -198,26 +234,25 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
 
           SizedBox(height: 10.h),
 
-          // secondary: regenerate
+          // 🔥 replaced “Generate new link” with Share button
           SizedBox(
             width: double.infinity,
             height: 48.h,
-            child: OutlinedButton(
-              onPressed: () {
-                // TODO: generate new token flow
-              },
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: _hair),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14.r),
-                ),
-              ),
-              child: Text(
-                'Generate new link',
+            child: OutlinedButton.icon(
+              onPressed: _share,
+              icon: Icon(MdiIcons.shareVariant, color: _brand, size: 18.sp),
+              label: Text(
+                'Share via...',
                 style: GoogleFonts.inter(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w700,
                   color: _brand,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _hair),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14.r),
                 ),
               ),
             ),
@@ -226,8 +261,9 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
           SizedBox(height: 8.h),
           Center(
             child: Text(
-              'Customers paste this in korra to open the product.',
+              'Customers should paste the code in korra to open the product.',
               textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 12.sp,
                 color: const Color(0xFF8B8B8B),

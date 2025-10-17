@@ -14,45 +14,54 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
   final String vendorUid;
   final NetCubit net;
 
-  VendorHomeBloc({required this.vendors, required this.vendorUid, required this.net})
-      // ▼ CHANGE this from .mock() to .initial()
-      : super(VendorHomeState.initial()) {
+  VendorHomeBloc({
+    required this.vendors,
+    required this.vendorUid,
+    required this.net,
+  })
+    // ▼ CHANGE this from .mock() to .initial()
+    : super(VendorHomeState.initial()) {
     on<VendorHomeStarted>(_onStarted);
     on<VendorHomeRefresh>(_onRefresh);
     on<ManagePayoutMethod>(_onManagePayoutMethod);
     on<ViewHoldSchedule>(_onViewHoldSchedule);
   }
 
-  Future<void> _onStarted(VendorHomeStarted event, Emitter<VendorHomeState> emit) async {
+  Future<void> _onStarted(
+    VendorHomeStarted event,
+    Emitter<VendorHomeState> emit,
+  ) async {
     await _loadHomeData(emit);
   }
 
-  Future<void> _onRefresh(VendorHomeRefresh event, Emitter<VendorHomeState> emit) async {
+  Future<void> _onRefresh(
+    VendorHomeRefresh event,
+    Emitter<VendorHomeState> emit,
+  ) async {
     await _loadHomeData(emit);
   }
 
   Future<void> _loadHomeData(Emitter<VendorHomeState> emit) async {
     final online = await net.preflight();
-    if (!online) return; 
-
+    if (!online) return;
 
     try {
       // ▼ EMIT loading state first
       emit(state.copyWith(status: VendorHomeStatus.loading));
-
-
 
       // On-hold & next release (optional, you can fetch from your system)
       final onHold = '₦1,300,000'; // Replace with real data if available
       final nextRelease = 'Aug 27'; // Replace with real data if available
 
       // ▼ EMIT success state with the fetched data
-      emit(state.copyWith(
-        status: VendorHomeStatus.success,
-        onHold: onHold,
-        nextReleaseDate: nextRelease,
-        // You would also fetch and update counts and activities here
-      ));
+      emit(
+        state.copyWith(
+          status: VendorHomeStatus.success,
+          onHold: onHold,
+          nextReleaseDate: nextRelease,
+          // You would also fetch and update counts and activities here
+        ),
+      );
     } catch (e) {
       // ▼ EMIT failure state on error
       debugPrint('Error loading home data: ${e.toString()}');
@@ -60,11 +69,21 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
     }
   }
 
-  Future<void> _onManagePayoutMethod(ManagePayoutMethod event, Emitter<VendorHomeState> emit) async {
+  Future<void> _onManagePayoutMethod(
+    ManagePayoutMethod event,
+    Emitter<VendorHomeState> emit,
+  ) async {
     emit(state.copyWith(navigateToPayout: true));
   }
 
-  void _onViewHoldSchedule(ViewHoldSchedule event, Emitter<VendorHomeState> emit) {
-    Get.snackbar('On-hold', 'Opening schedule…', snackPosition: SnackPosition.BOTTOM);
+  void _onViewHoldSchedule(
+    ViewHoldSchedule event,
+    Emitter<VendorHomeState> emit,
+  ) {
+    Get.snackbar(
+      'On-hold',
+      'Opening schedule…',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 }

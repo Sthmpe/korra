@@ -4,12 +4,34 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/config/constants/colors.dart';
 
-void showSuccessSnackbar(String message) {
+enum SnackbarType { success, warning, error }
+
+void showAppSnackbar(String message, SnackbarType type) {
+  IconData icon;
+  Color color;
+
+  switch (type) {
+    case SnackbarType.success:
+      icon = Icons.check_circle;
+      color = KorraColors.brand; // burnt orange
+      break;
+    case SnackbarType.warning:
+      icon = Icons.info; // circle i
+      color = Colors.amber.shade700;
+      break;
+    case SnackbarType.error:
+      icon = Icons.error;
+      color = Colors.redAccent;
+      break;
+  }
+
   Get.snackbar(
     '',
     '',
     snackPosition: SnackPosition.TOP,
-    duration: const Duration(seconds: 2),
+    duration: const Duration(seconds: 12),
+    overlayBlur: 0,
+    barBlur: 0,
     backgroundColor: Colors.transparent,
     padding: EdgeInsets.zero,
     margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
@@ -22,7 +44,7 @@ void showSuccessSnackbar(String message) {
         borderRadius: BorderRadius.circular(12.r),
         border: Border(
           left: BorderSide(
-            color: KorraColors.brand, // burnt orange left border
+            color: color,
             width: 4,
           ),
         ),
@@ -36,11 +58,7 @@ void showSuccessSnackbar(String message) {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.check_circle,
-            color: KorraColors.brand,
-            size: 20.sp,
-          ),
+          Icon(icon, color: color, size: 20.sp),
           SizedBox(width: 12.w),
           Expanded(
             child: Text(
@@ -48,7 +66,7 @@ void showSuccessSnackbar(String message) {
               style: GoogleFonts.inter(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w600,
-                color: KorraColors.text, // dark text
+                color: KorraColors.text,
                 height: 1.3,
               ),
             ),

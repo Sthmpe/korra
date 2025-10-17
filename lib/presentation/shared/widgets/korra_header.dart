@@ -85,18 +85,17 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
                         ),
                       ),
                 SizedBox(width: 8.w),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B1B1B),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1B1B1B),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const Spacer(),
                 Row(
                   children:
                       trailingActions ??
