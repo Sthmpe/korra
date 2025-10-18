@@ -316,4 +316,5 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     if (digits.length == 11 && digits.startsWith('0')) return digits;
     return digits;
   }
+
 }

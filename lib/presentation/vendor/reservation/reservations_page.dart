@@ -59,7 +59,7 @@ class VendorReservationsPage extends StatelessWidget {
                     ),
                   ),
                   // List
-                  ReservationList(
+                  ReservationList(  
                     loading: s.loading,
                     items: s.visible,
                     filter: s.filter,

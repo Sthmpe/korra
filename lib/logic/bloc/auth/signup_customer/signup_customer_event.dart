@@ -75,3 +75,8 @@ class ConfirmPasswordChangedCU extends SignupCustomerEvent {
 }
 class TogglePasswordVisibilityCU extends SignupCustomerEvent {}
 class ToggleConfirmVisibilityCU extends SignupCustomerEvent {}
+
+// signup_vendor_event.dart
+class VerifyBvnRequested extends SignupCustomerEvent {}
+class VerifyNinRequested extends SignupCustomerEvent {}
+class ClearKycError extends SignupCustomerEvent {}

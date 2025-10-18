@@ -25,6 +25,21 @@ class SignupCustomerState extends Equatable {
   final bool hidePassword;
   final bool hideConfirm;
 
+  // KYC flags
+  final bool bvnVerifying;
+  final bool ninVerifying;
+  final bool bvnVerified;
+  final bool ninVerified;
+
+  // NEW: remember which exact values passed verification
+  final String? lastVerifiedNin;
+  final String? lastVerifiedBvn;
+
+  // NEW: per-field server errors (to show next to inputs)
+  final String? ninError;
+  final String? bvnError;
+  final String? kycError;
+
   const SignupCustomerState({
     this.pageIndex = 0,
     this.totalPages = 4,
@@ -41,7 +56,16 @@ class SignupCustomerState extends Equatable {
     this.password = '',
     this.confirm = '',
     this.hidePassword = true,
-    this.hideConfirm = true,
+    this.hideConfirm = true, 
+    this.bvnVerifying = false,
+    this.ninVerifying = false,
+    this.bvnVerified = false,
+    this.ninVerified = false,
+    this.lastVerifiedNin,
+    this.lastVerifiedBvn,
+    this.ninError,
+    this.bvnError,
+    this.kycError,
   });
 
   SignupCustomerState copyWith({
@@ -50,6 +74,15 @@ class SignupCustomerState extends Equatable {
     String? phone, String? email, DateTime? dob, Gender? gender,
     String? nin, String? bvn,
     String? password, String? confirm, bool? hidePassword, bool? hideConfirm,
+    bool? bvnVerifying,
+    bool? ninVerifying,
+    bool? bvnVerified,
+    bool? ninVerified,
+    String? lastVerifiedNin, 
+    String? lastVerifiedBvn,
+    String? ninError, 
+    String? bvnError,
+    String? kycError,
   }) {
     return SignupCustomerState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -67,7 +100,16 @@ class SignupCustomerState extends Equatable {
       password: password ?? this.password,
       confirm: confirm ?? this.confirm,
       hidePassword: hidePassword ?? this.hidePassword,
-      hideConfirm: hideConfirm ?? this.hideConfirm,
+      hideConfirm: hideConfirm ?? this.hideConfirm,    
+      bvnVerifying: bvnVerifying ?? this.bvnVerifying,
+      ninVerifying: ninVerifying ?? this.ninVerifying,
+      bvnVerified: bvnVerified ?? this.bvnVerified,
+      ninVerified: ninVerified ?? this.ninVerified,
+      lastVerifiedNin: lastVerifiedNin ?? this.lastVerifiedNin,
+      lastVerifiedBvn: lastVerifiedBvn ?? this.lastVerifiedBvn,
+      ninError: ninError ?? this.ninError,
+      bvnError: bvnError ?? this.bvnError,
+      kycError: kycError ?? this.kycError,
     );
   }
 
@@ -75,6 +117,15 @@ class SignupCustomerState extends Equatable {
   List<Object?> get props => [
     pageIndex,totalPages,loading,
     firstName,lastName,otherName,phone,email,dob,gender,
-    nin,bvn,password,confirm,hidePassword,hideConfirm
+    nin,bvn,password,confirm,hidePassword,hideConfirm,
+    bvnVerifying,
+    ninVerifying,
+    bvnVerified,
+    ninVerified,
+    lastVerifiedNin,
+    lastVerifiedBvn,
+    ninError,
+    bvnError,
+    kycError,
   ];
 }
