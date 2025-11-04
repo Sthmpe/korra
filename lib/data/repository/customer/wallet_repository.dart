@@ -1,9 +1,9 @@
-import 'package:korra/data/repository/vendors/payout_repository.dart';
-import '../../models/vendor/payout/payout_details.dart';
-import '../../models/vendor/vendor_model.dart';
-import 'vendor_repository.dart';
+import 'package:korra/data/models/customer/customer_model.dart';
+import 'package:korra/data/models/customer/topup/topup_details.dart';
+import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:korra/data/repository/customer/topup_repository.dart';
 
-extension WalletRepository on VendorRepository {
+extension WalletRepository on CustomerRepository {
   /// Fetch all wallets created by the merchant
   // Future<void> fetchWallets({int pageSize = 10, int pageNo = 0}) async {
   //   final wallets = await monnify.fetchWallets(
@@ -27,8 +27,8 @@ extension WalletRepository on VendorRepository {
   }
 
   
-  Future<void> updateWithdrawableBalance(
-    String vendorUid,
+  Future<void> updateAvailableBalance(
+    String customerUid,
     String walletAccountNumber,
   ) async {
     final data = await monnify.getWalletBalance(
@@ -36,28 +36,24 @@ extension WalletRepository on VendorRepository {
     );
     final balance = data['availableBalance'] as num? ?? 0;
 
-    final repository = VendorRepository();
-    final currentDetails = await repository.getPayoutDetails(vendorUid);
+    final repository = CustomerRepository();
+    final currentDetails = await repository.getTopUpDetails(customerUid);
 
     if (currentDetails != null) {
       // Update only the withdrawable balance, keep other details
-      final updatedDetails = PayoutDetails(
-        withdrawableBalance: balance,
+      final updatedDetails = TopUpDetails(
+        availableBalance: balance,
         walletAccountNumber: currentDetails.walletAccountNumber,
         walletAccountName: currentDetails.walletAccountName,
-        walletAccountReference: currentDetails.walletAccountReference,
-        bankCode: currentDetails.bankCode,
-        bankAccountNumber: currentDetails.bankAccountNumber,
-        bankAccountName: currentDetails.bankAccountName,
-        bankName: currentDetails.bankName,
+        walletAccountReference: currentDetails.walletAccountReference
       );
 
-      await repository.savePayoutDetails(vendorUid, updatedDetails);
+      await repository.saveTopUpDetails(customerUid, updatedDetails);
     }
   }
 
   /// Get all wallet transactions for a vendor
-  Future<List<Map<String, dynamic>>> getVendorWalletTransactions(
+  Future<List<Map<String, dynamic>>> getCustomerWalletTransactions(
     String accountNumber,
   ) async {
     try {
@@ -72,7 +68,7 @@ extension WalletRepository on VendorRepository {
 
   /// Get vendor available wallet balance
   /// Returns only the availableBalance (int or double)
-  Future<num> getVendorWalletBalance(String accountNumber) async {
+  Future<num> getCustomerWalletBalance(String accountNumber) async {
     try {
       final result = await monnify.getWalletBalance(
         accountNumber: accountNumber,
@@ -85,17 +81,17 @@ extension WalletRepository on VendorRepository {
   }
 
   /// ✅ Calls MonnifyFunctions to create a wallet.
-  Future<Map<String, dynamic>> createWallet(Vendor vendor, String uid) async {
+  Future<Map<String, dynamic>> createWallet(Customer customer, String uid) async {
     final walletRef =
         'korra_${uid.substring(0, 6)}_${DateTime.now().millisecondsSinceEpoch}';
 
     return await monnify.createWallet(
       walletReference: walletRef,
-      walletName: vendor.storeName,
-      customerName: '${vendor.firstName} ${vendor.lastName}'.trim(),
-      customerEmail: vendor.email,
-      bvn: vendor.bvn,
-      bvnDateOfBirth: _fmtDobIso(vendor.dob!),
+      walletName: 'Korra_finance${'${customer.firstName}_${customer.lastName}'}',
+      customerName: '${customer.firstName} ${customer.lastName}'.trim(),
+      customerEmail: customer.email,
+      bvn: customer.bvn,
+      bvnDateOfBirth: _fmtDobIso(customer.dob!),
     );
   }
 

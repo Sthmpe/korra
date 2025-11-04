@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/config/constants/colors.dart';
 
 import '../../../../config/constants/sizes.dart';
 import '../../../../config/validators/validators.dart';
@@ -29,13 +30,13 @@ class _StepPersonalState extends State<StepPersonal> {
   void initState() {
     super.initState();
     final s = context.read<SignupVendorBloc>().state;
-    _firstCtl = TextEditingController(text: s.ownerFirst)
+    _firstCtl = TextEditingController(text: s.firstName)
       ..addListener(() => _on(OwnerFirstChanged(_firstCtl.text)));
-    _lastCtl = TextEditingController(text: s.ownerLast)
+    _lastCtl = TextEditingController(text: s.lastName)
       ..addListener(() => _on(OwnerLastChanged(_lastCtl.text)));
-    _otherCtl = TextEditingController(text: s.ownerOther)
+    _otherCtl = TextEditingController(text: s.otherName)
       ..addListener(() => _on(OwnerOtherChanged(_otherCtl.text)));
-    _phoneCtl = TextEditingController(text: s.ownerPhone)
+    _phoneCtl = TextEditingController(text: s.phone)
       ..addListener(() => _on(OwnerPhoneChanged(_phoneCtl.text)));
     _emailCtl = TextEditingController(text: s.email)
       ..addListener(() => _on(VendorEmailChanged(_emailCtl.text)));
@@ -130,18 +131,19 @@ class _StepPersonalState extends State<StepPersonal> {
               _field(
                 controller: _phoneCtl,
                 label: 'Phone',
-                icon: Iconsax.call,
+                icon: Iconsax.call, 
                 validator: KorraValidators.phoneNg,
                 type: TextInputType.phone,
               ),
               SizedBox(height: 10.h),
-              _field(
-                controller: _emailCtl,
-                label: 'Email address',
-                icon: Iconsax.sms,
-                validator: KorraValidators.email,
-                type: TextInputType.emailAddress,
-              ),
+              _emailField(context, _emailCtl),
+              // _field(
+              //   controller: _emailCtl,
+              //   label: 'Email address',
+              //   icon: Iconsax.sms,
+              //   validator: KorraValidators.email,
+              //   type: TextInputType.emailAddress,
+              // ),
 
               SizedBox(height: 12.h),
 
@@ -347,4 +349,94 @@ class _StepPersonalState extends State<StepPersonal> {
       ),
     );
   }
+
+  Widget _emailField(BuildContext context, TextEditingController controller) {
+    return BlocBuilder<SignupVendorBloc, SignupVendorState>(
+      buildWhen: (p, c) =>
+          p.emailChecking != c.emailChecking ||
+          p.emailUnused != c.emailUnused ||
+          p.emailError != c.emailError,
+      builder: (context, s) {
+        // Determine the suffix icon
+        Widget? suffix;
+        // bool validEmail = false;
+        if (s.emailChecking) {
+          suffix = Padding(
+            padding: EdgeInsets.only(top: 20.h, right: 20.w, bottom: 20.h, left: 20.w),
+            child: SizedBox(
+              height: 10.h,
+              width: 10.w,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            ),
+          );
+        } else if (s.emailError != null && !s.emailUnused) {
+          suffix = Icon(Iconsax.close_circle, color: Colors.red, size: 20.sp, weight: 100,);
+        } else if (s.emailUnused) {
+          suffix = Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp, weight: 100,);
+        }
+
+        debugPrint("emailUnused in step4: ${s.emailUnused}");
+        debugPrint("emailError in step4: ${s.emailError}");
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextFormField(
+              controller: controller,
+              keyboardType: TextInputType.emailAddress,
+              style: GoogleFonts.inter(fontSize: 13.5.sp),
+              decoration: InputDecoration(
+                labelText: 'Email address',
+                labelStyle: GoogleFonts.inter(
+                  fontSize: 13.5.sp,
+                  color: Colors.black87,
+                ),
+                errorStyle: GoogleFonts.inter(fontSize: 12.sp),
+                prefixIcon: Icon(Iconsax.sms, size: 18.sp),
+                suffixIcon: suffix,
+                filled: true,
+              ),
+              // onChanged: (value) {
+              //   final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
+              //   debugPrint('ok: $ok');
+              //   if (!ok) {
+              //     validEmail = false;
+              //     return;
+              //   }
+              //   validEmail = true;
+              //   context.read<SignupVendorBloc>().add(
+              //     VendorEmailChanged(value),
+              //   );
+              // },
+            ),
+
+            // Below-field message
+            if (s.emailChecking || s.emailError != null || s.emailUnused)
+              Padding(
+                padding: EdgeInsets.only(left: 12.w, top: 3.h),
+                child: Text(
+                  s.emailChecking
+                      ? 'Checking email…'
+                      : s.emailUnused
+                        ? 'Email verified and available'
+                        : s.emailError != null 
+                          ? s.emailError!
+                          : 'Enter your email address' ,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    color: s.emailChecking
+                        ? KorraColors.brand
+                        : s.emailUnused
+                          ? Colors.green
+                          : s.emailError != null
+                            ? Colors.red
+                            : KorraColors.brand,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
 }

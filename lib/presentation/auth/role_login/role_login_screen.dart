@@ -27,7 +27,7 @@ class RoleLoginScreen extends StatelessWidget {
     return BlocProvider(
       create: (_) => RoleLoginBloc(),
       child: BlocListener<RoleLoginBloc, RoleLoginState>(
-        listenWhen: (p, c) => p.status != c.status || p.failure != c.failure,
+        listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
           if (state.status == LoginStatus.success) {
             final Widget destination =

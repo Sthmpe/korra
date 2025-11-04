@@ -40,10 +40,13 @@ class VendorHomePage extends StatelessWidget {
         ),
         // Add more blocs here if needed
       ],
-      child: const Scaffold(
+      child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: KorraHeader(title: 'Home'),
-        body: VendorHomeBody(),
+        appBar: const KorraHeader(title: 'Home'),
+        body: VendorHomeBody(
+          vendorUid: vendorUid,
+          vendors: vendors,
+        ),
       ),
     );
   }

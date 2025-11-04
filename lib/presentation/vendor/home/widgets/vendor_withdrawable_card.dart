@@ -4,10 +4,13 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../../config/constants/colors.dart';
+
 class VendorWithdrawableCard extends StatelessWidget {
   final String balanceText;          // withdrawable only
   final String methodMasked;         // e.g., 'GTB ••1289' or 'Add payout method'
   final VoidCallback? onPayout;
+  final bool loading;
   
 
   const VendorWithdrawableCard({
@@ -15,6 +18,7 @@ class VendorWithdrawableCard extends StatelessWidget {
     required this.balanceText,
     required this.methodMasked,
     required this.onPayout,
+    required this.loading,
   });
 
   static const _brand = Color(0xFFA54600);
@@ -51,7 +55,16 @@ class VendorWithdrawableCard extends StatelessWidget {
                   Text('Withdrawable balance',
                     style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF5E5E5E))),
                   SizedBox(height: 2.h),
-                  Text(balanceText,
+                  loading ?
+                  SizedBox(
+                    height: 25.h,
+                    width: 25.w,
+                    child: CircularProgressIndicator(
+                      color: KorraColors.brand,
+                      strokeWidth: 2,
+                    ),
+                  )
+                  : Text(balanceText,
                     style: GoogleFonts.inter(
                       fontSize: 22.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B),
                       fontFeatures: const [FontFeature.tabularFigures()],

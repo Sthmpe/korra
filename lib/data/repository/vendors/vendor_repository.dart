@@ -83,7 +83,10 @@ class VendorRepository {
 
   Future<Map<String, dynamic>?> getVendorLimit(String vendorId) async {
     try {
-      final doc = await firestore.collection('vendor_limits').doc(vendorId).get();
+      final doc = await firestore
+          .collection('vendor_limits')
+          .doc(vendorId)
+          .get();
 
       if (doc.exists && doc.data() != null) {
         return doc.data();
@@ -101,14 +104,15 @@ class VendorRepository {
     final vendorDoc = firestore.collection('vendors').doc(vendor.uid);
     await vendorDoc.set(vendor.toMap());
 
-    final vendorLimitDoc = firestore.collection('vendor_limits').doc(vendor.uid);
+    final vendorLimitDoc = firestore
+        .collection('vendor_limits')
+        .doc(vendor.uid);
     await vendorLimitDoc.set({
       'vendorId': vendor.uid,
       'reservationLimit': 100000, // default limit for new vendor
       'currentUsedAmount': 0,
     });
   }
-
 
   /// Creates a new vendor account with Firebase Auth, a Monnify wallet,
   /// and a Firestore document.
@@ -117,24 +121,20 @@ class VendorRepository {
       throw Exception('NIN and BVN must be verified before account creation.');
     }
 
+    debugPrint('vendor state: $state');
+
     final email = state.email.trim().toLowerCase();
 
-    final customerExists = await _checkIfCustomerExists(email);
-
-    if (customerExists) {
-      throw Exception('Email is already used by a customer.');
-    }
-
-    final authCredential = await auth.createUserWithEmailAndPassword(
-      email: email,
-      password: state.password,
-    );
-    final uid = authCredential.user!.uid;
-    debugPrint('Firebase user created with UID: $uid');
-
-    var vendor = Vendor.fromState(state, uid, status: 'pending-wallet');
-
     try {
+      final authCredential = await auth.createUserWithEmailAndPassword(
+        email: email,
+        password: state.password,
+      );
+      final uid = authCredential.user!.uid;
+      debugPrint('Firebase user created with UID: $uid');
+
+      var vendor = Vendor.fromState(state, uid, status: 'pending-wallet');
+
       final walletData = await createWallet(vendor, uid); // 👈 use wrapper
       vendor = vendor.copyWithMonnify(
         walletReference: walletData['walletReference'] as String?,
@@ -161,28 +161,24 @@ class VendorRepository {
       await updateWithdrawableBalance(uid, vendor.accountNumber ?? '');
       await createVendorWithLimit(vendor);
       debugPrint('Payout details initialized in Firestore.');
+      await _saveVendorToFirestore(vendor);
+      debugPrint('Vendor data saved to Firestore.');
+
+      await _sendWelcomeEmail(vendor);
+      debugPrint('Welcome email function triggered.');
+
+      return uid;
+    } on FirebaseAuthException catch (err) {
+      debugPrint('FirebaseAuth error: ${err.message}');
+      throw Exception(err.message ?? 'Failed to create account.');
     } catch (err) {
-      debugPrint('Wallet creation failed: $err');
+      debugPrint('Unexpected error during signup: $err');
+      throw Exception('Unexpected signup error: $err');
     }
-
-    await _saveVendorToFirestore(vendor);
-    debugPrint('Vendor data saved to Firestore.');
-
-    await _sendWelcomeEmail(vendor);
-    debugPrint('Welcome email function triggered.');
-
-    return uid;
   }
 
   /// Authenticates a vendor using email and password.
   Future<String> signInVendor(String email, String password) async {
-    final customerExists = await _checkIfCustomerExists(
-      email.trim().toLowerCase(),
-    );
-    if (customerExists) {
-      throw Exception('Email is already used by a customer.');
-    }
-
     final credential = await auth.signInWithEmailAndPassword(
       email: email.trim().toLowerCase(),
       password: password,
@@ -202,14 +198,25 @@ class VendorRepository {
     }
   }
 
-  /// Checks if an email is already associated with a customer account.
-  Future<bool> _checkIfCustomerExists(String email) async {
-    final custSnap = await db
-        .collection('customers')
-        .where('email', isEqualTo: email)
-        .limit(1)
-        .get();
-    return custSnap.docs.isNotEmpty;
+  // Helper function to check a single collection for the nested email
+  Future<bool> checkCollectionForEmail(
+    String collectionName,
+    String email,
+  ) async {
+    try {
+      final snapshot = await db
+          .collection(collectionName)
+          // Use dot notation to access the email field inside the 'owner' map
+          .where('personal.email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      // Handle potential errors (e.g., permission denied, network issues)
+      debugPrint('Error checking email in $collectionName: $e');
+      return false; // Return false on error to prevent exposing existence
+    }
   }
 
   /// Saves the vendor data to Firestore with server timestamps.
@@ -226,7 +233,7 @@ class VendorRepository {
       await fx.invoke(
         'send-welcome-email',
         body: {
-          'name': '${vendor.ownerFirst} ${vendor.ownerLast}'.trim(),
+          'name': '${vendor.firstName} ${vendor.lastName}'.trim(),
           'email': vendor.email,
         },
       );

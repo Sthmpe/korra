@@ -24,10 +24,7 @@ import 'widgets/transaction_status_overlay.dart';
 import 'widgets/transfer_otp_screen.dart';
 
 class PayoutScreen extends StatelessWidget {
-
-  const PayoutScreen({
-    super.key,
-  });
+  const PayoutScreen({super.key});
 
   void closeAllOverlays() {
     while (Get.isOverlaysOpen) {
@@ -36,78 +33,94 @@ class PayoutScreen extends StatelessWidget {
   }
 
   void _handleCreatePinFlow(BuildContext context, PayoutState state) {
-  if (state.createPinStep == CreatePinStep.success) {
-    closeAllOverlays();
-    Get.to(() => BlocProvider.value(
+    if (state.createPinStep == CreatePinStep.success) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      closeAllOverlays();
+      Get.to(
+        () => BlocProvider.value(
           value: context.read<PayoutBloc>(),
           child: const CreatePinSuccessScreen(),
-        ));
-  } else if (state.createPinStep == CreatePinStep.error) {
-    closeAllOverlays();
-    showPayoutFailureSheet(
-      context,
-      title: 'PIN Setup Failed',
-      message: state.createPinError ?? 'Could not create your PIN. Please try again.',
-      retryCallback: () => showCreatePinSheet(context),
-    );
+        ),
+      );
+    } else if (state.createPinStep == CreatePinStep.error) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      closeAllOverlays();
+      showPayoutFailureSheet(
+        context,
+        title: 'PIN Setup Failed',
+        message:
+            state.createPinError ??
+            'Could not create your PIN. Please try again.',
+        retryCallback: () => showCreatePinSheet(context),
+      );
+    }
   }
-}
 
-void _handlePayoutFlow(BuildContext context, PayoutState state) {
-  switch (state.payoutFlowStatus) {
-    case PayoutFlowStatus.requiresPin:
-      closeAllOverlays();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showPinInputSheet(context);
-      });
-      break;
-    case PayoutFlowStatus.createPin:
-      closeAllOverlays();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showCreatePinSheet(context);
-      });
-      break;
-    case PayoutFlowStatus.requiresOTP:
-      closeAllOverlays();
-      Get.to(() => OtpVerificationScreen(
-            onCompleted: (otp) => context.read<PayoutBloc>().add(OtpSubmitted(otp)),
+  void _handlePayoutFlow(BuildContext context, PayoutState state) {
+    switch (state.payoutFlowStatus) {
+      case PayoutFlowStatus.requiresPin:
+        FocusManager.instance.primaryFocus?.unfocus();
+        closeAllOverlays();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showPinInputSheet(context);
+        });
+        break;
+      case PayoutFlowStatus.createPin:
+        FocusManager.instance.primaryFocus?.unfocus();
+        closeAllOverlays();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showCreatePinSheet(context);
+        });
+        break;
+      case PayoutFlowStatus.requiresOTP:
+        closeAllOverlays();
+        Get.to(
+          () => OtpVerificationScreen(
+            onCompleted: (otp) =>
+                context.read<PayoutBloc>().add(OtpSubmitted(otp)),
             onResend: () {
               context.read<PayoutBloc>().add(OtpResendRequested());
               showSuccessSnackbar("A new OTP has been sent to your email.");
             },
-          ));
-      break;
-    case PayoutFlowStatus.sending:
-      closeAllOverlays();
-      Get.dialog(
-        BlocProvider.value(
-          value: context.read<PayoutBloc>(),
-          child: const TransactionStatusOverlay(),
-        ),
-        barrierDismissible: false,
-      );
-      break;
-    case PayoutFlowStatus.success:
-      closeAllOverlays();
-      Get.to(() => BlocProvider.value(
+          ),
+        );
+        break;
+      case PayoutFlowStatus.sending:
+        FocusManager.instance.primaryFocus?.unfocus();
+        closeAllOverlays();
+        Get.dialog(
+          BlocProvider.value(
             value: context.read<PayoutBloc>(),
-            child: TransactionSuccessScreen(amount: state.amountToWithdraw),
-          ));
-      break;
-    case PayoutFlowStatus.failure:
-      closeAllOverlays();
-      showPayoutFailureSheet(
-        context,
-        title: state.errorTitle ?? 'Transaction Failed',
-        message: state.errorMessage ?? 'An unknown error occurred.',
-        retryCallback: () => showPinInputSheet(context),
-      );
-      break;
-    default:
-      break;
+            child: const TransactionStatusOverlay(),
+          ),
+          barrierDismissible: false,
+        );
+        break;
+      case PayoutFlowStatus.success:
+        FocusManager.instance.primaryFocus?.unfocus();
+        closeAllOverlays();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => BlocProvider.value(
+              value: context.read<PayoutBloc>(),
+              child: TransactionSuccessScreen(amount: state.amountToWithdraw),
+            ),
+          ),
+        );
+        break;
+      case PayoutFlowStatus.failure:
+        closeAllOverlays();
+        showPayoutFailureSheet(
+          context,
+          title: state.errorTitle ?? 'Transaction Failed',
+          message: state.errorMessage ?? 'An unknown error occurred.',
+          retryCallback: () => showPinInputSheet(context),
+        );
+        break;
+      default:
+        break;
+    }
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -137,17 +150,14 @@ void _handlePayoutFlow(BuildContext context, PayoutState state) {
                   child: CircularProgressIndicator(color: KorraColors.brand),
                 );
               }
-      
+
               if (state.status == PayoutStatus.failure) {
                 return Center(
                   child: Text(state.errorMessage ?? 'An error occurred.'),
                 );
               }
               return ListView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 12.w,
-                  vertical: 12.h,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
                 children: [
                   PayoutBalanceCard(state: state),
                   SizedBox(height: 24.h),
@@ -161,18 +171,16 @@ void _handlePayoutFlow(BuildContext context, PayoutState state) {
                       onPressed: state.amountToWithdraw.isNotEmpty
                           ? () {
                               FocusScope.of(context).unfocus();
-                              context.read<PayoutBloc>().add(
-                                WithdrawTapped(),
-                              );
+                              FocusManager.instance.primaryFocus?.unfocus();
+                              context.read<PayoutBloc>().add(WithdrawTapped());
                             }
                           : null,
                       style: FilledButton.styleFrom(
                         backgroundColor: KorraColors.brand,
-                        disabledBackgroundColor: KorraColors.brand
-                            .withOpacity(0.4),
-                        disabledForegroundColor: Colors.white.withOpacity(
-                          0.7,
+                        disabledBackgroundColor: KorraColors.brand.withOpacity(
+                          0.4,
                         ),
+                        disabledForegroundColor: Colors.white.withOpacity(0.7),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14.r),
                         ),

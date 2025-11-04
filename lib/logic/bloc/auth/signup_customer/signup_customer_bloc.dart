@@ -1,13 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'signup_customer_event.dart';
 import 'signup_customer_state.dart';
 
 typedef Emit = Emitter<SignupCustomerState>;
 
 class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> {
-  SignupCustomerBloc() : super(const SignupCustomerState()) {
+  // Gateways
+  final CustomerRepository _customerRepo;
+  final FunctionsClient fx;
+
+  SignupCustomerBloc({CustomerRepository? customerRepo, FunctionsClient? functions}) 
+    : _customerRepo = customerRepo ?? CustomerRepository(),
+      fx = functions ?? Supabase.instance.client.functions,
+      super(const SignupCustomerState()) {
     on<SignupCustomerInit>(_onInit);
     on<SignupCustomerNextPressed>(_onNext);
     on<SignupCustomerBackPressed>(_onBack);
@@ -18,7 +27,7 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
     on<LastNameChanged>((e, emit) => emit(state.copyWith(lastName: e.value)));
     on<OtherNameChanged>((e, emit) => emit(state.copyWith(otherName: e.value)));
     on<PhoneChanged>((e, emit) => emit(state.copyWith(phone: e.value)));
-    on<EmailChangedCU>((e, emit) => emit(state.copyWith(email: e.value)));
+    on<EmailChangedCU>(_onEmailChanged);
     on<DobChanged>((e, emit) => emit(state.copyWith(dob: e.value)));
     on<GenderChanged>((e, emit) => emit(state.copyWith(gender: e.value)));
 
@@ -41,17 +50,86 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
   }
 
   Future<void> _onSubmit(SignupCustomerSubmitPressed e, Emitter<SignupCustomerState> emit) async {
-    if (!state.ninVerified && !state.bvnVerified) {
-      emit(state.copyWith(kycError: 'Please verify either NIN or BVN first.'));
+    if (!state.ninVerified || !state.bvnVerified) {
+      emit(state.copyWith(signUpError: 'Please verify both NIN and BVN first.', status: SignupStatus.failure));
       return;
     }
 
-    emit(state.copyWith(loading: true));
-    await Future.delayed(const Duration(milliseconds: 900)); // UI-only
-    emit(state.copyWith(loading: false));
+    emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
+    try {
+      await _customerRepo.createCustomerFromState(state);
+
+      emit(state.copyWith(loading: false, status: SignupStatus.success));
+    } catch (error) {
+      debugPrint('Error submitting customer: $error');
+      emit(state.copyWith(loading: false, signUpError: error.toString(), status: SignupStatus.failure));
+    }
   }
 
   void _onInit(SignupCustomerInit event, Emit emit) {}
+
+  // Email verification
+  Future<void> _onEmailChanged(
+    EmailChangedCU event,
+    Emitter<SignupCustomerState> emit,
+  ) async {
+    final email = event.value.trim();
+
+    emit(state.copyWith(emailChecking: true, emailError: null, emailUnused: false));
+    
+    if (email.isEmpty) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailError: 'Email is required',
+        emailUnused: false,
+      ));
+      return;
+    }
+
+    final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+
+
+    debugPrint("Reg result bloc: $ok");
+    debugPrint("Reg result inline: ${RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)}");
+
+    if (!ok) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailError: 'Enter a valid email',
+        emailUnused: false
+      ));
+      return;
+    }
+
+    try {
+      final existsInVendors = await _customerRepo.checkCollectionForEmail('vendors', email);
+      final existsInCustomer = await _customerRepo.checkCollectionForEmail('customer', email);
+      debugPrint("Email exist in customer: $existsInCustomer");
+      debugPrint("Email exist in vendors: $existsInVendors");
+      if (existsInCustomer || existsInVendors) {
+        emit(state.copyWith(
+          emailChecking: false,
+          emailUnused: false,
+          emailError: 'Email is already in use.',
+        ));
+      } else {
+        debugPrint("Email exist false: ${existsInCustomer || existsInVendors}");
+        emit(state.copyWith(
+          email: email,
+          emailChecking: false,
+          emailUnused: email.isEmpty ? false : true,
+          emailError: null,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailUnused: false,
+        emailError: 'Error checking email.',
+      ));
+    }
+  }
+
 
   void _onBack(SignupCustomerBackPressed event, Emit emit) {
     final prev = (state.pageIndex - 1).clamp(0, state.totalPages - 1);
@@ -80,12 +158,10 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
-
     if (ninNeedsVerification && state.nin.trim().length != 11) {
       emit(state.copyWith(ninError: 'Enter a valid 11-digit NIN'));
       return;
     }
-
     if (bvnNeedsVerification && state.bvn.trim().length != 11) {
       emit(state.copyWith(bvnError: 'Enter a valid 11-digit BVN'));
       return;

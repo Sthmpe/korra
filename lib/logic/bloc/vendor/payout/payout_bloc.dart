@@ -237,19 +237,125 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
         transactionId,
         "initiated",
       );
+      
+      emit(
+        state.copyWith(
+          transactionStatusMessage: "Authorizing transfer...",
+        ),
+      );
 
-      emit(state.copyWith(
-        payoutFlowStatus: PayoutFlowStatus.requiresOTP,
-      ));
+      emit(
+          state.copyWith(
+            transactionStatusMessage: 'Checking Transaction Status...',
+          ),
+        );
+
+        final statusMap = await vendors.checkTransferStatus(state.transactionRef!);
+        final status = statusMap["status"];
+
+        switch (status) {
+          case "SUCCESS":
+          case "COMPLETED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "completed",
+            );
+
+            await vendors.updateWithdrawableBalance(vendorUid, state.payoutDetails.walletAccountNumber);
+
+            final details = await vendors.getPayoutDetails(vendorUid);
+
+            emit(
+              state.copyWith(
+                transactionStatusMessage: 'Payout successful!',
+                payoutDetails: details,
+                transactionTime: DateTime.tryParse(statusMap["createdOn"] ?? ""),
+                transactionFee: statusMap["fee"],
+              ),
+            );
+            emit(state.copyWith(payoutFlowStatus: PayoutFlowStatus.success));
+            break;
+          case "PENDING":
+          case "AWAITING_PROCESSING":
+          case "IN_PROGRESS":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "pending",
+            );
+
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Pending',
+                errorMessage: "Transaction is still processing...",
+                payoutFlowStatus: PayoutFlowStatus.pending,
+              ),
+            );
+            break;
+          case "OTP_EMAIL_DISPATCH_FAILED":
+            emit(
+              state.copyWith(
+                payoutFlowStatus: PayoutFlowStatus.failure,
+                errorMessage: "OTP dispatch failed. Please try again.",
+                errorTitle: 'OTP Dispatch Failed',
+                otpHasError: true,
+              ),
+            );
+            break;
+          case "FAILED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Failed',
+                errorMessage: "Payout was not successful",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+            break;
+          case "REVERSED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Reversed',
+                errorMessage: "Payout was reversed",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+            break;
+          case "EXPIRED":
+            await vendors.updateTransactionStatus(
+              vendorUid,
+              state.transactionRef!,
+              "failed",
+            );
+            emit(
+              state.copyWith(
+                errorTitle: 'Payout Expired',
+                errorMessage: "Payout has expired",
+                otpHasError: true,
+                payoutFlowStatus: PayoutFlowStatus.failure,
+              ),
+            );
+            break;
+        }    
     } catch (e) {
       debugPrint(e.toString());
-
       await vendors.updateTransactionStatus(
         vendorUid,
         transactionId,
         "failure",
       );
-
       emit(
         state.copyWith(
           payoutFlowStatus: PayoutFlowStatus.failure,

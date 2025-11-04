@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:korra/data/repository/vendors/wallet_repository.dart';
 
+import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
@@ -19,7 +21,14 @@ import 'widgets/vendor_kpi_block.dart';
 import 'widgets/vendor_activity_timeline.dart';
 
 class VendorHomeBody extends StatelessWidget {
-  const VendorHomeBody({super.key});
+  final VendorRepository vendors;
+  final String vendorUid;
+
+  const VendorHomeBody({
+    super.key,
+    required this.vendors,
+    required this.vendorUid,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -69,19 +78,41 @@ class VendorHomeBody extends StatelessWidget {
                       // WALLET (withdrawable)
                       BlocBuilder<PayoutBloc, PayoutState>(
                         builder: (context, payoutState) {
-                          return VendorWithdrawableCard(
-                            balanceText: '₦${formatToCurrency(payoutState.payoutDetails.withdrawableBalance)}',
-                            methodMasked: payoutState.payoutDetails.masked.isEmpty ? 'Add method' : payoutState.payoutDetails.masked,
-                            onPayout: isEnabled
-                                ? () {
-                                    final payoutBloc = context.read<PayoutBloc>();
-                                    Get.to(
-                                      () => BlocProvider.value(
-                                        value: payoutBloc,
-                                        child: PayoutScreen(),                                      ),
-                                    );
-                                  }
-                                : null,
+
+                          return FutureBuilder<num>(
+                            future: vendors.getWalletBalance(payoutState.payoutDetails.walletAccountNumber),
+                            builder: (context, snapshot) {
+                               if (snapshot.connectionState == ConnectionState.waiting) {
+                                return VendorWithdrawableCard(
+                                  balanceText: 'Loading...',
+                                  loading: true,
+                                  methodMasked: '',
+                                  onPayout: null,
+                                );
+                              }
+                              debugPrint("Wallet Account Number: ${payoutState.payoutDetails.walletAccountNumber}");
+                              debugPrint("Withdrable Balance: ${snapshot.data}");
+                              final withdrawableBalance = snapshot.data ?? 0;
+
+                              return VendorWithdrawableCard(
+                                balanceText: '₦${formatToCurrency(withdrawableBalance)}',
+                                loading: false,
+                                methodMasked: payoutState.payoutDetails.masked.isEmpty
+                                    ? 'Add method'
+                                    : payoutState.payoutDetails.masked,
+                                onPayout: isEnabled
+                                    ? () {
+                                        final payoutBloc = context.read<PayoutBloc>();
+                                        Get.to(
+                                          () => BlocProvider.value(
+                                            value: payoutBloc,
+                                            child: PayoutScreen(),
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                              );
+                            },
                           );
                         }
                       ),

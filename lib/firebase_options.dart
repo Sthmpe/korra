@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'korra-9ab95.firebasestorage.app',
     measurementId: 'G-TJPVVV7N14',
   );
+
 }

@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'signup_vendor_event.dart';
 
+enum SignupStatus { initial, loading, success, failure }
+
 class SignupVendorState extends Equatable {
   final int pageIndex; // 0..4
   final int totalPages; // 5
@@ -23,15 +25,18 @@ class SignupVendorState extends Equatable {
   final String mapsLink;
 
   // V4
-  final String ownerFirst;
-  final String ownerLast;
-  final String ownerOther;
-  final String ownerPhone;
+  final String firstName;
+  final String lastName;
+  final String otherName;
+  final String phone;
 
   // New-V4
   final String email;
   final DateTime? dob;
-  final Gender gender;
+  final Gender gender;  
+  final bool emailChecking;
+  final bool emailUnused;
+  final String? emailError;
 
   // New-V5
   final String nin;
@@ -57,6 +62,8 @@ class SignupVendorState extends Equatable {
   final String? ninError;
   final String? bvnError;
   final String? kycError;
+  final String? signUpError;
+   final SignupStatus status;
 
   const SignupVendorState({
     this.pageIndex = 0,
@@ -72,12 +79,15 @@ class SignupVendorState extends Equatable {
     this.city = '',
     this.stateName = '',
     this.mapsLink = '',
-    this.ownerFirst = '',
-    this.ownerLast = '',
-    this.ownerOther = '',
-    this.ownerPhone = '',
+    this.firstName = '',
+    this.lastName = '',
+    this.otherName = '',
+    this.phone = '',
     this.dob,
-    this.gender = Gender.undisclosed,
+    this.gender = Gender.undisclosed,   
+    this.emailChecking = false,
+    this.emailUnused = false,
+    this.emailError,
     this.nin = '',
     this.bvn = '',
     this.email = '',
@@ -94,6 +104,8 @@ class SignupVendorState extends Equatable {
     this.ninError,
     this.bvnError,
     this.kycError,
+    this.signUpError,
+     this.status = SignupStatus.initial,
   });
 
   SignupVendorState copyWith({
@@ -109,13 +121,16 @@ class SignupVendorState extends Equatable {
     String? city,
     String? stateName,
     String? mapsLink,
-    String? ownerFirst,
-    String? ownerLast,
-    String? ownerPhone,
-    String? ownerOther,
+    String? firstName,
+    String? lastName,
+    String? phone,
+    String? otherName,
     String? email,
     DateTime? dob,
     Gender? gender,
+    bool? emailChecking,
+    bool? emailUnused,
+    String? emailError,
     String? nin,
     String? bvn,
     String? password,
@@ -131,6 +146,8 @@ class SignupVendorState extends Equatable {
     String? ninError, 
     String? bvnError,
     String? kycError,
+    String? signUpError,
+    SignupStatus? status,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -148,13 +165,16 @@ class SignupVendorState extends Equatable {
       mapsLink: mapsLink ?? this.mapsLink,
       email: email ?? this.email,
       dob: dob ?? this.dob,
-      gender: gender ?? this.gender,
+      gender: gender ?? this.gender, 
+      emailChecking: emailChecking ?? this.emailChecking,
+      emailUnused: emailUnused ?? this.emailUnused,
+      emailError: emailError ?? this.emailError,
       nin: nin ?? this.nin,
       bvn: bvn ?? this.bvn,
-      ownerFirst: ownerFirst ?? this.ownerFirst,
-      ownerLast: ownerLast ?? this.ownerLast,
-      ownerPhone: ownerPhone ?? this.ownerPhone,
-      ownerOther: ownerOther ?? this.ownerOther,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      phone: phone ?? this.phone,
+      otherName: otherName ?? this.otherName,
       password: password ?? this.password,
       confirm: confirm ?? this.confirm,
       hidePass: hidePass ?? this.hidePass,
@@ -168,6 +188,8 @@ class SignupVendorState extends Equatable {
       ninError: ninError ?? this.ninError,
       bvnError: bvnError ?? this.bvnError,
       kycError: kycError ?? this.kycError,
+      signUpError: signUpError ?? this.signUpError,
+      status: status ?? this.status,
     );
   }
 
@@ -186,13 +208,14 @@ class SignupVendorState extends Equatable {
     city,
     stateName,
     mapsLink,
-    ownerFirst,
-    ownerLast,
-    ownerOther,
-    ownerPhone,
+    firstName,
+    lastName,
+    otherName,
+    phone,
     email,
     dob,
     gender,
+    emailChecking, emailUnused, emailError,
     nin,
     bvn,
     password,
@@ -208,5 +231,7 @@ class SignupVendorState extends Equatable {
     ninError,
     bvnError,
     kycError,
+    signUpError,
+    status,
   ];
 }

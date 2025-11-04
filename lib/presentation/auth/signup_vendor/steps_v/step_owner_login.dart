@@ -31,9 +31,9 @@ class _StepOwnerLoginState extends State<StepOwnerLogin> {
   void initState() {
     super.initState();
     final s = context.read<SignupVendorBloc>().state;
-    _firstCtl = TextEditingController(text: s.ownerFirst)..addListener(() => _on(OwnerFirstChanged(_firstCtl.text)));
-    _lastCtl  = TextEditingController(text: s.ownerLast)..addListener(() => _on(OwnerLastChanged(_lastCtl.text)));
-    _phoneCtl = TextEditingController(text: s.ownerPhone)..addListener(() => _on(OwnerPhoneChanged(_phoneCtl.text)));
+    _firstCtl = TextEditingController(text: s.firstName)..addListener(() => _on(OwnerFirstChanged(_firstCtl.text)));
+    _lastCtl  = TextEditingController(text: s.lastName)..addListener(() => _on(OwnerLastChanged(_lastCtl.text)));
+    _phoneCtl = TextEditingController(text: s.phone)..addListener(() => _on(OwnerPhoneChanged(_phoneCtl.text)));
     _emailCtl = TextEditingController(text: s.email)..addListener(() => _on(VendorEmailChanged(_emailCtl.text)));
     _passCtl  = TextEditingController(text: s.password)..addListener(() => _on(VendorPasswordChanged(_passCtl.text)));
     _confCtl  = TextEditingController(text: s.confirm)..addListener(() => _on(VendorConfirmChanged(_confCtl.text)));

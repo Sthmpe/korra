@@ -62,8 +62,8 @@ class StepReviewVendor extends StatelessWidget {
               row('City/State', '${s.city.titleCase}, ${s.stateName.titleCase}'),
             ],
             if (s.mapsLink.isNotEmpty) row('Map', s.mapsLink),
-            row('Owner', '${s.ownerFirst.titleCase} ${s.ownerLast.titleCase}  ${s.ownerOther.trim().isEmpty ? '' : ' ${s.ownerOther.titleCase}'}'),
-            row('Owner phone', s.ownerPhone),
+            row('Owner', '${s.firstName.titleCase} ${s.lastName.titleCase}  ${s.otherName.trim().isEmpty ? '' : ' ${s.otherName.titleCase}'}'),
+            row('Owner phone', s.phone),
             row('Email', s.email),
             SizedBox(height: 12.h),
         

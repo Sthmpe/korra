@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'signup_customer_event.dart';
 
+enum SignupStatus { initial, loading, success, failure }
+
 class SignupCustomerState extends Equatable {
   final int pageIndex;         // 0..3
   final int totalPages;        // 4
@@ -14,6 +16,9 @@ class SignupCustomerState extends Equatable {
   final String email;
   final DateTime? dob;
   final Gender gender;
+  final bool emailChecking;
+  final bool emailUnused;
+  final String? emailError;
 
   // step 2
   final String nin;
@@ -39,6 +44,11 @@ class SignupCustomerState extends Equatable {
   final String? ninError;
   final String? bvnError;
   final String? kycError;
+  final String address;
+  final String city;
+  final String stateName;
+  final String? signUpError;
+  final SignupStatus status;
 
   const SignupCustomerState({
     this.pageIndex = 0,
@@ -51,6 +61,9 @@ class SignupCustomerState extends Equatable {
     this.email = '',
     this.dob,
     this.gender = Gender.undisclosed,
+    this.emailChecking = false,
+    this.emailUnused = false,
+    this.emailError,
     this.nin = '',
     this.bvn = '',
     this.password = '',
@@ -66,12 +79,20 @@ class SignupCustomerState extends Equatable {
     this.ninError,
     this.bvnError,
     this.kycError,
+    this.address = '',
+    this.city = '',
+    this.stateName = '',
+    this.signUpError,
+    this.status = SignupStatus.initial,
   });
 
   SignupCustomerState copyWith({
     int? pageIndex, bool? loading,
     String? firstName, String? lastName, String? otherName,
     String? phone, String? email, DateTime? dob, Gender? gender,
+    bool? emailChecking,
+    bool? emailUnused,
+    String? emailError,
     String? nin, String? bvn,
     String? password, String? confirm, bool? hidePassword, bool? hideConfirm,
     bool? bvnVerifying,
@@ -83,6 +104,9 @@ class SignupCustomerState extends Equatable {
     String? ninError, 
     String? bvnError,
     String? kycError,
+    String? address, String? city, String? stateName,
+    String? signUpError,
+    SignupStatus? status,
   }) {
     return SignupCustomerState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -95,6 +119,9 @@ class SignupCustomerState extends Equatable {
       email: email ?? this.email,
       dob: dob ?? this.dob,
       gender: gender ?? this.gender,
+      emailChecking: emailChecking ?? this.emailChecking,
+      emailUnused: emailUnused ?? this.emailUnused,
+      emailError: emailError ?? this.emailError,
       nin: nin ?? this.nin,
       bvn: bvn ?? this.bvn,
       password: password ?? this.password,
@@ -110,6 +137,11 @@ class SignupCustomerState extends Equatable {
       ninError: ninError ?? this.ninError,
       bvnError: bvnError ?? this.bvnError,
       kycError: kycError ?? this.kycError,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      stateName: stateName ?? this.stateName,
+      signUpError: signUpError ?? this.signUpError,
+      status: status ?? this.status,
     );
   }
 
@@ -117,6 +149,7 @@ class SignupCustomerState extends Equatable {
   List<Object?> get props => [
     pageIndex,totalPages,loading,
     firstName,lastName,otherName,phone,email,dob,gender,
+    emailChecking, emailUnused, emailError,
     nin,bvn,password,confirm,hidePassword,hideConfirm,
     bvnVerifying,
     ninVerifying,
@@ -127,5 +160,10 @@ class SignupCustomerState extends Equatable {
     ninError,
     bvnError,
     kycError,
+    address,
+    city,
+    stateName,
+    signUpError,
+    status,
   ];
 }

@@ -138,3 +138,4 @@ class ToggleVendorConfHidden extends SignupVendorEvent {}
 class VerifyBvnRequested extends SignupVendorEvent {}
 class VerifyNinRequested extends SignupVendorEvent {}
 class ClearKycError extends SignupVendorEvent {}
+

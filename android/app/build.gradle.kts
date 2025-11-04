@@ -45,3 +45,30 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Firebase Bill of Materials (BOM)
+    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+
+     // --- Core / analytics ---
+    implementation("com.google.firebase:firebase-analytics")
+
+    // --- Authentication (already had) ---
+    implementation("com.google.firebase:firebase-auth")
+
+    // --- Firestore (database) ---
+    implementation("com.google.firebase:firebase-firestore")
+
+    // --- Storage ---
+    implementation("com.google.firebase:firebase-storage")
+
+    // --- App Check ---
+    implementation("com.google.firebase:firebase-appcheck")
+
+    // --- AI/ML (Firebase AI Logic) ---
+    implementation("com.google.firebase:firebase-ai")
+
+    // --- (Optional) Add more if needed: ML Kit, Crashlytics, etc. ---
+    // implementation("com.google.firebase:firebase-crashlytics")
+    // implementation("com.google.firebase:firebase-functions")
+}

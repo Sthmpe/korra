@@ -21,11 +21,11 @@ class Vendor {
   final String stateName;
   final String mapsLink;
 
-  // owner/personal
-  final String ownerFirst;
-  final String ownerLast;
-  final String ownerOther;
-  final String ownerPhone;
+  // personal
+  final String firstName;
+  final String lastName;
+  final String otherName;
+  final String phone;
   final String email;
   final DateTime? dob;
   final Gender gender;
@@ -58,10 +58,10 @@ class Vendor {
     required this.city,
     required this.stateName,
     required this.mapsLink,
-    required this.ownerFirst,
-    required this.ownerLast,
-    required this.ownerOther,
-    required this.ownerPhone,
+    required this.firstName,
+    required this.lastName,
+    required this.otherName,
+    required this.phone,
     required this.email,
     required this.dob,
     required this.gender,
@@ -95,10 +95,10 @@ class Vendor {
       city: s.city.trim(),
       stateName: s.stateName.trim(),
       mapsLink: s.mapsLink.trim(),
-      ownerFirst: s.ownerFirst.trim(),
-      ownerLast: s.ownerLast.trim(),
-      ownerOther: s.ownerOther.trim(),
-      ownerPhone: s.ownerPhone.trim(),
+      firstName: s.firstName.trim(),
+      lastName: s.lastName.trim(),
+      otherName: s.otherName.trim(),
+      phone: s.phone.trim(),
       email: s.email.trim().toLowerCase(),
       dob: s.dob,
       gender: s.gender,
@@ -133,10 +133,10 @@ class Vendor {
       city: city,
       stateName: stateName,
       mapsLink: mapsLink,
-      ownerFirst: ownerFirst,
-      ownerLast: ownerLast,
-      ownerOther: ownerOther,
-      ownerPhone: ownerPhone,
+      firstName: firstName,
+      lastName: lastName,
+      otherName: otherName,
+      phone: phone,
       email: email,
       dob: dob,
       gender: gender,
@@ -182,11 +182,11 @@ class Vendor {
       'mapsLink': _nn(mapsLink), // optional
     });
 
-    final owner = _omitNulls({
-      'first': _nn(ownerFirst),
-      'last': _nn(ownerLast),
-      'other': _nn(ownerOther), // optional
-      'phone': _nn(ownerPhone),
+    final personal = _omitNulls({
+      'first': _nn(firstName),
+      'last': _nn(lastName),
+      'other': _nn(otherName), // optional
+      'phone': _nn(phone),
       'email': _nn(email.toLowerCase()),
       'dob': dob == null ? null : Timestamp.fromDate(dob!),
       'gender': gender.name,
@@ -214,7 +214,7 @@ class Vendor {
       'business': business,
       'store': store,
       'location': location.isEmpty ? null : location,
-      'owner': owner,
+      'personal': personal,
       'kyc': kyc,
       'monnify': monnifyMap.isEmpty ? null : monnifyMap,
       'status': status,

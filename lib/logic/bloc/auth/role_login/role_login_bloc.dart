@@ -5,15 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 
 import '../../../../config/constants/prefs_keys.dart';
+import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'role_login_event.dart';
 import 'role_login_state.dart';
 
 class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
   final VendorRepository _vendorRepo;
+  final CustomerRepository _customerRepo;
 
-  RoleLoginBloc({VendorRepository? vendorRepo})
+  RoleLoginBloc({VendorRepository? vendorRepo, CustomerRepository? customerRepo})
     : _vendorRepo = vendorRepo ?? VendorRepository(),
+      _customerRepo = customerRepo ?? CustomerRepository(),
       super(const RoleLoginState()) {
     on<RoleSelected>(
       (e, emit) => emit(
@@ -81,17 +84,21 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           return;
         }
       } else {
-        // Mock customer login for now
-        await Future.delayed(const Duration(seconds: 1));
-        emit(
-          state.copyWith(
-            loading: false,
-            status: LoginStatus.success,
-            role: KorraRole.customer,
-          ),
+        final uid = await _customerRepo.signInCustomer(
+          state.email.trim(),
+          state.password.trim(),
         );
-        //await _persistUserSession(uid, 'customer');
-        return;
+        if (uid.isNotEmpty) {
+          emit(
+            state.copyWith(
+              loading: false,
+              status: LoginStatus.success,
+              role: KorraRole.customer,
+            ),
+          );
+          await _persistUserSession(uid, 'customer');
+          return;
+        }
       }
     } on FirebaseAuthException catch (ex) {
       emit(

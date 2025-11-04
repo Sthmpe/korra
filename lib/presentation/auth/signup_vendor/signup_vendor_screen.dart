@@ -12,7 +12,10 @@ import '../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
+import '../../shared/widgets/show_app_snackbar.dart';
 import '../../vendor/vendor_shell.dart';
+import '../role_login/role_login_screen.dart';
+import '../sgnup_failure_sheet.dart';
 import 'steps_v/step_business_type.dart';
 import 'steps_v/step_identity.dart';
 import 'steps_v/step_personal.dart';
@@ -22,7 +25,11 @@ import 'steps_v/step_location.dart';
 import 'steps_v/step_review_vendor.dart';
 
 class SignupVendorScreen extends StatefulWidget {
-  const SignupVendorScreen({super.key});
+  final bool? showLeadingIcon;
+  const SignupVendorScreen({
+    super.key,
+    this.showLeadingIcon,
+  });
 
   @override
   State<SignupVendorScreen> createState() => _SignupVendorScreenState();
@@ -32,6 +39,12 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
   final _controller = PageController();
   final _formKeys = List.generate(7, (_) => GlobalKey<FormState>());
   bool _kycSheetOpen = false;
+
+  void closeAllOverlays() {
+    while (Get.isOverlaysOpen) {
+      Get.close(2);
+    }
+  }
 
   @override
   void dispose() {
@@ -51,14 +64,37 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Create vendor account',
-          style: GoogleFonts.inter(
-            fontSize: 16.sp,
-            fontWeight: FontWeight.w700,
-          ),
+        title: Row(
+          children: [
+            widget.showLeadingIcon!
+             ? IconButton(
+                        onPressed: () => Get.offAll(() => RoleLoginScreen()),
+                        style: IconButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size(40.w, 40.w),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          alignment: Alignment.center,
+                        ),
+                        icon: Icon(
+                          MdiIcons.arrowLeft,
+                          size: 24.sp,
+                          color: const Color(0xFF1B1B1B),
+                        ),
+                      )
+              : SizedBox.shrink(),
+            widget.showLeadingIcon!
+            ? 12.h.horizontalSpace
+            : SizedBox.shrink(),
+            Text(
+              'Create vendor account',
+              style: GoogleFonts.inter(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-        centerTitle: true,
+        centerTitle: false,
       ),
       body: SafeArea(
         child: Padding(
@@ -107,6 +143,41 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                             rootNavigator: true,
                           ).maybePop();
                           _kycSheetOpen = false;
+                        }
+                      },
+                    ),
+                    BlocListener<SignupVendorBloc, SignupVendorState>(
+                      listenWhen: (p, c) => p.status != c.status,
+                      listener: (context, s) {
+                        if (s.status == SignupStatus.failure) {
+                          closeAllOverlays();
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(24.r),
+                              ),
+                            ),
+                            builder: (_) => SignupFailureSheet(
+                              title: 'Signup Failed',
+                              message: s.signUpError ?? 'An unknown error occurred during signup.',
+                              retryCallback: () {
+                                Get.offAll(() => BlocProvider(
+                                  create: (_) => SignupVendorBloc(),
+                                  child: SignupVendorScreen(showLeadingIcon: true,))
+                                );
+                              },
+                            ),
+                          );
+                        }
+
+                        if (s.status == SignupStatus.success) {
+                          showAppSnackbar(
+                            'Your vendor account has been created successfully.',
+                            SnackbarType.success,
+                          );
                         }
                       },
                     ),
@@ -237,21 +308,21 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     Future<void> handleNext() async {
       FocusScope.of(context).unfocus();
+      final s = context.read<SignupVendorBloc>().state;
 
       final ok = formKey.currentState?.validate() ?? true;
+      debugPrint('Email error at next button: ${s.emailError}');
+      if ((s.emailError != null && s.emailError!.isNotEmpty) && pageIndex == 3) return;
       if (!ok) return;
 
       if (isLast) {
         context.read<SignupVendorBloc>().add(SignupVendorSubmitPressed());
         await Future.delayed(const Duration(milliseconds: 950));
         if (!context.mounted) return;
-        Get.offAll(() => VendorShell());
-        return;
       }
 
       // Identity step (index 4): open progress sheet; Bloc will run NIN→BVN and navigate on success
-      if (pageIndex == 4) {
-        final s = context.read<SignupVendorBloc>().state;
+      if (pageIndex == 4) { 
         final ninNeeded = !(s.ninVerified && s.lastVerifiedNin == s.nin);
         final bvnNeeded = !(s.bvnVerified && s.lastVerifiedBvn == s.bvn);
 
@@ -274,8 +345,10 @@ class _BottomNav extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12.r),
               ),
             ),
-            onPressed: () =>
-                context.read<SignupVendorBloc>().add(SignupVendorBackPressed()),
+            onPressed: () {
+                FocusManager.instance.primaryFocus?.unfocus();
+                context.read<SignupVendorBloc>().add(SignupVendorBackPressed());
+            },
             child: Text(
               'Back',
               style: GoogleFonts.inter(
@@ -299,7 +372,12 @@ class _BottomNav extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                 ),
-                onPressed: loading ? null : handleNext,
+                onPressed: loading
+                    ? null
+                    : () {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        handleNext();
+                      },
                 child: Text(
                   isLast ? 'Create account' : 'Next',
                   style: GoogleFonts.inter(

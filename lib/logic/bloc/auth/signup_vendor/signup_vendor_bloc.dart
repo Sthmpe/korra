@@ -11,11 +11,11 @@ typedef Emit = Emitter<SignupVendorState>;
 
 class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
   // Gateways
-  final VendorRepository vendors;
+  final VendorRepository _vendorsRepo;
   final FunctionsClient fx;
 
   SignupVendorBloc({VendorRepository? vendorRepo, FunctionsClient? functions})
-      : vendors = vendorRepo ?? VendorRepository(),
+      : _vendorsRepo = vendorRepo ?? VendorRepository(),
         fx = functions ?? Supabase.instance.client.functions,
         super(const SignupVendorState()) {
     // Navigation
@@ -41,17 +41,17 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     on<MapsLinkChanged>((e, emit) => emit(state.copyWith(mapsLink: e.value)));
 
     // V4 — Personal
-    on<OwnerFirstChanged>((e, emit) => emit(state.copyWith(ownerFirst: e.value)));
-    on<OwnerLastChanged>((e, emit) => emit(state.copyWith(ownerLast: e.value)));
-    on<OwnerOtherChanged>((e, emit) => emit(state.copyWith(ownerOther: e.value)));
-    on<OwnerPhoneChanged>((e, emit) => emit(state.copyWith(ownerPhone: e.value)));
+    on<OwnerFirstChanged>((e, emit) => emit(state.copyWith(firstName: e.value)));
+    on<OwnerLastChanged>((e, emit) => emit(state.copyWith(lastName: e.value)));
+    on<OwnerOtherChanged>((e, emit) => emit(state.copyWith(otherName: e.value)));
+    on<OwnerPhoneChanged>((e, emit) => emit(state.copyWith(phone: e.value)));
     on<DobChanged>((e, emit) => emit(state.copyWith(dob: e.value)));
     on<GenderChanged>((e, emit) => emit(state.copyWith(gender: e.value)));
 
     // V5 — Identity & security
     on<NinChanged>(_onNinChanged);
     on<BvnChanged>(_onBvnChanged);
-    on<VendorEmailChanged>((e, emit) => emit(state.copyWith(email: e.value)));
+    on<VendorEmailChanged>(_onEmailChanged);
     on<VendorPasswordChanged>((e, emit) => emit(state.copyWith(password: e.value)));
     on<VendorConfirmChanged>((e, emit) => emit(state.copyWith(confirm: e.value)));
     on<ToggleVendorPassHidden>((_, emit) => emit(state.copyWith(hidePass: !state.hidePass)));
@@ -90,7 +90,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       return;
     }
 
-    if (state.ownerFirst.isEmpty || state.ownerLast.isEmpty || state.dob == null) {
+    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
@@ -160,22 +160,83 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     }
   }
 
-  // ── Submit (final) ─────────────────────────────────────────────────────────
+  // Email verification
+  Future<void> _onEmailChanged(
+    VendorEmailChanged event,
+    Emitter<SignupVendorState> emit,
+  ) async {
+    final email = event.value.trim();
 
-  Future<void> _onSubmit(SignupVendorSubmitPressed event, Emit emit) async {
-    if (!state.ninVerified || !state.bvnVerified) {
-      emit(state.copyWith(kycError: 'Please verify both NIN and BVN first.'));
+    emit(state.copyWith(emailChecking: true, emailError: null, emailUnused: false));
+    
+    if (email.isEmpty) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailError: 'Email is required',
+        emailUnused: false,
+      ));
       return;
     }
 
-    emit(state.copyWith(loading: true, kycError: null));
-    try {
-      await vendors.createVendorFromState(state);
+    final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
 
-      emit(state.copyWith(loading: false));
+
+    debugPrint("Reg result bloc: $ok");
+    debugPrint("Reg result inline: ${RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)}");
+
+    if (!ok) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailError: 'Enter a valid email',
+        emailUnused: false
+      ));
+      return;
+    }
+
+    try {
+      final existsInVendors = await _vendorsRepo.checkCollectionForEmail('vendors', email);
+      final existsInCustomer = await _vendorsRepo.checkCollectionForEmail('customer', email);
+      debugPrint("Email exist in customer: $existsInCustomer");
+      debugPrint("Email exist in vendors: $existsInVendors");
+      if (existsInCustomer || existsInVendors) {
+        emit(state.copyWith(
+          emailChecking: false,
+          emailUnused: false,
+          emailError: 'Email is already in use.',
+        ));
+      } else {
+        debugPrint("Email exist false: ${existsInCustomer || existsInVendors}");
+        emit(state.copyWith(
+          email: email,
+          emailChecking: false,
+          emailUnused: email.isEmpty ? false : true,
+          emailError: '',
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        emailChecking: false,
+        emailUnused: false,
+        emailError: 'Error checking email.',
+      ));
+    }
+  }
+
+  // ── Submit (final) ─────────────────────────────────────────────────────────
+  Future<void> _onSubmit(SignupVendorSubmitPressed event, Emit emit) async {
+    if (!state.ninVerified || !state.bvnVerified) {
+      emit(state.copyWith(signUpError: 'Please verify both NIN and BVN first.', status: SignupStatus.failure));
+      return;
+    }
+
+    emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
+    try {
+      await _vendorsRepo.createVendorFromState(state);
+
+      emit(state.copyWith(loading: false, status: SignupStatus.success));
     } catch (error) {
       debugPrint('Error submitting vendor: $error');
-      emit(state.copyWith(loading: false, kycError: error.toString()));
+      emit(state.copyWith(loading: false, signUpError: error.toString(), status: SignupStatus.failure));
     }
   }
 
@@ -192,7 +253,6 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
   }
 
   // ── Identity field changes: reset verification when edited ─────────────────
-
   void _onNinChanged(NinChanged event, Emit emit) {
     final changed = event.value != state.nin;
     emit(state.copyWith(
@@ -219,14 +279,14 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       emit(state.copyWith(kycError: 'Enter NIN'));
       return;
     }
-    if (state.ownerFirst.isEmpty || state.ownerLast.isEmpty || state.dob == null) {
+    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      // await vendors.verifyNin(state.nin.trim());
+      // await _vendorsRepo.verifyNin(state.nin.trim());
       emit(state.copyWith(
         ninVerifying: false,
         ninVerified: true,
@@ -247,16 +307,16 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       emit(state.copyWith(kycError: 'Enter BVN'));
       return;
     }
-    if (state.ownerFirst.isEmpty || state.ownerLast.isEmpty || state.dob == null) {
+    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
 
     emit(state.copyWith(bvnVerifying: true, kycError: null));
     try {
-      final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
+      final fullName = '${state.firstName} ${state.lastName}'.trim();
       final dobIso = _formatDobForBvn(state.dob);
-      final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
+      final localPhone = _normalizeNigerianMsisdn(state.phone);
 
       if (dobIso == null) {
         emit(state.copyWith(kycError: 'Date of birth is missing'));

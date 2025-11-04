@@ -58,9 +58,7 @@ class _PinInputSheetState extends State<_PinInputSheet> {
     });
 
     if (_enteredPin.length == 4) {
-      Timer(const Duration(milliseconds: 10), () {
-        context.read<PayoutBloc>().add(PinSubmitted(_enteredPin));
-      });
+     context.read<PayoutBloc>().add(PinSubmitted(_enteredPin));
     }
   }
 
