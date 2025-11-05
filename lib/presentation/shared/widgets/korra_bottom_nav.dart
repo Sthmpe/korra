@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 class KorraBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final List<NavSpec> items;
+  final List<NavSpec> pageIcons;
 
   /// Optional: numeric badges per index (e.g., {2: 5} for Reservations)
   final Map<int, int> countBadges;
@@ -18,10 +18,10 @@ class KorraBottomNav extends StatelessWidget {
     super.key,
     required this.currentIndex,
     required this.onTap,
-    required this.items,
+    required this.pageIcons,
     this.countBadges = const {},
     this.dotBadges = const {},
-  }) : assert(items.length >= 2);
+  }) : assert(pageIcons.length >= 2);
 
   static const _brand  = Color(0xFFA54600);
   static const _stroke = Color(0xFFEAE6E2);
@@ -38,15 +38,15 @@ class KorraBottomNav extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final slot = constraints.maxWidth / items.length;
+            final slot = constraints.maxWidth / pageIcons.length;
             final indicatorLeft = slot * currentIndex + (slot - 24.w) / 2;
 
             return Stack(
               children: [
                 Row(
-                  children: List.generate(items.length, (i) {
+                  children: List.generate(pageIcons.length, (i) {
                     final selected = i == currentIndex;
-                    final spec = items[i];
+                    final spec = pageIcons[i];
                     final badge = countBadges[i] ?? 0;
                     final showDot = dotBadges.contains(i);
 

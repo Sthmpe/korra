@@ -31,7 +31,7 @@ class RoleLoginScreen extends StatelessWidget {
         listener: (context, state) async {
           if (state.status == LoginStatus.success) {
             final Widget destination =
-                state.role == KorraRole.vendor ? VendorShell() : const CustomerShell();
+                state.role == KorraRole.vendor ? VendorShell(uid: state.uid) : CustomerShell(uid: state.uid);
             // Using Get.offAll to prevent returning to the login screen.
             Get.offAll(() => destination);
           }

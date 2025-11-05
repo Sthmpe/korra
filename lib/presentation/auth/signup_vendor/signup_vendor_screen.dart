@@ -178,6 +178,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                             'Your vendor account has been created successfully.',
                             SnackbarType.success,
                           );
+                          Get.offAll(() => VendorShell(uid: s.uid));
                         }
                       },
                     ),

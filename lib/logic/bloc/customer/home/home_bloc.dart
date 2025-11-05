@@ -1,12 +1,22 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../data/repository/customer/home_repository.dart';
+import '../../../core/net/net_cubit.dart';
 import 'home_event.dart';
 import 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final HomeRepository repo;
-  HomeBloc(this.repo) : super(const HomeState()) {
+  final CustomerRepository customerRepo;
+  final String customerUid;
+  final NetCubit net;
+  HomeBloc({
+    required this.repo,
+    required this.customerRepo,
+    required this.customerUid,
+    required this.net,
+  }) : super(HomeState.initial()) {
     on<HomeStarted>(_onStarted);
     on<PasteLinkSubmitted>(_onPaste);
   }

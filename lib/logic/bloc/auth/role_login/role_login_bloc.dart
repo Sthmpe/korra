@@ -75,6 +75,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         if (uid.isNotEmpty) {
           emit(
             state.copyWith(
+              uid: uid,
               loading: false,
               status: LoginStatus.success,
               role: KorraRole.vendor,
@@ -91,6 +92,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         if (uid.isNotEmpty) {
           emit(
             state.copyWith(
+              uid: uid,
               loading: false,
               status: LoginStatus.success,
               role: KorraRole.customer,

@@ -63,7 +63,9 @@ class SignupVendorState extends Equatable {
   final String? bvnError;
   final String? kycError;
   final String? signUpError;
-   final SignupStatus status;
+  final SignupStatus status;
+
+  final String uid; // Added to hold the UID after successful signup
 
   const SignupVendorState({
     this.pageIndex = 0,
@@ -105,7 +107,8 @@ class SignupVendorState extends Equatable {
     this.bvnError,
     this.kycError,
     this.signUpError,
-     this.status = SignupStatus.initial,
+    this.status = SignupStatus.initial,
+    this.uid = '',
   });
 
   SignupVendorState copyWith({
@@ -148,6 +151,7 @@ class SignupVendorState extends Equatable {
     String? kycError,
     String? signUpError,
     SignupStatus? status,
+    String? uid,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -190,6 +194,7 @@ class SignupVendorState extends Equatable {
       kycError: kycError ?? this.kycError,
       signUpError: signUpError ?? this.signUpError,
       status: status ?? this.status,
+      uid: uid ?? this.uid,
     );
   }
 
@@ -233,5 +238,6 @@ class SignupVendorState extends Equatable {
     kycError,
     signUpError,
     status,
+    uid,
   ];
 }

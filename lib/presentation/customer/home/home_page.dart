@@ -4,12 +4,16 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // import '../../../data/models/activity_item.dart';
+import '../../../data/repository/customer/customer_repository.dart';
 import '../../../data/repository/customer/home_repository.dart';
-import '../../../logic/bloc/customer_shell/home/home_bloc.dart';
-import '../../../logic/bloc/customer_shell/home/home_event.dart';
-import '../../../logic/bloc/customer_shell/home/home_state.dart';
+import '../../../logic/bloc/customer/home/home_bloc.dart';
+import '../../../logic/bloc/customer/home/home_event.dart';
+import '../../../logic/bloc/customer/home/home_state.dart';
 
 // import 'widgets/activity_list.dart';
+import '../../../logic/bloc/customer/topup/top_up_bloc.dart';
+import '../../../logic/bloc/customer/topup/top_up_event.dart';
+import '../../../logic/core/net/net_cubit.dart';
 import 'widgets/activity_timeline.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/plan_carousel_slider.dart';
@@ -21,47 +25,51 @@ import 'widgets/link_input.dart';
 import 'widgets/vendor_chip.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  final CustomerRepository customerRepo;
+  final String customerUid; 
+  const HomePage({super.key, required this.customerRepo, required this.customerUid});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => HomeBloc(HomeRepository())..add(HomeStarted()),
-      child: BlocConsumer<HomeBloc, HomeState>(
-        listenWhen: (p, c) => p.message != c.message && c.message != null,
-        listener: (context, state) {
-          if (state.message != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                behavior: SnackBarBehavior.floating,
-                content: Text(
-                  state.message!,
-                  style: GoogleFonts.inter(fontSize: 13.5.sp),
-                ),
-              ),
-            );
-          }
-        },
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (_) => HomeBloc(
+            repo: HomeRepository(),
+            customerRepo: customerRepo,
+            customerUid: customerUid,
+            net: context.read<NetCubit>(),
+          )..add(HomeStarted()),
+        ),
+        BlocProvider(
+          create: (_) => TopUpBloc(
+            customerUid: customerUid,
+            customers: customerRepo,
+          )..add(TopUpStarted()),
+        ),
+      ],
+      child: BlocBuilder<HomeBloc, HomeState>(
         builder: (context, state) {
           final bloc = context.read<HomeBloc>();
-
-          return RefreshIndicator(
-            onRefresh: () async => bloc.add(HomeStarted()),
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent, // still lets inner widgets get taps
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: Scaffold(
-                appBar: KorraHeader(
-                  title: 'Home',
-                  onHistory: () {
-                    // Get.to(() => const HistoryPage());
-                  },
-                  onSupport: () {
-                    // Get.to(() => const SupportChatPage());
-                  },
-                  showHistoryDot: true, // set based on bloc later
-                ),
-                body: CustomScrollView(
+          final bool isEnabled = state.status == HomeStatus.success;
+      
+          return Scaffold(
+            backgroundColor: Colors.white,
+            appBar: KorraHeader(
+              title: 'Home',
+              onHistory: () {
+                // Get.to(() => const HistoryPage());
+              },
+              onSupport: () {
+                // Get.to(() => const SupportChatPage());
+              },
+              showHistoryDot: true, // set based on bloc later
+            ),
+            body: RefreshIndicator(
+              onRefresh: () async => bloc.add(HomeStarted()),
+              elevation: 0,
+              displacement: 0,
+              child: CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
@@ -161,7 +169,6 @@ class HomePage extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
             ),
           );
         },

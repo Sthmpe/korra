@@ -18,6 +18,7 @@ class RoleLoginState extends Equatable {
   final String password;
   final KorraRole role;
   final bool passwordHidden;
+  final String uid;
 
   /// keep your old flag so existing widgets don’t break
   final bool loading;
@@ -39,6 +40,7 @@ class RoleLoginState extends Equatable {
     this.status = LoginStatus.idle,
     this.failure,
     this.bioUi = BiometricUi.idle,
+    this.uid = '',
   });
 
   bool get isValidEmail =>
@@ -54,6 +56,7 @@ class RoleLoginState extends Equatable {
     LoginStatus? status,
     KorraFailure? failure,
     BiometricUi? bioUi,
+    String? uid,
   }) {
     return RoleLoginState(
       email: email ?? this.email,
@@ -64,10 +67,11 @@ class RoleLoginState extends Equatable {
       status: status ?? this.status,
       failure: failure,
       bioUi: bioUi ?? this.bioUi,
+      uid: uid ?? this.uid,
     );
   }
 
   @override
   List<Object?> get props =>
-      [email, password, role, passwordHidden, loading, status, failure, bioUi];
+      [email, password, role, passwordHidden, loading, status, failure, bioUi, uid];
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../logic/bloc/customer_shell/plans/plans_event.dart';
+import '../../../../logic/bloc/customer/plans/plans_event.dart';
 
 class PlansTabsSliver extends SliverPersistentHeaderDelegate {
   final PlansTab current;

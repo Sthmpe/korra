@@ -57,9 +57,9 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
 
     emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
     try {
-      await _customerRepo.createCustomerFromState(state);
+      final uid = await _customerRepo.createCustomerFromState(state);
 
-      emit(state.copyWith(loading: false, status: SignupStatus.success));
+      emit(state.copyWith(loading: false, status: SignupStatus.success, uid: uid));
     } catch (error) {
       debugPrint('Error submitting customer: $error');
       emit(state.copyWith(loading: false, signUpError: error.toString(), status: SignupStatus.failure));

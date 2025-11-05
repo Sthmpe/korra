@@ -4,7 +4,7 @@ import '../../../../data/models/customer/activity_item.dart';
 import '../../../../data/models/customer/plan.dart';
 import '../../../../data/models/customer/vendor.dart';
 
-enum HomeStatus { idle, loading, loaded, failure }
+enum HomeStatus { idle, initial, loading, loaded, failure, success }
 
 class HomeState extends Equatable {
   final HomeStatus status;
@@ -16,7 +16,7 @@ class HomeState extends Equatable {
   final String? message;
 
   const HomeState({
-    this.status = HomeStatus.idle,
+    this.status = HomeStatus.initial,
     this.walletBalance = '—',
     this.defaultMethodMasked = '—',
     this.plans = const [],
@@ -24,6 +24,15 @@ class HomeState extends Equatable {
     this.activity = const [],
     this.message,
   });
+
+  factory HomeState.initial() => const HomeState(
+    status: HomeStatus.initial,
+    walletBalance: '—',
+    defaultMethodMasked: '—',
+    plans: [],
+    vendors: [],
+    activity: [],
+  );
 
   HomeState copyWith({
     HomeStatus? status,

@@ -45,7 +45,7 @@ extension WalletRepository on CustomerRepository {
         availableBalance: balance,
         walletAccountNumber: currentDetails.walletAccountNumber,
         walletAccountName: currentDetails.walletAccountName,
-        walletAccountReference: currentDetails.walletAccountReference
+        walletAccountReference: currentDetails.walletAccountReference,
       );
 
       await repository.saveTopUpDetails(customerUid, updatedDetails);

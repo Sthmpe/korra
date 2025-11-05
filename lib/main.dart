@@ -64,8 +64,8 @@ Future<Widget> _getStartScreen() async {
 
   // A match is found, route to the correct role-based shell.
   if (role == 'vendor') {
-    return VendorShell();
+    return VendorShell(uid: uid);
   } else {
-    return const CustomerShell();
+    return CustomerShell(uid: uid);
   }
 }

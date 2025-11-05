@@ -231,9 +231,9 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
     try {
-      await _vendorsRepo.createVendorFromState(state);
+      final uid = await _vendorsRepo.createVendorFromState(state);
 
-      emit(state.copyWith(loading: false, status: SignupStatus.success));
+      emit(state.copyWith(loading: false, status: SignupStatus.success, uid: uid));
     } catch (error) {
       debugPrint('Error submitting vendor: $error');
       emit(state.copyWith(loading: false, signUpError: error.toString(), status: SignupStatus.failure));

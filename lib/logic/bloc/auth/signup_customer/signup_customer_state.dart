@@ -49,6 +49,7 @@ class SignupCustomerState extends Equatable {
   final String stateName;
   final String? signUpError;
   final SignupStatus status;
+  final String uid; // Added to hold the UID after successful signup
 
   const SignupCustomerState({
     this.pageIndex = 0,
@@ -84,6 +85,7 @@ class SignupCustomerState extends Equatable {
     this.stateName = '',
     this.signUpError,
     this.status = SignupStatus.initial,
+    this.uid = '',
   });
 
   SignupCustomerState copyWith({
@@ -107,6 +109,7 @@ class SignupCustomerState extends Equatable {
     String? address, String? city, String? stateName,
     String? signUpError,
     SignupStatus? status,
+    String? uid,
   }) {
     return SignupCustomerState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -142,6 +145,7 @@ class SignupCustomerState extends Equatable {
       stateName: stateName ?? this.stateName,
       signUpError: signUpError ?? this.signUpError,
       status: status ?? this.status,
+      uid: uid ?? this.uid
     );
   }
 
@@ -165,5 +169,6 @@ class SignupCustomerState extends Equatable {
     stateName,
     signUpError,
     status,
+    uid
   ];
 }

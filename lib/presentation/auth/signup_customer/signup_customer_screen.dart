@@ -171,6 +171,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                             'Your customer account has been created successfully.',
                             SnackbarType.success,
                           );
+                          Get.offAll(() => CustomerShell(uid: s.uid));
                         }
                       },
                     ),
@@ -312,8 +313,6 @@ class _BottomNav extends StatelessWidget {
         context.read<SignupCustomerBloc>().add(SignupCustomerSubmitPressed());
         await Future.delayed(const Duration(milliseconds: 950));
         if (!context.mounted) return;
-        Get.offAll(() => CustomerShell());
-        return;
       }
 
       // Identity step (index 4): open progress sheet; Bloc will run NIN→BVN and navigate on success
