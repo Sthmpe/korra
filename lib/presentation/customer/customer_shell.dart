@@ -5,7 +5,6 @@ import '../../data/repository/customer/customer_repository.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_bloc.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_event.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_state.dart';
-// import '../../logic/core/net/global_offline_banner.dart';
 import 'home/home_page.dart';
 import 'plans/plans_page.dart';
 import 'profile/profile_page.dart';

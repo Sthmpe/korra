@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:korra/data/repository/customer/wallet_repository.dart';
 
 // import '../../../data/models/activity_item.dart';
+import '../../../config/utils/currency_formatters.dart';
 import '../../../data/repository/customer/customer_repository.dart';
 import '../../../data/repository/customer/home_repository.dart';
 import '../../../logic/bloc/customer/home/home_bloc.dart';
@@ -13,12 +16,15 @@ import '../../../logic/bloc/customer/home/home_state.dart';
 // import 'widgets/activity_list.dart';
 import '../../../logic/bloc/customer/topup/top_up_bloc.dart';
 import '../../../logic/bloc/customer/topup/top_up_event.dart';
+import '../../../logic/bloc/customer/topup/top_up_state.dart';
 import '../../../logic/core/net/net_cubit.dart';
+import '../../shared/korra_error_bannar.dart';
+import '../topup/topup_screen.dart';
 import 'widgets/activity_timeline.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/plan_carousel_slider.dart';
 // import 'widgets/plan_media_shape.dart';
-import 'widgets/wallet_card.dart';
+import 'widgets/customer_wallet_card.dart';
 import '../../shared/widgets/section_header.dart';
 // import 'widgets/plan_carousel.dart';
 import 'widgets/link_input.dart';
@@ -51,7 +57,6 @@ class HomePage extends StatelessWidget {
       child: BlocBuilder<HomeBloc, HomeState>(
         builder: (context, state) {
           final bloc = context.read<HomeBloc>();
-          final bool isEnabled = state.status == HomeStatus.success;
       
           return Scaffold(
             backgroundColor: Colors.white,
@@ -76,12 +81,46 @@ class HomePage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // ▼ Subtle loading indicator at the top when refreshing
+                        if (state.status == HomeStatus.loading)
+                          const LinearProgressIndicator(minHeight: 2),
+                        if (state.status == HomeStatus.failure)
+                          ErrorBanner(
+                            message: 'failed to load data, drag down to refresh',
+                          ),
+
                           // Wallet summary
-                          WalletCard(
-                            balanceText: state.walletBalance,
-                            methodMasked: state.defaultMethodMasked,
-                            onTopUp: () {},
-                            onManageMethod: () {},
+                          BlocBuilder<TopUpBloc, TopUpState>(
+                            builder: (context, topUpState) {
+                              return FutureBuilder<num>(
+                                future: customerRepo.getWalletBalance(topUpState.details.walletAccountNumber),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return CustomerWalletCard(
+                                      balanceText: 'Loading...',
+                                      loading: true,
+                                      onTopUp: null,
+                                    );
+                                  }
+
+                                  final availableBalance = snapshot.data ?? topUpState.details.availableBalance;
+
+                                  return CustomerWalletCard(
+                                    balanceText: '₦${formatToCurrency(availableBalance)}', 
+                                    loading: false,
+                                    onTopUp: () {
+                                      final topUpBloc = context.read<TopUpBloc>();
+                                      Get.to(
+                                        () => BlocProvider.value(
+                                          value: topUpBloc,
+                                          child: const TopUpScreen(),
+                                        ),
+                                      );
+                                    }, 
+                                  );
+                                }
+                              );
+                            }
                           ),
               
                           // Plans

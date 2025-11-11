@@ -22,3 +22,10 @@ class TopUpRefreshRequested extends TopUpEvent {
   @override
   List<Object?> get props => [];
 }
+
+class VerifyPaymentPressed extends TopUpEvent {
+  const VerifyPaymentPressed();
+
+  @override
+  List<Object?> get props => [];
+}

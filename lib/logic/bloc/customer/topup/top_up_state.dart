@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../../../data/models/customer/topup/topup_details.dart';
 
-enum TopUpStatus { initial, loading, loaded }
+enum TopUpStatus { initial, loading, loaded, verifying, failure }
 
 class TopUpState extends Equatable {
   final TopUpStatus status;

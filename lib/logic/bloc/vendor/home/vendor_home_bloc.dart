@@ -42,9 +42,6 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
   }
 
   Future<void> _loadHomeData(Emitter<VendorHomeState> emit) async {
-    final online = await net.preflight();
-    if (!online) return;
-
     try {
       // ▼ EMIT loading state first
       emit(state.copyWith(status: VendorHomeStatus.loading));
