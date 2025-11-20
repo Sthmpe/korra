@@ -36,7 +36,7 @@ class CustomerShell extends StatelessWidget {
               final pages = [
                 HomePage(customerRepo: repo, customerUid: uid),
                 PlansPage(),
-                ProfilePage(),
+                ProfilePage(customerRepo: repo, customerUid: uid),
               ];
         
               return Scaffold(

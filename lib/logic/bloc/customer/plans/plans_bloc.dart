@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../data/models/customer/plan.dart';
+import '../../../../data/models/customer/mock_plan.dart';
 import '../../../../data/repository/customer/home_repository.dart';
 import 'plans_event.dart';
 import 'plans_state.dart';
@@ -78,7 +78,7 @@ class PlansBloc extends Bloc<PlansEvent, PlansState> {
     final q = state.query.trim().toLowerCase();
     if (q.isNotEmpty) {
       out = out.where((p) =>
-        p.title.toLowerCase().contains(q) || p.vendor.toLowerCase().contains(q)
+        p.title.toLowerCase().contains(q) || p.storeName.toLowerCase().contains(q)
       ).toList();
     }
 
@@ -104,12 +104,12 @@ class PlansBloc extends Bloc<PlansEvent, PlansState> {
   bool _isAutopay(Plan p) => p.id.hashCode.isEven;
 
   bool _isHighValue(Plan p) {
-    final remain = _currencyToInt(p.amountRemainText);
-    final next   = _currencyToInt(p.nextAmountText);
+    final remain = p.amountRemain;
+    final next   = p.nextAmount ?? 0;
     return remain >= 300000 || next >= 50000;
   }
 
-  int _amount(Plan p) => _currencyToInt(p.nextAmountText) + _currencyToInt(p.amountRemainText);
+  double _amount(Plan p) => (p.nextAmount ?? 0) + p.amountRemain;
 
   int _currencyToInt(String? s) {
     if (s == null || s.isEmpty) return 0;

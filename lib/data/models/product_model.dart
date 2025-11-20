@@ -8,6 +8,7 @@ import '../../logic/bloc/vendor/product/vendor_products_state.dart';
 class Product {
   final String id;
   final String vendorId;
+  final String storeName;
   final String code;
   final String name;
   final String description;
@@ -24,6 +25,7 @@ class Product {
   Product({
     required this.id,
     required this.vendorId,
+    required this.storeName,
     required this.code,
     required this.name,
     required this.description,
@@ -41,6 +43,7 @@ class Product {
   /// Create new product as pending
   factory Product.create({
     required String vendorId,
+    required String storeName,
     required String name,
     required String description,
     required double price,
@@ -55,6 +58,7 @@ class Product {
       id: "",
       vendorId: vendorId,
       code: _generateProductCode(vendorId),
+      storeName: storeName,
       name: name,
       description: description,
       price: price,
@@ -72,6 +76,7 @@ class Product {
   Product copyWith({
     String? id,
     String? vendorId,
+    String? storeName,
     String? code,
     String? name,
     String? description,
@@ -88,6 +93,7 @@ class Product {
     return Product(
       id: id ?? this.id,
       vendorId: vendorId ?? this.vendorId,
+      storeName: storeName ?? this.storeName,
       code: code ?? this.code,
       name: name ?? this.name,
       description: description ?? this.description,
@@ -116,6 +122,7 @@ class Product {
     return Product(
       id: docId,
       vendorId: map['vendorId'] ?? '',
+      storeName: map['storeName'] ?? '',
       code: map['code'] ?? '',
       name: map['name'] ?? '',
       description: map['description'] ?? '',
@@ -137,6 +144,7 @@ class Product {
   Map<String, dynamic> toMap() {
     return {
       'vendorId': vendorId,
+      'storeName': storeName,
       'code': code,
       'name': name,
       'description': description,

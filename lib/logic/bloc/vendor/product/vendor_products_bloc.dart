@@ -146,9 +146,12 @@ class VendorProductsBloc
           return;
         }
 
+        final storeName = await vendors.getStoreName(vendorUid);
+
         // Generate product ID + code
         final newProduct = Product.create(
           vendorId: vendorUid,
+          storeName: storeName,
           name: event.name,
           description: event.description,
           price: event.price,

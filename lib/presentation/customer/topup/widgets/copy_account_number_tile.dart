@@ -32,11 +32,13 @@ class _CopyAccountNumberTileState extends State<CopyAccountNumberTile> {
   Widget build(BuildContext context) {
     final Color hair = const Color(0xFFE0E0E0);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(12.r),
+    return GestureDetector(
+      //borderRadius: BorderRadius.circular(12.r),
       onTap: _copy,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+        height: 58.h,
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 12.w),
         decoration: BoxDecoration(
           color: const Color(0xFFF7F3EF),
           borderRadius: BorderRadius.circular(12.r),
@@ -93,17 +95,21 @@ class _CopyAccountNumberTileState extends State<CopyAccountNumberTile> {
                         ),
                       ],
                     )
-                  : IconButton(
-                      key: const ValueKey('copy'),
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        MdiIcons.contentCopy,
-                        size: 18.sp,
-                        color: const Color(0xFF1B1B1B),
+                  : SizedBox(
+                    width: 24.w,
+                    height: 24.h,
+                    child: IconButton(
+                        key: const ValueKey('copy'),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          MdiIcons.contentCopy,
+                          size: 18.sp,
+                          color: const Color(0xFF1B1B1B),
+                        ),
+                        onPressed: _copy,
                       ),
-                      onPressed: _copy,
-                    ),
+                  ),
             ),
           ],
         ),

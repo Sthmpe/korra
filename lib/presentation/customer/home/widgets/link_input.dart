@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 class LinkInput extends StatefulWidget {
   final void Function(String value) onSubmit;
-  final VoidCallback onScan;
+  final void Function(String value)  onScan;
   const LinkInput({super.key, required this.onSubmit, required this.onScan});
 
   @override
@@ -25,6 +25,7 @@ class _LinkInputState extends State<LinkInput> {
               controller: _ctrl,
               style: GoogleFonts.inter(
                 fontSize: 13.5.sp,
+                fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
               decoration: InputDecoration(
@@ -53,14 +54,14 @@ class _LinkInputState extends State<LinkInput> {
                   vertical: 12.h,
                 ),
               ),
-              onSubmitted: widget.onSubmit,
+              onSubmitted: (_) => widget.onSubmit(_ctrl.text),
             ),
           ),
           SizedBox(width: 4.w),
           IconButton(
             splashRadius: 30.r,
             color: const Color(0xFFA54600).withOpacity(0.055),
-            onPressed: widget.onScan,
+            onPressed: () => widget.onScan(_ctrl.text),
             icon: Container(
               padding: EdgeInsets.all(8.r),
               decoration: BoxDecoration(

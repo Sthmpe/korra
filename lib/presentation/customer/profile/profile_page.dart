@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:korra/data/repository/customer/customer_repository.dart';
 
 import '../../../data/repository/customer/profile_repository.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer/profile/profile_event.dart';
 import '../../../logic/bloc/customer/profile/profile_state.dart';
+import '../../../logic/core/net/net_cubit.dart';
+import '../../auth/role_login/role_login_screen.dart';
 import '../../shared/notify/korra_notify.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/identity_header_card.dart';
@@ -16,13 +20,16 @@ import 'widgets/section_card.dart';
 const _brand = Color(0xFFA54600);
 
 class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
+  final CustomerRepository customerRepo;
+  final String customerUid;
+
+  const ProfilePage({super.key, required this.customerRepo, required this.customerUid});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => ProfileBloc(ProfileRepository())..add(ProfileStarted()),
-      child: BlocConsumer<ProfileBloc, ProfileState>(
+      create: (context) => ProfileBloc(repo: ProfileRepository(), customerRepo: customerRepo, customerUid: customerUid, net: context.read<NetCubit>())..add(ProfileStarted()),
+    child: BlocConsumer<ProfileBloc, ProfileState>(
         listenWhen: (p, c) => p.message != c.message && c.message != null,
         listener: (context, state) {
           if (state.message != null) {
@@ -52,11 +59,11 @@ class ProfilePage extends StatelessWidget {
                               child: CircularProgressIndicator(),
                             ),
                           )
-                        else if (state.status == ProfileStatus.error)
+                        else if (state.status == ProfileStatus.failure)
                           Padding(
                             padding: EdgeInsets.all(16.w),
                             child: Text(
-                              state.error ?? 'Something went wrong',
+                              state.errorMessage ?? 'Something went wrong',
                               style: GoogleFonts.inter(
                                 color: const Color(0xFFB3261E),
                               ),
@@ -389,27 +396,20 @@ class ProfilePage extends StatelessWidget {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () =>
-                                        bloc.add(LogoutRequested()),
-                                    style: OutlinedButton.styleFrom(
-                                      minimumSize: Size.fromHeight(48.h),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          12.r,
-                                        ),
-                                      ),
-                                      side: const BorderSide(color: _brand),
-                                    ),
-                                    child: Text(
-                                      'Logout',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 15.sp,
-                                        fontWeight: FontWeight.w700,
-                                        color: _brand,
-                                      ),
-                                    ),
-                                  ),
+                                  child:  OutlinedButton(
+                                onPressed: () {
+                                  bloc.add(LogoutRequested());
+                                  Get.offAll(() => const RoleLoginScreen());
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: _brand),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                                  padding: EdgeInsets.symmetric(vertical: 14.h),
+                                  foregroundColor: _brand,
+                                ),
+                                child: Text('Logout',
+                                  style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800)),
+                              ),
                                 ),
                                 SizedBox(width: 12.w),
                                 Expanded(

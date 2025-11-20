@@ -2,18 +2,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:korra/config/utils/currency_formatters.dart';
 
 class PlanCardCompact extends StatelessWidget {
-  final String imageUrl;
+  final List<String> imageUrls;
   final String title;
-  final String vendor;
+  final String storeName;
 
-  final int progressPercent; // 0..100
-  final String amountPaidText; // e.g. "₦75,500"
-  final String amountRemainText; // e.g. "₦224,500"
+  final int progressPercent; 
+  final double amountPaid; 
+  final double amountRemain; 
   final String cadenceText; // e.g. "Weekly plan"
   final String nextDueText; // e.g. "Due Tue"
-  final String nextAmountText; // e.g. "₦12,500"
+  final double? nextAmount; 
 
   final double aspectRatio; // 4/3
   final VoidCallback onPay;
@@ -21,15 +22,15 @@ class PlanCardCompact extends StatelessWidget {
 
   const PlanCardCompact({
     super.key,
-    required this.imageUrl,
+    required this.imageUrls,
     required this.title,
-    required this.vendor,
+    required this.storeName,
     required this.progressPercent,
-    required this.amountPaidText,
-    required this.amountRemainText,
+    required this.amountPaid,
+    required this.amountRemain,
     required this.cadenceText,
     required this.nextDueText,
-    required this.nextAmountText,
+    required this.nextAmount,
     required this.aspectRatio,
     required this.onPay,
     required this.onDetails,
@@ -57,7 +58,7 @@ class PlanCardCompact extends StatelessWidget {
                 AspectRatio(
                   aspectRatio: aspectRatio,
                   child: Image.network(
-                    imageUrl,
+                    imageUrls.first,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) =>
                         Container(color: const Color(0xFFEAE6E2)),
@@ -85,7 +86,7 @@ class PlanCardCompact extends StatelessWidget {
                         ),
                         SizedBox(width: 4.w),
                         Text(
-                          vendor,
+                          storeName,
                           style: GoogleFonts.inter(
                             fontSize: 12.sp,
                             fontWeight: FontWeight.w700,
@@ -165,7 +166,7 @@ class PlanCardCompact extends StatelessWidget {
                           ),
                           SizedBox(height: 8.h),
                           Text(
-                            '$nextDueText • $nextAmountText',
+                            '$nextDueText • ${formatToCurrency(nextAmount as num)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
@@ -215,9 +216,9 @@ class PlanCardCompact extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        _Stat(label: 'Paid', value: amountPaidText),
+                        _Stat(label: 'Paid', value: formatToCurrency(amountPaid as num)),
                         _DividerDot(),
-                        _Stat(label: 'Remaining', value: amountRemainText),
+                        _Stat(label: 'Remaining', value: formatToCurrency(amountRemain as num)),
                       ],
                     ),
                   ),

@@ -9,9 +9,19 @@ abstract class HomeEvent extends Equatable {
 class HomeStarted extends HomeEvent {}
 class PasteLinkSubmitted extends HomeEvent {
   final String value;
-  const PasteLinkSubmitted(this.value);
+  final double balance;
+  const PasteLinkSubmitted(this.value, this.balance);
   @override
-  List<Object?> get props => [value];
+  List<Object?> get props => [value, balance];
 }
+
+class WalletBalanceUpdated extends HomeEvent {
+  final double balance;
+  const WalletBalanceUpdated(this.balance);
+
+  @override
+  List<Object?> get props => [balance];
+}
+
 class ScanRequested extends HomeEvent {}
 class RequestLinkSheetOpened extends HomeEvent {}

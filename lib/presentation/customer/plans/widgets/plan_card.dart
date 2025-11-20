@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../data/models/customer/plan.dart';
+import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/models/customer/mock_plan.dart';
 import '../../../shared/korra_net_image.dart';
 
 class PlanCard extends StatelessWidget {
@@ -37,7 +38,7 @@ class PlanCard extends StatelessWidget {
 
             // --- Product image banner (prestige, compact) ---
             KorraNetImage(
-              url: plan.imageUrl,
+              url: plan.imageUrls.first,
               height: 250.h,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -55,11 +56,11 @@ class PlanCard extends StatelessWidget {
                   // Top row: vendor + Autopay
                   Row(
                     children: [
-                      _vendorBadge(plan.vendor),
+                      _vendorBadge(plan.storeName),
                       SizedBox(width: 8.w),
                       Expanded(
                         child: Text(
-                          plan.vendor,
+                          plan.storeName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
@@ -91,7 +92,7 @@ class PlanCard extends StatelessWidget {
 
                   // Amount summary
                   Text(
-                    '${plan.amountPaidText ?? "—"} paid · ${plan.amountRemainText ?? "—"} remaining',
+                    '${formatToCurrency(plan.amountPaid)} paid · ${formatToCurrency(plan.amountRemain)} remaining',
                     style: GoogleFonts.inter(
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w500,
@@ -119,7 +120,7 @@ class PlanCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${plan.nextDue} · ${plan.nextAmountText ?? ""}'.trim(),
+                        '${plan.nextDue} · ${plan.nextAmount != null ? formatToCurrency(plan.nextAmount as num) : ""}'.trim(),
                         style: GoogleFonts.inter(
                           fontSize: 13.sp,
                           fontWeight: FontWeight.w600,

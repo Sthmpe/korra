@@ -1,16 +1,27 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../data/models/customer/user_profile.dart';
+import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../data/repository/customer/profile_repository.dart';
 
+import '../../../core/net/net_cubit.dart';
 import 'profile_event.dart';
 import 'profile_state.dart';
 
 class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   final ProfileRepository repo;
+  final CustomerRepository customerRepo;
+  final String customerUid;
+  final NetCubit net;
+
   UserProfile? _profile; // typed model internally
 
-  ProfileBloc(this.repo) : super(const ProfileState()) {
+  ProfileBloc({
+    required this.repo,
+    required this.customerRepo,
+    required this.customerUid,
+    required this.net,
+  }) : super(const ProfileState()) {
     on<ProfileStarted>(_onLoad);
     on<ProfileRefreshed>(_onLoad);
 
@@ -23,14 +34,15 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
 
     on<ChangeReminderCadence>(_onChangeCadence);
 
-    on<LogoutRequested>(_onLogout);
+    on<LogoutRequested>(_onLogoutRequested);
     on<DeleteAccountRequested>(_onDelete);
   }
 
   void _pushToState(UserProfile p, Emitter<ProfileState> emit) {
     emit(state.copyWith(
-      status: ProfileStatus.ready,
-      error: null,
+      status: ProfileStatus.success,
+      errorMessage: null,
+      message: null,
       name: p.name,
       email: p.email,
       phone: p.phone,
@@ -49,12 +61,12 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   }
 
   Future<void> _onLoad(ProfileEvent e, Emitter<ProfileState> emit) async {
-    emit(state.copyWith(status: ProfileStatus.loading, error: null, message: null));
+    emit(state.copyWith(status: ProfileStatus.loading, errorMessage: null));
     try {
       _profile = await repo.fetchProfile();
       _pushToState(_profile!, emit);
     } catch (err) {
-      emit(state.copyWith(status: ProfileStatus.error, error: '$err'));
+      emit(state.copyWith(status: ProfileStatus.failure, errorMessage: '$err'));
     }
   }
 
@@ -106,9 +118,22 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     emit(state.copyWith(updatingReminder: false));
   }
 
-  Future<void> _onLogout(LogoutRequested e, Emitter<ProfileState> emit) async {
-    await repo.logout();
-    emit(state.copyWith(message: 'Logged out'));
+  Future<void> _onLogoutRequested(
+    LogoutRequested event,
+    Emitter<ProfileState> emit,
+  ) async {
+    final online = await net.preflight();
+    if (!online) return; 
+
+    try {
+      await customerRepo.logout();
+      emit(state.copyWith(status: ProfileStatus.logout, message: 'Logged out successfully'));
+    } catch (e) {
+      emit(state.copyWith(
+        status: ProfileStatus.failure,
+        errorMessage: e.toString(),
+      ));
+    }
   }
 
   Future<void> _onDelete(DeleteAccountRequested e, Emitter<ProfileState> emit) async {

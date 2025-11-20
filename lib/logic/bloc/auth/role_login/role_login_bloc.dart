@@ -68,6 +68,12 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
 
     try {
       if (state.role == KorraRole.vendor) {
+        final existsInCustomer = await _customerRepo.checkCollectionForEmail('customer', state.email.trim());
+        
+        if (existsInCustomer) {
+          throw Exception('customer');
+        }
+
         final uid = await _vendorRepo.signInVendor(
           state.email.trim(),
           state.password.trim(),
@@ -85,6 +91,12 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           return;
         }
       } else {
+        final existsInVendors = await _customerRepo.checkCollectionForEmail('vendors', state.email.trim());
+        
+        if (existsInVendors) {
+          throw Exception('vendor');
+        }
+
         final uid = await _customerRepo.signInCustomer(
           state.email.trim(),
           state.password.trim(),

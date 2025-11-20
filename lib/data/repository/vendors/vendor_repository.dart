@@ -227,6 +227,13 @@ class VendorRepository {
     await db.collection('vendors').doc(vendor.uid).set(map);
   }
 
+  Future<String> getStoreName(String vendorUid) async {
+    return await firestore.collection("vendors")
+          .doc(vendorUid)
+          .get()
+          .then((snap) => snap.data()?["store"]["storeName"] ?? "Korra_Vendor-${vendorUid.substring(0, 5)}");
+  }
+
   /// Calls a Supabase Edge Function to send a welcome email.
   Future<void> _sendWelcomeEmail(Vendor vendor) async {
     try {

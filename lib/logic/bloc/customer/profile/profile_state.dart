@@ -1,10 +1,10 @@
 import 'package:equatable/equatable.dart';
 
-enum ProfileStatus { initial, loading, ready, error }
+enum ProfileStatus { initial, loading, success, failure, logout }
 
 class ProfileState extends Equatable {
   final ProfileStatus status;
-  final String? error;
+  final String? errorMessage;
   final String? message;
 
   // Identity (primitives for UI)
@@ -37,9 +37,8 @@ class ProfileState extends Equatable {
 
   const ProfileState({
     this.status = ProfileStatus.initial,
-    this.error,
+    this.errorMessage,
     this.message,
-
     this.name = '',
     this.email = '',
     this.phone = '',
@@ -66,7 +65,7 @@ class ProfileState extends Equatable {
 
   ProfileState copyWith({
     ProfileStatus? status,
-    String? error,
+    String? errorMessage,
     String? message,
 
     String? name,
@@ -94,9 +93,8 @@ class ProfileState extends Equatable {
   }) {
     return ProfileState(
       status: status ?? this.status,
-      error: error,
-      message: message,
-
+      errorMessage: errorMessage ?? this.errorMessage,
+      message: message ?? this.message,
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,
@@ -124,7 +122,7 @@ class ProfileState extends Equatable {
 
   @override
   List<Object?> get props => [
-    status, error, message,
+    status, errorMessage, message,
     name, email, phone, initials, kycVerified, basicTier,
     walletBalanceText, defaultMethodMasked, autopayDefault,
     pushNotif, emailNotif, smsNotif, reminderCadence,

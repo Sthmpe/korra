@@ -2,7 +2,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import '../../../../data/models/customer/plan.dart'; // adjust if your path differs
+import '../../../../data/models/customer/mock_plan.dart'; // adjust if your path differs
 import 'plan_card_compact.dart';
 
 class PlanCarouselSlider extends StatefulWidget {
@@ -57,17 +57,17 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
             ),
             child: PlanCardCompact(
               // image + title
-              imageUrl: p.imageUrl,
+              imageUrls: p.imageUrls,
               title: p.title,
-              vendor: p.vendor,
+              storeName: p.storeName,
 
               // payments summary (map your model here)
               progressPercent: p.progress,                    // 0..100
-              amountPaidText: p.amountPaidText ?? '₦75,500', // placeholders ok
-              amountRemainText: p.amountRemainText ?? '₦224,500',
+              amountPaid: p.amountPaid, // placeholders ok
+              amountRemain: p.amountRemain,
               cadenceText: p.cadenceText ?? 'Weekly plan',   // Daily / Weekly / Monthly
               nextDueText: p.nextDue,                         // “Due Fri”
-              nextAmountText: p.nextAmountText ?? '₦12,500',
+              nextAmount: p.nextAmount ?? 12500,
 
               aspectRatio: _aspect,
               onPay: () {},

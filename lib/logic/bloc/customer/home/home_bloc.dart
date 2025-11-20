@@ -19,6 +19,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }) : super(HomeState.initial()) {
     on<HomeStarted>(_onStarted);
     on<PasteLinkSubmitted>(_onPaste);
+    on<WalletBalanceUpdated>(_onWalletBalanceUpdated);
+  }
+
+  void _onWalletBalanceUpdated(
+    WalletBalanceUpdated event,
+    Emitter<HomeState> emit,
+  ) {
+    emit(state.copyWith(walletBalance: event.balance.toString()));
   }
 
   Future<void> _onStarted(HomeStarted e, Emitter<HomeState> emit) async {
@@ -31,16 +39,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         repo.fetchSavedVendors(),
         repo.fetchActivity(),
       ]);
-      emit(state.copyWith(
-        status: HomeStatus.loaded,
-        walletBalance: results[0] as String,
-        defaultMethodMasked: results[1] as String,
-        plans: results[2] as dynamic,
-        vendors: results[3] as dynamic,
-        activity: results[4] as dynamic,
-      ));
+      emit(
+        state.copyWith(
+          status: HomeStatus.loaded,
+          walletBalance: results[0] as String,
+          defaultMethodMasked: results[1] as String,
+          plans: results[2] as dynamic,
+          vendors: results[3] as dynamic,
+          activity: results[4] as dynamic,
+        ),
+      );
     } catch (_) {
-      emit(state.copyWith(status: HomeStatus.failure, message: 'Something went wrong.'));
+      emit(
+        state.copyWith(
+          status: HomeStatus.failure,
+          message: 'Something went wrong.',
+        ),
+      );
     }
   }
 

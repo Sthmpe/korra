@@ -30,11 +30,17 @@ class WalletDetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _walletRow('Account Name', state.details.walletAccountName),
-          SizedBox(height: 14.h),
           CopyAccountNumberTile(accountNumber: state.details.walletAccountNumber),
           SizedBox(height: 14.h),
-          _walletRow('Bank Name', state.details.walletBankName, showImageLogo: true, imagePath: state.details.bankLogoImageString),
+           Padding(
+             padding: EdgeInsets.symmetric(horizontal: 12.w),
+             child: _walletRow('Account Name', state.details.walletAccountName),
+           ),
+          SizedBox(height: 14.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12.w),
+            child: _walletRow('Bank Name', state.details.walletBankName, showImageLogo: true, imagePath: state.details.bankLogoImageString),
+          ),
           SizedBox(height: 18.h),
           Divider(height: 1, color: KorraColors.border.withOpacity(0.4)),
           SizedBox(height: 14.h),
@@ -55,14 +61,7 @@ class WalletDetailsCard extends StatelessWidget {
 
   Widget _walletRow(String label, String value, {bool showImageLogo = false, String? imagePath}) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        if (showImageLogo)
-          Image.asset(
-            '$imagePath',
-            width: 24.r,
-            height: 24.r,
-          ),
         Text(
           label,
           style: GoogleFonts.inter(
@@ -71,6 +70,13 @@ class WalletDetailsCard extends StatelessWidget {
             color: KorraColors.textMuted,
           ),
         ),
+        Spacer(),
+        if (showImageLogo)
+          Image.asset(
+            '$imagePath',
+            width: 50.w,
+            height: 50.h,
+          ),
         Text(
           value,
           style: GoogleFonts.inter(
