@@ -1,25 +1,22 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../data/repository/customer/customer_repository.dart';
-import '../../../../data/repository/customer/home_repository.dart';
 import '../../../core/net/net_cubit.dart';
 import 'home_event.dart';
 import 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  final HomeRepository repo;
   final CustomerRepository customerRepo;
   final String customerUid;
   final NetCubit net;
   HomeBloc({
-    required this.repo,
     required this.customerRepo,
     required this.customerUid,
     required this.net,
   }) : super(HomeState.initial()) {
-    on<HomeStarted>(_onStarted);
     on<PasteLinkSubmitted>(_onPaste);
     on<WalletBalanceUpdated>(_onWalletBalanceUpdated);
+    on<HomeStarted>(_onStarted);
   }
 
   void _onWalletBalanceUpdated(
@@ -29,36 +26,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(state.copyWith(walletBalance: event.balance.toString()));
   }
 
-  Future<void> _onStarted(HomeStarted e, Emitter<HomeState> emit) async {
+  Future<void> _onStarted(HomeStarted event, Emitter<HomeState> emit) async {
+    // Your logic to load vendors, etc.
+    // Example:
     emit(state.copyWith(status: HomeStatus.loading));
     try {
-      final results = await Future.wait([
-        repo.fetchWalletBalance(),
-        repo.fetchDefaultMethodMasked(),
-        repo.fetchPlans(),
-        repo.fetchSavedVendors(),
-        repo.fetchActivity(),
-      ]);
-      emit(
-        state.copyWith(
-          status: HomeStatus.loaded,
-          walletBalance: results[0] as String,
-          defaultMethodMasked: results[1] as String,
-          plans: results[2] as dynamic,
-          vendors: results[3] as dynamic,
-          activity: results[4] as dynamic,
-        ),
-      );
-    } catch (_) {
-      emit(
-        state.copyWith(
-          status: HomeStatus.failure,
-          message: 'Something went wrong.',
-        ),
-      );
+       // Load data...
+       // emit(state.copyWith(status: HomeStatus.success, ...));
+    } catch (e) {
+       // emit(state.copyWith(status: HomeStatus.failure));
     }
   }
-
+  
   Future<void> _onPaste(PasteLinkSubmitted e, Emitter<HomeState> emit) async {
     // For MVP just show a toast message via message field
     emit(state.copyWith(message: 'Link received: ${e.value}'));

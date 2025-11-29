@@ -6,19 +6,23 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
+import '../../../../config/constants/colors.dart'; // Ensure KorraColors is imported
+
 class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback? onHistory;
+  final VoidCallback? onMenu;
   final VoidCallback? onSupport;
   final VoidCallback? onBackpressed;
   final bool showHistoryDot;
   final bool showLeadingIcon;
-  final List<Widget>? trailingActions; // NEW
+  final List<Widget>? trailingActions;
 
   const KorraHeader({
     super.key,
     required this.title,
     this.onHistory,
+    this.onMenu,
     this.onSupport,
     this.onBackpressed,
     this.showHistoryDot = false,
@@ -26,91 +30,73 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
     this.trailingActions,
   });
 
-  static const _brand = Color(0xFFA54600);
-
   @override
-  Size get preferredSize => Size.fromHeight(56.h);
+  Size get preferredSize => Size.fromHeight(60.h); // Slightly taller for modern feel
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          bottom: false,
-          child: Container(
-            height: 56.h,
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFEAE6E2), width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                showLeadingIcon
-                    ? IconButton(
-                        onPressed: onBackpressed ??
-                            () {
-                              if (Get.isOverlaysOpen) {
-                                Get.back();
-                              } else {
-                                Get.back();
-                              }
-                            },
-                        style: IconButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size(40.w, 40.w),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          alignment: Alignment.center,
-                        ),
-                        icon: Icon(
-                          MdiIcons.arrowLeft,
-                          size: 24.sp,
-                          color: const Color(0xFF1B1B1B),
-                        ),
-                      )
-                    : Container(
-                        width: 28.w,
-                        height: 28.w,
-                        decoration: BoxDecoration(
-                          color: _brand,
-                          borderRadius: BorderRadius.circular(8.r),
-                        ),
-                        child: Icon(
-                          MdiIcons.crown,
-                          size: 16.sp,
-                          color: Colors.white,
-                        ),
-                      ),
-                SizedBox(width: 8.w),
-                Text(
+      // Dark icons on white status bar
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Container(
+        color: Colors.white, // Solid background
+        padding: EdgeInsets.symmetric(horizontal: 20.w), // More breathing room
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          height: 60.h,
+          alignment: Alignment.center,
+          child: Row(
+            children: [
+              // --- LEADING (Back or Brand) ---
+              if (showLeadingIcon)
+                _BackButton(onPressed: onBackpressed)
+              else
+                _BrandLogo(),
+
+              SizedBox(width: 12.w),
+
+              // --- TITLE ---
+              Expanded(
+                child: Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontSize: 18.sp,
+                    fontSize: 20.sp, // Larger, bolder title
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1B1B1B),
+                    color: KorraColors.black,
+                    letterSpacing: -0.5,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const Spacer(),
-                Row(
-                  children:
-                      trailingActions ??
-                      [
-                        _IconBtn(icon: MdiIcons.history, onTap: onHistory),
-                        SizedBox(width: 8.w),
-                        _IconBtn(
+              ),
+
+              // --- ACTIONS ---
+              Row(
+                children: trailingActions ??
+                    [
+                      if (onHistory != null)
+                        _HeaderActionBtn(
+                          icon: Iconsax.clock, 
+                          onTap: onHistory,
+                        ),
+                      if (onMenu != null)
+                        _HeaderActionBtn(
+                          icon: Icons.more_vert_rounded,
+                          onTap: onMenu,
+                        ),
+                      if (onSupport != null) ...[
+                        SizedBox(width: 4.w), // Tiny gap between icons
+                        _HeaderActionBtn(
                           icon: Iconsax.notification,
                           onTap: onSupport,
-                          dot: showHistoryDot,
+                          showDot: showHistoryDot,
                         ),
-                      ],
-                ),
-              ],
-            ),
+                      ]
+                    ],
+              ),
+            ],
           ),
         ),
       ),
@@ -118,34 +104,95 @@ class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _IconBtn extends StatelessWidget {
+// -----------------------------------------------------------------------------
+// SUB-COMPONENTS
+// -----------------------------------------------------------------------------
+
+class _BackButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  const _BackButton({this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed ?? () => Get.back(),
+      borderRadius: BorderRadius.circular(12.r),
+      child: Container(
+        width: 40.w,
+        height: 40.w,
+        alignment: Alignment.centerLeft, // Align icon left to remove visual padding
+        child: Icon(
+          Iconsax.arrow_left,
+          size: 24.sp,
+          color: KorraColors.black,
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandLogo extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36.w,
+      height: 36.w,
+      decoration: BoxDecoration(
+        color: KorraColors.brand,
+        borderRadius: BorderRadius.circular(10.r), // Soft square
+        boxShadow: [
+          BoxShadow(
+            color: KorraColors.brand.withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(
+        MdiIcons.crown,
+        size: 20.sp,
+        color: Colors.white,
+      ),
+    );
+  }
+}
+
+class _HeaderActionBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
-  final bool dot;
-  const _IconBtn({required this.icon, this.onTap, this.dot = false});
+  final bool showDot;
+
+  const _HeaderActionBtn({
+    required this.icon,
+    this.onTap,
+    this.showDot = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        SizedBox(
-          width: 45.w,
-          height: 45.w,
-          child: IconButton(
-            onPressed: onTap,
-            icon: Icon(icon, size: 22.sp, color: const Color(0xFF1B1B1B)),
+        IconButton(
+          onPressed: onTap,
+          splashRadius: 24.r,
+          icon: Icon(
+            icon, 
+            size: 24.sp, 
+            color: const Color(0xFF111111), // Almost black
           ),
         ),
-        if (dot)
+        if (showDot)
           Positioned(
-            right: 6.w,
-            top: 6.h,
+            right: 10.w,
+            top: 10.h,
             child: Container(
               width: 8.w,
               height: 8.w,
-              decoration: const BoxDecoration(
-                color: Color(0xFFA54600),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF3B30), // iOS Red
                 shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.5), // White ring
               ),
             ),
           ),

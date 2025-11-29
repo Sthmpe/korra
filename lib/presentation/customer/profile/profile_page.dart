@@ -3,17 +3,31 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:korra/data/models/customer/customer_ui_extentsion.dart';
 
-import '../../../data/repository/customer/profile_repository.dart';
+// REPO & MODELS
+import '../../../../data/models/customer/customer_model.dart';
+import '../../../../data/repository/customer/customer_repository.dart';
+
+// BLOC
+import '../../../logic/services/share_service.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer/profile/profile_event.dart';
 import '../../../logic/bloc/customer/profile/profile_state.dart';
 import '../../../logic/core/net/net_cubit.dart';
+
+// WIDGETS
 import '../../auth/role_login/role_login_screen.dart';
 import '../../shared/notify/korra_notify.dart';
 import '../../shared/widgets/korra_header.dart';
+import 'bank_details_screen.dart';
+import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
+import 'help_center_screen.dart';
+import 'legal_screen.dart';
+import 'statements_screen.dart';
 import 'widgets/identity_header_card.dart';
+import 'my_qr_screen.dart';
 import 'widgets/rows.dart';
 import 'widgets/section_card.dart';
 
@@ -23,469 +37,300 @@ class ProfilePage extends StatelessWidget {
   final CustomerRepository customerRepo;
   final String customerUid;
 
-  const ProfilePage({super.key, required this.customerRepo, required this.customerUid});
+  const ProfilePage({
+    super.key,
+    required this.customerRepo,
+    required this.customerUid,
+  });
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => ProfileBloc(repo: ProfileRepository(), customerRepo: customerRepo, customerUid: customerUid, net: context.read<NetCubit>())..add(ProfileStarted()),
-    child: BlocConsumer<ProfileBloc, ProfileState>(
-        listenWhen: (p, c) => p.message != c.message && c.message != null,
+      create: (context) => ProfileBloc(
+        customerRepo: customerRepo,
+        net: context.read<NetCubit>(),
+      ),
+      child: BlocListener<ProfileBloc, ProfileState>(
         listener: (context, state) {
-          if (state.message != null) {
-            final msg = state.message;
-            if (msg != null) {
-              KorraNotify.info(context, msg);
-            }
-          }
+          if (state.message != null) KorraNotify.info(context, state.message!);
+          if (state.status == ProfileStatus.logout)
+            Get.offAll(() => const RoleLoginScreen());
         },
-        builder: (context, state) {
-          final bloc = context.read<ProfileBloc>();
+        // REAL-TIME DATA STREAM
+        child: StreamBuilder<Customer?>(
+          stream: customerRepo.streamCustomer(customerUid),
+          builder: (context, snapshot) {
+            final bloc = context.read<ProfileBloc>();
 
-          return Scaffold(
-            appBar: const KorraHeader(title: 'Profile'),
-            body: RefreshIndicator(
-              onRefresh: () async => bloc.add(ProfileRefreshed()),
-              child: CustomScrollView(
+            // 1. LOADING
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator(color: _brand)),
+              );
+            }
+
+            final customer = snapshot.data;
+
+            // 2. ERROR / NO DATA
+            if (customer == null) {
+              return const Scaffold(
+                body: Center(child: Text("Profile not found")),
+              );
+            }
+
+            // 3. SUCCESS UI
+            return Scaffold(
+              backgroundColor: const Color(0xFFF9FAFB),
+              appBar: const KorraHeader(title: 'Profile'),
+              body: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverToBoxAdapter(
                     child: Column(
                       children: [
-                        if (state.status == ProfileStatus.loading)
-                          Padding(
-                            padding: EdgeInsets.only(top: 60.h),
-                            child: const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        else if (state.status == ProfileStatus.failure)
-                          Padding(
-                            padding: EdgeInsets.all(16.w),
-                            child: Text(
-                              state.errorMessage ?? 'Something went wrong',
-                              style: GoogleFonts.inter(
-                                color: const Color(0xFFB3261E),
+                        // IDENTITY CARD (Using Extension Getters)
+                        IdentityHeaderCard(
+                          initials: customer.initials, // 👈 Extension
+                          name: customer.displayName, // 👈 Extension
+                          email: customer.email,
+                          phone: customer.phone,
+                          kycVerified: customer.isFullyVerified, // 👈 Extension
+                          basicTier: true,
+                          onMyQr: () {
+                            Get.to(() => MyQrScreen(customer: customer));
+                          },
+                          onShare: () {
+                            ShareService.shareAppReferral(referrerName: customer.firstName);
+                          },
+                          onEdit: () {
+                            Get.to(
+                              () => EditProfileScreen(
+                                customer:
+                                    customer, // Pass the current customer data
+                                repo: customerRepo, // Pass the repo
                               ),
-                            ),
-                          )
-                        else ...[
-                          // Identity
-                          IdentityHeaderCard(
-                            initials: state.initials,
-                            name: state.name,
-                            email: state.email,
-                            phone: state.phone,
-                            kycVerified: state.kycVerified,
-                            basicTier: state.basicTier,
-                            onEdit: () {}, // TODO
-                          ),
+                            );
+                          },
+                        ),
 
-                          // Wallet & payments
-                          SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Wallet & payments',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5E5E5E),
-                                  ),
-                                ),
-                                SizedBox(height: 6.h),
-                                RowWithChevron(
-                                  icon: Icons.account_balance_wallet_outlined,
-                                  title: state.walletBalanceText,
-                                  subtitle: 'Wallet balance • Top up',
-                                  onTap: () {}, // TODO
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.credit_card,
-                                  title: 'Default method',
-                                  subtitle: state.defaultMethodMasked,
-                                  onTap: () {}, // TODO
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                SwitchRow(
-                                  icon: Icons.autorenew_rounded,
-                                  title: 'AutoPay (default)',
-                                  subtitle: 'Use AutoPay when available',
-                                  value: state.autopayDefault,
-                                  onChanged: (v) =>
-                                      bloc.add(ToggleAutopayDefault(v)),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.receipt_long_outlined,
-                                  title: 'Statements & receipts',
-                                  onTap: () {}, // TODO
-                                ),
-                              ],
-                            ),
-                          ),
+                        SizedBox(height: 16.h),
 
-                          // Preferences
-                          SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Preferences',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5E5E5E),
-                                  ),
-                                ),
-                                SizedBox(height: 6.h),
-                                SwitchRow(
-                                  icon: Icons.notifications_active_outlined,
-                                  title: 'Push notifications',
-                                  value: state.pushNotif,
-                                  onChanged: (v) =>
-                                      bloc.add(TogglePushNotif(v)),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                SwitchRow(
-                                  icon: Icons.email_outlined,
-                                  title: 'Email notifications',
-                                  value: state.emailNotif,
-                                  onChanged: (v) =>
-                                      bloc.add(ToggleEmailNotif(v)),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                SwitchRow(
-                                  icon: Icons.sms_outlined,
-                                  title: 'SMS notifications',
-                                  value: state.smsNotif,
-                                  onChanged: (v) => bloc.add(ToggleSmsNotif(v)),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8.h),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Reminders',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14.5.sp,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      SizedBox(height: 8.h),
-                                      Wrap(
-                                        spacing: 8.w,
-                                        children: [
-                                          for (final c in const [
-                                            'Same day',
-                                            '1 day before',
-                                            '3 days before',
-                                          ])
-                                            ChoiceChip(
-                                              label: Text(
-                                                c,
-                                                style: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                              selected:
-                                                  state.reminderCadence == c,
-                                              onSelected: (_) => bloc.add(
-                                                ChangeReminderCadence(c),
-                                              ),
-                                              selectedColor: _brand,
-                                              labelStyle: GoogleFonts.inter(
-                                                color:
-                                                    state.reminderCadence == c
-                                                    ? Colors.white
-                                                    : const Color(0xFF1B1B1B),
-                                              ),
-                                              backgroundColor: Colors.white,
-                                              side: const BorderSide(
-                                                color: Color(0xFFEAE6E2),
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12.r),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.brightness_6_outlined,
-                                      size: 18.sp,
-                                      color: _brand,
-                                    ),
-                                    SizedBox(width: 10.w),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Theme',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14.5.sp,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          SizedBox(height: 2.h),
-                                          Text(
-                                            'Coming soon',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12.5.sp,
-                                              color: const Color(0xFF5E5E5E),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
+                        // WALLET SECTION
+                        SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionTitle('Wallet & payments'),
+                              SizedBox(height: 6.h),
 
-                          // Security
-                          SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Security',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5E5E5E),
-                                  ),
-                                ),
-                                SizedBox(height: 6.h),
-                                SwitchRow(
-                                  icon: Icons.fingerprint,
-                                  title: 'Biometric sign-in',
-                                  value: state.biometricsEnabled,
-                                  onChanged: (v) =>
-                                      bloc.add(ToggleBiometrics(v)),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.lock_outline,
-                                  title: 'Change password',
-                                  onTap: () {}, // TODO
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Support & legal
-                          SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Support & legal',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5E5E5E),
-                                  ),
-                                ),
-                                SizedBox(height: 6.h),
-                                RowWithChevron(
-                                  icon: Icons.help_outline,
-                                  title: 'Help Center (FAQ)',
-                                  onTap: () {}, // TODO
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.description_outlined,
-                                  title: 'Terms of Service',
-                                  onTap: () {
-                                    // TODO: show your existing Terms sheet
-                                  },
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.privacy_tip_outlined,
-                                  title: 'Privacy Policy',
-                                  onTap: () {
-                                    // TODO: show your existing Privacy sheet
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // About
-                          SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'About',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5E5E5E),
-                                  ),
-                                ),
-                                SizedBox(height: 6.h),
-                                RowWithChevron(
-                                  icon: Icons.info_outline,
-                                  title: 'Version',
-                                  subtitle: '1.0.0 (42)',
-                                  onTap: () {},
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  color: Color(0xFFEAE6E2),    
-                                ),
-                                RowWithChevron(
-                                  icon: Icons.balance_outlined,
-                                  title: 'Open source licenses',
-                                  onTap: () {}, // TODO
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Danger zone
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 24.h),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child:  OutlinedButton(
-                                onPressed: () {
-                                  bloc.add(LogoutRequested());
-                                  Get.offAll(() => const RoleLoginScreen());
+                              // Bank Details (Real Data from Extension)
+                              RowWithChevron(
+                                icon: Icons.account_balance_rounded,
+                                title: 'Bank Details',
+                                subtitle: customer.bankDisplay, // 👈 Extension
+                                onTap: () {
+                                  Get.to(() => BankDetailsScreen(customer: customer));
                                 },
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: _brand),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                                  padding: EdgeInsets.symmetric(vertical: 14.h),
-                                  foregroundColor: _brand,
-                                ),
-                                child: Text('Logout',
-                                  style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800)),
                               ),
+                              _divider(),
+
+                              // AutoPay (Disabled)
+                              SwitchRow(
+                                icon: Icons.autorenew_rounded,
+                                title: 'AutoPay',
+                                subtitle: 'Coming soon',
+                                value: false,
+                                onChanged: (_) =>
+                                    KorraNotify.info(context, "Coming soon!"),
+                              ),
+                              _divider(),
+
+                              RowWithChevron(
+                                icon: Icons.receipt_long_outlined,
+                                title: 'Statements & receipts',
+                                onTap: () {
+                                  Get.to(() => StatementsScreen(repo: customerRepo, customerUid: customerUid));
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // PREFERENCES
+                        SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionTitle('Preferences'),
+                              SizedBox(height: 6.h),
+
+                              RowWithChevron(
+                                icon: Icons.brightness_6_outlined,
+                                title: 'App Theme',
+                                subtitle: 'Coming soon',
+                                onTap: () => KorraNotify.info(
+                                  context,
+                                  "Themes are coming soon!",
                                 ),
-                                SizedBox(width: 12.w),
-                                Expanded(
-                                  child: FilledButton(
-                                    onPressed: () =>
-                                        _confirmDelete(context, bloc),
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: const Color(0xFFB3261E),
-                                      minimumSize: Size.fromHeight(48.h),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          12.r,
-                                        ),
-                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+ // 3. SECURITY & LEGAL
+                        SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionTitle('Security'),
+                              SizedBox(height: 6.h),
+                              
+                              SwitchRow(
+                                icon: Icons.fingerprint,
+                                title: 'Biometric Sign-in',
+                                subtitle: 'Coming soon',
+                                value: false,
+                                onChanged: (v) {
+                                   KorraNotify.info(context, "Biometrics coming soon!");
+                                },
+                              ),
+                              _divider(),
+                              
+                              RowWithChevron(
+                                icon: Icons.lock_outline,
+                                title: 'Change password',
+                                onTap: () {
+                                  Get.to(() => ChangePasswordScreen(repo: customerRepo));
+                                }, 
+                              ),
+                              _divider(),
+                              
+                              RowWithChevron(
+                                icon: Icons.description_outlined,
+                                title: 'Legal & Privacy',
+                                onTap: () {
+                                  Get.to(() => const LegalMenuScreen());
+                                }, 
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // HELP CENTER
+                        SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionTitle('Help Center'),
+                              SizedBox(height: 6.h),
+                              
+                              RowWithChevron(
+                                icon: Icons.question_mark_outlined,
+                                title: 'Help Center',
+                                onTap: () {
+                                  Get.to(() => const HelpCenterScreen());
+                                }, 
+                              ),
+                            ],
+                          ),
+                        ),
+
+
+
+                        // LOGOUT
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 40.h),
+                          child: Column(
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50.h,
+                                child: OutlinedButton(
+                                  onPressed: () => bloc.add(LogoutRequested()),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(
+                                      color: Color(0xFFD0D5DD),
                                     ),
-                                    child: Text(
-                                      'Delete account',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 15.sp,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12.r),
+                                    ),
+                                    foregroundColor: const Color(0xFF344054),
+                                  ),
+                                  child: Text(
+                                    'Log out',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 15.sp,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              SizedBox(height: 12.h),
+                              GestureDetector(
+                                onTap: () => _confirmDelete(context, bloc),
+                                child: Text(
+                                  "Delete account",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13.sp,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
+  }
+
+  // --- WIDGET HELPERS ---
+  Widget _sectionTitle(String title) {
+    return Text(
+      title.toUpperCase(),
+      style: GoogleFonts.inter(
+        fontSize: 11.sp,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF98A2B3),
+        letterSpacing: 1.0,
+      ),
+    );
+  }
+
+  Widget _divider() {
+    return Divider(height: 24.h, color: const Color(0xFFF2F4F7), thickness: 1);
   }
 
   void _confirmDelete(BuildContext context, ProfileBloc bloc) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(
-          'Delete account',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-        ),
+        title: Text('Delete Account?', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.red)),
         content: Text(
-          'This action is permanent. Your plans and data will be removed.',
-          style: GoogleFonts.inter(),
+          'This action is permanent and cannot be undone.\n\n'
+          'Note: You cannot delete your account if you have any active plans or unpaid debts.',
+          style: GoogleFonts.inter(fontSize: 14.sp),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-            ),
+            child: Text('Keep Account', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.black)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB3261E),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E)),
             onPressed: () {
               Navigator.of(context).pop();
               bloc.add(DeleteAccountRequested());
             },
-            child: Text(
-              'Delete',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
+            child: Text('Delete Permanently', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
           ),
         ],
       ),

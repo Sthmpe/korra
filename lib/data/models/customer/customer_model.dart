@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
+import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart'; 
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 
 class Customer {
@@ -26,10 +25,12 @@ class Customer {
   final bool ninVerified;
   final bool bvnVerified;
 
-  // Monnify / wallet (optional)
+  // Monnify / Wallet
   final String? walletReference;
   final String? accountNumber;
   final String? accountName;
+  final String? bankName;        // <--- NEW: Needed for UI
+  final double availableBalance; // <--- NEW: Needed for UI
 
   // Meta
   final String status; // 'pending' | 'active' | 'suspended'
@@ -55,12 +56,74 @@ class Customer {
     this.walletReference,
     this.accountNumber,
     this.accountName,
+    this.bankName,           // <--- Added to constructor
+    this.availableBalance = 0.0, // <--- Default to 0
     required this.status,
     required this.createdAt,
     required this.updatedAt,
   });
 
-  /// Construct from signup state (you’ll make your own SignupCustomerState)
+  // ---------------------------------------------------------------------------
+  // FACTORY: FROM FIRESTORE MAP (The Missing Piece)
+  // ---------------------------------------------------------------------------
+  factory Customer.fromMap(Map<String, dynamic> data) {
+    // 1. Safely extract nested maps (default to empty if missing)
+    final personal = data['personal'] as Map<String, dynamic>? ?? {};
+    final addressMap = data['address'] as Map<String, dynamic>? ?? {};
+    final kyc = data['kyc'] as Map<String, dynamic>? ?? {};
+    final monnify = data['monnify'] as Map<String, dynamic>? ?? {};
+
+    // 2. Parse Gender Enum safely
+    Gender parsedGender = Gender.male; // Default fallback
+    if (personal['gender'] != null) {
+      try {
+        parsedGender = Gender.values.firstWhere(
+          (e) => e.name.toLowerCase() == (personal['gender'] as String).toLowerCase(),
+          orElse: () => Gender.male,
+        );
+      } catch (_) {}
+    }
+
+    return Customer(
+      uid: data['uid'] ?? '',
+      
+      // Personal
+      firstName: personal['first'] ?? '',
+      lastName: personal['last'] ?? '',
+      otherName: personal['other'] ?? '',
+      phone: personal['phone'] ?? '',
+      email: personal['email'] ?? '',
+      dob: (personal['dob'] as Timestamp?)?.toDate(),
+      gender: parsedGender,
+
+      // Address
+      address: addressMap['address'] ?? '',
+      city: addressMap['city'] ?? '',
+      stateName: addressMap['state'] ?? '',
+
+      // KYC
+      nin: kyc['nin'] ?? '',
+      bvn: kyc['bvn'] ?? '',
+      ninVerified: kyc['ninVerified'] ?? false,
+      bvnVerified: kyc['bvnVerified'] ?? false,
+
+      // Monnify / Wallet
+      walletReference: monnify['walletReference'],
+      accountNumber: monnify['accountNumber'],
+      accountName: monnify['accountName'],
+      bankName: monnify['bankName'], // Now we can read this!
+      availableBalance: (monnify['availableBalance'] ?? 0).toDouble(), // Now we can read this!
+
+      // Meta
+      status: data['status'] ?? 'pending',
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // FACTORY: FROM SIGNUP STATE
+  // ---------------------------------------------------------------------------
   factory Customer.fromState(SignupCustomerState s, String uid, {String status = 'pending'}) {
     return Customer(
       uid: uid,
@@ -81,16 +144,23 @@ class Customer {
       walletReference: null,
       accountNumber: null,
       accountName: null,
+      bankName: null,
+      availableBalance: 0.0,
       status: status,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // COPY WITH (Updated)
+  // ---------------------------------------------------------------------------
   Customer copyWithMonnify({
     String? walletReference,
     String? accountNumber,
     String? accountName,
+    String? bankName,
+    double? availableBalance,
     String? status,
   }) {
     return Customer(
@@ -109,9 +179,13 @@ class Customer {
       bvn: bvn,
       ninVerified: ninVerified,
       bvnVerified: bvnVerified,
+      // Wallet updates
       walletReference: walletReference ?? this.walletReference,
       accountNumber: accountNumber ?? this.accountNumber,
       accountName: accountName ?? this.accountName,
+      bankName: bankName ?? this.bankName,
+      availableBalance: availableBalance ?? this.availableBalance,
+      
       status: status ?? this.status,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
@@ -127,6 +201,9 @@ class Customer {
     return m;
   }
 
+  // ---------------------------------------------------------------------------
+  // TO MAP (Updated to include Balance & BankName)
+  // ---------------------------------------------------------------------------
   Map<String, dynamic> toMap() {
     final personal = _omitNulls({
       'first': _nn(firstName),
@@ -158,6 +235,8 @@ class Customer {
       'walletReference': _nn(walletReference ?? ''),
       'accountNumber': _nn(accountNumber ?? ''),
       'accountName': _nn(accountName ?? ''),
+      'bankName': _nn(bankName ?? ''),
+      'availableBalance': availableBalance, // Always save balance
     });
 
     return _omitNulls({

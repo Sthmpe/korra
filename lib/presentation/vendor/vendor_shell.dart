@@ -68,8 +68,10 @@ class VendorShell extends StatelessWidget {
                 bottomNavigationBar: KorraBottomNav(
                   currentIndex: state.index,
                   pageIcons: vendorsPageIcons,
-                  onTap: (i) =>
-                      context.read<BottomNavBloc>().add(BottomNavChanged(i)),
+                  onTap: (i) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      context.read<BottomNavBloc>().add(BottomNavChanged(i));
+                  },
                 ),
               );
             },

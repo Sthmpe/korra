@@ -1,13 +1,23 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
+import 'package:korra/data/repository/customer/customer_repository.dart';
 
-import '../../../../data/models/customer/mock_plan.dart'; // adjust if your path differs
+import '../../../../data/models/customer/plans.dart';
+import '../../plans/widgets/pay_plan_input_screen.dart';
+import '../../plans/widgets/plan_details_screen.dart';
 import 'plan_card_compact.dart';
 
 class PlanCarouselSlider extends StatefulWidget {
   final List<Plan> plans;
-  const PlanCarouselSlider({super.key, required this.plans});
+  final CustomerRepository customerRepo;
+  
+  const PlanCarouselSlider({
+    super.key, 
+    required this.plans, 
+    required this.customerRepo
+  });
 
   @override
   State<PlanCarouselSlider> createState() => _PlanCarouselSliderState();
@@ -15,9 +25,12 @@ class PlanCarouselSlider extends StatefulWidget {
 
 class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
   final CarouselSliderController _controller = CarouselSliderController();
+  
+  // 1. State to track active slide
+  int _current = 0; 
 
-  static const double _viewport = 0.7;
-  static const double _aspect = 4 / 3; // product-friendly
+  static const double _viewport = 0.75; // Slightly wider for better focus
+  static const double _aspect = 4 / 3; 
 
   @override
   Widget build(BuildContext context) {
@@ -25,57 +38,97 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
 
     final screenW = MediaQuery.sizeOf(context).width;
     final itemW = screenW * _viewport;
-    final imageH = itemW / _aspect; // keeps 4:3 image
-    final metaH  = 136.h;           // was ~120.h; gives comfy room for new strip
+    final imageH = itemW / _aspect; 
+    final metaH  = 136.h;
     final totalH = imageH + metaH + 24.h;
 
-    return SizedBox(
-      height: totalH,
-      child: CarouselSlider.builder(
-        carouselController: _controller,
-        options: CarouselOptions(
-          viewportFraction: _viewport,
+    return Column(
+      children: [
+        // 2. The Slider
+        SizedBox(
           height: totalH,
-          autoPlay: true,
-          pauseAutoPlayOnTouch: true,
-          autoPlayInterval: const Duration(seconds: 3),
-          autoPlayAnimationDuration: const Duration(milliseconds: 800),
-          autoPlayCurve: Curves.easeInOut,
-          enableInfiniteScroll: widget.plans.length > 1,
-          enlargeCenterPage: true,
-          enlargeFactor: 0.2,
-          padEnds: false,
-          scrollPhysics: const BouncingScrollPhysics(),
+          child: CarouselSlider.builder(
+            carouselController: _controller,
+            options: CarouselOptions(
+              viewportFraction: _viewport,
+              height: totalH,
+              autoPlay: false, // User usually wants to read details, auto-play can be annoying here
+              enableInfiniteScroll:  false,//widget.plans.length > 1,
+              enlargeCenterPage: true,
+              enlargeFactor: 0.2,
+              padEnds: false,
+              scrollPhysics: const BouncingScrollPhysics(),
+              // 3. Update State on Change
+              onPageChanged: (index, reason) {
+                setState(() {
+                  _current = index;
+                });
+              },
+            ),
+            itemCount: widget.plans.length,
+            itemBuilder: (context, i, realIndex) {
+              final p = widget.plans[i];
+              
+              final String dueText = "Due ${p.nextDueDate.day}/${p.nextDueDate.month}"; 
+              
+              return Padding(
+                padding: EdgeInsets.only(
+                  left: i == 0 ? 16.w : 8.w,
+                  right: i == widget.plans.length - 1 ? 16.w : 8.w,
+                ),
+                child: PlanCardCompact(
+                  imageUrls: p.imageUrls.isNotEmpty 
+                      ? p.imageUrls 
+                      : ['https://placehold.co/400x300.png?text=No+Image'], 
+                  
+                  title: p.title,
+                  storeName: p.storeName,
+                  progressPercent: p.progressPercent.toInt(), 
+                  amountPaid: p.amountPaid,
+                  amountRemain: p.amountRemaining,
+                  cadenceText: p.cadenceType != null 
+                      ? "${p.cadenceType![0].toUpperCase()}${p.cadenceType!.substring(1)} Plan"
+                      : "Flexible Plan",
+                  nextDueText: dueText,
+                  nextAmount: p.nextAmount,
+                  aspectRatio: _aspect,
+                  
+                  onPay: () {
+                    Get.to(() => PayPlanInputScreen(plan: p, repo: widget.customerRepo));
+                  },
+                  onDetails: () {
+                    Get.to(() => PlanDetailsScreen(plan: p, customerRepo: widget.customerRepo));
+                  },
+                ),
+              );
+            },
+          ),
         ),
-        itemCount: widget.plans.length,
-        itemBuilder: (context, i, realIndex) {
-          final p = widget.plans[i];
-          return Padding(
-            padding: EdgeInsets.only(
-              left: i == 0 ? 16.w : 8.w,
-              right: i == widget.plans.length - 1 ? 16.w : 8.w,
-            ),
-            child: PlanCardCompact(
-              // image + title
-              imageUrls: p.imageUrls,
-              title: p.title,
-              storeName: p.storeName,
 
-              // payments summary (map your model here)
-              progressPercent: p.progress,                    // 0..100
-              amountPaid: p.amountPaid, // placeholders ok
-              amountRemain: p.amountRemain,
-              cadenceText: p.cadenceText ?? 'Weekly plan',   // Daily / Weekly / Monthly
-              nextDueText: p.nextDue,                         // “Due Fri”
-              nextAmount: p.nextAmount ?? 12500,
+        SizedBox(height: 12.h),
 
-              aspectRatio: _aspect,
-              onPay: () {},
-              onDetails: () {},
-            ),
-          );
-        },
-      ),
+        // 4. The Indicator Row (Only if more than 1 plan)
+        if (widget.plans.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: widget.plans.asMap().entries.map((entry) {
+              return GestureDetector(
+                onTap: () => _controller.animateToPage(entry.key),
+                child: Container(
+                  width: _current == entry.key ? 18.w : 6.w, // Active expands
+                  height: 6.w,
+                  margin: EdgeInsets.symmetric(horizontal: 3.w),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    color: _current == entry.key 
+                        ? const Color(0xFFA54600) // Brand Color
+                        : Colors.grey.shade300,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+      ],
     );
   }
 }

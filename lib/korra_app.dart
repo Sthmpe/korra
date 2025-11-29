@@ -18,6 +18,7 @@ class KorraApp extends StatelessWidget {
         title: 'Korra',
         theme: AppTheme.light(),
         home: Scaffold(
+          resizeToAvoidBottomInset: false,
           body: SafeArea(
             child: Column(
               children: [

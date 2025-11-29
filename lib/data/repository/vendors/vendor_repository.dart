@@ -198,24 +198,18 @@ class VendorRepository {
     }
   }
 
-  // Helper function to check a single collection for the nested email
-  Future<bool> checkCollectionForEmail(
-    String collectionName,
-    String email,
-  ) async {
+  /// Checks if Email exists securely (Works for Vendors OR Customers)
+  Future<bool> checkCollectionForEmail(String collectionName, String email) async {
     try {
-      final snapshot = await db
-          .collection(collectionName)
-          // Use dot notation to access the email field inside the 'owner' map
-          .where('personal.email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      return snapshot.docs.isNotEmpty;
+      final res = await fx.invoke('check_uniqueness', body: {
+        'type': 'email',
+        'value': email,
+        'collection': collectionName,
+      });
+      return res.data['exists'] == true;
     } catch (e) {
-      // Handle potential errors (e.g., permission denied, network issues)
-      debugPrint('Error checking email in $collectionName: $e');
-      return false; // Return false on error to prevent exposing existence
+      debugPrint('Check Email Failed: $e');
+      return false;
     }
   }
 

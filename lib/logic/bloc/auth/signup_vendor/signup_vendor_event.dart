@@ -133,9 +133,49 @@ class VendorConfirmChanged extends SignupVendorEvent {
 }
 class ToggleVendorPassHidden extends SignupVendorEvent {}
 class ToggleVendorConfHidden extends SignupVendorEvent {}
+class TermsAgreementToggled extends SignupVendorEvent {
+  final bool value;
+  TermsAgreementToggled(this.value);
+}
 
 // signup_vendor_event.dart
 class VerifyBvnRequested extends SignupVendorEvent {}
 class VerifyNinRequested extends SignupVendorEvent {}
 class ClearKycError extends SignupVendorEvent {}
+
+// --- Socials Step Events ---
+class InstagramChanged extends SignupVendorEvent {
+  final String value;
+  InstagramChanged(this.value);
+}
+
+class TwitterChanged extends SignupVendorEvent {
+  final String value;
+  TwitterChanged(this.value);
+}
+
+class FacebookChanged extends SignupVendorEvent {
+  final String value;
+  FacebookChanged(this.value);
+}
+
+class TiktokChanged extends SignupVendorEvent {
+  final String value;
+  TiktokChanged(this.value);
+}
+
+class WebsiteChanged extends SignupVendorEvent {
+  final String value;
+  WebsiteChanged(this.value);
+}
+
+class WhatsappGroupChanged extends SignupVendorEvent {
+  final String value;
+  WhatsappGroupChanged(this.value);
+}
+
+class OtherLinkChanged extends SignupVendorEvent {
+  final String value;
+  OtherLinkChanged(this.value);
+}
 

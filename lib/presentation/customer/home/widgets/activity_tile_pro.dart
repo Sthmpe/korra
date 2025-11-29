@@ -1,6 +1,5 @@
 part of 'activity_timeline.dart';
 
-
 class _ActivityTilePro extends StatefulWidget {
   final ActivityItem item;
   final bool isFirst;
@@ -9,8 +8,6 @@ class _ActivityTilePro extends StatefulWidget {
   final void Function(ActivityItem)? onPayNow;
   final void Function(ActivityItem)? onViewPlan;
   final void Function(ActivityItem)? onViewReceipt;
-  final void Function(ActivityItem)? onReviewLink;
-  final void Function(ActivityItem)? onEnableAutopay;
 
   const _ActivityTilePro({
     required this.item,
@@ -19,8 +16,6 @@ class _ActivityTilePro extends StatefulWidget {
     this.onPayNow,
     this.onViewPlan,
     this.onViewReceipt,
-    this.onReviewLink,
-    this.onEnableAutopay,
   });
 
   @override
@@ -30,8 +25,6 @@ class _ActivityTilePro extends StatefulWidget {
 class _ActivityTileProState extends State<_ActivityTilePro>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
-
-  static const _brand = Color(0xFFA54600);
 
   @override
   Widget build(BuildContext context) {
@@ -51,21 +44,27 @@ class _ActivityTileProState extends State<_ActivityTilePro>
                 // rail above
                 if (!widget.isFirst)
                   Positioned(
-                    top: -8.h,
-                    bottom: 24.h,
-                    child: Container(width: 2.w, color: const Color(0xFFE9E5E2)),
+                    top: 0,
+                    bottom: 40.h,
+                    child: Container(
+                      width: 2.w,
+                      color: const Color(0xFFE9E5E2),
+                    ),
                   ),
                 // rail below
                 if (!widget.isLast)
                   Positioned(
-                    top: 24.h,
-                    bottom: -8.h,
-                    child: Container(width: 2.w, color: const Color(0xFFE9E5E2)),
+                    top: 20.h, // Starts from center of icon
+                    bottom: 0,
+                    child: Container(
+                      width: 2.w,
+                      color: const Color(0xFFE9E5E2),
+                    ),
                   ),
-                // node
+                //node
                 Container(
-                  width: 24.w,
-                  height: 24.w,
+                  width: 28.w,
+                  height: 28.w,
                   decoration: BoxDecoration(
                     color: spec.bg,
                     shape: BoxShape.circle,
@@ -80,59 +79,114 @@ class _ActivityTileProState extends State<_ActivityTilePro>
 
           // Bubble
           Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.all(12.r),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16.r),
-                  border: Border.all(color: const Color(0xFFEAE6E2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      widget.item.title,
-                      style: GoogleFonts.inter(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF1B1B1B),
-                      ),
-                    ),
-                    SizedBox(height: 4.h),
+            child: Padding(
+              padding: EdgeInsets.only(left: 8.w),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOut,
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16.r),
+                    border: _expanded
+                        ? Border.all(color: spec.stroke, width: 1.5.sp)
+                        : Border.all(
+                            color: const Color(0xFFEAE6E2),
+                            width: 1.sp,
+                          ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // --- HEADER & TEXT ---
+                      Padding(
+                        padding: EdgeInsets.all(12.r),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.item.title,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                      SizedBox(height: 4.h),
+                                      // THE RICH SUBTITLE (Passed from Repo)
+                                      RichText(
+                                        text: TextSpan(
+                                          children: widget.item.richSubtitle,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
 
-                    // Subtitle/meta
-                    Text(
-                      widget.item.subtitle,
-                      style: GoogleFonts.inter(
-                        fontSize: 12.5.sp,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF5E5E5E),
-                      ),
-                    ),
-
-                    // Actions (expand to reveal)
-                    AnimatedCrossFade(
-                      firstChild: SizedBox(height: 4.h),
-                      secondChild: Padding(
-                        padding: EdgeInsets.only(top: 10.h),
-                        child: Wrap(
-                          spacing: 8.w,
-                          runSpacing: 8.h,
-                          children: _actionsFor(widget.item),
+                                // Right Side: Amount + Time
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    if (widget.item.amountDisplay.isNotEmpty)
+                                      Text(
+                                        widget.item.amountDisplay,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13.sp,
+                                          fontWeight: FontWeight.w700,
+                                          color:
+                                              widget.item.amountDisplay
+                                                  .contains('+')
+                                              ? const Color(0xFF16A34A)
+                                              : const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      _formatTime(widget.item.date),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.sp,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      crossFadeState: _expanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration: const Duration(milliseconds: 160),
-                    ),
-                  ],
+
+                      // --- EXPANDABLE ACTIONS ---
+                      // Actions (expand to reveal)
+                      AnimatedCrossFade(
+                        firstChild: SizedBox(height: 4.h),
+                        secondChild: Padding(
+                          padding: EdgeInsets.fromLTRB(12.r, 0, 12.r, 12.r),
+                          child: Wrap(
+                            spacing: 8.w,
+                            runSpacing: 8.h,
+                            children: _actionsFor(widget.item),
+                          ),
+                        ),
+                        crossFadeState: _expanded
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        duration: const Duration(milliseconds: 160),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -143,38 +197,46 @@ class _ActivityTileProState extends State<_ActivityTilePro>
   }
 
   List<Widget> _actionsFor(ActivityItem a) {
-    switch (a.type) {
-      case ActivityType.payment:
-        return [
-          if (widget.onViewReceipt != null)
-            _primary('View receipt', () => widget.onViewReceipt!(a)),
-          if (widget.onViewPlan != null)
-            _secondary('View plan', () => widget.onViewPlan!(a)),
-        ];
-      case ActivityType.dueSoon:
-        return [
-          if (widget.onPayNow != null)
-            _primary('Pay now', () => widget.onPayNow!(a)),
-          if (widget.onViewPlan != null)
-            _secondary('View plan', () => widget.onViewPlan!(a)),
-        ];
-      case ActivityType.link:
-        return [
-          if (widget.onReviewLink != null)
-            _primary('Review link', () => widget.onReviewLink!(a)),
-        ];
-      case ActivityType.autopay:
-        return [
-          if (widget.onEnableAutopay != null)
-            _primary('Enable AutoPay', () => widget.onEnableAutopay!(a)),
-          if (widget.onViewPlan != null)
-            _secondary('View plan', () => widget.onViewPlan!(a)),
-        ];
-      case ActivityType.expired:
+    // Check if the plan associated with the transaction is completed (Hypothetical field)
+    //final isCompleted = a.type == ActivityType.payment && a.subtitle.contains("towards plan") && a.amountRemaining <= 0;
+
+    switch (a.title) {
+      case 'Reservation Secured':
         return [
           if (widget.onViewPlan != null)
             _primary('View plan', () => widget.onViewPlan!(a)),
+          if (widget.onViewReceipt != null)
+            _secondary('View receipt', () => widget.onViewReceipt!(a)),
         ];
+      case 'Installment Paid':
+        return [
+          if (widget.onViewPlan != null)
+            _primary('View plan', () => widget.onViewPlan!(a)),
+          if (widget.onViewReceipt != null)
+            _secondary('View receipt', () => widget.onViewReceipt!(a)),
+        ];
+      case 'Wallet Top-up':
+        return [
+          if (widget.onViewReceipt != null)
+            _primary('View receipt', () => widget.onViewReceipt!(a)),
+        ];
+      case 'Plan Cancellation Pending':
+        return [
+          if (widget.onViewPlan != null)
+            _secondary('View details', () => widget.onViewPlan!(a)),
+        ];
+      case 'Plan Completed': // Inject this logic after final payment
+        return [
+          if (widget.onViewReceipt != null)
+            _primary(
+              'Start New Plan',
+              () => widget.onViewReceipt!(a),
+            ), // Reusing receipt callback for now
+          if (widget.onViewPlan != null)
+            _secondary('View history', () => widget.onViewPlan!(a)),
+        ];
+      default:
+        return [];
     }
   }
 
@@ -185,21 +247,21 @@ class _ActivityTileProState extends State<_ActivityTilePro>
           icon: Icons.check_rounded,
           fg: Color(0xFF1B5E20),
           bg: Color(0xFFEAF4EC),
-          stroke: Color(0xFFD3E5D7),
+          stroke: Color(0xFFBBF7D0),
         );
       case ActivityType.dueSoon:
         return const _Spec(
-          icon: Icons.warning_amber_rounded,
-          fg: Color(0xFF7A4E00),
-          bg: Color(0xFFFEF4E6),
-          stroke: Color(0xFFF4E2C7),
+          icon: Icons.priority_high_rounded,
+          fg: Color(0xFFA16207),
+          bg: Color(0xFFFEF9C3),
+          stroke: Color(0xFFFEF08A),
         );
       case ActivityType.link:
         return const _Spec(
           icon: Icons.link_rounded,
-          fg: _brand,
-          bg: Color(0xFFF6F1ED),
-          stroke: Color(0xFFEAE6E2),
+          fg: Color(0xFFA54600),
+          bg: Color(0xFFFFF7ED),
+          stroke: Color(0xFFFFEDD5),
         );
       case ActivityType.autopay:
         return const _Spec(
@@ -208,55 +270,76 @@ class _ActivityTileProState extends State<_ActivityTilePro>
           bg: Color(0xFFE8EAF6),
           stroke: Color(0xFFD7DAEC),
         );
-      case ActivityType.expired:
+      default:
         return const _Spec(
-          icon: Icons.timer_off_rounded,
-          fg: Color(0xFF5E5E5E),
-          bg: Color(0xFFF2F2F2),
-          stroke: Color(0xFFE3E3E3),
+          icon: Icons.notifications_none_rounded,
+          fg: Color(0xFF475569),
+          bg: Color(0xFFF1F5F9),
+          stroke: Color(0xFFE2E8F0),
         );
     }
   }
-
-  Widget _primary(String text, VoidCallback onTap) {
-    return SizedBox(
-      height: 36.h,
-      child: FilledButton(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFFA54600),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-          padding: EdgeInsets.symmetric(horizontal: 14.w),
-        ),
-        child: Text(
-          text,
-          style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  Widget _secondary(String text, VoidCallback onTap) {
-    return SizedBox(
-      height: 36.h,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFEAE6E2)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-          padding: EdgeInsets.symmetric(horizontal: 12.w),
-          foregroundColor: const Color(0xFFA54600),
-        ),
-        child: Text(text, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
 }
+
+Widget _primary(String text, VoidCallback onTap) {
+  return SizedBox(
+    height: 36.h,
+    child: FilledButton(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFA54600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 14.w),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 13.sp,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _secondary(String text, VoidCallback onTap) {
+  return SizedBox(
+    height: 36.h,
+    child: OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: Color(0xFFEAE6E2)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 12.w),
+        foregroundColor: const Color(0xFFA54600),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700),
+      ),
+    ),
+  );
+}
+
 
 class _Spec {
   final IconData icon;
   final Color fg;
   final Color bg;
   final Color stroke;
-  const _Spec({required this.icon, required this.fg, required this.bg, required this.stroke});
+  const _Spec({
+    required this.icon,
+    required this.fg,
+    required this.bg,
+    required this.stroke,
+  });
+}
+
+String _formatTime(DateTime dt) {
+  return DateFormat('h:mm a').format(dt);
 }

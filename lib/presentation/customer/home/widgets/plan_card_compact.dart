@@ -1,4 +1,3 @@
-// lib/presentation/customer/home/widgets/plan_card_compact.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,11 +11,11 @@ class PlanCardCompact extends StatelessWidget {
   final int progressPercent; 
   final double amountPaid; 
   final double amountRemain; 
-  final String cadenceText; // e.g. "Weekly plan"
-  final String nextDueText; // e.g. "Due Tue"
+  final String cadenceText; 
+  final String nextDueText; 
   final double? nextAmount; 
 
-  final double aspectRatio; // 4/3
+  final double aspectRatio;
   final VoidCallback onPay;
   final VoidCallback onDetails;
 
@@ -40,179 +39,198 @@ class PlanCardCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFEAE6E2).withOpacity(0.3)),
-      ),
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
+    return GestureDetector(
+      onTap: onDetails,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFEAE6E2).withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.max, // Fill the available height
           children: [
-            // IMAGE — edge to edge + vendor chip + thin progress bar
-            Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: aspectRatio,
-                  child: Image.network(
-                    imageUrls.first,
+            // 1. IMAGE SECTION: Changed to EXPANDED
+            // This takes "all remaining space" so it never pushes content off screen
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand, // Ensures image fills the Expanded area
+                children: [
+                  Image.network(
+                    imageUrls.isNotEmpty ? imageUrls.first : '',
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: const Color(0xFFEAE6E2)),
-                  ),
-                ),
-                Positioned(
-                  left: 10.w,
-                  top: 10.h,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 8.w,
-                      vertical: 4.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.94),
-                      borderRadius: BorderRadius.circular(999.r),
-                      border: Border.all(color: const Color(0xFFEAE6E2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.verified_outlined,
-                          size: 14,
-                          color: _brand,
-                        ),
-                        SizedBox(width: 4.w),
-                        Text(
-                          storeName,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B1B1B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Thin progress bar on the image
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    height: 6.h,
-                    color: const Color(0xFFEDE8E4),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: (progressPercent.clamp(0, 100)) / 100.0,
-                        child: Container(color: _brand),
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => Container(
+                      color: const Color(0xFFF5F5F5),
+                      child: Center(
+                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey.shade400, size: 24.sp),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  
+                  // Vendor Chip
+                  Positioned(
+                    left: 10.w,
+                    top: 10.h,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(20.r),
+                        border: Border.all(color: const Color(0xFFEAE6E2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.verified_rounded, size: 14, color: _brand),
+                          SizedBox(width: 4.w),
+                          Text(
+                            storeName,
+                            style: GoogleFonts.inter(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1B1B1B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // Progress Bar
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      height: 4.h,
+                      color: const Color(0xFFF0F0F0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: (progressPercent.clamp(0, 100)) / 100.0,
+                          child: Container(color: _brand),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
-            // CONTENT
+            // 2. CONTENT SECTION: Static Height (Priority)
+            // This determines how much space is left for the image
             Padding(
-              padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 12.h),
+              padding: EdgeInsets.fromLTRB(12.w, 10.h, 12.w, 12.h), // Reduced top padding slightly
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // Hug content
                 children: [
-                  // Title
                   Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w700,
                       color: const Color(0xFF1B1B1B),
+                      height: 1.2,
                     ),
                   ),
-                  SizedBox(height: 8.h),
+                  SizedBox(height: 8.h), // Reduced gap slightly
 
-                  // Cadence chip + next due / amount
+                  // Cadence + Pay Button
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8.w,
-                              vertical: 4.h,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF6F1ED),
-                              borderRadius: BorderRadius.circular(999.r),
-                              border: Border.all(
-                                color: const Color(0xFFEAE6E2),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFDF8F6),
+                                borderRadius: BorderRadius.circular(6.r),
                               ),
+                              child: Text(
+                                cadenceText,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: _brand,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              nextDueText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF5E5E5E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      SizedBox(width: 8.w),
+                      
+                      GestureDetector(
+                        onTap: onPay,
+                        child: SizedBox(
+                          height: 36.h,
+                          child: FilledButton(
+                            onPressed: onPay,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _brand,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.r),
+                              ),
+                              padding: EdgeInsets.symmetric(horizontal: 16.w),
+                              elevation: 0,
                             ),
                             child: Text(
-                              cadenceText,
+                              'Pay',
                               style: GoogleFonts.inter(
-                                fontSize: 12.sp,
+                                fontSize: 13.sp,
                                 fontWeight: FontWeight.w700,
-                                color: _brand,
+                                color: Colors.white,
                               ),
-                            ),
-                          ),
-                          SizedBox(height: 8.h),
-                          Text(
-                            '$nextDueText • ${formatToCurrency(nextAmount as num)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF5E5E5E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Spacer(),
-                      SizedBox(
-                        height: 40.h,
-                        child: FilledButton(
-                          onPressed: onPay,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _brand,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14.r),
-                            ),
-                            padding: EdgeInsets.symmetric(horizontal: 18.w),
-                          ),
-                          child: Text(
-                            'Pay',
-                            style: GoogleFonts.inter(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
                             ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 10.h),
+                  
+                  SizedBox(height: 10.h), // Reduced gap slightly
 
-                  // Stats strip: Paid | Remaining (compact “receipt” look)
+                  // Stats Strip
                   Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12.w,
-                      vertical: 10.h,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h), // Tighter padding
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFAF7F4),
+                      color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: const Color(0xFFEAE6E2)),
                     ),
                     child: Row(
                       children: [
@@ -232,6 +250,7 @@ class PlanCardCompact extends StatelessWidget {
   }
 }
 
+// Helpers remain unchanged
 class _Stat extends StatelessWidget {
   final String label;
   final String value;
@@ -245,22 +264,14 @@ class _Stat extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF7A7A7A),
-            ),
+            style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
           ),
           SizedBox(height: 2.h),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF1B1B1B),
-            ),
+            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF1B1B1B)),
           ),
         ],
       ),
@@ -272,15 +283,8 @@ class _DividerDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10.w),
-      child: Container(
-        width: 4.w,
-        height: 4.w,
-        decoration: const BoxDecoration(
-          color: Color(0xFFD4CBC5),
-          shape: BoxShape.circle,
-        ),
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 12.w),
+      child: Container(width: 1.w, height: 24.h, color: Colors.grey.shade300),
     );
   }
 }

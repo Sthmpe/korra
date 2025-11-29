@@ -9,52 +9,66 @@ class LoginHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // final titleStyle = GoogleFonts.inter(
-    //   fontSize: 20.sp, // moderate
-    //   fontWeight: FontWeight.w800,
-    // );
-    final subtitleStyle = GoogleFonts.inter(
-      fontSize: 14.sp,
-      color: Colors.black54,
-      height: 1.35,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: Column(
-            children: [
-              // Rounded square behind crown logo
-              Container(
-                padding: EdgeInsets.all(10.r),
-                decoration: BoxDecoration(
-                  color: KorraColors.brand.withOpacity(1),
-                  borderRadius: BorderRadius.circular(12.r), // rounded box
-                ),
-                child: Icon(
-                  MdiIcons.crown,
-                  color: Colors.white,
-                  size: 40.sp, // moderate
-                ),
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.only(top: 20.h),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // --- LOGO WITH GLOW ---
+            Container(
+              padding: EdgeInsets.all(14.r),
+              decoration: BoxDecoration(
+                color: KorraColors.brand,
+                borderRadius: BorderRadius.circular(20.r), // Softer, modern radius
+                boxShadow: [
+                  BoxShadow(
+                    color: KorraColors.brand.withOpacity(0.3), // The "Glow"
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                    spreadRadius: -4,
+                  ),
+                ],
               ),
-              SizedBox(height: 10.h),
-              Text(
-                'Korra',
-                style: GoogleFonts.inter(
-                  fontSize: 28.sp,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Icon(
+                MdiIcons.crown,
+                color: Colors.white,
+                size: 36.sp,
               ),
-              SizedBox(height: 6.h),
-              Text(
+            ),
+            
+            SizedBox(height: 20.h),
+            
+            // --- BRAND NAME ---
+            Text(
+              'Korra',
+              style: GoogleFonts.inter(
+                fontSize: 30.sp,
+                fontWeight: FontWeight.w800, // Extra Bold for impact
+                color: const Color(0xFF111111), // Almost black
+                letterSpacing: -1.0, // Tight tracking looks more professional
+              ),
+            ),
+            
+            SizedBox(height: 8.h),
+            
+            // --- SUBTITLE ---
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 35.w), // Prevent edge touching on small screens
+              child: Text(
                 'Reserve now — pay in parts, own with ease.',
-                style: subtitleStyle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14.5.sp,
+                  color: const Color(0xFF666666), // Premium Grey
+                  height: 1.4, // Relaxed line height
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

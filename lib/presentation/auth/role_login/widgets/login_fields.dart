@@ -6,9 +6,8 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:korra/presentation/auth/forgot_password/forgot_password_screen.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
-// import '../../../../config/constants/sizes.dart';
+import '../../../../config/constants/colors.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -30,6 +29,10 @@ class LoginFields extends StatefulWidget {
 class _LoginFieldsState extends State<LoginFields> {
   late final TextEditingController _emailCtl;
   late final TextEditingController _passCtl;
+  
+  // Focus nodes to handle the "Pop" animation
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passFocus = FocusNode();
 
   @override
   void initState() {
@@ -37,18 +40,17 @@ class _LoginFieldsState extends State<LoginFields> {
     final s = context.read<RoleLoginBloc>().state;
     _emailCtl = TextEditingController(text: s.email);
     _passCtl = TextEditingController(text: s.password);
-    _emailCtl.addListener(
-      () => context.read<RoleLoginBloc>().add(EmailChanged(_emailCtl.text)),
-    );
-    _passCtl.addListener(
-      () => context.read<RoleLoginBloc>().add(PasswordChanged(_passCtl.text)),
-    );
+    
+    _emailCtl.addListener(() => context.read<RoleLoginBloc>().add(EmailChanged(_emailCtl.text)));
+    _passCtl.addListener(() => context.read<RoleLoginBloc>().add(PasswordChanged(_passCtl.text)));
   }
 
   @override
   void dispose() {
     _emailCtl.dispose();
     _passCtl.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
     super.dispose();
   }
 
@@ -70,14 +72,12 @@ class _LoginFieldsState extends State<LoginFields> {
     final role = context.read<RoleLoginBloc>().state.role;
     if (role == KorraRole.customer) {
       Get.to(() => BlocProvider(
-        create:(_) => SignupCustomerBloc()..add(SignupCustomerInit()),
-        child: const SignupCustomerScreen()
-      ));
+          create: (_) => SignupCustomerBloc()..add(SignupCustomerInit()),
+          child: const SignupCustomerScreen()));
     } else {
       Get.to(() => BlocProvider(
           create: (_) => SignupVendorBloc()..add(SignupVendorInit()),
-          child: const SignupVendorScreen(showLeadingIcon: false)
-        ));
+          child: const SignupVendorScreen(showLeadingIcon: false)));
     }
   }
 
@@ -88,59 +88,52 @@ class _LoginFieldsState extends State<LoginFields> {
       autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         children: [
-          TextFormField(
+          // --- EMAIL FIELD ---
+          _PremiumInput(
             controller: _emailCtl,
-            keyboardType: TextInputType.emailAddress,
-            style: GoogleFonts.inter(fontSize: 13.5.sp),
-            autofillHints: const [AutofillHints.username, AutofillHints.email],
-            decoration: InputDecoration(
-              labelText: 'Email address',
-              labelStyle: GoogleFonts.inter(fontSize: 13.5.sp),
-              prefixIcon: Icon(Iconsax.sms, size: 18.sp),
-              errorStyle: GoogleFonts.inter(fontSize: 12.sp),
-            ),
+            focusNode: _emailFocus,
+            hint: 'Email address',
+            icon: Iconsax.sms,
+            inputType: TextInputType.emailAddress,
+            autofill: const [AutofillHints.email],
             validator: _validateEmail,
-            textInputAction: TextInputAction.next,
+            onSubmitted: (_) {
+              FocusScope.of(context).requestFocus(_passFocus);
+            },
           ),
-          SizedBox(height: 12.h),
+          
+          SizedBox(height: 16.h),
 
+          // --- PASSWORD FIELD ---
           BlocBuilder<RoleLoginBloc, RoleLoginState>(
             buildWhen: (p, c) => p.passwordHidden != c.passwordHidden,
             builder: (context, state) {
-              return TextFormField(
+              return _PremiumInput(
                 controller: _passCtl,
+                focusNode: _passFocus,
+                hint: 'Password',
+                icon: Iconsax.lock,
+                isPassword: true,
                 obscureText: state.passwordHidden,
-                autofillHints: const [AutofillHints.password],
-                style: GoogleFonts.inter(fontSize: 13.5.sp),
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: GoogleFonts.inter(fontSize: 13.5.sp),
-                  prefixIcon: Icon(MdiIcons.lockOutline, size: 18.sp),
-                  errorStyle: GoogleFonts.inter(fontSize: 12.sp),
-                  suffixIcon: IconButton(
-                    splashRadius: 20,
-                    onPressed: () => context.read<RoleLoginBloc>().add(
-                      TogglePasswordVisibility(),
-                    ),
-                    icon: Icon(
-                      state.passwordHidden ? Iconsax.eye_slash : Iconsax.eye,
-                      size: 18.sp,
-                    ),
-                  ),
-                ),
+                autofill: const [AutofillHints.password],
                 validator: _validatePassword,
-                onFieldSubmitted: (_) {
-                  HapticFeedback.selectionClick();
+                onTogglePass: () => context.read<RoleLoginBloc>().add(TogglePasswordVisibility()),
+                onSubmitted: (_) {
                   FocusScope.of(context).unfocus();
+                  // Trigger login submit here if you want "Enter" to log in
                 },
               );
             },
           ),
 
+          SizedBox(height: 24.h),
+
+          // --- BOTTOM LINKS ---
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              TextButton(
-                onPressed: () {
+              GestureDetector(
+                onTap: () {
                   FocusScope.of(context).unfocus();
                   Get.to(() => const ForgotPasswordScreen());
                 },
@@ -149,23 +142,189 @@ class _LoginFieldsState extends State<LoginFields> {
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
                     fontSize: 13.5.sp,
+                    color: KorraColors.textMuted, // Muted for secondary action
                   ),
                 ),
               ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => _goToCreateAccount(context),
+              
+              GestureDetector(
+                onTap: () => _goToCreateAccount(context),
                 child: Text(
                   'Create account',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: 13.5.sp,
+                    color: KorraColors.brand, // Brand color for primary call
                   ),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// THE PREMIUM INPUT COMPONENT
+// -----------------------------------------------------------------------------
+class _PremiumInput extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String hint;
+  final IconData icon;
+  final TextInputType? inputType;
+  final Iterable<String>? autofill;
+  final bool isPassword;
+  final bool obscureText;
+  final VoidCallback? onTogglePass;
+  final String? Function(String?)? validator;
+  final void Function(String)? onSubmitted;
+
+  const _PremiumInput({
+    required this.controller,
+    required this.focusNode,
+    required this.hint,
+    required this.icon,
+    this.inputType,
+    this.autofill,
+    this.isPassword = false,
+    this.obscureText = false,
+    this.onTogglePass,
+    this.validator,
+    this.onSubmitted,
+  });
+
+  @override
+  State<_PremiumInput> createState() => _PremiumInputState();
+}
+
+class _PremiumInputState extends State<_PremiumInput> {
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_handleFocus);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_handleFocus);
+    super.dispose();
+  }
+
+  void _handleFocus() {
+    setState(() {
+      _isFocused = widget.focusNode.hasFocus;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        // iOS Style: Grey fill normally, White fill when active
+        color: _isFocused ? Colors.white : const Color(0xFFF2F2F7),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: _isFocused ? KorraColors.brand : Colors.transparent,
+          width: 1,
+        ),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: KorraColors.brand.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : [],
+      ),
+      child: TextFormField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        keyboardType: widget.inputType,
+        autofillHints: widget.autofill,
+        obscureText: widget.obscureText,
+        onFieldSubmitted: (v) {
+          HapticFeedback.selectionClick();
+          widget.onSubmitted?.call(v);
+        },
+        style: GoogleFonts.inter(
+          fontSize: 15.sp,
+          fontWeight: FontWeight.w600, // Slightly bold input
+          color: const Color(0xFF1B1B1B),
+        ),
+        cursorColor: KorraColors.brand,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: widget.hint,
+          hintStyle: GoogleFonts.inter(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF9CA3AF), // Cool Grey
+          ),
+          prefixIcon: Icon(
+            widget.icon,
+            size: 20.sp,
+            color: _isFocused ? KorraColors.brand : const Color(0xFF9CA3AF),
+          ),
+          prefixIconConstraints: BoxConstraints(minWidth: 48.w),
+          
+          suffixIcon: widget.isPassword
+              ? IconButton(
+                  splashRadius: 20,
+                  onPressed: widget.onTogglePass,
+                  icon: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      widget.obscureText ? Iconsax.eye : Iconsax.eye_slash,
+                      key: ValueKey(widget.obscureText),
+                      size: 20.sp,
+                      color: const Color(0xFF9CA3AF),
+                    ),
+                  ),
+                )
+              : null,
+          
+          border: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(16.r), 
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16.w,
+                vertical: 14.h,
+              ),
+
+          
+          // Handle error state visually inside the container
+          errorStyle: GoogleFonts.inter(
+            fontSize: 12.sp,
+            color: Colors.red.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        validator: widget.validator,
       ),
     );
   }

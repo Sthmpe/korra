@@ -1,6 +1,39 @@
+import 'package:flutter/foundation.dart';
+
 import 'vendor_repository.dart';
 
 extension VerificationRepository on VendorRepository {
+  /// Checks if a specific Identity Number (NIN or BVN) already exists.
+  /// Returns true if it exists (Duplicate found), false if safe to use.
+  Future<bool> checkIdentityExists({String? nin, String? bvn}) async {
+    try {
+      if (nin != null) {
+        final snapshot = await db
+            .collection('vendors') 
+            .where('kyc.nin', isEqualTo: nin)
+            .limit(1)
+            .get();
+        if (snapshot.docs.isNotEmpty) return true;
+      }
+
+      if (bvn != null) {
+        final snapshot = await db
+            .collection('vendors')
+            .where('kyc.bvn', isEqualTo: bvn)
+            .limit(1)
+            .get();
+        if (snapshot.docs.isNotEmpty) return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking identity uniqueness: $e');
+      // If DB fails, strictly block to be safe, or allow with warning depending on risk appetite.
+      // Blocking is safer for fraud prevention.
+      throw Exception('Could not verify identity uniqueness. Please try again.');
+    }
+  }
+
   /// Verify NIN through Monnify
   Future<void> verifyNin(String nin) async {
     try {

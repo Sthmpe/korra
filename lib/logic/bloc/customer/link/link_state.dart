@@ -3,7 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../../../data/models/customer/plans.dart';
 
 
-enum LinkStatus { idle, loadingProduct, loaded, validating, valid, invalid, creating, success, failure }
+enum LinkStatus { idle, loadingProduct, loaded, validating, valid, needTopup, invalid, empty, failed, creating, success, failure }
 
 class LinkState extends Equatable {
   final LinkStatus status;

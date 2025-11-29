@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,13 +13,15 @@ void showKorraFailureSheetCustomer(
   required String message,
   VoidCallback? onRetry,
   VoidCallback? onCancel,
+  bool isDismissible = false,
 }) {
+  HapticFeedback.lightImpact(); // Subtle haptic on error
   showModalBottomSheet(
+    isDismissible: isDismissible,
+    enableDrag: isDismissible,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    isDismissible: false,
-    enableDrag: false,
     builder: (ctx) => _KorraFailureSheetCustomer(
       title: title,
       message: message,
@@ -27,7 +30,6 @@ void showKorraFailureSheetCustomer(
     ),
   );
 }
-
 
 class _KorraFailureSheetCustomer extends StatelessWidget {
   final String title;
@@ -47,148 +49,172 @@ class _KorraFailureSheetCustomer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 20.h),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: 2,
+          )
+        ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle Bar
-          Container(
-            width: 40.w,
-            height: 4.h,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAE6E2),
-              borderRadius: BorderRadius.circular(2.r),
+      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 24.h),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // --- HANDLE BAR ---
+            Center(
+              child: Container(
+                width: 40.w,
+                height: 4.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0E0E0),
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              ),
             ),
-          ),
-          SizedBox(height: 24.h),
+            SizedBox(height: 32.h),
 
-          // Icon
-          Icon(
-            Iconsax.warning_2,
-            size: 36.sp,
-            color: KorraColors.danger,
-          ),
-          SizedBox(height: 16.h),
-
-          // Title
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 18.sp,
-              fontWeight: FontWeight.w700,
-              color: KorraColors.text,
+            // --- ICON WITH SOFT BACKGROUND ---
+            Container(
+              width: 64.w,
+              height: 64.w,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2), // Soft Red Background
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Iconsax.warning_2,
+                size: 32.sp,
+                color: const Color(0xFFDC2626), // Deep Red
+              ),
             ),
-          ),
-          SizedBox(height: 8.h),
+            SizedBox(height: 24.h),
 
-          // Message
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 14.sp,
-              height: 1.5,
-              color: KorraColors.textMuted,
+            // --- TITLE ---
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 20.sp,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111111), // Almost Black
+                letterSpacing: -0.5,
+              ),
             ),
-          ),
-          SizedBox(height: 24.h),
+            SizedBox(height: 12.h),
 
-          // Buttons
-          if (hasRetry) ...[
-            Row(
-              children: [
-                // Cancel
-                Expanded(
-                  child: SizedBox(
-                    height: 52.h,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        onCancel?.call();
-                        Get.back();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14.r),
+            // --- MESSAGE ---
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15.sp,
+                height: 1.5,
+                color: const Color(0xFF666666), // Modern Grey
+              ),
+            ),
+            SizedBox(height: 32.h),
+
+            // --- BUTTONS ---
+            if (hasRetry) ...[
+              Row(
+                children: [
+                  // Cancel (Soft Grey Button - iOS Style)
+                  Expanded(
+                    child: SizedBox(
+                      height: 56.h,
+                      child: TextButton(
+                        onPressed: () {
+                          Get.back();
+                          onCancel?.call();
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFFF2F2F7), // iOS Secondary Fill
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.r),
+                          ),
                         ),
-                        side: BorderSide(color: KorraColors.border),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.inter(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
-                          color: KorraColors.textMuted,
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                SizedBox(width: 12.w),
+                  
+                  SizedBox(width: 16.w),
 
-                // Try Again
-                Expanded(
-                  child: SizedBox(
-                    height: 52.h,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Get.back();
-                        onRetry?.call();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: KorraColors.brand,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14.r),
+                  // Retry (Brand Primary)
+                  Expanded(
+                    child: SizedBox(
+                      height: 56.h,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Get.back();
+                          onRetry?.call();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: KorraColors.brand,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.r),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        "Try Again",
-                        style: GoogleFonts.inter(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                        child: Text(
+                          "Try Again",
+                          style: GoogleFonts.inter(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            )
-          ] else ...[
-            // Only Dismiss Button
-            SizedBox(
-              width: double.infinity,
-              height: 52.h,
-              child: ElevatedButton(
-                onPressed: () {
-                  onCancel?.call();
-                  Get.back();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: KorraColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14.r),
+                ],
+              )
+            ] else ...[
+              // Dismiss Only (Full Width)
+              SizedBox(
+                width: double.infinity,
+                height: 56.h,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Get.back();
+                    onCancel?.call();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF2F2F7), // Soft Grey
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
                   ),
-                ),
-                child: Text(
-                  "Dismiss",
-                  style: GoogleFonts.inter(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w700,
-                    color: KorraColors.textMuted,
+                  child: Text(
+                    "Dismiss",
+                    style: GoogleFonts.inter(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
                   ),
                 ),
               ),
-            )
+            ],
+            
+            SizedBox(height: 12.h), // Bottom padding
           ],
-
-          SizedBox(height: 16.h),
-        ],
+        ),
       ),
     );
   }

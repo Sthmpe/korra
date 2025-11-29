@@ -2,21 +2,26 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:korra/data/repository/customer/verification_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../config/utils/korra_exception.dart';
 import 'signup_customer_event.dart';
 import 'signup_customer_state.dart';
 
 typedef Emit = Emitter<SignupCustomerState>;
 
-class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> {
+class SignupCustomerBloc
+    extends Bloc<SignupCustomerEvent, SignupCustomerState> {
   // Gateways
   final CustomerRepository _customerRepo;
   final FunctionsClient fx;
 
-  SignupCustomerBloc({CustomerRepository? customerRepo, FunctionsClient? functions}) 
-    : _customerRepo = customerRepo ?? CustomerRepository(),
-      fx = functions ?? Supabase.instance.client.functions,
-      super(const SignupCustomerState()) {
+  SignupCustomerBloc({
+    CustomerRepository? customerRepo,
+    FunctionsClient? functions,
+  }) : _customerRepo = customerRepo ?? CustomerRepository(),
+       fx = functions ?? Supabase.instance.client.functions,
+       super(const SignupCustomerState()) {
     on<SignupCustomerInit>(_onInit);
     on<SignupCustomerNextPressed>(_onNext);
     on<SignupCustomerBackPressed>(_onBack);
@@ -37,11 +42,15 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
 
     // step 3
     on<PasswordChangedCU>((e, emit) => emit(state.copyWith(password: e.value)));
-    on<ConfirmPasswordChangedCU>((e, emit) => emit(state.copyWith(confirm: e.value)));
-    on<TogglePasswordVisibilityCU>((e, emit) =>
-        emit(state.copyWith(hidePassword: !state.hidePassword)));
-    on<ToggleConfirmVisibilityCU>((e, emit) =>
-        emit(state.copyWith(hideConfirm: !state.hideConfirm)));
+    on<ConfirmPasswordChangedCU>(
+      (e, emit) => emit(state.copyWith(confirm: e.value)),
+    );
+    on<TogglePasswordVisibilityCU>(
+      (e, emit) => emit(state.copyWith(hidePassword: !state.hidePassword)),
+    );
+    on<ToggleConfirmVisibilityCU>(
+      (e, emit) => emit(state.copyWith(hideConfirm: !state.hideConfirm)),
+    );
 
     // KYC (explicit triggers if you keep standalone Verify buttons)
     on<VerifyBvnRequested>(_onVerifyBvn);
@@ -49,20 +58,49 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
     on<ClearKycError>((_, emit) => emit(state.copyWith(kycError: null)));
   }
 
-  Future<void> _onSubmit(SignupCustomerSubmitPressed e, Emitter<SignupCustomerState> emit) async {
+  Future<void> _onSubmit(
+    SignupCustomerSubmitPressed e,
+    Emitter<SignupCustomerState> emit,
+  ) async {
     if (!state.ninVerified || !state.bvnVerified) {
-      emit(state.copyWith(signUpError: 'Please verify both NIN and BVN first.', status: SignupStatus.failure));
+      emit(
+        state.copyWith(
+          signUpError: 'Please verify both NIN and BVN first.',
+          status: SignupStatus.failure,
+        ),
+      );
       return;
     }
 
-    emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
+    emit(
+      state.copyWith(
+        loading: true,
+        signUpError: null,
+        status: SignupStatus.loading,
+      ),
+    );
     try {
       final uid = await _customerRepo.createCustomerFromState(state);
 
-      emit(state.copyWith(loading: false, status: SignupStatus.success, uid: uid));
+      emit(
+        state.copyWith(loading: false, status: SignupStatus.success, uid: uid),
+      );
     } catch (error) {
-      debugPrint('Error submitting customer: $error');
-      emit(state.copyWith(loading: false, signUpError: error.toString(), status: SignupStatus.failure));
+      debugPrint('❌ Error submitting customer (Technical): $error');
+
+      // Use the professional message if it's a KorraException, otherwise generic.
+      String userMessage = 'Account setup failed. Please try again.';
+      if (error is KorraException) {
+        userMessage = error.message;
+      }
+
+      emit(
+        state.copyWith(
+          loading: false,
+          signUpError: userMessage,
+          status: SignupStatus.failure,
+        ),
+      );
     }
   }
 
@@ -75,61 +113,79 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
   ) async {
     final email = event.value.trim();
 
-    emit(state.copyWith(emailChecking: true, emailError: null, emailUnused: false));
-    
+    emit(
+      state.copyWith(emailChecking: true, emailError: null, emailUnused: false),
+    );
+
     if (email.isEmpty) {
-      emit(state.copyWith(
-        emailChecking: false,
-        emailError: 'Email is required',
-        emailUnused: false,
-      ));
+      emit(
+        state.copyWith(
+          emailChecking: false,
+          emailError: 'Email is required',
+          emailUnused: false,
+        ),
+      );
       return;
     }
 
     final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
 
-
     debugPrint("Reg result bloc: $ok");
-    debugPrint("Reg result inline: ${RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)}");
+    debugPrint(
+      "Reg result inline: ${RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)}",
+    );
 
     if (!ok) {
-      emit(state.copyWith(
-        emailChecking: false,
-        emailError: 'Enter a valid email',
-        emailUnused: false
-      ));
+      emit(
+        state.copyWith(
+          emailChecking: false,
+          emailError: 'Enter a valid email',
+          emailUnused: false,
+        ),
+      );
       return;
     }
 
     try {
-      final existsInVendors = await _customerRepo.checkCollectionForEmail('vendors', email);
-      final existsInCustomer = await _customerRepo.checkCollectionForEmail('customer', email);
+      final existsInVendors = await _customerRepo.checkCollectionForEmail(
+        'vendors',
+        email,
+      );
+      final existsInCustomer = await _customerRepo.checkCollectionForEmail(
+        'customer',
+        email,
+      );
       debugPrint("Email exist in customer: $existsInCustomer");
       debugPrint("Email exist in vendors: $existsInVendors");
       if (existsInCustomer || existsInVendors) {
-        emit(state.copyWith(
-          emailChecking: false,
-          emailUnused: false,
-          emailError: 'Email is already in use.',
-        ));
+        emit(
+          state.copyWith(
+            emailChecking: false,
+            emailUnused: false,
+            emailError: 'Email is already in use.',
+          ),
+        );
       } else {
         debugPrint("Email exist false: ${existsInCustomer || existsInVendors}");
-        emit(state.copyWith(
-          email: email,
-          emailChecking: false,
-          emailUnused: email.isEmpty ? false : true,
-          emailError: null,
-        ));
+        emit(
+          state.copyWith(
+            email: email,
+            emailChecking: false,
+            emailUnused: email.isEmpty ? false : true,
+            emailError: null,
+          ),
+        );
       }
     } catch (e) {
-      emit(state.copyWith(
-        emailChecking: false,
-        emailUnused: false,
-        emailError: 'Error checking email.',
-      ));
+      emit(
+        state.copyWith(
+          emailChecking: false,
+          emailUnused: false,
+          emailError: 'Error checking email.',
+        ),
+      );
     }
   }
-
 
   void _onBack(SignupCustomerBackPressed event, Emit emit) {
     final prev = (state.pageIndex - 1).clamp(0, state.totalPages - 1);
@@ -146,16 +202,24 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
       return;
     }
 
-    final ninNeedsVerification = !(state.ninVerified && state.lastVerifiedNin == state.nin);
-    final bvnNeedsVerification = !(state.bvnVerified && state.lastVerifiedBvn == state.bvn);
+    final ninNeedsVerification =
+        !(state.ninVerified && state.lastVerifiedNin == state.nin);
+    final bvnNeedsVerification =
+        !(state.bvnVerified && state.lastVerifiedBvn == state.bvn);
 
     if (!ninNeedsVerification && !bvnNeedsVerification) {
       emit(state.copyWith(pageIndex: next));
       return;
     }
 
-    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
-      emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
+    if (state.firstName.isEmpty ||
+        state.lastName.isEmpty ||
+        state.dob == null) {
+      emit(
+        state.copyWith(
+          kycError: 'Fill first name, last name, and date of birth.',
+        ),
+      );
       return;
     }
     if (ninNeedsVerification && state.nin.trim().length != 11) {
@@ -168,80 +232,148 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
     }
 
     try {
+      // --- 1. FRAUD CHECK (UNIQUENESS) ---
+      // We check DB before calling external APIs to save money and prevent duplicates.
+
       if (ninNeedsVerification) {
-        emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
-        
-        // await vendors.verifyNin(state.nin.trim());
-        emit(state.copyWith(
-          ninVerifying: false,
-          ninVerified: true,
-          lastVerifiedNin: state.nin.trim(),
-        ));
+        emit(
+          state.copyWith(ninVerifying: true, ninError: null, kycError: null),
+        );
+
+        final ninExists = await _customerRepo.checkIdentityExists(
+          nin: state.nin.trim(),
+        );
+        if (ninExists) {
+          emit(
+            state.copyWith(
+              ninVerifying: false,
+              ninError:
+                  'This NIN is linked to another account.', // Fraud Message
+            ),
+          );
+          return; // Stop here
+        }
       }
 
       if (bvnNeedsVerification) {
-        emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
-        // final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
+        emit(
+          state.copyWith(bvnVerifying: true, bvnError: null, kycError: null),
+        );
+
+        final bvnExists = await _customerRepo.checkIdentityExists(
+          bvn: state.bvn.trim(),
+        );
+        if (bvnExists) {
+          emit(
+            state.copyWith(
+              bvnVerifying: false,
+              bvnError:
+                  'This BVN is linked to another account.', // Fraud Message
+            ),
+          );
+          return; // Stop here
+        }
+      }
+
+      if (ninNeedsVerification) {
+        emit(
+          state.copyWith(ninVerifying: true, ninError: null, kycError: null),
+        );
+
+        //await _customerRepo.verifyNin(state.nin.trim());
+        emit(
+          state.copyWith(
+            ninVerifying: false,
+            ninVerified: true,
+            lastVerifiedNin: state.nin.trim(),
+          ),
+        );
+      }
+
+      if (bvnNeedsVerification) {
+        emit(
+          state.copyWith(bvnVerifying: true, bvnError: null, kycError: null),
+        );
+        //final fullName = '${state.firstName} ${state.lastName}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
-        // final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
+        //final localPhone = _normalizeNigerianMsisdn(state.phone);
 
         if (dobForBvn == null) {
           emit(state.copyWith(kycError: 'Date of birth is missing'));
           return;
         }
 
-        // await vendors.verifyBvn(
+        // await _customerRepo.verifyBvn(
         //   bvn: state.bvn.trim(),
         //   name: fullName,
         //   dateOfBirthIso: dobForBvn,
         //   mobileNo: localPhone,
         // );
-        emit(state.copyWith(
-          bvnVerifying: false,
-          bvnVerified: true,
-          lastVerifiedBvn: state.bvn.trim(),
-        ));
+        emit(
+          state.copyWith(
+            bvnVerifying: false,
+            bvnVerified: true,
+            lastVerifiedBvn: state.bvn.trim(),
+          ),
+        );
       }
 
       emit(state.copyWith(pageIndex: next));
     } catch (error) {
-      debugPrint('Error during KYC verification: $error');
+      debugPrint('❌ Error during KYC verification (Technical): $error');
+
+      // Use professional message
+      String userMessage =
+          'Identity verification failed. Please check your data.';
+      if (error is KorraException) {
+        userMessage = error.message;
+      }
+
+      // Set the clean user message to the appropriate field:
       if (state.ninVerifying) {
-        emit(state.copyWith(
-          ninVerifying: false,
-          ninVerified: false,
-          ninError: error.toString(),
-        ));
+        emit(
+          state.copyWith(
+            ninVerifying: false,
+            ninVerified: false,
+            ninError: userMessage,
+          ),
+        );
       } else if (state.bvnVerifying) {
-        emit(state.copyWith(
-          bvnVerifying: false,
-          bvnVerified: false,
-          bvnError: error.toString(),
-        ));
+        emit(
+          state.copyWith(
+            bvnVerifying: false,
+            bvnVerified: false,
+            bvnError: userMessage,
+          ),
+        );
       } else {
-        emit(state.copyWith(kycError: error.toString()));
+        emit(state.copyWith(kycError: userMessage));
       }
     }
   }
 
   void _onNinChanged(NinChanged event, Emit emit) {
     final changed = event.value != state.nin;
-    emit(state.copyWith(
-      nin: event.value,
-      ninError: null,
-      ninVerified: changed ? false : state.ninVerified,
-      lastVerifiedNin: changed ? null : state.lastVerifiedNin,
-    ));
+    emit(
+      state.copyWith(
+        nin: event.value,
+        ninError: null,
+        ninVerified: changed ? false : state.ninVerified,
+        lastVerifiedNin: changed ? null : state.lastVerifiedNin,
+      ),
+    );
   }
 
   void _onBvnChanged(BvnChanged event, Emit emit) {
     final changed = event.value != state.bvn;
-    emit(state.copyWith(
-      bvn: event.value,
-      bvnError: null,
-      bvnVerified: changed ? false : state.bvnVerified,
-      lastVerifiedBvn: changed ? null : state.lastVerifiedBvn,
-    ));
+    emit(
+      state.copyWith(
+        bvn: event.value,
+        bvnError: null,
+        bvnVerified: changed ? false : state.bvnVerified,
+        lastVerifiedBvn: changed ? null : state.lastVerifiedBvn,
+      ),
+    );
   }
 
   // ── Optional explicit KYC triggers (if you keep buttons) ───────────────────
@@ -250,26 +382,36 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
       emit(state.copyWith(kycError: 'Enter NIN'));
       return;
     }
-    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
-      emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
+    if (state.firstName.isEmpty ||
+        state.lastName.isEmpty ||
+        state.dob == null) {
+      emit(
+        state.copyWith(
+          kycError: 'Fill first name, last name, and date of birth.',
+        ),
+      );
       return;
     }
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      // await vendors.verifyNin(state.nin.trim());
-      emit(state.copyWith(
-        ninVerifying: false,
-        ninVerified: true,
-        lastVerifiedNin: state.nin.trim(),
-      ));
+      // await _customerRepo.verifyNin(state.nin.trim());
+      emit(
+        state.copyWith(
+          ninVerifying: false,
+          ninVerified: true,
+          lastVerifiedNin: state.nin.trim(),
+        ),
+      );
     } catch (error) {
       debugPrint('Error verifying NIN: $error');
-      emit(state.copyWith(
-        ninVerifying: false,
-        ninVerified: false,
-        kycError: error.toString(),
-      ));
+      emit(
+        state.copyWith(
+          ninVerifying: false,
+          ninVerified: false,
+          kycError: error.toString(),
+        ),
+      );
     }
   }
 
@@ -278,43 +420,52 @@ class SignupCustomerBloc extends Bloc<SignupCustomerEvent, SignupCustomerState> 
       emit(state.copyWith(kycError: 'Enter BVN'));
       return;
     }
-    if (state.firstName.isEmpty || state.lastName.isEmpty || state.dob == null) {
-      emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
+    if (state.firstName.isEmpty ||
+        state.lastName.isEmpty ||
+        state.dob == null) {
+      emit(
+        state.copyWith(
+          kycError: 'Fill first name, last name, and date of birth.',
+        ),
+      );
       return;
     }
 
     emit(state.copyWith(bvnVerifying: true, kycError: null));
     try {
-      final fullName = '${state.firstName} ${state.lastName}'.trim();
+      //final fullName = '${state.firstName} ${state.lastName}'.trim();
       final dobIso = _formatDobForBvn(state.dob);
-      final localPhone = _normalizeNigerianMsisdn(state.phone);
+      // final localPhone = _normalizeNigerianMsisdn(state.phone);
 
       if (dobIso == null) {
         emit(state.copyWith(kycError: 'Date of birth is missing'));
         return;
       }
 
-      // await vendors.verifyBvn(
+      // await _customerRepo.verifyBvn(
       //   bvn: state.bvn.trim(),
       //   name: fullName,
       //   dateOfBirthIso: dobIso,
       //   mobileNo: localPhone,
       // );
-      emit(state.copyWith(
-        bvnVerifying: false,
-        bvnVerified: true,
-        lastVerifiedBvn: state.bvn.trim(),
-      ));
+      emit(
+        state.copyWith(
+          bvnVerifying: false,
+          bvnVerified: true,
+          lastVerifiedBvn: state.bvn.trim(),
+        ),
+      );
     } catch (error) {
       debugPrint('Error verifying BVN: $error');
-      emit(state.copyWith(
-        bvnVerifying: false,
-        bvnVerified: false,
-        kycError: error.toString(),
-      ));
+      emit(
+        state.copyWith(
+          bvnVerifying: false,
+          bvnVerified: false,
+          kycError: error.toString(),
+        ),
+      );
     }
   }
-
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   String? _formatDobForBvn(DateTime? date) {

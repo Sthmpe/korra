@@ -7,11 +7,7 @@ class KorraBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final List<NavSpec> pageIcons;
-
-  /// Optional: numeric badges per index (e.g., {2: 5} for Reservations)
   final Map<int, int> countBadges;
-
-  /// Optional: dot badges per index (e.g., {0} for Home dot)
   final Set<int> dotBadges;
 
   const KorraBottomNav({
@@ -23,85 +19,110 @@ class KorraBottomNav extends StatelessWidget {
     this.dotBadges = const {},
   }) : assert(pageIcons.length >= 2);
 
-  static const _brand  = Color(0xFFA54600);
-  static const _stroke = Color(0xFFEAE6E2);
+  static const _brand = Color(0xFFA54600);
+  static const _inactiveColor = Color(0xFF9E9E9E);
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 60.h,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: _stroke, width: 1)),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final slot = constraints.maxWidth / pageIcons.length;
-            final indicatorLeft = slot * currentIndex + (slot - 24.w) / 2;
+    // Using a shadow container instead of border for that "floating" feel
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64.h, // Slightly taller for modern touch targets
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slot = constraints.maxWidth / pageIcons.length;
+              // Calculate center position for the indicator
+              // slot * index moves it to the slot start
+              // (slot - width) / 2 centers it within the slot
+              final indicatorWidth = 32.w;
+              final indicatorLeft = (slot * currentIndex) + (slot - indicatorWidth) / 2;
 
-            return Stack(
-              children: [
-                Row(
-                  children: List.generate(pageIcons.length, (i) {
-                    final selected = i == currentIndex;
-                    final spec = pageIcons[i];
-                    final badge = countBadges[i] ?? 0;
-                    final showDot = dotBadges.contains(i);
+              return Stack(
+                children: [
+                  // 1. The Icons Row
+                  Row(
+                    children: List.generate(pageIcons.length, (i) {
+                      final selected = i == currentIndex;
+                      final spec = pageIcons[i];
+                      final badge = countBadges[i] ?? 0;
+                      final showDot = dotBadges.contains(i);
 
-                    return Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          onTap(i);
-                        },
-                        borderRadius: BorderRadius.circular(12.r),
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 6.h, bottom: 8.h),
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact(); // Crisper haptic
+                            onTap(i);
+                          },
+                          behavior: HitTestBehavior.opaque,
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              // Icon + Badge Stack
                               SizedBox(
-                                height: 24.h,
-                                width: 28.w,
+                                height: 28.h,
+                                width: 32.w, // Constrain width for badge positioning
                                 child: Stack(
                                   clipBehavior: Clip.none,
+                                  alignment: Alignment.center,
                                   children: [
-                                    Align(
-                                      alignment: Alignment.center,
+                                    // The Icon
+                                    AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 200),
                                       child: Icon(
                                         selected ? spec.filled : spec.outline,
-                                        size: 22.sp,
-                                        color: selected ? _brand : const Color(0xFF4D4D4D),
+                                        key: ValueKey(selected),
+                                        size: 24.sp,
+                                        color: selected ? _brand : _inactiveColor,
                                       ),
                                     ),
+
+                                    // Dot Badge (Notification)
                                     if (showDot)
                                       Positioned(
-                                        right: -2.w, top: -2.h,
+                                        right: -2.w,
+                                        top: -2.h,
                                         child: Container(
-                                          width: 8.w, height: 8.w,
-                                          decoration: const BoxDecoration(
-                                            color: _brand, shape: BoxShape.circle,
+                                          width: 8.w,
+                                          height: 8.w,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 1.5),
                                           ),
                                         ),
                                       ),
+
+                                    // Count Badge (Messages)
                                     if (badge > 0)
                                       Positioned(
-                                        right: -8.w, top: -8.h,
+                                        left: 14.w, // Offset to the right
+                                        top: -5.h,
                                         child: Container(
-                                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                                          constraints: BoxConstraints(minWidth: 18.w),
+                                          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                                          constraints: BoxConstraints(minWidth: 16.w),
                                           decoration: BoxDecoration(
-                                            color: Colors.redAccent,
-                                            borderRadius: BorderRadius.circular(999),
+                                            color: _brand,
+                                            borderRadius: BorderRadius.circular(10.r),
+                                            border: Border.all(color: Colors.white, width: 1.5),
                                           ),
                                           child: Text(
                                             badge > 99 ? '99+' : '$badge',
                                             textAlign: TextAlign.center,
                                             style: GoogleFonts.inter(
-                                              fontSize: 10.sp,
-                                              fontWeight: FontWeight.w800,
+                                              fontSize: 9.sp,
+                                              fontWeight: FontWeight.w700,
                                               color: Colors.white,
                                             ),
                                           ),
@@ -110,41 +131,53 @@ class KorraBottomNav extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                              
                               SizedBox(height: 4.h),
-                              Text(
-                                spec.label,
+                              
+                              // Label
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 200),
                                 style: GoogleFonts.inter(
-                                  fontSize: 11.5.sp,
-                                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                                  color: selected ? _brand : const Color(0xFF4D4D4D),
+                                  fontSize: 11.sp,
+                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                                  color: selected ? _brand : _inactiveColor,
+                                  letterSpacing: -0.2,
                                 ),
+                                child: Text(spec.label),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                ),
+                      );
+                    }),
+                  ),
 
-                // Tiny brand indicator under selected icon
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOut,
-                  left: indicatorLeft,
-                  bottom: 6.h,
-                  child: Container(
-                    width: 24.w,
-                    height: 3.h,
-                    decoration: BoxDecoration(
-                      color: _brand,
-                      borderRadius: BorderRadius.circular(999),
+                  // 2. The Sliding Indicator (Your Favorite Part)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.fastLinearToSlowEaseIn, // iOS "Springy" feel
+                    left: indicatorLeft,
+                    bottom: 0, // Align to very bottom edge
+                    child: Container(
+                      width: indicatorWidth,
+                      height: 4.h, // Slightly thicker for visibility
+                      decoration: BoxDecoration(
+                        color: _brand,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(4.r)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _brand.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
+                          )
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

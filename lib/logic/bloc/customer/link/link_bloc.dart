@@ -1,5 +1,4 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:korra/data/models/customer/plans.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import 'link_event.dart';
@@ -15,7 +14,6 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
   }) : super(const LinkState()) {
     on<LinkSubmitted>(_onLinkSubmitted);
     on<LinkValidated>(_onLinkValidated);
-    on<PlanCreationRequested>(_onPlanCreationRequested);
   }
 
   /// STEP 1: User pastes link
@@ -24,11 +22,19 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
 
     final korraRegex = RegExp(r'^korra-[A-Z0-9]{4}-[a-f0-9]{7}$');
 
+    if (e.value.trim().isEmpty) {
+      emit(state.copyWith(
+        status: LinkStatus.empty,
+        message: "Please enter a link",
+      ));
+      return;
+    }
 
-    if (!korraRegex.hasMatch(e.value)) {
+
+    if (!korraRegex.hasMatch(e.value.trim())) {
       emit(state.copyWith(
         status: LinkStatus.invalid,
-        message: "Invalid link format",
+        message: "Invalid link format please check and try again",
       ));
       return;
     }
@@ -47,7 +53,7 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
     emit(state.copyWith(status: LinkStatus.loadingProduct, message: "Fetching product"));
 
     try {
-      final productFetch = await customerRepo.getProduct(e.productCode);
+      final productFetch = await customerRepo.getProduct(e.productCode.trim());
 
       emit(state.copyWith(
         status: LinkStatus.loaded,
@@ -56,35 +62,8 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
       ));
     } catch (_) {
       emit(state.copyWith(
-        status: LinkStatus.failure,
-        message: "Failed to fetch product",
-      ));
-    }
-  }
-
-  /// STEP 3: Confirm → Create plan
-  Future<void> _onPlanCreationRequested(
-      PlanCreationRequested e, Emitter<LinkState> emit) async {
-    emit(state.copyWith(status: LinkStatus.creating, message: "Creating plan"));
-
-    try {
-      /// Call your full plan creation process
-      final plan = await customerRepo.createPlan(
-        productCode: e.productCode,
-        downPayment: e.downPayment,
-        customerId: customerUid,
-        commitmentEnabled: e.autoCommit,
-        productFeteched: state.productFetch!,
-      );
-
-      emit(state.copyWith(
-        status: LinkStatus.success,
-        plan: plan,
-      ));
-    } catch (err) {
-      emit(state.copyWith(
-        status: LinkStatus.failure,
-        message: err.toString(),
+        status: LinkStatus.failed,
+        message: "Failed to fetch product details, pleasse check the link and try again",
       ));
     }
   }

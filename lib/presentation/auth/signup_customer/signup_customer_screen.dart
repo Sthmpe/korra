@@ -4,7 +4,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
@@ -15,14 +14,13 @@ import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 import '../../customer/customer_shell.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../role_login/role_login_screen.dart';
-import '../sgnup_failure_sheet.dart';
 import 'steps/step_personal.dart';
 import 'steps/step_identity.dart';
 import 'steps/step_security.dart';
 import 'steps/step_review.dart';
 
 class SignupCustomerScreen extends StatefulWidget {
-  final bool? showLeadingIcon;
+  final bool showLeadingIcon;
   const SignupCustomerScreen({super.key, this.showLeadingIcon = false});
 
   @override
@@ -35,9 +33,8 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
   bool _kycSheetOpen = false;
 
   void closeAllOverlays() {
-    while (Get.isOverlaysOpen) {
-      Get.close(2);
-    }
+    // Safer way to close known overlays without nuking navigation stack
+    if (Get.isOverlaysOpen) Navigator.of(context).pop();
   }
 
   @override
@@ -49,186 +46,191 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
   void _animateTo(int index) {
     _controller.animateToPage(
       index,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 350), // Slower = smoother
+      curve: Curves.fastOutSlowIn, // iOS physics
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:  AppBar(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        automaticallyImplyLeading: false,
         title: Row(
           children: [
-            widget.showLeadingIcon!
-             ? IconButton(
-                        onPressed: () => Get.offAll(() => RoleLoginScreen()),
-                        style: IconButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size(40.w, 40.w),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          alignment: Alignment.center,
-                        ),
-                        icon: Icon(
-                          MdiIcons.arrowLeft,
-                          size: 24.sp,
-                          color: const Color(0xFF1B1B1B),
-                        ),
-                      )
-              : SizedBox.shrink(),
-            widget.showLeadingIcon!
-            ? 12.h.horizontalSpace
-            : SizedBox.shrink(),
+            if (widget.showLeadingIcon)
+              Padding(
+                padding: EdgeInsets.only(right: 12.w),
+                child: IconButton(
+                  onPressed: () => Get.offAll(() => const RoleLoginScreen()),
+                  icon: Icon(
+                    Iconsax.arrow_left,
+                    size: 24.sp,
+                    color: Colors.black,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
             Text(
-              'Create vendor account',
+              'Create Customer Account',
               style: GoogleFonts.inter(
-                fontSize: 16.sp,
+                fontSize: 18.sp,
                 fontWeight: FontWeight.w700,
+                color: const Color(0xFF111111),
+                letterSpacing: -0.5,
               ),
             ),
           ],
         ),
-        centerTitle: false,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: KorraSizes.gutter.w),
-          child: Column(
-            children: [
-              SizedBox(height: 12.h),
-              const _StepperBar(),
-              SizedBox(height: 16.h),
-    
-              Expanded(
-                child: MultiBlocListener(
-                  listeners: [
-                    // Close sheet & animate on successful page change
-                    BlocListener<SignupCustomerBloc, SignupCustomerState>(
-                      listenWhen: (p, c) => p.pageIndex != c.pageIndex,
-                      listener: (context, s) async {
-                        if (_kycSheetOpen) {
-                          await Future.delayed(const Duration(seconds: 3));
-                          Navigator.of(
-                            context,
-                            rootNavigator: true,
-                          ).maybePop();
-                          _kycSheetOpen = false;
-                        }
-                        _animateTo(s.pageIndex);
-                      },
-                    ),
-                    // Close sheet on identity failure (stay on Identity page)
-                    BlocListener<SignupCustomerBloc, SignupCustomerState>(
-                      listenWhen: (p, c) =>
-                          p.ninVerifying != c.ninVerifying ||
-                          p.bvnVerifying != c.bvnVerifying ||
-                          p.ninError != c.ninError ||
-                          p.bvnError != c.bvnError,
-                      listener: (context, s) async {
-                        final failedNow =
-                            (!s.ninVerifying && s.ninError != null) ||
-                            (!s.bvnVerifying && s.bvnError != null);
-    
-                        if (failedNow && _kycSheetOpen) {
-                          await Future.delayed(const Duration(seconds: 3));
-                          Navigator.of(
-                            context,
-                            rootNavigator: true,
-                          ).maybePop();
-                          _kycSheetOpen = false;
-                        }
-                      },
-                    ),
-                    BlocListener<SignupCustomerBloc, SignupCustomerState>(
-                      listenWhen: (p, c) => p.status != c.status,
-                      listener: (context, s) {
-                        if (s.status == SignupStatus.failure) {
-                          closeAllOverlays();
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(24.r),
-                              ),
-                            ),
-                            builder: (_) => SignupFailureSheet(
-                              title: 'Signup Failed',
-                              message: s.signUpError ?? 'An unknown error occurred during signup.',
-                              retryCallback: () {
-                                Get.offAll(() => BlocProvider(
-                                  create: (_) => SignupCustomerBloc(),
-                                  child: SignupCustomerScreen(showLeadingIcon: true,)
-                                ));
-                              },
-                            ),
-                          );
-                        }
+        child: Column(
+          children: [
+            // --- PROGRESS BAR ---
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: KorraSizes.gutter.w,
+                vertical: 12.h,
+              ),
+              child: const _StepperBar(),
+            ),
 
-                        if (s.status == SignupStatus.success) {
-                          showAppSnackbar(
-                            'Your customer account has been created successfully.',
-                            SnackbarType.success,
-                          );
-                          Get.offAll(() => CustomerShell(uid: s.uid));
-                        }
-                      },
-                    ),
-                  ],
-                  child: PageView(
-                    controller: _controller,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      StepPersonal(formKey: _formKeys[0]),
-                      StepIdentity(formKey: _formKeys[1]),
-                      StepSecurity(formKey: _formKeys[2]),
-                      StepReview(formKey: _formKeys[3]),
-                    ],
+            // --- FORM PAGES ---
+            Expanded(
+              child: MultiBlocListener(
+                listeners: [
+                  // 1. Page Navigation
+                  BlocListener<SignupCustomerBloc, SignupCustomerState>(
+                    listenWhen: (p, c) => p.pageIndex != c.pageIndex,
+                    listener: (context, s) async {
+                      if (_kycSheetOpen) {
+                        await Future.delayed(
+                          const Duration(milliseconds: 1500),
+                        ); // Give user time to see "Success"
+                        if (context.mounted) Navigator.of(context).pop();
+                        _kycSheetOpen = false;
+                      }
+                      _animateTo(s.pageIndex);
+                    },
                   ),
+                  // 2. KYC Failure Handling (Close sheet to show error on UI)
+                  BlocListener<SignupCustomerBloc, SignupCustomerState>(
+                    listenWhen: (p, c) =>
+                        (p.ninVerifying &&
+                            !c.ninVerifying &&
+                            c.ninError != null) ||
+                        (p.bvnVerifying &&
+                            !c.bvnVerifying &&
+                            c.bvnError != null),
+                    listener: (context, s) async {
+                      if (_kycSheetOpen) {
+                        await Future.delayed(const Duration(seconds: 2));
+                        if (context.mounted) Navigator.of(context).pop();
+                        _kycSheetOpen = false;
+                      }
+                    },
+                  ),
+                  // 3. Signup Completion
+                  BlocListener<SignupCustomerBloc, SignupCustomerState>(
+                    listenWhen: (p, c) => p.status != c.status,
+                    listener: (context, s) {
+                      if (s.status == SignupStatus.failure) {
+                        closeAllOverlays();
+                        showKorraFailureSheetCustomer(
+                          context,
+                          title: 'Signup Failed',
+                          message:
+                              s.signUpError ??
+                              'An unknown error occurred during signup.',
+                          onRetry: () {
+                            Get.offAll(
+                              () => BlocProvider(
+                                create: (_) => SignupCustomerBloc(),
+                                child: SignupCustomerScreen(
+                                  showLeadingIcon: true,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      }
+                      if (s.status == SignupStatus.success) {
+                        showAppSnackbar(
+                          'Account created successfully!',
+                          SnackbarType.success,
+                        );
+                        Get.offAll(() => CustomerShell(uid: s.uid));
+                      }
+                    },
+                  ),
+                ],
+                child: PageView(
+                  controller: _controller,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    StepPersonal(formKey: _formKeys[0]),
+                    StepIdentity(formKey: _formKeys[1]),
+                    StepSecurity(formKey: _formKeys[2]),
+                    StepReview(formKey: _formKeys[3]),
+                  ],
                 ),
               ),
-    
-              SizedBox(height: 12.h),
-              BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
-                buildWhen: (p, c) =>
-                    p.pageIndex != c.pageIndex || p.loading != c.loading,
-                builder: (_, s) => _BottomNav(
-                  formKey: _formKeys[s.pageIndex],
-                  isLast: s.pageIndex == s.totalPages - 1,
-                  loading: s.loading,
-                  pageIndex: s.pageIndex, // pass current step
-                  openKycSheet: () {
-                    if (!_kycSheetOpen) {
-                      _kycSheetOpen = true;
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        isDismissible: false,
-                        backgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(16.r),
+            ),
+
+            // --- BOTTOM NAVIGATION ---
+            BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
+              builder: (context, state) {
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    KorraSizes.gutter.w,
+                    0,
+                    KorraSizes.gutter.w,
+                    16.h,
+                  ),
+                  child: _BottomNav(
+                    formKey: _formKeys[state.pageIndex],
+                    isLast: state.pageIndex == state.totalPages - 1,
+                    loading: state.loading,
+                    pageIndex: state.pageIndex,
+                    openKycSheet: () {
+                      if (!_kycSheetOpen) {
+                        _kycSheetOpen = true;
+                        final bloc = context.read<SignupCustomerBloc>();
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          isDismissible: false,
+                          enableDrag: false,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => BlocProvider.value(
+                            value: bloc, // Pass the captured bloc instance
+                            child: const _KycProgressSheet(),
                           ),
-                        ),
-                        builder: (_) => BlocProvider.value(
-                          value: context.read<SignupCustomerBloc>(),
-                          child: const _KycProgressSheet(),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ),
-              SizedBox(height: 14.h),
-            ],
-          ),
+                        );
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+// -----------------------------------------------------------------------------
+// 1. PROGRESS STEPPER (Minimal & Clean)
+// -----------------------------------------------------------------------------
 class _StepperBar extends StatelessWidget {
   const _StepperBar();
 
@@ -237,47 +239,45 @@ class _StepperBar extends StatelessWidget {
     return BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
       buildWhen: (p, c) => p.pageIndex != c.pageIndex,
       builder: (_, s) {
-        final progress = (s.pageIndex + 1) / s.totalPages;
+        // Smooth animation for progress bar
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                Container(
-                  height: 6.h,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(6.r),
-                  ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: progress,
-                  child: Container(
-                    height: 6.h,
-                    decoration: BoxDecoration(
-                      color: KorraColors.brand,
-                      borderRadius: BorderRadius.circular(6.r),
-                    ),
-                  ),
-                ),
-              ],
+            Container(
+              height: 4.h,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F2F7), // Light grey track
+                borderRadius: BorderRadius.circular(2.r),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final stepWidth = constraints.maxWidth / s.totalPages;
+                  final currentWidth = stepWidth * (s.pageIndex + 1);
+                  return Stack(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                        width: currentWidth,
+                        decoration: BoxDecoration(
+                          color: KorraColors.brand,
+                          borderRadius: BorderRadius.circular(2.r),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-            SizedBox(height: 6.h),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Step ${s.pageIndex + 1} of ${s.totalPages}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    color: Colors.black54,
-                  ),
-                ),
-                Icon(
-                  MdiIcons.accountPlus,
-                  size: 20.sp,
-                  color: KorraColors.brand,
-                ),
-              ],
+            SizedBox(height: 8.h),
+            Text(
+              'Step ${s.pageIndex + 1} of ${s.totalPages}',
+              style: GoogleFonts.inter(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF666666),
+              ),
             ),
           ],
         );
@@ -286,6 +286,9 @@ class _StepperBar extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// 2. BOTTOM NAVIGATION BAR
+// -----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final bool isLast;
@@ -303,26 +306,26 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Future<void> handleNext() async {
+    void handleNext() {
       FocusScope.of(context).unfocus();
-
       final ok = formKey.currentState?.validate() ?? true;
       if (!ok) return;
 
       if (isLast) {
         context.read<SignupCustomerBloc>().add(SignupCustomerSubmitPressed());
-        await Future.delayed(const Duration(milliseconds: 950));
-        if (!context.mounted) return;
+        return;
       }
 
-      // Identity step (index 4): open progress sheet; Bloc will run NIN→BVN and navigate on success
-      if (pageIndex == 4) {
+      // Identity Logic (Step 2 -> Index 1)
+      if (pageIndex == 1) {
         final s = context.read<SignupCustomerBloc>().state;
-        final ninNeeded = !(s.ninVerified && s.lastVerifiedNin == s.nin);
-        final bvnNeeded = !(s.bvnVerified && s.lastVerifiedBvn == s.bvn);
+        // Only verify if not already verified
+        final needsVerification =
+            !(s.ninVerified && s.lastVerifiedNin == s.nin) ||
+            !(s.bvnVerified && s.lastVerifiedBvn == s.bvn);
 
-        if (ninNeeded || bvnNeeded) {
-          openKycSheet(); // only open when we’ll actually verify
+        if (needsVerification) {
+          openKycSheet();
         }
       }
 
@@ -331,64 +334,63 @@ class _BottomNav extends StatelessWidget {
 
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              minimumSize: Size.fromHeight(48.h),
-              side: BorderSide(color: Colors.grey.shade300),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
+        // BACK BUTTON (Visible only after step 1)
+        if (pageIndex > 0) ...[
+          SizedBox(
+            height: 54.h,
+            width: 54.h,
+            child: OutlinedButton(
+              onPressed: loading
+                  ? null
+                  : () => context.read<SignupCustomerBloc>().add(
+                      SignupCustomerBackPressed(),
+                    ),
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                backgroundColor: Colors.white,
               ),
-            ),
-            onPressed: () => context.read<SignupCustomerBloc>().add(
-              SignupCustomerBackPressed(),
-            ),
-            child: Text(
-              'Back',
-              style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-              ),
+              child: Icon(Iconsax.arrow_left, color: Colors.black, size: 24.sp),
             ),
           ),
-        ),
-        SizedBox(width: 12.w),
+          SizedBox(width: 12.w),
+        ],
+
+        // NEXT / SUBMIT BUTTON
         Expanded(
-          child: Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  minimumSize: Size.fromHeight(48.h),
-                  overlayColor: KorraColors.brand,
-                  backgroundColor: KorraColors.brand,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
+          child: SizedBox(
+            height: 54.h,
+            child: ElevatedButton(
+              onPressed: loading ? null : handleNext,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: KorraColors.brand,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.r),
                 ),
-                onPressed: loading ? null : handleNext,
-                child: Text(
-                  isLast ? 'Create account' : 'Next',
-                  style: GoogleFonts.inter(
-                    fontSize: 14.5.sp,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
+                disabledBackgroundColor: KorraColors.brand.withOpacity(0.5),
               ),
-              if (loading)
-                Padding(
-                  padding: EdgeInsets.only(right: 14.w),
-                  child: SizedBox(
-                    height: 16.r,
-                    width: 16.r,
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+              child: loading
+                  ? SizedBox(
+                      height: 20.h,
+                      width: 20.h,
+                      child: const CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : Text(
+                      isLast ? 'Create Account' : 'Continue',
+                      style: GoogleFonts.inter(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ],
@@ -396,94 +398,96 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// 3. PREMIUM KYC PROGRESS SHEET
+// -----------------------------------------------------------------------------
 class _KycProgressSheet extends StatelessWidget {
   const _KycProgressSheet();
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 16.h),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 32.h),
+      child: SafeArea(
+        top: false,
         child: BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
-          buildWhen: (p, c) =>
-              p.ninVerifying != c.ninVerifying ||
-              p.bvnVerifying != c.bvnVerifying ||
-              p.ninVerified != c.ninVerified ||
-              p.bvnVerified != c.bvnVerified ||
-              p.ninError != c.ninError ||
-              p.bvnError != c.bvnError,
           builder: (_, s) {
             final allVerified = s.ninVerified && s.bvnVerified;
             final anyError = s.ninError != null || s.bvnError != null;
 
             return Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 40.w,
-                    height: 4.h,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEAE6E2),
-                      borderRadius: BorderRadius.circular(2.r),
-                    ),
+                // Handle
+                Container(
+                  width: 40.w,
+                  height: 4.h,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0E0E0),
+                    borderRadius: BorderRadius.circular(4.r),
                   ),
                 ),
-                SizedBox(height: 12.h),
+                SizedBox(height: 24.h),
+
+                // Header
                 Text(
-                  'Verifying your identity',
+                  allVerified ? "Identity Verified" : "Verifying Identity",
                   style: GoogleFonts.inter(
-                    fontSize: 16.sp,
+                    fontSize: 18.sp,
                     fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111111),
                   ),
                 ),
-                SizedBox(height: 8.h),
+                SizedBox(height: 24.h),
 
-                _line(
-                  'NIN',
-                  running: s.ninVerifying,
-                  ok: s.ninVerified && s.lastVerifiedNin == s.nin,
-                  err: s.ninError,
-                ),
-                SizedBox(height: 8.h),
-                _line(
-                  'BVN',
-                  running: s.bvnVerifying,
-                  ok: s.bvnVerified && s.lastVerifiedBvn == s.bvn,
-                  err: s.bvnError,
+                // NIN Line
+                _VerificationLine(
+                  title: "NIN Validation",
+                  isProcessing: s.ninVerifying,
+                  isSuccess: s.ninVerified && s.lastVerifiedNin == s.nin,
+                  hasError: s.ninError != null,
                 ),
 
-                SizedBox(height: 10.h),
+                // Connector Line
+                Container(
+                  margin: EdgeInsets.only(left: 11.w), // Align with icon center
+                  height: 16.h,
+                  width: 2.w,
+                  color: const Color(0xFFF2F2F7),
+                ),
 
-                if (allVerified) ...[
+                // BVN Line
+                _VerificationLine(
+                  title: "BVN Validation",
+                  isProcessing: s.bvnVerifying,
+                  isSuccess: s.bvnVerified && s.lastVerifiedBvn == s.bvn,
+                  hasError: s.bvnError != null,
+                ),
+
+                SizedBox(height: 24.h),
+
+                // Status Footer
+                if (anyError)
                   Text(
-                    'Done',
+                    "Verification Failed. Please check your details.",
                     style: GoogleFonts.inter(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ] else if (anyError) ...[
-                  Text(
-                    'There was an issue',
-                    style: GoogleFonts.inter(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14.sp,
                       color: Colors.red,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                ] else ...[
+                  )
+                else if (!allVerified)
                   Text(
-                    'This won’t take long…',
+                    "This usually takes a few seconds...",
                     style: GoogleFonts.inter(
-                      fontSize: 12.sp,
-                      color: Colors.black54,
+                      fontSize: 13.sp,
+                      color: Colors.grey,
                     ),
                   ),
-                ],
-                SizedBox(height: 6.h),
               ],
             );
           },
@@ -491,72 +495,80 @@ class _KycProgressSheet extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _line(
-    String title, {
-    required bool running,
-    required bool ok,
-    String? err,
-  }) {
+class _VerificationLine extends StatelessWidget {
+  final String title;
+  final bool isProcessing;
+  final bool isSuccess;
+  final bool hasError;
+
+  const _VerificationLine({
+    required this.title,
+    required this.isProcessing,
+    required this.isSuccess,
+    required this.hasError,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     IconData icon;
     Color color;
-    String subtitle;
-    Widget? tail;
+    Color bgColor;
 
-    if (running) {
-      icon = Iconsax.timer;
+    if (isProcessing) {
+      icon = Iconsax.refresh; // Or spinner
       color = Colors.orange;
-      subtitle = 'Checking…';
-      tail = SizedBox(
-        width: 16.r,
-        height: 16.r,
-        child: const CircularProgressIndicator(strokeWidth: 2),
-      );
-    } else if (ok) {
+      bgColor = Colors.orange.withOpacity(0.1);
+    } else if (isSuccess) {
       icon = Iconsax.tick_circle;
       color = Colors.green;
-      subtitle = 'Verified';
-    } else if (err != null) {
+      bgColor = Colors.green.withOpacity(0.1);
+    } else if (hasError) {
       icon = Iconsax.close_circle;
       color = Colors.red;
-      subtitle = 'Failed';
+      bgColor = Colors.red.withOpacity(0.1);
     } else {
-      icon = Iconsax.more;
+      icon = Iconsax.lock;
       color = Colors.grey;
-      subtitle = 'Waiting';
+      bgColor = Colors.grey.withOpacity(0.1);
     }
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16.sp, color: color),
-        SizedBox(width: 8.w),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                ok ? subtitle : (err ?? 'Pending'),
-                style: GoogleFonts.inter(
-                  fontSize: 11.sp,
-                  color: ok
-                      ? Colors.green
-                      : err != null
-                      ? Colors.red
-                      : Colors.black54,
-                ),
-              ),
-            ],
+        Container(
+          width: 24.w,
+          height: 24.w,
+          decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+          child: isProcessing
+              ? Padding(
+                  padding: EdgeInsets.all(6.r),
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.orange,
+                  ),
+                )
+              : Icon(icon, size: 14.sp, color: color),
+        ),
+        SizedBox(width: 12.w),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF111111),
           ),
         ),
-        if (tail != null) tail,
+        const Spacer(),
+        if (isSuccess)
+          Text(
+            "Matched",
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+              color: Colors.green,
+            ),
+          ),
       ],
     );
   }

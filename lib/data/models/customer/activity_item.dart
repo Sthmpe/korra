@@ -1,15 +1,32 @@
-enum ActivityType { payment, dueSoon, link, autopay, expired }
+import 'package:flutter/material.dart';
+
+enum ActivityType { payment, dueSoon, link, autopay, expired, milestone }
 
 class ActivityItem {
   final String id;
-  final ActivityType type;
   final String title;
-  final String subtitle; // time / details
-  const ActivityItem({required this.id, required this.type, required this.title, required this.subtitle});
+  
+  // 1. The Rich Text Spans for the subtitle
+  final List<TextSpan> richSubtitle; 
+  
+  // 2. The Simple Amount string for the trailing side (e.g. "- ₦5,000")
+  final String amountDisplay; 
+  
+  // 3. For navigation logic (to open receipt/plan)
+  final String? planId; 
+  final DateTime date; // Renamed from timestamp for clarity in UI code
+  final double amount; // Raw amount for math if needed
 
-  static List<ActivityItem> dummies() => const [
-    ActivityItem(id:'a1', type: ActivityType.payment, title:'Installment paid • ₦12,500', subtitle:'Today 10:20 • iPhone 13'),
-    ActivityItem(id:'a2', type: ActivityType.dueSoon, title:'Plan due tomorrow • ₦8,200', subtitle:'LG OLED C2 55”'),
-    ActivityItem(id:'a3', type: ActivityType.link, title:'New reserve link from TechHub NG', subtitle:'Tap to review'),
-  ];
+  final ActivityType type;
+
+  const ActivityItem({
+    required this.id,
+    required this.title,
+    required this.richSubtitle,
+    required this.amountDisplay,
+    required this.date,
+    required this.amount,
+    required this.type,
+    this.planId,
+  });
 }

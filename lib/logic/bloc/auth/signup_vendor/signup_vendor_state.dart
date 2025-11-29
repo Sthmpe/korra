@@ -64,8 +64,18 @@ class SignupVendorState extends Equatable {
   final String? kycError;
   final String? signUpError;
   final SignupStatus status;
+  final bool toggled;
 
   final String uid; // Added to hold the UID after successful signup
+
+  // Social
+ final String instagram;
+final String twitter;
+final String facebook;
+final String tiktok;
+final String website;
+final String whatsappGroup;
+final String otherLink;
 
   const SignupVendorState({
     this.pageIndex = 0,
@@ -108,6 +118,14 @@ class SignupVendorState extends Equatable {
     this.kycError,
     this.signUpError,
     this.status = SignupStatus.initial,
+    this.instagram = '',
+  this.twitter = '',
+  this.facebook = '',
+  this.tiktok = '',
+  this.website = '',
+  this.whatsappGroup = '',
+  this.otherLink = '',
+  this.toggled = false,
     this.uid = '',
   });
 
@@ -151,6 +169,14 @@ class SignupVendorState extends Equatable {
     String? kycError,
     String? signUpError,
     SignupStatus? status,
+    String? instagram,
+  String? twitter,
+  String? facebook,
+  String? tiktok,
+  String? website,
+  String? whatsappGroup,
+  String? otherLink,
+  bool? toggled,
     String? uid,
   }) {
     return SignupVendorState(
@@ -194,12 +220,21 @@ class SignupVendorState extends Equatable {
       kycError: kycError ?? this.kycError,
       signUpError: signUpError ?? this.signUpError,
       status: status ?? this.status,
+      instagram: instagram ?? this.instagram,
+    twitter: twitter ?? this.twitter,
+    facebook: facebook ?? this.facebook,
+    tiktok: tiktok ?? this.tiktok,
+    website: website ?? this.website,
+    whatsappGroup: whatsappGroup ?? this.whatsappGroup,
+    otherLink: otherLink ?? this.otherLink,
+    toggled: toggled ?? this.toggled,
       uid: uid ?? this.uid,
     );
   }
 
   @override
   List<Object?> get props => [
+    toggled,
     pageIndex,
     totalPages,
     loading,
@@ -238,6 +273,12 @@ class SignupVendorState extends Equatable {
     kycError,
     signUpError,
     status,
+    whatsappGroup,
+    instagram,
+    facebook,
+    twitter,
+    otherLink,
+    website,
     uid,
   ];
 }

@@ -5,7 +5,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/constants/colors.dart';
 
-class CustomerWalletCard extends StatelessWidget {
+class CustomerWalletCard extends StatefulWidget {
   final String balanceText;
   final VoidCallback? onTopUp;
   final bool loading;
@@ -17,92 +17,178 @@ class CustomerWalletCard extends StatelessWidget {
     required this.loading,
   });
 
-  static const _brand = Color(0xFFA54600);
+  @override
+  State<CustomerWalletCard> createState() => _CustomerWalletCardState();
+}
+
+class _CustomerWalletCardState extends State<CustomerWalletCard> {
+  bool _isBalanceVisible = true;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
       child: Container(
-        padding: EdgeInsets.all(16.r),
+        height: 180.h,
+        width: double.infinity,
         decoration: BoxDecoration(
-          color: _brand.withOpacity(0.055),
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: const Color(0xFFEAE6E2).withOpacity(0.1), width: 1),
-        ),
-        child: Row(
-          children: [
-            // left brand tile
-            Container(
-              width: 44.w,
-              height: 44.w,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4ECE7),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: const Icon(Iconsax.card, color: _brand),
+          // Premium Gradient
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFA54600), // Brand Color
+              Color(0xFF7A3300), // Darker shade for depth
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24.r),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFA54600).withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-      
-            SizedBox(width: 12.w),
-      
-            // center text block
-            Expanded(
+          ],
+        ),
+        child: Stack(
+          children: [
+            // 1. Background Abstract Decoration
+            Positioned(
+              right: -30.w,
+              top: -30.h,
+              child: Icon(
+                Iconsax.wallet_1,
+                size: 200.sp,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+
+            // 2. Content
+            Padding(
+              padding: EdgeInsets.all(24.r),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Available Balance',
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF5E5E5E),
-                      )),
-                  SizedBox(height: 2.h),
-                  loading ?
-                   SizedBox(
-                      height: 25.h,
-                      width: 25.w,
-                      child: CircularProgressIndicator(
-                        color: KorraColors.brand,
-                        strokeWidth: 2,
+                  // Top Row: Label + Hide Toggle
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(6.r),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Iconsax.flash_1,
+                              color: Colors.white,
+                              size: 14.sp,
+                            ),
+                          ),
+                          SizedBox(width: 8.w),
+                          Text(
+                            'Available Balance',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.8),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                  : Text(
-                    balanceText,
-                    style: GoogleFonts.inter(
-                      fontSize: 22.sp,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1B1B1B),
-                    ),
+
+                      // The Visibility Toggle
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isBalanceVisible = !_isBalanceVisible;
+                          });
+                        },
+                        child: Container(
+                          padding: EdgeInsets.all(6.r),
+                          color: Colors.transparent, // Hit target area
+                          child: Icon(
+                            _isBalanceVisible ? Iconsax.eye : Iconsax.eye_slash,
+                            color: Colors.white.withOpacity(0.6),
+                            size: 20.sp,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Middle: The Big Number
+                  widget.loading
+                      ? SizedBox(
+                          height: 35.h,
+                          width: 35.w,
+                          child: const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 3.0,
+                          ),
+                        )
+                      : AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (child, anim) =>
+                              FadeTransition(opacity: anim, child: child),
+                          child: Text(
+                            _isBalanceVisible
+                                ? widget.balanceText
+                                : '₦ ••••', // Use Bullets (Alt+7 or Copy this)
+                            key: ValueKey<bool>(_isBalanceVisible),
+                            style: GoogleFonts.inter(
+                              fontSize: 32.sp,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              // Increase spacing for bullets so they don't bunch up
+                              letterSpacing: _isBalanceVisible ? -1.0 : 4.0,
+                            ),
+                          ),
+                        ),
+                  // Bottom: Action Button
+                  Row(
+                    children: [
+                      Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: InkWell(
+                          onTap: widget.onTopUp,
+                          borderRadius: BorderRadius.circular(12.r),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16.w,
+                              vertical: 10.h,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Iconsax.add,
+                                  size: 18.sp,
+                                  color: KorraColors.brand,
+                                ),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  'Top Up',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w700,
+                                    color: KorraColors.brand,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-      
-            SizedBox(width: 12.w),
-      
-            // right CTA
-            ConstrainedBox(
-              constraints: BoxConstraints(minWidth: 96.w),
-              child: SizedBox(
-                height: 44.h,
-                child: FilledButton(
-                  onPressed: onTopUp,
-                  style: FilledButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14.r),
-                    ),
-                    backgroundColor: _brand,
-                  ),
-                  child: Text(
-                    'Top up',
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
               ),
             ),
           ],

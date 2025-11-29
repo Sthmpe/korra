@@ -1,14 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; // Required for debugPrint
-import 'package:korra/data/models/customer/customer_model.dart';
-import 'package:korra/data/repository/customer/topup_repository.dart';
-import 'package:korra/data/repository/customer/wallet_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
-    show Supabase, FunctionsClient;
+    show Supabase, FunctionsClient, FunctionException;
 
+// --- MODELS ---
+import '../../../config/utils/korra_exception.dart';
+import '../../../data/models/customer/customer_model.dart';
+import '../../models/customer/cutomer_limit.dart';
+import '../../models/customer/transaction_model.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
-import '../../models/customer/topup/topup_details.dart';
+
+// --- REMOTE ---
+import '../../models/customer/vendor_profile.dart';
 import '../remote/monnify_functions.dart';
 
 class CustomerRepository {
@@ -30,127 +34,321 @@ class CustomerRepository {
        fx = functions ?? Supabase.instance.client.functions,
        monnify = monnify ?? MonnifyFunctions();
 
-  // Helper function to check a single collection for the nested email
+  // ---------------------------------------------------------------------------
+  // UTILITY METHODS
+  // ---------------------------------------------------------------------------
+
+  /// Checks if Email exists securely (Works for Vendors OR Customers)
   Future<bool> checkCollectionForEmail(
     String collectionName,
     String email,
   ) async {
     try {
-      final snapshot = await db
-          .collection(collectionName)
-          // Use dot notation to access the email field inside the 'owner' map
-          .where('personal.email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      return snapshot.docs.isNotEmpty;
+      final res = await fx.invoke(
+        'check_uniqueness',
+        body: {'type': 'email', 'value': email, 'collection': collectionName},
+      );
+      return res.data['exists'] == true;
     } catch (e) {
-      // Handle potential errors (e.g., permission denied, network issues)
-      debugPrint('Error checking email in $collectionName: $e');
-      return false; // Return false on error to prevent exposing existence
+      debugPrint('Check Email Failed: $e');
+      return false;
     }
   }
 
-  Future<Map<String, dynamic>?> getCustomerReserveLimit(
-    String customerId,
-  ) async {
-    try {
-      final doc = await firestore
-          .collection('customer_reserve_limits')
-          .doc(customerId)
-          .get();
+  // ---------------------------------------------------------------------------
+  // AUTHENTICATION (SIGN IN & LOGOUT)
+  // ---------------------------------------------------------------------------
 
-      if (doc.exists && doc.data() != null) {
-        return doc.data();
-      } else {
-        debugPrint('No customer limit found for $customerId');
-        return null;
+  //// Authenticates a customer and performs the "Zombie Account" check.
+  Future<String> signInCustomer(String email, String password) async {
+    // 1. Sign In via Firebase Auth
+    final credential = await auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final uid = credential.user!.uid;
+
+    // 2. THE ORPHAN CHECK (Safety Net)
+    try {
+      final doc = await firestore.collection('customer').doc(uid).get();
+
+      if (!doc.exists) {
+        throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
       }
     } catch (e) {
-      debugPrint('Error getting customer limit: $e');
-      return null;
+      // If we get Permission Denied or Not Found, it means the DB doc is missing.
+      // (Because the rule says "allow read if owner". If doc is missing, rule might fail or return empty)
+
+      debugPrint('CRITICAL: Zombie account detected (Technical): $e');
+
+      // Delete the Auth user so they can sign up again properly
+      try {
+        await credential.user!.delete();
+      } catch (delError) {
+        debugPrint("Could not delete zombie user: $delError");
+      }
+
+      throw KorraException(
+        'Your account setup was incomplete. Please sign up again.',
+        technicalDetails: e.toString(),
+      );
+    }
+
+    return uid;
+  }
+
+  // Helper method to isolate Auth sign-in exceptions
+  Future<String> _attemptFirebaseAuthSignIn(String email, String password) async {
+    try {
+      final credential = await auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential.user!.uid;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Auth Sign In Failed (Technical): ${e.code} - ${e.message}');
+      // Translate to KorraException
+      throw KorraException(_translateFirebaseAuthError(e), technicalDetails: e.toString());
+    } catch (e) {
+      debugPrint('❌ Auth Sign In Failed (Generic): $e');
+      throw KorraException(
+        'A network error occurred during sign-in. Please try again.',
+        technicalDetails: e.toString(),
+      );
     }
   }
 
-  Future<void> createCustomerReserveLimit(Customer customer) async {
-    final customerDoc = firestore.collection('customer').doc(customer.uid);
-    await customerDoc.set(customer.toMap());
-
-    final customerLimitDoc = firestore
-        .collection('customer_reserve_limits')
-        .doc(customer.uid);
-    await customerLimitDoc.set({
-      'customerId': customer.uid,
-      'reservationLimit': 100000, // default limit for new customer
-      'currentUsedAmount': 0,
-    });
+  Future<void> logout() async {
+    try {
+      await auth.signOut();
+    } catch (e) {
+      // Throw the clean error
+      debugPrint('❌ Logout failed (Technical): $e');
+      throw KorraException(
+        'Logout failed',
+        technicalDetails: e.toString(),
+      );
+    }
   }
 
-  /// Creates a new customer account with Firebase Auth, a Monnify wallet,
-  /// and a Firestore document.
+  // ---------------------------------------------------------------------------
+  // SIGN UP FLOW (HYBRID ARCHITECTURE)
+  // ---------------------------------------------------------------------------
+
   Future<String> createCustomerFromState(SignupCustomerState state) async {
     if (!state.ninVerified || !state.bvnVerified) {
-      throw Exception('NIN and BVN must be verified before account creation.');
+      throw KorraException('NIN and BVN must be verified before account creation.');
     }
 
     final email = state.email.trim().toLowerCase();
+    User? firebaseUser;
+    String? uid;
 
     try {
+      // --- STEP 1: Create Firebase Auth User ---
       final authCredential = await auth.createUserWithEmailAndPassword(
         email: email,
         password: state.password,
       );
-      final uid = authCredential.user!.uid;
-      debugPrint('Firebase user created with UID: $uid');
+      firebaseUser = authCredential.user;
+      uid = firebaseUser!.uid;
+      debugPrint('Step 1: Firebase user created: $uid');
 
-      var customer = Customer.fromState(state, uid, status: 'pending-wallet');
-      final walletData = await createWallet(customer, uid); // 👈 use wrapper
+      // --- STEP 2: Call Supabase (Monnify Reservation) ---
+      final response = await fx.invoke(
+        'create-reserve-account',
+        body: {
+          'uid': uid,
+          'email': email,
+          'firstName': state.firstName,
+          'lastName': state.lastName,
+          'bvn': state.bvn,
+          'nin': state.nin,
+        },
+      );
+
+      final responseData = response.data;
+
+      if (responseData['success'] != true) {
+        throw KorraException(
+          'Banking Setup Failed: ${responseData['error'] ?? "Unknown"}',
+        );
+      }
+
+      final bankData = responseData['data'];
+      debugPrint('Step 2: Reserve Account Created: ${bankData['accountNumber']}');
+
+      // --- STEP 3: Construct & Save to Firestore ---
+
+      // A. Create Base Customer Object
+      var customer = Customer.fromState(state, uid, status: 'active');
+
+      // B. Update Object with known Monnify Details
       customer = customer.copyWithMonnify(
-        walletReference: walletData['walletReference'] as String?,
-        accountNumber: walletData['accountNumber'] as String?,
-        accountName: walletData['accountName'] as String?,
+        walletReference: bankData['accountReference'],
+        accountNumber: bankData['accountNumber'],
+        accountName: bankData['accountName'],
         status: 'active',
       );
-      debugPrint(
-        'Monnify wallet created successfully for customer: ${customer.walletReference}',
-      );
 
-      // Save payout details immediately, even if bank account is not set yet
-      final topup = TopUpDetails(
-        availableBalance: 0,
-        walletAccountNumber: customer.accountNumber ?? '',
-        walletAccountName: customer.accountName ?? '',
-        walletAccountReference: customer.walletReference ?? '',
-      );
-      await saveTopUpDetails(uid, topup);
-      await updateAvailableBalance(uid, customer.accountNumber ?? '');
-      await createCustomerReserveLimit(customer);
-      debugPrint('Top-up details initialized in Firestore.');
-      await _saveCustomerToFirestore(customer);
-      debugPrint('Customer data saved to Firestore.');
+      // C. Save Profile
+      await _saveCustomerToFirestore(customer, bankData['bankName']);
 
+      // D. Initialize Ledger (Transaction History)
+      await _initializeLedger(uid, bankData);
+
+      // E. Initialize Limits (Risk Engine Profile)
+      await _initializeCustomerLimit(customer); // ✅ Renamed for clarity
+
+      // F. Send Welcome Email
       await _sendWelcomeEmail(customer);
-      debugPrint('Welcome email function triggered.');
 
       return uid;
-    } on FirebaseAuthException catch (err) {
-      debugPrint('FirebaseAuth error: ${err.message}');
-      throw Exception(err.message ?? 'Failed to create account.');
+    } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Auth Create Failed (Technical): ${e.code} - ${e.message}');
+      throw KorraException(_translateFirebaseAuthCreateError(e), technicalDetails: e.toString());
+    } on FunctionException catch (e) {
+      debugPrint('❌ Supabase Bank Setup Failed (Technical): $e');
+      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Unknown server error.';
+      throw KorraException(serverError.toString(), technicalDetails: e.toString()); 
     } catch (err) {
-      debugPrint('Unexpected error during signup: $err');
-      throw Exception('Unexpected signup error: $err');
+      // --- ROLLBACK LOGIC ---
+      debugPrint('CRITICAL ERROR: Signup failed. Initiating Rollback... Technical: $err');
+      if (uid != null) {
+        try {
+          // Attempt to clean up Firestore documents
+          await db.collection('customer').doc(uid).delete();
+          await db.collection('customer_limits').doc(uid).delete();
+        } catch (_) {}
+      }
+      if (firebaseUser != null) {
+        try {
+          // Attempt to delete Auth user
+          await firebaseUser.delete();
+        } catch (_) {}
+      }
+      
+      // If the error is already a KorraException (from Step 2), rethrow it cleanly.
+      if (err is KorraException) {
+        rethrow;
+      }
+      
+      // Generic fallback for network or unknown errors (e.g., Firestore failure)
+      throw KorraException(
+        'Account setup failed due to a critical error. Please contact support.',
+        technicalDetails: err.toString(),
+      );
     }
   }
 
-  /// Saves the customer data to Firestore with server timestamps.
-  Future<void> _saveCustomerToFirestore(Customer customer) async {
+  // ---------------------------------------------------------------------------
+  // HELPER METHODS (Auth Error Translators)
+  // ---------------------------------------------------------------------------
+
+  String _translateFirebaseAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+      case 'wrong-password':
+        return 'Invalid email or password.';
+      case 'invalid-email':
+        return 'The email address is not valid.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Access temporarily blocked due to too many failed login attempts.';
+      default:
+        return 'Login failed. Please check your credentials.';
+    }
+  }
+
+  String _translateFirebaseAuthCreateError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'This email is already linked to an existing account.';
+      case 'weak-password':
+        return 'Password should be at least 6 characters.';
+      case 'invalid-email':
+        return 'The email address is not valid.';
+      default:
+        return 'Account creation failed. Please try again.';
+    }
+  }
+
+  Future<void> _saveCustomerToFirestore(
+    Customer customer,
+    String bankName,
+  ) async {
     final map = customer.toMap();
     map['createdAt'] = FieldValue.serverTimestamp();
     map['updatedAt'] = FieldValue.serverTimestamp();
-    await db.collection('customer').doc(customer.uid).set(map);
+
+    if (map['monnify'] is Map) {
+      final monnifyMap = Map<String, dynamic>.from(map['monnify']);
+      monnifyMap['bankName'] = bankName;
+      monnifyMap['availableBalance'] = 0.00;
+      map['monnify'] = monnifyMap;
+    } else {
+      map['monnify'] = {
+        'walletReference': customer.walletReference,
+        'accountNumber': customer.accountNumber,
+        'accountName': customer.accountName,
+        'bankName': bankName,
+        'availableBalance': 0.00,
+      };
+    }
+
+    await db
+        .collection('customer')
+        .doc(customer.uid)
+        .set(map, SetOptions(merge: true));
   }
 
-  /// Calls a Supabase Edge Function to send a welcome email.
+  /// ✅ CORRECTED: Uses TransactionModel to ensure data consistency
+  Future<void> _initializeLedger(
+    String uid,
+    Map<String, dynamic> bankData,
+  ) async {
+    final newDocRef = db
+        .collection('customer')
+        .doc(uid)
+        .collection('ledger_transactions')
+        .doc();
+
+    final initialTx = TransactionModel(
+      id: newDocRef.id,
+      customerId: uid,
+      type: 'system',
+      amount: 0.00,
+      description: 'Account Opened: ${bankData['bankName']}',
+      planId: 'none',
+      reference: 'INIT-${newDocRef.id.substring(0, 8)}',
+      status: 'success',
+      balanceBefore: 0.00,
+      balanceAfter: 0.00,
+      createdAt: DateTime.now(),
+    );
+
+    await newDocRef.set(initialTx.toMap());
+  }
+
+  /// ✅ CORRECTED: Matches CustomerLimit Model Fields exactly
+  Future<void> _initializeCustomerLimit(Customer customer) async {
+    // We define the collection name here.
+    // MUST match what you use in StreamBuilder and Security Rules.
+    final limitRef = firestore.collection('customer_limits').doc(customer.uid);
+
+    // We manually construct the map to ensure it matches the Model 100%
+    // Or we could instantiate the model and use .toFirestore(), but manual is explicit here.
+    await limitRef.set({
+      'uid': customer.uid,
+      'totalCreditLimit': 15000.00, // ✅ Correct Field Name
+      'activeDebt': 0.00, // ✅ Correct Field Name
+      'successfulRepayments': 0,
+      'defaultCount': 0,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _sendWelcomeEmail(Customer customer) async {
     try {
       await fx.invoke(
@@ -165,24 +363,160 @@ class CustomerRepository {
     }
   }
 
-  /// Authenticates a customer using email and password.
-  Future<String> signInCustomer(String email, String password) async {
-    final credential = await auth.signInWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
-      password: password,
-    );
-    debugPrint(
-      'Customer signed in successfully with UID: ${credential.user!.uid}',
-    );
-    return credential.user!.uid;
+  // ---------------------------------------------------------------------------
+  // READ METHODS (Used by UI)
+  // ---------------------------------------------------------------------------
+
+  /// Stream Limit for Dashboard
+  Stream<CustomerLimit?> streamCustomerLimit(String uid) {
+    return firestore.collection('customer_limits').doc(uid).snapshots().map((
+      doc,
+    ) {
+      if (!doc.exists) return null;
+      return CustomerLimit.fromFirestore(doc);
+    });
   }
 
-  /// Logs out the current customer.
-  Future<void> logout() async {
+  /// Stream Balance & Profile
+  Stream<Customer?> streamCustomer(String uid) {
+    return db.collection('customer').doc(uid).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return Customer.fromMap(doc.data()!);
+    });
+  }
+
+  // STREAM: Listens to the Ledger (Transactions)
+  Stream<List<TransactionModel>> streamLedger(String uid) {
+    return db
+        .collection('customer')
+        .doc(uid)
+        .collection('ledger_transactions')
+        .orderBy('createdAt', descending: true) // Newest first
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            // Fix: Pass both the data AND the document ID
+            return TransactionModel.fromMap(doc.data(), doc.id);
+          }).toList();
+        });
+  }
+
+  /// STREAM: Listens to My Vendors
+  Stream<List<VendorProfile>> streamMyVendors(String uid) {
+    return db
+        .collection('customer')
+        .doc(uid)
+        .collection('my_vendors')
+        .orderBy('lastInteractionAt', descending: true)
+        .snapshots()
+        .map((snap) {
+          return snap.docs.map((doc) {
+            // ✅ FIX: Pass both doc.data() AND doc.id
+            return VendorProfile.fromMap(doc.data(), doc.id);
+          }).toList();
+        });
+  }
+
+  Future<void> updateCustomerAddress({
+    required String uid,
+    required String address,
+    required String city,
+    required String state,
+  }) async {
     try {
-      await auth.signOut();
+      await db.collection('customer').doc(uid).update({
+        'address.address': address.trim(),
+        'address.city': city.trim(),
+        'address.state': state.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
-      throw Exception('Logout failed: $e');
+      throw KorraException("Failed to update profile.", technicalDetails: e.toString());
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = auth.currentUser;
+    if (user == null) throw KorraException("User not logged in");
+
+    // 1. Create Credential for Re-Auth
+    final cred = EmailAuthProvider.credential(
+      email: user.email!, 
+      password: currentPassword
+    );
+
+    try {
+      // 2. Re-Authenticate (Critical Security Step)
+      await user.reauthenticateWithCredential(cred);
+
+      // 3. Update Password
+      await user.updatePassword(newPassword);
+      
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        throw KorraException("The current password is incorrect.");
+      } else if (e.code == 'weak-password') {
+        throw KorraException("New password is too weak.");
+      } else if (e.code == 'requires-recent-login') {
+        throw KorraException("Please log out and log back in before changing your password.");
+      }
+      throw KorraException("Update failed: ${e.message}");
+    } catch (e) {
+      throw KorraException("An unknown error occurred.");
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // 1. Call the Executioner Function
+      final response = await fx.invoke(
+        'delete-account',
+        body: { 'customerUid': user.uid },
+      );
+
+      final data = response.data;
+
+      // 2. Handle Business Logic Errors (e.g., Active Plans)
+      if (data['success'] == false) {
+        throw KorraException(data['error'] ?? "Could not delete account");
+      }
+      
+      // 3. If successful, the Auth token is now invalid on the server.
+      // We sign out locally to clear the state.
+      await auth.signOut();
+
+    } catch (e) {
+      // 4. Handle Technical Errors
+      if (e is FunctionException) {
+         // Extract error from Supabase response if possible
+         final details = e.details;
+         if (details is Map && details['error'] != null) {
+            throw KorraException(details['error']);
+         }
+      }
+      // If it's already a KorraException, rethrow
+      if (e is KorraException) rethrow;
+
+      throw KorraException("Unable to delete account. Please contact support.");
+    }
+  }
+
+  Future<void> updateFcmToken(String uid, String token) async {
+    try {
+      // We merge it so we don't overwrite other data
+      await db.collection('customer').doc(uid).set({
+        'fcmToken': token,
+        'lastSeen': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Failed to update FCM Token: $e");
     }
   }
 }

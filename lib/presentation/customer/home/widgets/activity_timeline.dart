@@ -1,7 +1,8 @@
-// lib/presentation/customer/home/widgets/activity_timeline.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart'; // Ensure you have intl or use custom formatter
+// Update these imports to match your project structure
 import '../../../../data/models/customer/activity_item.dart';
 
 part 'activity_tile_pro.dart';
@@ -9,7 +10,6 @@ part 'activity_tile_pro.dart';
 class ActivityTimeline extends StatelessWidget {
   final List<ActivityItem> items;
 
-  // optional callbacks
   final void Function(ActivityItem)? onPayNow;
   final void Function(ActivityItem)? onViewPlan;
   final void Function(ActivityItem)? onViewReceipt;
@@ -30,36 +30,29 @@ class ActivityTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-        child: Container(
-          padding: EdgeInsets.all(16.r),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(color: const Color(0xFFEAE6E2)),
-          ),
-          child: Text(
-            'No recent activity.',
-            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF5E5E5E)),
-          ),
+        padding: EdgeInsets.symmetric(horizontal: 20.w),
+        child: Text(
+          'No recent activity.',
+          style: GoogleFonts.inter(color: Colors.grey),
         ),
       );
     }
 
-    return Column(
-      children: List.generate(items.length, (i) {
-        final a = items[i];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: items.length,
+      itemBuilder: (context, index) {
         return _ActivityTilePro(
-          item: a,
-          isFirst: i == 0,
-          isLast: i == items.length - 1,
+          item: items[index],
+          isFirst: index == 0,
+          isLast: index == items.length - 1,
           onPayNow: onPayNow,
           onViewPlan: onViewPlan,
           onViewReceipt: onViewReceipt,
-          onReviewLink: onReviewLink,
-          onEnableAutopay: onEnableAutopay,
         );
-      }),
+      },
     );
   }
 }

@@ -32,10 +32,11 @@ class CustomerShell extends StatelessWidget {
           child: BlocBuilder<BottomNavBloc, BottomNavState>(
             builder: (context, state) {
               final repo = context.read<CustomerRepository>();
+              final navBloc = context.read<BottomNavBloc>();
         
               final pages = [
-                HomePage(customerRepo: repo, customerUid: uid),
-                PlansPage(),
+                HomePage(customerRepo: repo, customerUid: uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
+                PlansPage(customerRepo: repo, customerUid: uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)),),
                 ProfilePage(customerRepo: repo, customerUid: uid),
               ];
         
@@ -54,8 +55,10 @@ class CustomerShell extends StatelessWidget {
                 bottomNavigationBar: KorraBottomNav(
                   currentIndex: state.index,
                   pageIcons: customerPageIcons,
-                  onTap: (i) =>
-                      context.read<BottomNavBloc>().add(BottomNavChanged(i)),
+                  onTap: (i) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      navBloc.add(BottomNavChanged(i));
+                  },
                 ),
               );
             },

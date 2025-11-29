@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:korra/data/repository/vendors/verification_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../data/repository/vendors/vendor_repository.dart';
@@ -56,11 +57,21 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     on<VendorConfirmChanged>((e, emit) => emit(state.copyWith(confirm: e.value)));
     on<ToggleVendorPassHidden>((_, emit) => emit(state.copyWith(hidePass: !state.hidePass)));
     on<ToggleVendorConfHidden>((_, emit) => emit(state.copyWith(hideConf: !state.hideConf)));
+    on<TermsAgreementToggled>((e, emit) => emit(state.copyWith(toggled: e.value)));
 
     // KYC (explicit triggers if you keep standalone Verify buttons)
     on<VerifyBvnRequested>(_onVerifyBvn);
     on<VerifyNinRequested>(_onVerifyNin);
     on<ClearKycError>((_, emit) => emit(state.copyWith(kycError: null)));
+
+    // --- NEW: Social Media Handlers ---
+    on<InstagramChanged>((e, emit) => emit(state.copyWith(instagram: e.value)));
+    on<TwitterChanged>((e, emit) => emit(state.copyWith(twitter: e.value)));
+    on<FacebookChanged>((e, emit) => emit(state.copyWith(facebook: e.value)));
+    on<TiktokChanged>((e, emit) => emit(state.copyWith(tiktok: e.value)));
+    on<WebsiteChanged>((e, emit) => emit(state.copyWith(website: e.value)));
+    on<WhatsappGroupChanged>((e, emit) => emit(state.copyWith(whatsappGroup: e.value)));
+    on<OtherLinkChanged>((e, emit) => emit(state.copyWith(otherLink: e.value)));
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────
@@ -104,6 +115,35 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     }
 
     try {
+      // --- 1. FRAUD CHECK (UNIQUENESS) ---
+      // We check DB before calling external APIs to save money and prevent duplicates.
+      
+      if (ninNeedsVerification) {
+        emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
+        
+        final ninExists = await _vendorsRepo.checkIdentityExists(nin: state.nin.trim());
+        if (ninExists) {
+           emit(state.copyWith(
+            ninVerifying: false,
+            ninError: 'This NIN is linked to another account.', // Fraud Message
+          ));
+          return; // Stop here
+        }
+      }
+
+      if (bvnNeedsVerification) {
+        emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
+
+        final bvnExists = await _vendorsRepo.checkIdentityExists(bvn: state.bvn.trim());
+        if (bvnExists) {
+           emit(state.copyWith(
+            bvnVerifying: false,
+            bvnError: 'This BVN is linked to another account.', // Fraud Message
+          ));
+          return; // Stop here
+        }
+      }
+
       if (ninNeedsVerification) {
         emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
         
