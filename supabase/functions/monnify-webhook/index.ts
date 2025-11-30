@@ -12,9 +12,9 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
-const messaging = admin.messaging(); // Need this for Push Notifications later
+const messaging = admin.messaging();
 
-// 2. CRYPTO HELPER
+// 2. CRYPTO HELPER (HMAC-SHA512)
 async function verifyMonnifyHash(bodyText: string, signature: string, secret: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -54,7 +54,7 @@ serve(async (req) => {
     const isValid = await verifyMonnifyHash(bodyText, signature, MONNIFY_SECRET_KEY);
     if (!isValid) {
       console.error("Invalid Signature");
-      // return new Response("Unauthorized", { status: 401 }); 
+      return new Response("Unauthorized", { status: 401 }); 
     }
 
     const payload = JSON.parse(bodyText);
@@ -93,7 +93,7 @@ serve(async (req) => {
 
       const userData = userDoc.data();
       const currentBalance = userData?.monnify?.availableBalance || 0.00;
-      const fcmToken = userData?.fcmToken; // Get token for push later
+      const fcmToken = userData?.fcmToken; // Get token for push
 
       // 3. Calculations
       const fee = Math.min(amountPaid * 0.03, 4000); 
@@ -143,7 +143,7 @@ serve(async (req) => {
         "monnify.availableBalance": admin.firestore.FieldValue.increment(netCredit)
       });
 
-      // --- WRITE D: SAVE IN-APP NOTIFICATION (The Missing Piece) ---
+      // Write D: SAVE IN-APP NOTIFICATION
       const notifRef = db.collection('customer').doc(uid).collection('notifications').doc();
       t.set(notifRef, {
         id: notifRef.id,
@@ -154,18 +154,35 @@ serve(async (req) => {
         createdAt: timestamp
       });
 
-      // --- SEND PUSH NOTIFICATION (Async Side Effect) ---
-      // Note: We usually do this *after* transaction, but inside is okay if we don't await it blocking
+      // 5. SEND PUSH NOTIFICATION (Async Side Effect)
       if (fcmToken) {
+        // We deliberately catch errors here so the Transaction doesn't fail just because Push failed
         messaging.send({
           token: fcmToken,
           notification: {
             title: "Wallet Funded 💰",
             body: `You received ${formattedAmount} in your Korra wallet.`,
           },
-          android: { priority: "high", notification: { color: "#FFA54600" } },
-          apns: { payload: { aps: { sound: "default" } } }
-        }).catch((e: any) => console.error("FCM Error:", e));
+          android: {
+            priority: "high",
+            notification: {
+              channelId: "korra_high_importance_channel",
+              priority: "max",
+              defaultSound: true,
+              defaultVibrateTimings: true,
+              color: "#A54600", // ✅ FIXED: 6-digit Hex (Removed FF alpha)
+              icon: "ic_launcher"
+            }
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: "default",
+                contentAvailable: true,
+              }
+            }
+          }
+        }).catch((e: any) => console.error("FCM Error (Transaction still succeeded):", e));
       }
     });
 
