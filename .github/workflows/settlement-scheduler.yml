@@ -18,7 +18,7 @@ jobs:
       - name: Call Supabase Function
         # We use 'curl' (a standard command line tool) to send the POST request
         run: |
-          curl -X POST '${{ secrets.SUPABASE_FUNCTION_URL }}' \
+          curl -X POST '${{ secrets.SUPABASE_URL }}/functions/v1/process-settlements?save=true' \
           -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
           -H "Content-Type: application/json" \
           --fail  # This makes the Action fail visibly if the server returns an error (4xx/5xx)
