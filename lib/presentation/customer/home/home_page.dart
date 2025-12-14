@@ -122,6 +122,7 @@ class _HomePageState extends State<HomePage> {
                       customerUid: widget.customerUid,
                       walletBalance: currentBalance,
                       onJumpToHome: () => widget.onJumpTo(0),
+                      onJumpToPlan: () => widget.onJumpToPlan,
                     ));
                   }
                 },
@@ -145,7 +146,7 @@ class _HomePageState extends State<HomePage> {
                           Get.to(() => NotificationScreen(
                             repo: widget.customerRepo, 
                             uid: widget.customerUid,
-                            onJumpTo: widget.onJumpToPlan,
+                            onJumpToPlans: () => widget.onJumpTo(1),
                           ));
                         },
                         icon: Stack(

@@ -52,6 +52,13 @@ class VendorProductsAdd extends VendorProductsEvent {
   final int stock;
   final String category;
   final List<File> images;
+  
+  // ✅ NEW FIELDS FOR POLICY LOGIC
+  final ProductModelType modelType;       // Strict vs Direct
+  final String cancellationPolicy;        // "50% Refund", "Store Credit", etc.
+  final bool extensionsEnabled;           // True/False
+  final bool termsAccepted;               // Must be true
+  final double? directDownPayment;        // Only for Direct model
 
   const VendorProductsAdd({
     required this.name,
@@ -60,10 +67,27 @@ class VendorProductsAdd extends VendorProductsEvent {
     required this.stock,
     required this.category,
     required this.images,
+    required this.modelType,
+    required this.cancellationPolicy,
+    required this.extensionsEnabled,
+    required this.termsAccepted,
+    this.directDownPayment,
   });
 
   @override
-  List<Object?> get props => [name, description, price, stock, category, images];
+  List<Object?> get props => [
+        name,
+        description,
+        price,
+        stock,
+        category,
+        images,
+        modelType,
+        cancellationPolicy,
+        extensionsEnabled,
+        termsAccepted,
+        directDownPayment,
+      ];
 }
 
 class VendorProductsRequested extends VendorProductsEvent {}

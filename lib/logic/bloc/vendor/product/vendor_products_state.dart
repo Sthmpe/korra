@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+enum ProductModelType { strict, direct }
 enum ProductStatus { approved, pending, rejected, outOfStock }
 enum ProductFilter { all, approved, pending, outOfStock, rejected }
 enum ProductFlow { create, edit, idle}
@@ -15,6 +16,13 @@ class ProductItem extends Equatable {
   final ProductStatus status;
   final List<String> imageUrl; // '' => fallback letter tile
   final DateTime createdAt;
+  final ProductModelType modelType;
+  final String cancellationPolicy;
+  final String baseDuration;
+  final String noticePeriod;
+  final String totalMaxTime;
+  final bool extensionsEnabled;
+  final double? directDownPayment;
 
   const ProductItem({
     required this.id,
@@ -26,14 +34,20 @@ class ProductItem extends Equatable {
     required this.status,
     required this.description,
     required this.createdAt,
-
     this.imageUrl = const [],
+    this.modelType = ProductModelType.strict,
+    this.cancellationPolicy = "50% Refund",
+    this.baseDuration = "15 Days",
+    this.noticePeriod = "1 Day",
+    this.totalMaxTime = "16 Days",
+    this.extensionsEnabled = false,
+    this.directDownPayment,
   });
 
   bool get shareable => status == ProductStatus.approved && stock > 0;
 
   @override
-  List<Object?> get props => [id, name, priceText, stock, status, imageUrl, code, description];
+  List<Object?> get props => [id, name, priceText, stock, status, imageUrl, code, description, category, createdAt, modelType, cancellationPolicy, baseDuration, noticePeriod, totalMaxTime, extensionsEnabled, directDownPayment];
 }
 
 class VendorProductsState extends Equatable {
@@ -45,6 +59,7 @@ class VendorProductsState extends Equatable {
   final bool? success;
   final String? errorMessage;
   final Map<ProductFilter, int> statusCounts;
+  final double availableLimit;
 
   const VendorProductsState({
     required this.query,
@@ -55,6 +70,7 @@ class VendorProductsState extends Equatable {
     this.success,
     this.errorMessage,
     this.statusCounts = const {},
+    this.availableLimit = 0.0,
   });
 
   List<ProductItem> get visibleItems {
@@ -102,6 +118,7 @@ class VendorProductsState extends Equatable {
     bool? isSubmitting,
     String? errorMessage,
     Map<ProductFilter, int>? statusCounts,
+    double? availableLimit,
   }) {
     return VendorProductsState(
       query: query ?? this.query,
@@ -112,6 +129,7 @@ class VendorProductsState extends Equatable {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       errorMessage: errorMessage ?? this.errorMessage,
       statusCounts: statusCounts ?? this.statusCounts,
+      availableLimit: availableLimit ?? this.availableLimit,
     );
   }
 
@@ -126,5 +144,5 @@ class VendorProductsState extends Equatable {
   );
 
   @override
-  List<Object?> get props => [query, filter, items, isSubmitting, success, errorMessage, flow, statusCounts];
+  List<Object?> get props => [query, filter, items, isSubmitting, success, errorMessage, flow, statusCounts, availableLimit];
 }

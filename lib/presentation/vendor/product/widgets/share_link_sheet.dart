@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:iconsax/iconsax.dart'; // Using Iconsax for consistency
 import 'package:share_plus/share_plus.dart';
+
+import '../../../../config/constants/colors.dart'; // Ensure KorraColors is imported
 
 class ShareLinkSheet extends StatefulWidget {
   final String productName;
@@ -36,13 +38,14 @@ class ShareLinkSheet extends StatefulWidget {
 }
 
 class _ShareLinkSheetState extends State<ShareLinkSheet> {
-  static const _brand = Color(0xFFA54600);
+  // Using consistent brand colors
+  static const _brand = KorraColors.brand; 
   static const _hair = Color(0xFFEAE6E2);
 
   bool _copied = false;
 
   String get _code => 'KORRA: ${widget.token}';
-  String get _shareUrl => widget.token;
+  String get _shareUrl => widget.token; // This acts as the deep link code
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: _code));
@@ -55,14 +58,15 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
 
   Future<void> _share() async {
     final message =
-        'Reserve this product now on Korra!\nProduct: ${widget.productName}\nCode: $_shareUrl';
+        'Reserve this product now on Korra!\nProduct: ${widget.productName}\nCode: $_shareUrl\n\nOpen Korra and paste this code to view.';
 
     final param = ShareParams(
       text: message,
-      title: 'Share Reservation Product Link',
+      title: 'Share Product Code', // More specific title
     );
 
-    await SharePlus.instance.share(param);
+    // Using the static method directly
+    await Share.share(param.text, subject: param.title); 
   }
 
   @override
@@ -70,136 +74,121 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 16.h + bottom),
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 24.h + bottom), // Adjusted padding
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // drag handle
+          // 1. Drag Handle
           Center(
             child: Container(
               width: 40.w,
               height: 4.h,
               decoration: BoxDecoration(
-                color: _hair,
+                color: Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2.r),
               ),
             ),
           ),
-          SizedBox(height: 12.h),
+          SizedBox(height: 24.h),
 
-          // title row
+          // 2. Title Row
           Row(
             children: [
               Container(
-                width: 40.w,
-                height: 40.w,
+                padding: EdgeInsets.all(10.r),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4ECE7),
+                  color: const Color(0xFFFFF4ED), // Light orange bg
                   borderRadius: BorderRadius.circular(12.r),
                 ),
-                alignment: Alignment.center,
-                child: Icon(MdiIcons.linkVariant, color: _brand, size: 20.sp),
+                child: Icon(Iconsax.link_2, color: _brand, size: 24.sp),
               ),
-              SizedBox(width: 10.w),
+              SizedBox(width: 14.w),
               Expanded(
-                child: Text(
-                  'Share reserve link',
-                  style: GoogleFonts.inter(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Share Product',
+                      style: GoogleFonts.inter(
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF101828),
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      widget.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.sp,
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              // optional close (kept subtle)
               IconButton(
-                splashRadius: 22.r,
-                icon: Icon(
-                  MdiIcons.close,
-                  size: 20.sp,
-                  color: const Color(0xFF1B1B1B),
-                ),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(Icons.close, size: 22.sp, color: Colors.grey),
               ),
             ],
           ),
 
-          SizedBox(height: 6.h),
-          Text(
-            widget.productName,
-            style: GoogleFonts.inter(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF5E5E5E),
-            ),
-          ),
+          SizedBox(height: 32.h),
 
-          // token field (tap anywhere to copy)
-          SizedBox(height: 12.h),
-          InkWell(
-            borderRadius: BorderRadius.circular(12.r),
+          // 3. Code Display Area (Tap to Copy)
+          GestureDetector(
             onTap: _copy,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
               decoration: BoxDecoration(
-                color: const Color(0xFFF7F3EF),
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: _hair),
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(color: const Color(0xFFEAECF0)),
               ),
               child: Row(
                 children: [
-                  Icon(MdiIcons.link, color: _brand, size: 18.sp),
-                  SizedBox(width: 10.w),
+                  Icon(Iconsax.copy, size: 20.sp, color: Colors.grey.shade600),
+                  SizedBox(width: 12.w),
                   Expanded(
                     child: Text(
                       _code,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                        fontSize: 13.5.sp,
+                        fontSize: 16.sp,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1B1B1B),
+                        color: const Color(0xFF101828),
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  SizedBox(width: 8.w),
                   AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 140),
-                    transitionBuilder: (c, a) =>
-                        FadeTransition(opacity: a, child: c),
+                    duration: const Duration(milliseconds: 200),
                     child: _copied
-                        ? IconButton(
-                            onPressed: null,
-                            icon: Row(
-                              key: const ValueKey('copied'),
-                              children: [
-                                Icon(
-                                  MdiIcons.clipboardCheckOutline,
-                                  size: 18.sp,
-                                  color: const Color(0xFF1B5E20),
+                        ? Row(
+                            key: const ValueKey('copied'),
+                            children: [
+                              Icon(Iconsax.tick_circle, color: Colors.green, size: 18.sp),
+                              SizedBox(width: 4.w),
+                              Text(
+                                "Copied",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green,
                                 ),
-                                SizedBox(width: 6.w),
-                                Text(
-                                  'Copied',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12.5.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF1B5E20),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           )
-                        : IconButton(
-                            key: const ValueKey('copy'),
-                            constraints: const BoxConstraints(),
-                            padding: EdgeInsets.zero,
-                            icon: Icon(
-                              MdiIcons.contentCopy,
-                              size: 18.sp,
-                              color: const Color(0xFF1B1B1B),
+                        : Text(
+                            "Tap to copy",
+                            key: const ValueKey('tap'),
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              color: Colors.grey.shade500,
                             ),
-                            onPressed: _copy,
                           ),
                   ),
                 ],
@@ -207,72 +196,49 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
             ),
           ),
 
-          // primary actions
-          SizedBox(height: 14.h),
+          SizedBox(height: 24.h),
+
+          // 4. Primary Share Button
           SizedBox(
             width: double.infinity,
-            height: 48.h,
-            child: FilledButton(
-              onPressed: _copy,
+            height: 52.h,
+            child: FilledButton.icon(
+              onPressed: _share,
               style: FilledButton.styleFrom(
                 backgroundColor: _brand,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14.r),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
                 elevation: 0,
               ),
-              child: Text(
-                _copied ? 'Copied' : 'Copy code',
-                style: GoogleFonts.inter(
-                  fontSize: 14.5.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-
-          SizedBox(height: 10.h),
-
-          // 🔥 replaced “Generate new link” with Share button
-          SizedBox(
-            width: double.infinity,
-            height: 48.h,
-            child: OutlinedButton.icon(
-              onPressed: _share,
-              icon: Icon(MdiIcons.shareVariant, color: _brand, size: 18.sp),
+              icon: Icon(Iconsax.share, size: 20.sp),
               label: Text(
-                'Share via...',
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w700,
-                  color: _brand,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: _hair),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14.r),
-                ),
+                "Share Code",
+                style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),
               ),
             ),
           ),
 
-          SizedBox(height: 8.h),
+          SizedBox(height: 16.h),
+
+          // 5. Helper Text
           Center(
             child: Text(
-              'Customers should paste the code in korra to open the product.',
+              'Customers enter this code in the Korra app to find your product.',
               textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 12.sp,
-                color: const Color(0xFF8B8B8B),
+                color: const Color(0xFF667085),
+                height: 1.4,
               ),
             ),
           ),
-          SizedBox(height: 6.h),
         ],
       ),
     );
   }
+}
+
+class ShareParams {
+  final String text;
+  final String title;
+  ShareParams({required this.text, required this.title});
 }

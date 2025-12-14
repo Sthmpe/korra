@@ -5,13 +5,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:korra/config/constants/colors.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:intl/intl.dart';
 
-import '../../../../config/utils/currency_formatters.dart';
+import '../../../../config/constants/colors.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
+import '../../../../presentation/vendor/product/widgets/share_link_sheet.dart';
 import '../../../shared/widgets/korra_header.dart';
 import 'product_edit_screen.dart';
 
@@ -25,263 +26,468 @@ class ProductDetailsScreen extends StatefulWidget {
 }
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
-  int _currentIndex = 0;
+  int _currentImageIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final images = widget.product.imageUrl;
-    debugPrint('Product images: $images');
+    final product = widget.product;
+    final bool canEdit = product.status != ProductStatus.pending;
 
     return Scaffold(
-      backgroundColor: KorraColors.bg,
+      backgroundColor: Colors.white,
       appBar: KorraHeader(
-        title: 'Product Details',
+        title: "Product Details",
         showLeadingIcon: true,
         trailingActions: [
-          if (widget.product.status != ProductStatus.pending &&
-              widget.product.status != ProductStatus.outOfStock)
+          if (canEdit)
             IconButton(
-              icon: Icon(
-                MdiIcons.storeEdit,
-                size: 24.sp,
-                color: KorraColors.brand,
-              ),
-              onPressed: () =>
-                  Get.to(() => MultiBlocProvider(
-                        providers: [
-                          // Pass the existing bloc instance
-                          BlocProvider.value(
-                            value: context.read<VendorProductsBloc>(),
-                          ),
-
-                          // Create a new bloc instance
-                          BlocProvider(create: (_) => ImageBloc()),
-                        ],
-                    child: ProductEditScreen(product: widget.product)
-                  )),
+              onPressed: () => _navigateToEdit(context),
+              icon: Icon(Iconsax.edit, size: 22.sp, color: const Color(0xFF101828)),
+              tooltip: "Edit Product",
             ),
         ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.all(16.w),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ---------- IMAGE CAROUSEL ----------
-            images.isNotEmpty
-                ? Stack(
-                    children: [
-                      CarouselSlider.builder(
-                        itemCount: images.length,
-                        itemBuilder: (context, index, realIdx) {
-                          return Container(
-                            margin: EdgeInsets.symmetric(horizontal: 4.w),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16.r),
-                              child: CachedNetworkImage(
-                                imageUrl: images[index],
-                                imageBuilder: (context, imageProvider) =>
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        image: DecorationImage(
-                                          image: imageProvider,
-                                          fit: BoxFit.cover,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          12.r,
-                                        ),
-                                      ),
-                                    ),
-                                placeholder: (context, url) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                errorWidget: (context, url, error) =>
-                                    const Icon(Icons.broken_image),
-                              ),
-                            ),
-                          );
-                        },
-                        options: CarouselOptions(
-                          height: 280.h,
-                          viewportFraction: 0.95,
-                          enableInfiniteScroll: images.length > 1,
-                          autoPlay: images.length > 1,
-                          autoPlayInterval: const Duration(seconds: 4),
-                          onPageChanged: (index, reason) {
-                            setState(() => _currentIndex = index);
-                          },
-                        ),
-                      ),
-                      // // Gradient overlay (for polish)
-                      // Positioned(
-                      //   bottom: 0,
-                      //   left: 0,
-                      //   right: 0,
-                      //   child: Container(
-                      //     height: 60.h,
-                      //     decoration: BoxDecoration(
-                      //       gradient: LinearGradient(
-                      //         begin: Alignment.bottomCenter,
-                      //         end: Alignment.topCenter,
-                      //         colors: [Colors.black.withOpacity(0.3), Colors.transparent],
-                      //       ),
-                      //     ),
-                      //   ),
-                      // ),
-                    ],
-                  )
-                : Container(
-                    height: 280.h,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(16.r),
-                    ),
-                    child: Icon(
-                      Icons.image_not_supported,
-                      size: 80.sp,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-            SizedBox(height: 10.h),
-
-            // ---------- INDICATOR ----------
-            if (images.length > 1)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(images.length, (index) {
-                  final isActive = index == _currentIndex;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: EdgeInsets.symmetric(horizontal: 4.w),
-                    width: isActive ? 18.w : 7.w,
-                    height: 7.h,
-                    decoration: BoxDecoration(
-                      color: isActive ? KorraColors.brand : Colors.grey[400],
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                  );
-                }),
+            
+            // 1. STATUS BANNER
+            if (product.status == ProductStatus.rejected) ...[
+              _buildAlertBanner(
+                "This product was rejected.", 
+                Iconsax.close_circle, 
+                const Color(0xFFFEF3F2), 
+                const Color(0xFFB42318)
               ),
+              SizedBox(height: 20.h),
+            ],
 
-            SizedBox(height: 20.h),
+            // 2. IMAGE GALLERY
+            _buildImageGallery(product.imageUrl),
+            
+            SizedBox(height: 24.h),
 
-            // ---------- NAME ----------
+            // 3. TITLE & PRICE
             Text(
-              widget.product.name,
+              product.name,
               style: GoogleFonts.inter(
                 fontSize: 20.sp,
                 fontWeight: FontWeight.w700,
+                color: const Color(0xFF101828),
+                height: 1.3,
               ),
             ),
-
             SizedBox(height: 8.h),
-
-            // ---------- PRICE + STATUS ----------
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  formatPrice(widget.product.priceText),
+                  product.priceText,
                   style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600,
-                    color: KorraColors.brand,
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
+                    color: KorraColors.brand, 
+                    letterSpacing: -0.5,
                   ),
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 10.w,
-                    vertical: 4.h,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _statusColor(widget.product.status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20.r),
-                  ),
-                  child: Text(
-                    widget.product.status.name.toUpperCase(),
-                    style: GoogleFonts.inter(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: _statusColor(widget.product.status),
-                    ),
-                  ),
-                ),
+                const Spacer(),
+                _StatusPill(status: product.status),
               ],
             ),
 
-            SizedBox(height: 20.h),
+            SizedBox(height: 24.h),
 
-            // ---------- DESCRIPTION ----------
+            // 4. ACTION BUTTON
+            if (product.shareable) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 52.h,
+                child: OutlinedButton.icon(
+                  onPressed: () => ShareLinkSheet.show(
+                    context, 
+                    productName: product.name, 
+                    token: product.code
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFD0D5DD)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Iconsax.export_1, size: 20, color: Color(0xFF344054)),
+                  label: Text(
+                    "Share Link",
+                    style: GoogleFonts.inter(
+                      fontSize: 15.sp, 
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF344054)
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 32.h),
+            ],
+
+            // 5. TERMS OF SALE (SMART CONTRACT INFO)
+            Text(
+              "Terms of Sale",
+              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054)),
+            ),
+            SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(color: const Color(0xFFEAECF0)),
+              ),
+              child: Column(
+                children: [
+                  // Model Type
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8.r),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFEAECF0)),
+                        ),
+                        child: Icon(
+                          product.modelType == ProductModelType.strict ? Iconsax.shield_tick : Icons.handshake_rounded,
+                          size: 18.sp,
+                          color: KorraColors.brand,
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.modelType == ProductModelType.strict ? "Strict Lock" : "Korra Direct",
+                            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828)),
+                          ),
+                          Text(
+                            "Sales Model",
+                            style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF667085)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16.h),
+                    child: const Divider(height: 1, color: Color(0xFFEAECF0)),
+                  ),
+
+                  // Policy Details Grid
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildDetailColumn("Cancellation", product.cancellationPolicy),
+                      
+                      // Show Down Payment ONLY if Direct
+                      if (product.modelType == ProductModelType.direct && product.directDownPayment != null)
+                         _buildDetailColumn("Down Payment", "₦${NumberFormat('#,##0').format(product.directDownPayment)}"),
+                      
+                      // Show Extension Status
+                      _buildDetailColumn("Extensions", product.extensionsEnabled ? "Allowed" : "No"),
+                    ],
+                  )
+                ],
+              ),
+            ),
+
+            SizedBox(height: 24.h),
+
+            // 6. TIMELINE CARD
+            Text(
+              "Lock Duration",
+              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054)),
+            ),
+            SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(color: const Color(0xFFEAECF0)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildTimelineItem(product.baseDuration, "Base Time", false),
+                  Icon(Iconsax.add, size: 14.sp, color: Colors.grey),
+                  _buildTimelineItem(product.noticePeriod, "Notice", true),
+                  Icon(Iconsax.arrow_right_1, size: 14.sp, color: Colors.grey),
+                  _buildTimelineItem(product.totalMaxTime, "Total Max", false, isBold: true),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 32.h),
+
+            // 7. STANDARD INFO GRID
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16.h),
+              decoration: const BoxDecoration(
+                border: Border.symmetric(horizontal: BorderSide(color: Color(0xFFF2F4F7), width: 1)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _InfoItem(label: "Stock", value: product.stock.toString()),
+                  Container(width: 1, height: 24.h, color: const Color(0xFFEAECF0)),
+                  _InfoItem(label: "Category", value: product.category),
+                  Container(width: 1, height: 24.h, color: const Color(0xFFEAECF0)),
+                  _InfoItem(label: "Added", value: DateFormat('d MMM').format(product.createdAt)),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 32.h),
+
+            // 8. DESCRIPTION
             Text(
               "Description",
               style: GoogleFonts.inter(
                 fontSize: 16.sp,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF101828),
               ),
             ),
-            SizedBox(height: 6.h),
+            SizedBox(height: 12.h),
             Text(
-              widget.product.description,
+              product.description,
               style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                color: Colors.black87,
-                height: 1.4,
+                fontSize: 15.sp,
+                color: const Color(0xFF475467),
+                height: 1.6,
+                fontWeight: FontWeight.w400,
               ),
             ),
 
-            SizedBox(height: 20.h),
-
-            // ---------- INFO BOX ----------
-            Divider(height: 24.h),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _infoTile("Stock", widget.product.stock.toString()),
-                _infoTile("Category", widget.product.category),
-                _infoTile(
-                  "Date Added",
-                  widget.product.createdAt.toString().split(' ').first,
-                ),
-              ],
-            ),
+            SizedBox(height: 40.h),
           ],
         ),
       ),
     );
   }
 
-  Widget _infoTile(String label, String value) {
+  // --- WIDGET HELPERS ---
+
+  Widget _buildDetailColumn(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey[600]),
+          style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w500),
         ),
         SizedBox(height: 4.h),
         Text(
           value,
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF101828), fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
-  Color _statusColor(ProductStatus status) {
+  Widget _buildTimelineItem(String value, String label, bool isAlert, {bool isBold = false}) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 13.sp, 
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+            color: isAlert ? const Color(0xFFA54600) : const Color(0xFF101828)
+          ),
+        ),
+        SizedBox(height: 4.h),
+        Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF667085)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImageGallery(List<String> images) {
+    if (images.isEmpty) {
+      return Container(
+        height: 250.h, // Slightly shorter for better scroll
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF2F4F7),
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Iconsax.image, size: 48.sp, color: Colors.grey.shade400),
+            SizedBox(height: 8.h),
+            Text("No images", style: GoogleFonts.inter(color: Colors.grey.shade500)),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        CarouselSlider(
+          options: CarouselOptions(
+            height: 300.h,
+            viewportFraction: 1.0, 
+            enableInfiniteScroll: images.length > 1,
+            autoPlay: false, 
+            onPageChanged: (index, _) => setState(() => _currentImageIndex = index),
+          ),
+          items: images.map((url) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(20.r),
+              child: CachedNetworkImage(
+                imageUrl: url,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(color: Colors.grey.shade100),
+                errorWidget: (_, __, ___) => Container(color: Colors.grey.shade100, child: const Icon(Icons.error)),
+              ),
+            );
+          }).toList(),
+        ),
+        if (images.length > 1) ...[
+          SizedBox(height: 12.h),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: images.asMap().entries.map((entry) {
+              final isActive = _currentImageIndex == entry.key;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: isActive ? 24.w : 6.w,
+                height: 6.w,
+                margin: EdgeInsets.symmetric(horizontal: 3.w),
+                decoration: BoxDecoration(
+                  color: isActive ? KorraColors.brand : const Color(0xFFEAECF0),
+                  borderRadius: BorderRadius.circular(100.r),
+                ),
+              );
+            }).toList(),
+          ),
+        ]
+      ],
+    );
+  }
+
+  Widget _buildAlertBanner(String msg, IconData icon, Color bg, Color text) {
+    return Container(
+      padding: EdgeInsets.all(12.r),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: bg.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20.sp, color: text),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Text(msg, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: text)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToEdit(BuildContext context) {
+    Get.to(() => MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: context.read<VendorProductsBloc>()),
+        BlocProvider(create: (_) => ImageBloc()),
+      ],
+      child: ProductEditScreen(product: widget.product),
+    ));
+  }
+}
+
+// --- SUB-WIDGETS ---
+
+class _InfoItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoItem({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF101828), fontWeight: FontWeight.w700),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final ProductStatus status;
+  const _StatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color bg;
+    Color text;
+    String label;
+
     switch (status) {
       case ProductStatus.approved:
-        return Colors.green;
+        bg = const Color(0xFFECFDF5);
+        text = const Color(0xFF027A48);
+        label = "Active";
+        break;
       case ProductStatus.pending:
-        return Colors.orange;
+        bg = const Color(0xFFFFFAEB);
+        text = const Color(0xFFB54708);
+        label = "In Review";
+        break;
       case ProductStatus.rejected:
-        return Colors.redAccent;
+        bg = const Color(0xFFFEF3F2);
+        text = const Color(0xFFB42318);
+        label = "Rejected";
+        break;
       case ProductStatus.outOfStock:
-        return Colors.grey;
+        bg = const Color(0xFFF2F4F7);
+        text = const Color(0xFF344054);
+        label = "Sold Out";
+        break;
     }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(100.r),
+        border: Border.all(color: bg == const Color(0xFFF2F4F7) ? const Color(0xFFEAECF0) : Colors.transparent),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: text),
+      ),
+    );
   }
 }

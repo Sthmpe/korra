@@ -98,61 +98,7 @@ class MonnifyFunctions {
     }
   }
 
-  /// Get Wallets
-  /// Response:
-  /// {
-  ///   "ok": true,
-  ///   "wallets": [
-  ///     {
-  ///       "walletName": "...",
-  ///       "walletReference": "...",
-  ///       "customerName": "...",
-  ///       "customerEmail": "...",
-  ///       "accountNumber": "...",
-  ///       "accountName": "...",
-  ///       "topUpAccountDetails": {
-  ///         "accountNumber": "...",
-  ///         "bankName": "...",
-  ///         "bankCode": "..."
-  ///       }
-  ///     }
-  ///   ]
-  /// }
-  Future<List<Map<String, dynamic>>> fetchWallets({
-    int pageSize = 10,
-    int pageNo = 0,
-  }) async {
-    try {
-      final res = await _fx.invoke(
-        'get-wallets',
-        method: HttpMethod.get,
-        queryParameters: {
-          'pageSize': pageSize.toString(),
-          'pageNo': pageNo.toString(),
-        },
-      );
 
-      final data = res.data;
-
-      if (data == null || data['ok'] != true) {
-        if (data != null && data.containsKey('monnifyError')) {
-          final monnifyError = data['monnifyError'];
-          final message =
-              monnifyError['responseMessage'] ?? 'Unknown Monnify error';
-          final code = monnifyError['responseCode'] ?? 'N/A';
-          throw Exception("Monnify Error: $message (Code: $code)");
-        }
-        throw Exception("Error fetching wallets: ${data?['message']}");
-      }
-
-      final wallets = List<Map<String, dynamic>>.from(data['wallets'] ?? []);
-      debugPrint("Fetched ${wallets.length} wallets");
-      return wallets;
-    } catch (e) {
-      debugPrint("Error fetching wallets: $e");
-      rethrow;
-    }
-  }
 
   /// Get Reserved Account Transactions
   /// Response:
@@ -205,52 +151,6 @@ class MonnifyFunctions {
     return Map<String, dynamic>.from(data);
   }
 
-  /// Create Reserved Account
-  /// Response:
-  /// {
-  ///   "ok": true,
-  ///   "accountReference": "abc1niui23",
-  ///   "accountName": "MARVELOUS BENJI",
-  ///   "accountNumber": "6839490147",
-  ///   "bankName": "Moniepoint Microfinance Bank",
-  ///   "bankCode": "50515",
-  ///   "currencyCode": "NGN",
-  ///   "customerEmail": "test@tester.com",
-  ///   "status": "ACTIVE"
-  /// }
-  Future<Map<String, dynamic>> createReservedAccount({
-    required String accountReference,
-    required String accountName,
-    required String currencyCode,
-    required String contractCode,
-    required String customerEmail,
-    String? customerName,
-    String? bvn,
-    String? nin,
-    List<Map<String, dynamic>>? incomeSplitConfig,
-  }) async {
-    final res = await _fx.invoke(
-      'create-reserved-account',
-      body: {
-        'accountReference': accountReference,
-        'accountName': accountName,
-        'currencyCode': currencyCode,
-        'contractCode': contractCode,
-        'customerEmail': customerEmail,
-        'customerName': customerName,
-        'bvn': bvn,
-        'nin': nin,
-        'incomeSplitConfig': incomeSplitConfig ?? [],
-      },
-    );
-
-    final data = res.data;
-    if (data == null || data['ok'] != true) {
-      throw Exception(data?['message'] ?? 'Reserved account creation failed');
-    }
-
-    return Map<String, dynamic>.from(data);
-  }
 
   /// Validate Bank Account through Monnify
   /// Response will look like:
@@ -350,105 +250,7 @@ class MonnifyFunctions {
     return res.data as Map<String, dynamic>;
   }
 
-  /// Get Wallet Transactions
-  /// Response:
-  /// {
-  ///   "ok": true,
-  ///   "transactions": [
-  ///     {
-  ///       "reference": "MFDS50220230918031834001322SW440P",
-  ///       "amount": 2500000,
-  ///       "type": "DEBIT",
-  ///       "status": "COMPLETED",
-  ///       "date": "2023-09-18T14:18:34.751+0000",
-  ///       "narration": null
-  ///     },
-  ///     ...
-  ///   ]
-  /// }
-  Future<List<Map<String, dynamic>>> getWalletTransactions({
-    required String accountNumber,
-  }) async {
-    final res = await _fx.invoke(
-      'get-wallet-transactions',
-      method: HttpMethod.get,
-      queryParameters: {"accountNumber": accountNumber},
-    );
-
-    if (res.data == null || res.data['ok'] != true) {
-      throw Exception(
-        res.data?['message'] ?? 'Failed to fetch wallet transactions',
-      );
-    }
-
-    return List<Map<String, dynamic>>.from(res.data['transactions']);
-  }
-
-  /// Get Wallet Balance
-  /// Example Response:
-  /// {
-  ///   "ok": true,
-  ///   "availableBalance": 5000000000
-  /// }
-  Future<Map<String, dynamic>> getWalletBalance({
-    required String accountNumber,
-  }) async {
-    final res = await _fx.invoke(
-      'get-wallet-balance',
-      method: HttpMethod.post,
-      body: {"accountNumber": accountNumber},
-    );
-
-    if (res.data == null || res.data['ok'] != true) {
-      throw Exception(res.data?['message'] ?? 'Failed to fetch wallet balance');
-    }
-
-    return Map<String, dynamic>.from(res.data);
-  }
-
-  /// 🔐 Create Wallet
-  ///
-  /// Response format on success:
-  /// ```json
-  /// {
-  ///   "ok": true,
-  ///   "walletName": "Staging Wallet - ref16804248425966",
-  ///   "walletReference": "ref16842048425966",
-  ///   "accountNumber": "1345947817",
-  ///   "accountName": "Test01-John Doe"
-  /// }
-  /// ```
-  ///
-  /// On failure:
-  /// ```json
-  /// { "ok": false, "message": "Wallet creation failed" }
-  /// ```
-  Future<Map<String, dynamic>> createWallet({
-    required String walletReference,
-    required String walletName,
-    required String customerName,
-    required String customerEmail,
-    required String bvn,
-    required String bvnDateOfBirth, // "YYYY-MM-DD"
-  }) async {
-    final res = await _fx.invoke(
-      'create-wallet',
-      body: {
-        'walletReference': walletReference,
-        'walletName': walletName,
-        'customerName': customerName,
-        'customerEmail': customerEmail,
-        'bvn': bvn,
-        'bvnDateOfBirth': bvnDateOfBirth,
-      },
-    );
-
-    final ok = res.data is Map && (res.data['ok'] == true);
-    if (!ok) throw Exception(_msg(res.data));
-
-    return Map<String, dynamic>.from(res.data);
-  }
-
+  
   /// Verify NIN through Monnify Supabase Function
   /// ✅ On success:
   /// {

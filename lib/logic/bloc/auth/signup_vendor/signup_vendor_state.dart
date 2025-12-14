@@ -77,6 +77,12 @@ final String website;
 final String whatsappGroup;
 final String otherLink;
 
+final bool cacVerifying;
+final bool cacVerified;
+final String? cacError;
+final String? lastVerifiedCac; // To prevent verifying same number twice
+final String? selfiePath;
+
   const SignupVendorState({
     this.pageIndex = 0,
     this.totalPages = 7,
@@ -119,14 +125,19 @@ final String otherLink;
     this.signUpError,
     this.status = SignupStatus.initial,
     this.instagram = '',
-  this.twitter = '',
-  this.facebook = '',
-  this.tiktok = '',
-  this.website = '',
-  this.whatsappGroup = '',
-  this.otherLink = '',
-  this.toggled = false,
+    this.twitter = '',
+    this.facebook = '',
+    this.tiktok = '',
+    this.website = '',
+    this.whatsappGroup = '',
+    this.otherLink = '',
+    this.toggled = false,
     this.uid = '',
+    this.cacVerifying = false,
+    this.cacVerified = false,
+    this.cacError,
+    this.lastVerifiedCac,
+    this.selfiePath,
   });
 
   SignupVendorState copyWith({
@@ -170,14 +181,19 @@ final String otherLink;
     String? signUpError,
     SignupStatus? status,
     String? instagram,
-  String? twitter,
-  String? facebook,
-  String? tiktok,
-  String? website,
-  String? whatsappGroup,
-  String? otherLink,
-  bool? toggled,
+    String? twitter,
+    String? facebook,
+    String? tiktok,
+    String? website,
+    String? whatsappGroup,
+    String? otherLink,
+    bool? toggled,
     String? uid,
+    bool? cacVerifying,
+    bool? cacVerified,
+    String? cacError,
+    String? lastVerifiedCac,
+    String? selfiePath,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -221,14 +237,19 @@ final String otherLink;
       signUpError: signUpError ?? this.signUpError,
       status: status ?? this.status,
       instagram: instagram ?? this.instagram,
-    twitter: twitter ?? this.twitter,
-    facebook: facebook ?? this.facebook,
-    tiktok: tiktok ?? this.tiktok,
-    website: website ?? this.website,
-    whatsappGroup: whatsappGroup ?? this.whatsappGroup,
-    otherLink: otherLink ?? this.otherLink,
-    toggled: toggled ?? this.toggled,
+      twitter: twitter ?? this.twitter,
+      facebook: facebook ?? this.facebook,
+      tiktok: tiktok ?? this.tiktok,
+      website: website ?? this.website,
+      whatsappGroup: whatsappGroup ?? this.whatsappGroup,
+      otherLink: otherLink ?? this.otherLink,
+      toggled: toggled ?? this.toggled,
       uid: uid ?? this.uid,
+      cacVerifying: cacVerifying ?? this.cacVerifying,
+      cacVerified: cacVerified ?? this.cacVerified,
+      cacError: cacError ?? this.cacError,
+      lastVerifiedCac: lastVerifiedCac ?? this.lastVerifiedCac,
+      selfiePath: selfiePath ?? this.selfiePath,
     );
   }
 
@@ -280,5 +301,10 @@ final String otherLink;
     otherLink,
     website,
     uid,
+    cacVerifying,
+    cacVerified,
+    cacError,
+    lastVerifiedCac,
+    selfiePath,
   ];
 }

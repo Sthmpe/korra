@@ -31,12 +31,15 @@ class PlansPage extends StatefulWidget {
   final CustomerRepository customerRepo;
   final String customerUid;
   final VoidCallback onJumpToHome;
+  final VoidCallback onJumpToPlan;
+  
 
   const PlansPage({
     super.key,
     required this.customerRepo,
     required this.customerUid,
     required this.onJumpToHome,
+    required this.onJumpToPlan,
   });
 
   @override
@@ -100,6 +103,7 @@ class _PlansPageState extends State<PlansPage> {
                     customerUid: widget.customerUid,
                     walletBalance: currentBalance,
                     onJumpToHome: widget.onJumpToHome,
+                    onJumpToPlan: () => widget.onJumpToPlan,
                   ),
                 );
               }
@@ -305,7 +309,7 @@ class _PlansPageState extends State<PlansPage> {
       if (_currentTab == PlansTab.pending) return p.status == 'pending';
       if (_currentTab == PlansTab.completed) return p.status == 'completed';
       if (_currentTab == PlansTab.overdue) return p.isOverdue;
-      if (_currentTab == PlansTab.canceled) return p.status == 'cancelled';
+      if (_currentTab == PlansTab.cancelled) return p.status == 'cancelled';
       return true;
     }).toList();
 
@@ -345,8 +349,8 @@ class _PlansPageState extends State<PlansPage> {
         return 'No completed plans yet.';
       case PlansTab.overdue:
         return 'No overdue payments.\nYou’re all caught up 🎉';
-      case PlansTab.canceled:
-        return 'No canceled plans.';
+      case PlansTab.cancelled:
+        return 'No cancelled plans.';
       case PlansTab.pending:
         return 'No pending plans.';
     }

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../../data/repository/vendors/vendor_repository.dart';
@@ -39,29 +40,27 @@ class VendorProductsPage extends StatelessWidget {
             appBar: KorraHeader(
               title: 'Products',
               trailingActions: [
-                _IconBtn(
-                  icon: MdiIcons.plus,
-                  onTap: () {
-                    Get.to(
-                      () => MultiBlocProvider(
-                        providers: [
-                          // Pass the existing bloc instance
-                          BlocProvider.value(
-                            value: context.read<VendorProductsBloc>(),
-                          ),
-
-                          // Create a new bloc instance
-                          BlocProvider(create: (_) => ImageBloc()),
-                        ],
-                        // ✅ now works
-                        child: AddProductPage(
-                          vendors: vendors,
-                          vendorUid: vendorUid
-                        ),
-                      ),
-                    );
+                 // Minimalist "Add" Button (Icon only is cleaner)
+                IconButton(
+                  onPressed: () {
+                    Get.to(() => MultiBlocProvider(
+                      providers: [
+                        BlocProvider.value(value: context.read<VendorProductsBloc>()),
+                        BlocProvider(create: (_) => ImageBloc()),
+                      ],
+                      child: AddProductPage(vendors: vendors, vendorUid: vendorUid),
+                    ));
                   },
+                  icon: Container(
+                    padding: EdgeInsets.all(6.r),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4ED), // Light orange bg
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Iconsax.add, color: const Color(0xFFA54600), size: 24.sp),
+                  ),
                 ),
+                
               ],
             ),
             body: const VendorProductsBody(),

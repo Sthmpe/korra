@@ -6,95 +6,92 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
-import '../../../../config/constants/colors.dart'; // Ensure KorraColors is imported
+import '../../../../config/constants/colors.dart';
 
 class KorraHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final VoidCallback? onHistory;
-  final VoidCallback? onMenu;
-  final VoidCallback? onSupport;
   final VoidCallback? onBackpressed;
-  final bool showHistoryDot;
-  final bool showLeadingIcon;
+  final bool showLeadingIcon; // For "Back" button
+  final bool showLogo;        // ✅ NEW: Only for Home Page
   final List<Widget>? trailingActions;
+  
+  // Shortcuts for standard actions
+  final VoidCallback? onHistory;
+  final VoidCallback? onSupport;
+  final bool showHistoryDot;
 
   const KorraHeader({
     super.key,
     required this.title,
-    this.onHistory,
-    this.onMenu,
-    this.onSupport,
     this.onBackpressed,
-    this.showHistoryDot = false,
     this.showLeadingIcon = false,
+    this.showLogo = false, // Default to FALSE. Cleaner.
     this.trailingActions,
+    this.onHistory,
+    this.onSupport,
+    this.showHistoryDot = false,
   });
 
   @override
-  Size get preferredSize => Size.fromHeight(60.h); // Slightly taller for modern feel
+  Size get preferredSize => Size.fromHeight(56.h); // Standard iOS/Android height
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Dark icons on white status bar
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
       ),
       child: Container(
-        color: Colors.white, // Solid background
-        padding: EdgeInsets.symmetric(horizontal: 20.w), // More breathing room
+        color: Colors.white,
+        padding: EdgeInsets.symmetric(horizontal: 20.w),
         alignment: Alignment.bottomCenter,
-        child: Container(
-          height: 60.h,
-          alignment: Alignment.center,
+        child: SizedBox(
+          height: 56.h,
           child: Row(
             children: [
-              // --- LEADING (Back or Brand) ---
-              if (showLeadingIcon)
-                _BackButton(onPressed: onBackpressed)
-              else
+              // --- 1. LEADING AREA (Mutual Exclusive) ---
+              if (showLeadingIcon) ...[
+                _BackButton(onPressed: onBackpressed),
+                SizedBox(width: 12.w),
+              ] else if (showLogo) ...[
                 _BrandLogo(),
+                SizedBox(width: 12.w),
+              ],
 
-              SizedBox(width: 12.w),
-
-              // --- TITLE ---
+              // --- 2. TITLE AREA ---
               Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 20.sp, // Larger, bolder title
-                    fontWeight: FontWeight.w700,
-                    color: KorraColors.black,
-                    letterSpacing: -0.5,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: showLogo 
+                  // If Logo is present, Title usually isn't needed or is secondary
+                  ? const SizedBox.shrink() 
+                  : Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        fontSize: 20.sp, 
+                        fontWeight: FontWeight.w700, 
+                        color: const Color(0xFF101828), // Deep Black
+                        letterSpacing: -0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
               ),
 
-              // --- ACTIONS ---
+              // --- 3. ACTIONS AREA ---
               Row(
-                children: trailingActions ??
-                    [
-                      if (onHistory != null)
-                        _HeaderActionBtn(
-                          icon: Iconsax.clock, 
-                          onTap: onHistory,
-                        ),
-                      if (onMenu != null)
-                        _HeaderActionBtn(
-                          icon: Icons.more_vert_rounded,
-                          onTap: onMenu,
-                        ),
-                      if (onSupport != null) ...[
-                        SizedBox(width: 4.w), // Tiny gap between icons
-                        _HeaderActionBtn(
-                          icon: Iconsax.notification,
-                          onTap: onSupport,
-                          showDot: showHistoryDot,
-                        ),
-                      ]
-                    ],
+                mainAxisSize: MainAxisSize.min,
+                children: trailingActions ?? [
+                  if (onHistory != null)
+                    _HeaderActionBtn(icon: Iconsax.clock, onTap: onHistory),
+                  
+                  if (onSupport != null) ...[
+                    SizedBox(width: 4.w),
+                    _HeaderActionBtn(
+                      icon: Iconsax.notification, 
+                      onTap: onSupport,
+                      showDot: showHistoryDot,
+                    ),
+                  ]
+                ],
               ),
             ],
           ),
@@ -115,16 +112,23 @@ class _BackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onPressed ?? () => Get.back(),
+      onTap: () {
+        HapticFeedback.lightImpact(); // Tactile feel
+        if (onPressed != null) {
+          onPressed!();
+        } else {
+          Get.back();
+        }
+      },
       borderRadius: BorderRadius.circular(12.r),
       child: Container(
         width: 40.w,
         height: 40.w,
-        alignment: Alignment.centerLeft, // Align icon left to remove visual padding
+        alignment: Alignment.centerLeft, // Left align to reduce visual gap
         child: Icon(
           Iconsax.arrow_left,
           size: 24.sp,
-          color: KorraColors.black,
+          color: const Color(0xFF101828),
         ),
       ),
     );
@@ -139,7 +143,7 @@ class _BrandLogo extends StatelessWidget {
       height: 36.w,
       decoration: BoxDecoration(
         color: KorraColors.brand,
-        borderRadius: BorderRadius.circular(10.r), // Soft square
+        borderRadius: BorderRadius.circular(10.r),
         boxShadow: [
           BoxShadow(
             color: KorraColors.brand.withOpacity(0.25),
@@ -148,11 +152,7 @@ class _BrandLogo extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        MdiIcons.crown,
-        size: 20.sp,
-        color: Colors.white,
-      ),
+      child: Icon(MdiIcons.crown, size: 20.sp, color: Colors.white),
     );
   }
 }
@@ -176,10 +176,11 @@ class _HeaderActionBtn extends StatelessWidget {
         IconButton(
           onPressed: onTap,
           splashRadius: 24.r,
+          constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.w),
           icon: Icon(
             icon, 
             size: 24.sp, 
-            color: const Color(0xFF111111), // Almost black
+            color: const Color(0xFF101828),
           ),
         ),
         if (showDot)
@@ -192,7 +193,7 @@ class _HeaderActionBtn extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFF3B30), // iOS Red
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5), // White ring
+                border: Border.all(color: Colors.white, width: 1.5),
               ),
             ),
           ),

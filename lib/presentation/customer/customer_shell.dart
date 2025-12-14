@@ -36,7 +36,7 @@ class CustomerShell extends StatelessWidget {
         
               final pages = [
                 HomePage(customerRepo: repo, customerUid: uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
-                PlansPage(customerRepo: repo, customerUid: uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)),),
+                PlansPage(customerRepo: repo, customerUid: uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),),
                 ProfilePage(customerRepo: repo, customerUid: uid),
               ];
         

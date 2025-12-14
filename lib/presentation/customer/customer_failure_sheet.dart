@@ -190,8 +190,11 @@ class _KorraFailureSheetCustomer extends StatelessWidget {
                 height: 56.h,
                 child: ElevatedButton(
                   onPressed: () {
-                    Get.back();
-                    onCancel?.call();
+                    if (onCancel != null) {
+                      onCancel?.call();
+                    } else {
+                      Get.back();
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF2F2F7), // Soft Grey

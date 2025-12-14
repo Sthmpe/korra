@@ -64,19 +64,25 @@ extension BankRepository on VendorRepository {
   // ===========================================================================
   // 2. GET BANK LIST
   // ===========================================================================
-  Future<List<Bank>> getBankList() async {
+  Future<List<Bank>> getBankList({bool forceRefresh = false}) async {
+    if (cachedBankList != null && !forceRefresh) {
+      return cachedBankList!;
+    }
+
     try {
       final banks = await monnify.getBankList();
+      cachedBankList = banks;
+      if (banks.isEmpty) {
+        throw KorraException(
+          'Bank list is temporarily unavailable.', 
+          technicalDetails: 'Empty list returned from provider.'
+        );
+      }
       return banks;
     } catch (e) {
       debugPrint('❌ Fetch Bank List Failed (Technical): $e');
       
-      if (e is KorraException) rethrow;
-
-      throw KorraException(
-        'Could not retrieve the list of banks. Please check your internet connection.',
-        technicalDetails: e.toString(),
-      );
+      throw handleError(e, context: "bank list");
     }
   }
 

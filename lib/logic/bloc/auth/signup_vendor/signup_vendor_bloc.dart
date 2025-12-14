@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/vendors/verification_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../config/utils/korra_exception.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'signup_vendor_event.dart';
 import 'signup_vendor_state.dart';
@@ -27,8 +29,9 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     // V1 — Business type
     on<RegisteredToggled>((e, emit) => emit(state.copyWith(registered: e.registered)));
-    on<CacChanged>((e, emit) => emit(state.copyWith(cac: e.value)));
+    on<CacChanged>(_onCacChanged);
     on<LegalNameChanged>((e, emit) => emit(state.copyWith(legalName: e.value)));
+    on<VerifyCacRequested>(_onVerifyCac);
 
     // V2 — Store details
     on<StoreNameChanged>((e, emit) => emit(state.copyWith(storeName: e.value)));
@@ -85,8 +88,61 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
   /// On Identity step, verify only fields that need it; otherwise just advance.
   Future<void> _onNext(SignupVendorNextPressed event, Emit emit) async {
+    const businessStepIndex = 0;
+    const personalStepIndex = 3;
     const identityStepIndex = 4;
     final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
+
+    if (state.pageIndex == businessStepIndex) {
+      // 1. If Registered is selected, MUST be verified
+      if (state.registered) {
+         if (!state.cacVerified || state.cac != state.lastVerifiedCac) {
+            emit(state.copyWith(cacError: "Please verify your CAC number to continue."));
+            return;
+         }
+      }
+    }
+
+    // --- STEP 3: PERSONAL DETAILS (Validation Logic) ---
+    if (state.pageIndex == personalStepIndex) {
+      // 1. Check Empty Text Fields
+      if (state.firstName.trim().isEmpty || 
+          state.lastName.trim().isEmpty || 
+          state.phone.trim().isEmpty || 
+          state.email.trim().isEmpty) {
+        return;
+      }
+
+      // 2. Check Date of Birth
+      if (state.dob == null) {
+        return;
+      }
+      
+      // 3. Check Age (Optional but recommended)
+      final age = DateTime.now().year - state.dob!.year;
+      if (age < 18) {
+         return;
+      }
+
+      // 4. Check Gender
+      if (state.gender == Gender.undisclosed) { 
+        return;
+      }
+
+      // 5. Check Email Validity (If typed but not verified via regex)
+      if (state.emailError != null && state.emailError!.isNotEmpty) {
+         // The UI already shows the error under the field, but we block here too
+         return; 
+      }
+      
+      // 6. Check Email Availability (If we haven't checked yet or it failed)
+      // If user typed fast and clicked next before debounce finished
+      if (!state.emailUnused) {
+         // Trigger the check manually here to be safe
+         add(VendorEmailChanged(state.email)); 
+         return;
+      }
+    }
 
     if (state.pageIndex != identityStepIndex) {
       emit(state.copyWith(pageIndex: next));
@@ -197,6 +253,63 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       } else {
         emit(state.copyWith(kycError: error.toString()));
       }
+    }
+  }
+
+  void _onCacChanged(CacChanged event, Emit emit) {
+     emit(state.copyWith(
+       cac: event.value,
+       cacVerified: false, // Reset!
+       cacError: null,
+     ));
+  }
+
+  // --- LOGIC: VERIFY CAC ---
+  Future<void> _onVerifyCac(VerifyCacRequested event, Emit emit) async {
+    debugPrint("🚀 Bloc: Verifying CAC: ${state.cac}");
+    
+    // 1. Validation
+    if (state.cac.trim().isEmpty) {
+      emit(state.copyWith(cacError: "Enter RC Number"));
+      return;
+    }
+
+    // 2. Loading State
+    emit(state.copyWith(cacVerifying: true, cacError: null));
+
+    try {
+      // 3. Call Repo
+      final companyName = await _vendorsRepo.verifyCac(state.cac);
+      
+      debugPrint("✅ Bloc: Verification Success. Name: $companyName");
+
+      // 4. Success State
+      emit(state.copyWith(
+        cacVerifying: false,
+        cacVerified: true,
+        lastVerifiedCac: state.cac,
+        legalName: companyName.isNotEmpty ? companyName : state.legalName,
+        cacError: null, // Clear error
+      ));
+    } catch (e) {
+      debugPrint("❌ Bloc: Verification Failed: $e");
+      
+      // 5. Error Extraction
+      String msg = "Verification failed. Please try again.";
+      
+      if (e is KorraException) {
+        msg = e.message;
+      } else {
+        // Strip "Exception: " prefix if present from generic errors
+        msg = e.toString().replaceAll("Exception: ", "");
+      }
+      
+      // 6. Error State (Make sure verify flag is false)
+      emit(state.copyWith(
+        cacVerifying: false,
+        cacVerified: false, 
+        cacError: msg, // Pass clean message to UI
+      ));
     }
   }
 

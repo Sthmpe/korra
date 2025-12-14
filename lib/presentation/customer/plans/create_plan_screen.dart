@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,7 +17,6 @@ import '../../../logic/bloc/customer/plans/create_plan_event.dart';
 import '../../../logic/bloc/customer/plans/create_plan_state.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import '../home/home_page.dart';
 import '../topup_screen.dart';
 import '../customer_failure_sheet.dart';
 
@@ -25,6 +25,7 @@ class CreatePlanScreen extends StatefulWidget {
   final CustomerRepository customerRepo;
   final String customerUid;
   final VoidCallback onJumpToHome;
+  final VoidCallback onJumpToPlan;
   final double walletBalance;
 
   const CreatePlanScreen({
@@ -34,6 +35,7 @@ class CreatePlanScreen extends StatefulWidget {
     required this.customerUid,
     required this.walletBalance,
     required this.onJumpToHome,
+    required this.onJumpToPlan,
   });
 
   @override
@@ -49,8 +51,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   // -----------------------------
 
   String? cadenceType;
-  int durationMonths = 1;
   int _currentImageIndex = 0;
+  bool _agreedToTerms = false;
+
+  int _selectedGoalDays = 0;
 
   // Tracks the actual amount the user has typed/accepted
   double userEnteredDownPayment = 0.0;
@@ -120,6 +124,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     // Used for bottom padding logic
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
+    final bool isLowTicket = productPrice < 25000;
+
+    final bool isShortDuration = productPrice <= 25000;
+
     return BlocProvider(
       create: (context) =>
           CreatePlanBloc(repo: widget.customerRepo)
@@ -134,6 +142,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               _amountCtrl.text = NumberFormat(
                 "#,###",
               ).format(userEnteredDownPayment.toInt());
+
+              _selectedGoalDays = state.baseDurationDays;
             });
           }
           if (state.status == CreatePlanStatus.success) {
@@ -313,22 +323,26 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     isLowLimit
-                                      ? Text(
-                                          "Clear active plans",
-                                          style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.red, fontWeight: FontWeight.w600),
-                                        )
-                                      : Text(
-                                          "Minimum: ${currencyFormat.format(minDownPayment)}",
-                                          style: GoogleFonts.inter(
-                                            fontSize: 12.sp,
-                                            color:
-                                                (userEnteredDownPayment <
-                                                    minDownPayment)
-                                                ? Colors.red
-                                                : Colors.grey.shade500,
-                                            fontWeight: FontWeight.w500,
+                                        ? Text(
+                                            "Clear active plans",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12.sp,
+                                              color: Colors.red,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          )
+                                        : Text(
+                                            "Minimum: ${currencyFormat.format(minDownPayment)}",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12.sp,
+                                              color:
+                                                  (userEnteredDownPayment <
+                                                      minDownPayment)
+                                                  ? Colors.red
+                                                  : Colors.grey.shade500,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                        ),
 
                                     AnimatedSwitcher(
                                       duration: const Duration(
@@ -362,17 +376,73 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                 SizedBox(height: 40.h),
 
                                 if (!isFullPayment) ...[
-                                  _buildSectionLabel("Duration"),
-                                  SizedBox(height: 12.h),
-                                  _buildDurationSelector(),
+                                  _buildStrictDeadlineCard(
+                                    duration: state.baseDurationDays,
+                                    canExtend: state.canExtend,
+                                  ),
                                   SizedBox(height: 32.h),
+                                  _buildSectionLabel("Duration Limit"),
+                                  SizedBox(height: 12.h),
+
+                                  // 3. SIMPLE DURATION DISPLAY (No Choice)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.all(16.r),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF9FAFB),
+                                      borderRadius: BorderRadius.circular(12.r),
+                                      border: Border.all(
+                                        color: const Color(0xFFEAECF0),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Iconsax.timer_1,
+                                          color: KorraColors.brand,
+                                          size: 20.sp,
+                                        ),
+                                        SizedBox(width: 12.w),
+                                        Expanded(
+                                          child: Text(
+                                            "You have ${state.baseDurationDays} days to complete payment.",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13.sp,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: 32.h),
+                                  _buildSectionLabel("Set your goal"),
+                                  SizedBox(height: 12.h),
+                                  _buildGoalSelector(state.baseDurationDays),
+
+                                  SizedBox(height: 32.h),
+
                                   _buildSectionLabel("Choose Schedule"),
                                   SizedBox(height: 12.h),
+
+                                  // 4. DYNAMIC SCHEDULE (Based on Goal)
                                   _buildScheduleGrid(remainingBalance),
-                                  _buildCommitmentMessage(),
+
+                                  _buildCommitmentMessage(
+                                    state.baseDurationDays,
+                                  ),
                                 ] else ...[
                                   _buildFullPaymentSuccess(),
                                 ],
+
+                                if (!isLowLimit)
+                                  _buildLiabilityCheckbox(
+                                    _agreedToTerms,
+                                    (v) => setState(
+                                      () => _agreedToTerms = v ?? false,
+                                    ),
+                                  ),
 
                                 _buildLiabilityDisclaimer(),
                                 SizedBox(height: isKeyboardOpen ? 300.h : 40.h),
@@ -398,6 +468,59 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildStrictDeadlineCard({
+    required int duration,
+    required bool canExtend,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(12.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5), // Warning Orange
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFFFDDB3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Iconsax.shield_tick,
+            size: 20.sp,
+            color: const Color(0xFFB95000),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF96490B),
+                  height: 1.4,
+                ),
+                children: [
+                  const TextSpan(text: "Strict "),
+                  TextSpan(
+                    text: "$duration-Day ",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(
+                    text: "Limit. Late completion defaults trigger the ",
+                  ),
+                  TextSpan(
+                    text: "50% penalty.",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -464,52 +587,70 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     bool isInsufficient,
     bool isLowLimit,
   ) {
-    // 1. Validation Logic
     final bool isAmountValid = userEnteredDownPayment >= minDown;
-    // The form is complete ONLY if amount is okay AND (user picked full payment OR picked a schedule)
     final bool isSchedulePicked = isFullPayment || cadenceType != null;
     final bool isFormComplete = isAmountValid && isSchedulePicked;
 
-    final bool isLoading = state.status == CreatePlanStatus.creating;
+    // 5. VALIDATION: Must agree to terms
+    final bool canProceed = isLowLimit
+        ? true
+        : (isFormComplete && _agreedToTerms);
 
-    // 2. Text & Color Logic
     String btnText = "Pay & Start Plan";
     Color btnColor = KorraColors.brand;
+    VoidCallback? customAction;
+    
 
     if (isLowLimit) {
-      btnText = "View Outstanding Plans";
-      btnColor = Colors.orange.shade800; // Use a warning/action color
-    } else if (isInsufficient) {
-        btnText = "Top Up Wallet & Start";
-        btnColor = Colors.black; // Distinguish Top Up action
-      } else if (isFullPayment) {
-        btnText = "Pay Full Amount";
+      // The user CANNOT afford this based on current limit. Why?
+      debugPrint("has active plans: ${state.hasActivePlans}");
+      if (state.hasActivePlans) {
+        // CASE A: They have baggage.
+        btnText = "View Outstanding Plans";
+        btnColor = Colors.orange.shade800;
+      } else {
+        debugPrint("cutome acction: accepted");
+        // CASE B: They are new/clean, just need higher limit.
+        btnText = "Upgrade Account"; // Or "Fund to Upgrade"
+        btnColor = const Color(0xFF0F172A); // Premium Dark
+        customAction = () {
+           _showUpgradePrompt(context); // Show the sheet to fund wallet
+        };
       }
+    } else if (isInsufficient) {
+      btnText = "Top Up Wallet & Start";
+      btnColor = Colors.black;
+    } else if (isFullPayment) {
+      btnText = "Pay Full Amount";
+    }
 
-    // 3. Interaction Logic
-    // If loading OR form incomplete -> Button is disabled (null)
-    final VoidCallback? onPressed = (isLoading || !isFormComplete)
+    final VoidCallback? onPressed =
+        (state.status == CreatePlanStatus.creating ||
+            (!canProceed && !isInsufficient))
         ? null
         : () async {
-            // A. Handle Top Up Scenario
-            if (isInsufficient) {
-              Get.to(() => TopUpScreen(customer: null));
-              return;
+
+            if (customAction != null) {
+               customAction();
+               return;
+            }
+            
+            // 2. Handle Debt
+            if (isLowLimit && state.hasActivePlans) {
+               widget.onJumpToPlan();
+               return;
             }
 
-            if (isLowLimit) {
-             // Navigate to your Plans Screen
-             // CHANGE THIS to your actual Plans Screen widget
-             //Get.to(() => const HomePage(initialIndex: 1)); // Assuming Plans is tab 1, or use your specific screen
-             return;
-          }
+            if (isInsufficient) {
+              //
+              return;
+            }
+            if (isLowLimit) return;
 
-            // B. Handle Plan Creation
-            // Generate ID locally for reference
             final newPlanRef = widget.customerRepo.db.collection('plans').doc();
-
             final plan = Plan.create(
               generatedId: newPlanRef.id,
+              // ... (Standard Fields)
               vendorId: widget.product.data['vendorId'] ?? '',
               customerId: widget.customerUid,
               productId: widget.product.id,
@@ -519,14 +660,20 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               imageUrls: List<String>.from(widget.product.data['images'] ?? []),
               totalProductPrice:
                   widget.product.data['price']?.toDouble() ?? 0.0,
-
               totalUpfrontPaid: userEnteredDownPayment,
               loanAmount: state.loanAmount,
               dpPercentage: state.dpPercentage,
 
               cadenceType: isFullPayment ? 'full_payment' : cadenceType,
               commitmentEnabled: true,
-              durationMonths: durationMonths,
+
+              // *** Pass the Calculated Days ***
+              baseDurationDays: state.baseDurationDays,
+              noticeDays: state.noticeDays,
+              extensionDays: state.extensionDays,
+
+              // Fallback for backward compatibility if needed
+              durationMonths: (state.baseDurationDays / 30).ceil(),
             );
 
             context.read<CreatePlanBloc>().add(
@@ -535,7 +682,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           };
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24.w, 20.h, 24.w, 32.h),
+      padding: EdgeInsets.fromLTRB(24.w, 10.h, 24.w, 32.h),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -546,68 +693,81 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Deposit Amount",
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  color: KorraColors.textMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                currencyFormat.format(userEnteredDownPayment),
-                style: GoogleFonts.inter(
-                  fontSize: 20.sp,
-                  color: KorraColors.brand,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-
-          SizedBox(
-            width: double.infinity,
-            height: 54.h,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: btnColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                // This color shows when onPressed is null
-                disabledBackgroundColor: Colors.grey.shade300,
-                disabledForegroundColor: Colors.grey.shade500,
-              ),
-              onPressed: onPressed,
-              child: isLoading
-                  ? SizedBox(
-                      height: 24.h,
-                      width: 24.w,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : Text(
-                      btnText,
-                      style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 54.h,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: btnColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
+            disabledBackgroundColor: Colors.grey.shade300,
           ),
-        ],
+          onPressed: onPressed,
+          child: state.status == CreatePlanStatus.creating
+              ? SizedBox(
+                  height: 24.h,
+                  width: 24.w,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  btnText,
+                  style: GoogleFonts.inter(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
       ),
+    );
+  }
+
+  // THE UPGRADE SHEET
+  void _showUpgradePrompt(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.r))),
+      builder: (_) => Container(
+        padding: EdgeInsets.all(24.r),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle),
+              child: Icon(Iconsax.wallet_add, size: 32.sp, color: Colors.blue.shade800),
+            ),
+            SizedBox(height: 16.h),
+            Text("Increase Your Limit", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800)),
+            SizedBox(height: 8.h),
+            Text(
+              "This item is above your current reservation limit. To unlock higher limits instantly, fund your wallet with at least ₦20,000.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade600, height: 1.4),
+            ),
+            SizedBox(height: 24.h),
+            SizedBox(
+              width: double.infinity,
+              height: 50.h,
+              child: FilledButton(
+                onPressed: () {
+                   Navigator.pop(context); // Close sheet
+                   Get.to(() => TopUpScreen(customer: null)); // Go to Top Up
+                },
+                style: FilledButton.styleFrom(backgroundColor: KorraColors.brand),
+                child: Text("Fund Wallet Now", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+              ),
+            )
+          ],
+        ),
+      )
     );
   }
 
@@ -852,54 +1012,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildDurationSelector() {
-    return Container(
-      height: 48.h,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: [1, 2, 3].map((month) {
-          final isSelected = durationMonths == month;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() {
-                durationMonths = month;
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: EdgeInsets.all(4.r),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                          ),
-                        ]
-                      : [],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  "$month Month${month > 1 ? 's' : ''}",
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected
-                        ? KorraColors.text
-                        : KorraColors.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
 
   Widget _buildSmartCadenceOption({
     required String label,
@@ -1013,7 +1125,89 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
+  // DYNAMIC GOAL TABS
+  Widget _buildGoalSelector(int maxDays) {
+    List<int> options = [];
+    // Only show options that fit within the Max Days
+    if (maxDays >= 7) options.add(7);
+    if (maxDays >= 14) options.add(14);
+    if (maxDays >= 28) options.add(28);
+
+    // Always add the Max Limit as the last option
+    if (!options.contains(maxDays)) options.add(maxDays);
+
+    return Container(
+      height: 48.h,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12.r),
+      ),
+      child: Row(
+        children: options.map((days) {
+          final isSelected = _selectedGoalDays == days;
+
+          String label;
+          if (days == 7)
+            label = "1 Week";
+          else if (days == 14)
+            label = "2 Weeks";
+          else if (days == 28)
+            label = "4 Weeks";
+          else
+            label = "$days Days"; // Exact days (e.g. 15, 25, 90)
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _selectedGoalDays = days;
+                cadenceType = null; // Reset schedule on change
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 0),
+                margin: EdgeInsets.all(4.r),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10.r),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 4,
+                          ),
+                        ]
+                      : [],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? KorraColors.text
+                        : KorraColors.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildScheduleGrid(double balance) {
+    // Calculation based on SELECTED GOAL, not Max Limit
+    final durationDays = _selectedGoalDays;
+
+    final daily = balance / durationDays;
+    final weekly = balance / (durationDays / 7);
+
+    // Only show monthly if duration > 30 days
+    final showMonthly = durationDays >= 30;
+    // Only show weekly if duration >= 14 days
+    final showWeekly = durationDays >= 14;
+
     return Column(
       children: [
         Row(
@@ -1021,25 +1215,31 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             _buildSmartCadenceOption(
               label: "Daily",
               value: "daily",
-              calculatedAmount: balance / (durationMonths * 30),
+              calculatedAmount: daily,
             ),
             SizedBox(width: 10.w),
-            _buildSmartCadenceOption(
-              label: "Weekly",
-              value: "weekly",
-              calculatedAmount: balance / (durationMonths * 4),
-            ),
+
+            if (showWeekly)
+              _buildSmartCadenceOption(
+                label: "Weekly",
+                value: "weekly",
+                calculatedAmount: weekly,
+              )
+            else
+              const Spacer(),
           ],
         ),
         SizedBox(height: 10.h),
         Row(
           children: [
-            _buildSmartCadenceOption(
-              label: "Monthly",
-              value: "monthly",
-              calculatedAmount: balance / durationMonths,
-            ),
-            SizedBox(width: 10.w),
+            if (showMonthly) ...[
+              _buildSmartCadenceOption(
+                label: "Monthly",
+                value: "monthly",
+                calculatedAmount: balance / (durationDays / 30),
+              ),
+              SizedBox(width: 10.w),
+            ],
             _buildFlexibleOption(),
           ],
         ),
@@ -1047,25 +1247,77 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildCommitmentMessage() {
+  Widget _buildLiabilityCheckbox(
+    bool isChecked,
+    ValueChanged<bool?> onChanged,
+  ) {
+    return Padding(
+      padding: EdgeInsets.only(top: 24.h, bottom: 16.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 24.w,
+            height: 24.w,
+            child: Checkbox(
+              value: isChecked,
+              onChanged: onChanged,
+              activeColor: KorraColors.brand,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4.r),
+              ),
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+                children: [
+                  const TextSpan(
+                    text:
+                        "I agree to complete this plan within the timeline. If I fail, I accept the ",
+                  ),
+                  TextSpan(
+                    text: "50% Non-Refundable Penalty",
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFD92D20),
+                      decoration: TextDecoration.underline,
+                      decorationColor: const Color(0xFFD92D20).withOpacity(0.5),
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => _showPenaltyExplainer(context),
+                  ),
+                  const TextSpan(text: " policy."),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPenaltyExplainer(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _PenaltyExplainerSheet(),
+    );
+  }
+
+  Widget _buildCommitmentMessage(int days) {
     if (cadenceType == null) return const SizedBox.shrink();
     final isFlex = cadenceType == 'flexible';
-    final maxDateStr = DateFormat(
+    final date = DateFormat(
       'MMM d',
-    ).format(DateTime.now().add(const Duration(days: 90)));
-    final goalDateStr = DateFormat(
-      'MMM d',
-    ).format(DateTime.now().add(Duration(days: durationMonths * 30)));
-    String message;
-    if (durationMonths == 3) {
-      message = isFlex
-          ? "Pay at your own pace. You have the full 90-day window (until $maxDateStr) to complete this plan."
-          : "Reminders set! We'll help you stay on track to finish by the plan deadline on $maxDateStr.";
-    } else {
-      message = isFlex
-          ? "You're aiming to finish by $goalDateStr, but don't worry, your reservation is valid for the full 90 days until $maxDateStr."
-          : "We'll send reminders to help you finish by your $goalDateStr target. You still have the full 90 days (until $maxDateStr) if needed.";
-    }
+    ).format(DateTime.now().add(Duration(days: days)));
+
     return Padding(
       padding: EdgeInsets.only(top: 20.h),
       child: Container(
@@ -1080,7 +1332,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               isFlex ? Icons.verified_user_outlined : Icons.flag_rounded,
@@ -1089,29 +1340,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             ),
             SizedBox(width: 12.w),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isFlex ? "Flexible Pace" : "Goal Set!",
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w700,
-                      color: isFlex
-                          ? const Color(0xFF059669)
-                          : Colors.blue.shade700,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    message,
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      height: 1.4,
-                      color: KorraColors.text,
-                    ),
-                  ),
-                ],
+              child: Text(
+                "Finish by $date.",
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  height: 1.4,
+                  color: KorraColors.text,
+                ),
               ),
             ),
           ],
@@ -1169,6 +1404,146 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PenaltyExplainerSheet extends StatelessWidget {
+  const _PenaltyExplainerSheet();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(24.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(10.r),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Iconsax.shield_cross,
+                  color: const Color(0xFFD92D20),
+                  size: 24.sp,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "The 50% Penalty",
+                      style: GoogleFonts.inter(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF101828),
+                      ),
+                    ),
+                    Text(
+                      "Why is this necessary?",
+                      style: GoogleFonts.inter(
+                        fontSize: 12.sp,
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 24.h),
+          _buildReasonRow(
+            icon: Iconsax.shop,
+            title: "Vendor Commitment",
+            desc:
+                "The vendor removes this item from the shelf for you. They lose other potential buyers while waiting for you.",
+          ),
+          SizedBox(height: 16.h),
+          _buildReasonRow(
+            icon: Iconsax.clock,
+            title: "Time Compensation",
+            desc:
+                "If you default, the 50% compensates the vendor for lost time.",
+          ),
+          SizedBox(height: 16.h),
+          _buildReasonRow(
+            icon: Iconsax.wallet_check,
+            title: "Your Refund",
+            desc:
+                "The remaining 50% is refunded to your wallet instantly. We don't hold your balance.",
+          ),
+          SizedBox(height: 32.h),
+          SizedBox(
+            width: double.infinity,
+            height: 50.h,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.grey.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                foregroundColor: Colors.black,
+              ),
+              child: Text(
+                "I Understand",
+                style: GoogleFonts.inter(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 16.h),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReasonRow({
+    required IconData icon,
+    required String title,
+    required String desc,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18.sp, color: const Color(0xFF475467)),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF344054),
+                ),
+              ),
+              SizedBox(height: 2.h),
+              Text(
+                desc,
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  height: 1.4,
+                  color: const Color(0xFF667085),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

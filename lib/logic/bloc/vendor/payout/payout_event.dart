@@ -1,52 +1,43 @@
 import 'package:equatable/equatable.dart';
 
-import 'bank.dart';
-
 abstract class PayoutEvent extends Equatable {
   const PayoutEvent();
   @override
   List<Object?> get props => [];
 }
 
+// ✅ FIXED: Added currentBalance
 class PayoutStarted extends PayoutEvent {
-  const PayoutStarted();
-}
-
-class PayoutBankListLoaded extends PayoutEvent {
-  final List<Bank> bankList;
-
-  const PayoutBankListLoaded(this.bankList);
+  final double currentBalance;
+  const PayoutStarted(this.currentBalance);
+  @override
+  List<Object?> get props => [currentBalance];
 }
 
 class AmountChanged extends PayoutEvent {
-  final String amount;
-  const AmountChanged(this.amount);
+  final String input;
+  const AmountChanged(this.input);
   @override
-  List<Object?> get props => [amount];
+  List<Object?> get props => [input];
 }
 
-class UpdateMethodTapped extends PayoutEvent {}
-
-class WithdrawTapped extends PayoutEvent {}
-
-class EditMethodToggled extends PayoutEvent {}
-
-// ▼ NEW events for the advanced flow
-class BankSelected extends PayoutEvent {
-  final Bank bank;
-  const BankSelected(this.bank);
-  @override
-  List<Object?> get props => [bank];
-}
-
-class AccountNumberChanged extends PayoutEvent {
+class BankDetailsUpdated extends PayoutEvent {
+  final String bankName;
   final String accountNumber;
-  const AccountNumberChanged(this.accountNumber);
+  final String accountName;
+  final String bankCode;
+
+  const BankDetailsUpdated({
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    required this.bankCode,
+  });
   @override
-  List<Object?> get props => [accountNumber];
+  List<Object?> get props => [bankName, accountNumber, accountName, bankCode];
 }
 
-class ConfirmAndSaveMethodTapped extends PayoutEvent {}
+class WithdrawClicked extends PayoutEvent {}
 
 class PinSubmitted extends PayoutEvent {
   final String pin;
@@ -55,24 +46,11 @@ class PinSubmitted extends PayoutEvent {
   List<Object?> get props => [pin];
 }
 
-class ResetPayoutFlow extends PayoutEvent {}
-
 class NewPinCreated extends PayoutEvent {
   final String pin;
-
   const NewPinCreated(this.pin);
-
   @override
   List<Object?> get props => [pin];
 }
 
-class OtpSubmitted extends PayoutEvent {
-  final String otp;
-  const OtpSubmitted(this.otp);
-  @override
-  List<Object?> get props => [otp];
-}
-
-class OtpResendRequested extends PayoutEvent {
-  OtpResendRequested();
-}
+class PayoutReset extends PayoutEvent {}

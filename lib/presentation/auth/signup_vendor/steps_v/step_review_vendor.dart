@@ -7,27 +7,21 @@ import 'package:iconsax/iconsax.dart';
 import 'package:korra/config/utils/text_util.dart'; 
 
 import '../../../../config/constants/colors.dart';
-import '../../../../config/constants/sizes.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
-import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart'; // Import State
 import '../../legal/legal_sheet.dart';
 
-class StepReviewVendor extends StatefulWidget {
+class StepReviewVendor extends StatelessWidget {
   final GlobalKey<FormState> formKey; 
   const StepReviewVendor({super.key, required this.formKey});
 
   @override
-  State<StepReviewVendor> createState() => _StepReviewVendorState();
-}
-
-class _StepReviewVendorState extends State<StepReviewVendor> {
-  // Local state for checkbox because it's UI-specific to this step
-  bool _agreed = false;
-
-  @override
   Widget build(BuildContext context) {
+    // 1. Watch the state so the widget rebuilds when 'agreedToTerms' changes
     final s = context.watch<SignupVendorBloc>().state;
+    
+    // Use the value from the Bloc, not local state
+    final isAgreed = s.toggled; 
 
     String _fullName() {
       final fn = s.firstName.titleCase;
@@ -103,7 +97,7 @@ class _StepReviewVendorState extends State<StepReviewVendor> {
                 else ...[
                   if (s.instagram.isNotEmpty) _ReviewRow(label: "Instagram", value: "@${s.instagram}"),
                   if (s.twitter.isNotEmpty) _ReviewRow(label: "Twitter", value: "@${s.twitter}"),
-                  // ... other fields
+                  // Add other social checks here if needed
                 ],
 
                 Padding(
@@ -138,20 +132,18 @@ class _StepReviewVendorState extends State<StepReviewVendor> {
           // --- LEGAL CHECKBOX ---
           GestureDetector(
             onTap: () {
-              setState(() => _agreed = !_agreed);
-              // Notify parent/Bloc if needed, but local state is fine for blocking the button
-              // The trick is we need to pass this state to the BottomNav somehow.
-              // Option A: Add 'agreedToTerms' to Bloc State (Best for architecture)
-              // Option B: Use a callback (Simpler if passing props)
-              context.read<SignupVendorBloc>().add(TermsAgreementToggled(_agreed)); 
+              // 2. Dispatch event to Bloc instead of setState
+              // Toggle the current value
+              context.read<SignupVendorBloc>().add(TermsAgreementToggled(!isAgreed)); 
             },
             child: Container(
               padding: EdgeInsets.all(16.r),
               decoration: BoxDecoration(
-                color: _agreed ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB), 
+                // 3. UI now reacts to 'isAgreed' from Bloc
+                color: isAgreed ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB), 
                 borderRadius: BorderRadius.circular(12.r),
                 border: Border.all(
-                  color: _agreed ? const Color(0xFFBBF7D0) : const Color(0xFFF3F4F6)
+                  color: isAgreed ? const Color(0xFFBBF7D0) : const Color(0xFFF3F4F6)
                 ),
               ),
               child: Row(
@@ -163,14 +155,14 @@ class _StepReviewVendorState extends State<StepReviewVendor> {
                     width: 24.w,
                     height: 24.w,
                     decoration: BoxDecoration(
-                      color: _agreed ? KorraColors.brand : Colors.white,
+                      color: isAgreed ? KorraColors.brand : Colors.white,
                       borderRadius: BorderRadius.circular(6.r),
                       border: Border.all(
-                        color: _agreed ? KorraColors.brand : Colors.grey.shade300,
+                        color: isAgreed ? KorraColors.brand : Colors.grey.shade300,
                         width: 2,
                       ),
                     ),
-                    child: _agreed 
+                    child: isAgreed 
                         ? Icon(Icons.check, size: 16.sp, color: Colors.white)
                         : null,
                   ),
@@ -187,20 +179,19 @@ class _StepReviewVendorState extends State<StepReviewVendor> {
                           const TextSpan(text: 'By checking this box, I agree to Korra’s '),
                           TextSpan(
                             text: 'Terms of Service',
-                            style: TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
                             recognizer: TapGestureRecognizer()..onTap = () => showKorraVendorTermsSheet(context),
                           ),
                           const TextSpan(text: ', '),
                           TextSpan(
                             text: 'Privacy Policy',
-                            style: TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
                             recognizer: TapGestureRecognizer()..onTap = () => showKorraVendorPrivacySheet(context),
                           ),
                           const TextSpan(text: ', and '),
                           TextSpan(
                             text: 'Vendor Partnership Agreement',
-                            style: TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
-                            // Add showKorraPartnershipSheet if you have one, or reuse terms
+                            style: const TextStyle(color: KorraColors.brand, fontWeight: FontWeight.w700),
                             recognizer: TapGestureRecognizer()..onTap = () => showKorraVendorPartnershipSheet(context),
                           ),
                           const TextSpan(text: '.'),
@@ -220,7 +211,7 @@ class _StepReviewVendorState extends State<StepReviewVendor> {
   }
 }
 
-// --- COMPONENTS (Keep existing ones) ---
+// --- COMPONENTS (Unchanged) ---
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -240,8 +231,7 @@ class _SectionHeader extends StatelessWidget {
 class _ReviewRow extends StatelessWidget {
   final String label;
   final String value;
-  final bool isLink;
-  const _ReviewRow({required this.label, required this.value, this.isLink = false});
+  const _ReviewRow({required this.label, required this.value});
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -259,8 +249,7 @@ class _ReviewRow extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 13.5.sp, 
                 fontWeight: FontWeight.w600, 
-                color: isLink ? Colors.blue : const Color(0xFF1C1C1E),
-                decoration: isLink ? TextDecoration.underline : null
+                color: const Color(0xFF1C1C1E),
               ),
             ),
           ),

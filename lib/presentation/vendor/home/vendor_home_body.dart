@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
-import 'package:korra/data/repository/vendors/wallet_repository.dart';
-
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
 import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
-import '../../../logic/bloc/vendor/payout/payout_state.dart';
+import '../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../config/utils/currency_formatters.dart';
 import '../../../logic/core/net/net_cubit.dart';
 import '../../shared/korra_error_bannar.dart';
 import '../../shared/widgets/section_header.dart';
-import '../payout/payout_screen.dart';
+import '../payout/payout_screen_ui.dart';
+import 'widgets/vendor_capacity_card.dart';
 import 'widgets/vendor_withdrawable_card.dart';
 import 'widgets/vendor_hold_vault.dart';
 import 'widgets/vendor_kpi_block.dart';
@@ -66,86 +65,52 @@ class VendorHomeBody extends StatelessWidget {
                           message: 'failed to load data, drag down to refresh',
                         ),
 
-                      // WALLET (withdrawable)
-                      BlocBuilder<PayoutBloc, PayoutState>(
-                        builder: (context, payoutState) {
-                          return FutureBuilder<num>(
-                            future: vendors.getWalletBalance(
-                              payoutState.payoutDetails.walletAccountNumber,
-                            ),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return VendorWithdrawableCard(
-                                  balanceText: 'Loading...',
-                                  loading: true,
-                                  methodMasked: '',
-                                  onPayout: null,
-                                );
-                              }
-
-                              final withdrawableBalance =
-                                  snapshot.data ??
-                                  payoutState.payoutDetails.withdrawableBalance;
-
-                              return VendorWithdrawableCard(
-                                balanceText:
-                                    '₦${formatToCurrency(withdrawableBalance)}',
-                                loading: false,
-                                methodMasked:
-                                    payoutState.payoutDetails.masked.isEmpty
-                                    ? 'Add method'
-                                    : payoutState.payoutDetails.masked,
-                                onPayout: isEnabled
-                                    ? () {
-                                        final payoutBloc = context
-                                            .read<PayoutBloc>();
-                                        Get.to(
-                                          () => BlocProvider.value(
-                                            value: payoutBloc,
-                                            child: PayoutScreen(),
-                                          ),
-                                        );
-                                      }
-                                    : null,
+                      VendorWithdrawableCard(
+                        balanceText: '₦${formatToCurrency(s.withdrawable)}', //s.withdrawable
+                        // Pass Total Balance if you add a property for it later
+                        totalBalanceText: '₦${formatToCurrency(s.walletBalance)}', //s.walletBalance
+                        loading: s.status == VendorHomeStatus.loading,
+                        onPayout: isEnabled ? () {
+                          Get.to(
+                                () => BlocProvider(
+                                  create: (_) => PayoutBloc(
+                                    vendorUid: vendorUid, repo: vendors,
+                                  )..add(PayoutStarted(s.withdrawable)),
+                                  child: PayoutScreen(),
+                                ),
                               );
-                            },
-                          );
-                        },
+                        } : null,
                       ),
 
                       // =======================
-                      // SETTLEMENT — OPTION A: VAULT
+                      // 2. VAULT (Locked Funds)
                       // =======================
                       VendorHoldVault(
-                        holdText: s.onHold,
-                        daysRemaining:
-                            9, // replace with your remaining-days value
+                        // 1. Format the Double to String
+                        holdText: '₦${formatToCurrency(s.onHold)}', 
+                        
+                        // 2. Pass the Integer calculated in Bloc
+                        daysRemaining: s.daysRemaining, 
+                        
+                        // 3. Pass the Date String
                         nextRelease: s.nextReleaseDate,
-                        entries: const [
-                          HoldEntry(
-                            dateLabel: 'Aug 27',
-                            amountText: '₦240,000',
-                            released: false,
-                          ),
-                          HoldEntry(
-                            dateLabel: 'Sep 03',
-                            amountText: '₦510,000',
-                            released: false,
-                          ),
-                          HoldEntry(
-                            dateLabel: 'Sep 10',
-                            amountText: '₦120,000',
-                            released: false,
-                          ),
-                        ],
+                        
+                        // 4. Pass the List<HoldEntry> from State
+                        entries: s.upcomingReleases, 
+                        
                         onViewSchedule: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const ViewHoldSchedule(),
-                              )
+                            ? () {
+                                // context.read<VendorHomeBloc>().add(const ViewHoldSchedule());
+                              }
                             : null,
                       ),
 
+                      VendorCapacityCard(
+                        maxLimit: s.maxLimit,
+                        activePlanValue: s.activePlanValue,
+                        storeCreditValue: s.liabilityValue,
+                      ),
+                      
                       // ===== Reservations KPIs =====
                       SectionHeader(title: 'Reservations', actionText: ''),
                       VendorKpiBlock(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:get/get.dart'; // Using Get for navigation if needed
 
 import '../../../../data/models/customer/plans.dart';
 import '../widgets/plan_card.dart'; // Reuse your card!

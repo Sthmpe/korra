@@ -9,16 +9,20 @@ import '../../../../data/models/customer/korra_notification.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../data/repository/customer/notification_repository.dart'; 
 import '../../shared/widgets/korra_header.dart';
-import '../plans/plans_page.dart'; // Import Plans
-import '../profile/statements_screen.dart'; // Import Statements
+import '../profile/statements_screen.dart'; 
 import '../plans/widgets/empty_state_card.dart';
 
 class NotificationScreen extends StatelessWidget {
   final CustomerRepository repo;
   final String uid;
-  final VoidCallback onJumpTo;
+  final VoidCallback onJumpToPlans; // Function to switch to Plans tab
 
-  const NotificationScreen({super.key, required this.repo, required this.uid, required this.onJumpTo});
+  const NotificationScreen({
+    super.key, 
+    required this.repo, 
+    required this.uid, 
+    required this.onJumpToPlans
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -45,10 +49,6 @@ class NotificationScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator(color: Color(0xFFA54600)));
           }
 
-          if (snapshot.hasError) {
-            return const Center(child: Text("Could not load notifications"));
-          }
-
           final notifications = snapshot.data ?? [];
 
           if (notifications.isEmpty) {
@@ -65,14 +65,26 @@ class NotificationScreen extends StatelessWidget {
               return _NotificationTile(
                 notification: notif,
                 onTap: () {
-                  // 1. Logic: Mark Read
+                  // 1. Always Mark as Read on tap
                   if (!notif.isRead) repo.markNotificationRead(uid, notif.id);
 
-                  // 2. Logic: Navigate based on type
-                  if (notif.type == 'payment') {
-                    Get.to(() => StatementsScreen(repo: repo, customerUid: uid));
-                  } else if (notif.type == 'reminder' || notif.type == 'plan') {
-                    onJumpTo;
+                  // 2. Smart Navigation based on Type
+                  switch (notif.type) {
+                    case 'payment':
+                      Get.to(() => StatementsScreen(repo: repo, customerUid: uid));
+                      break;
+                      
+                    case 'reminder':
+                    case 'plan':
+                      Get.back(); // Close notification screen
+                      onJumpToPlans(); // Switch bottom tab to Plans
+                      break;
+                      
+                    case 'security':
+                    case 'system':
+                      // Usually just informational (Limit update), stays on screen or goes to profile
+                      // For now, we just mark read (already done above)
+                      break;
                   }
                 },
               );
@@ -93,6 +105,7 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUnread = !notification.isRead;
+    final iconSpec = _getIconSpec(notification.type);
     
     return GestureDetector(
       onTap: onTap,
@@ -113,14 +126,10 @@ class _NotificationTile extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(10.r),
               decoration: BoxDecoration(
-                color: _getIconColor(notification.type).withOpacity(0.1),
+                color: iconSpec.bg,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                _getIcon(notification.type), 
-                size: 20.sp, 
-                color: _getIconColor(notification.type)
-              ),
+              child: Icon(iconSpec.icon, size: 20.sp, color: iconSpec.color),
             ),
             
             SizedBox(width: 14.w),
@@ -145,15 +154,10 @@ class _NotificationTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Date or Red Dot
                       if (isUnread)
-                        Container(
-                          width: 8.w, height: 8.w, 
-                          decoration: const BoxDecoration(color: Color(0xFFD92D20), shape: BoxShape.circle)
-                        )
-                      else 
-                        // Show Chevron if read (Engineering Hint: "You can click this")
-                        Icon(Icons.chevron_right_rounded, size: 16.sp, color: Colors.grey.shade400)
+                        Container(width: 8.w, height: 8.w, decoration: const BoxDecoration(color: Color(0xFFD92D20), shape: BoxShape.circle))
+                      else
+                         Icon(Icons.chevron_right_rounded, size: 16.sp, color: Colors.grey.shade400)
                     ],
                   ),
                   SizedBox(height: 4.h),
@@ -161,7 +165,7 @@ class _NotificationTile extends StatelessWidget {
                     notification.body,
                     style: GoogleFonts.inter(
                       fontSize: 13.sp,
-                      color: isUnread ? const Color(0xFF475467) : Colors.grey.shade500,
+                      color: const Color(0xFF475467),
                       height: 1.4,
                     ),
                   ),
@@ -179,7 +183,6 @@ class _NotificationTile extends StatelessWidget {
     );
   }
 
-  // ... (Keep your _formatTime, _getIconColor, _getIcon helpers exactly as before)
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
@@ -190,15 +193,26 @@ class _NotificationTile extends StatelessWidget {
     return DateFormat('MMM d').format(dt);
   }
 
-  Color _getIconColor(String type) {
-    if (type == 'payment') return const Color(0xFF16A34A);
-    if (type == 'reminder') return const Color(0xFFF79009);
-    return const Color(0xFFA54600);
+  // --- Visual Specs Helper ---
+  _IconSpec _getIconSpec(String type) {
+    switch (type) {
+      case 'payment': 
+        return _IconSpec(Iconsax.wallet_2, const Color(0xFF16A34A), const Color(0xFFDCFCE7)); // Green
+      case 'reminder': 
+        return _IconSpec(Iconsax.timer_1, const Color(0xFFF79009), const Color(0xFFFEF9C3)); // Orange
+      case 'security': 
+        return _IconSpec(Iconsax.shield_tick, const Color(0xFFD92D20), const Color(0xFFFEE2E2)); // Red
+      case 'system':
+        return _IconSpec(Iconsax.trend_up, const Color(0xFF2563EB), const Color(0xFFDBEAFE)); // Blue (For Limit Increase)
+      default: 
+        return _IconSpec(Iconsax.notification, const Color(0xFFA54600), const Color(0xFFFFEDD5)); // Brand
+    }
   }
+}
 
-  IconData _getIcon(String type) {
-    if (type == 'payment') return Iconsax.wallet_2;
-    if (type == 'reminder') return Iconsax.timer_1;
-    return Iconsax.notification;
-  }
+class _IconSpec {
+  final IconData icon;
+  final Color color;
+  final Color bg;
+  _IconSpec(this.icon, this.color, this.bg);
 }

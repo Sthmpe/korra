@@ -184,6 +184,80 @@ serve(async (req) => {
           }
         }).catch((e: any) => console.error("FCM Error (Transaction still succeeded):", e));
       }
+      
+      // 1. CHECK FOR ACTIVE PLANS (The Gatekeeper)
+      // We check if there are any plans that are NOT 'completed' or 'cancelled'.
+      // We use a query inside the transaction or right before it.
+      const activePlansQuery = await t.get(
+        db.collection('plans')
+          .where('customerId', '==', uid)
+          .where('status', 'in', ['active', 'overdue', 'pending_approval'])
+          .limit(1)
+      );
+
+      // 2. EXECUTE LIMIT LOGIC ONLY IF CLEAN
+      if (activePlansQuery.empty) {
+         // 1. Get Old Limit Values
+         const totalLimit = limitDoc.exists ? (limitDoc.data().totalCreditLimit || 15000) : 15000;
+         const activeDebt = limitDoc.exists ? (limitDoc.data().activeDebt || 0) : 0;
+         
+         // 2. Calculate "Old Reservation Limit" (Purchasing Power)
+         const oldReservationLimit = Math.max(0, totalLimit - activeDebt);
+
+         // 3. Formula: (New Wallet Balance * 1.25) + (0.25 * Old Res Limit)
+         // Use balAfterFee because that's the actual cash they have now
+         const partA = balAfterFee * 1.25;
+         const partB = oldReservationLimit * 0.25;
+         const newReservationLimit = partA + partB;
+
+         // 4. Calculate New Total Limit (Add Debt back)
+         let newTotalLimit = newReservationLimit + activeDebt;
+
+         // Cap at 100k (as requested)
+         if (newTotalLimit > 100000) newTotalLimit = 100000;
+
+         // 5. Update if Increased
+         if (newTotalLimit > totalLimit) {
+            t.update(limitRef, {
+                totalCreditLimit: newTotalLimit,
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                limitReason: 'wallet_fund_boost_v5'
+            });
+
+            // 6. Limit Notification
+            const boostAmount = newReservationLimit - oldReservationLimit;
+            const formattedBoost = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(boostAmount);
+            const formattedTotal = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(newReservationLimit);
+
+            const limitNotifRef = db.collection('customer').doc(uid).collection('notifications').doc();
+            t.set(limitNotifRef, {
+                id: limitNotifRef.id,
+                title: "Purchasing Power Increased! 🚀",
+                body: `Your reservation limit increased by +${formattedBoost}. You can now reserve items up to ${formattedTotal}.`,
+                type: "system", // Shows standard/brand color
+                isRead: false,
+                createdAt: timestamp
+            });
+
+            // 7. Limit Push
+            if (fcmToken) {
+               messaging.send({
+                  token: fcmToken,
+                  data: {
+                    type: "system",
+                    title: "Limit Increased! 🚀",
+                    body: `Your purchasing power is now ${formattedTotal}.`,
+                    uid: uid,
+                    notifId: limitNotifRef.id
+                  },
+                  android: { priority: "high" },
+                  apns: { payload: { aps: { contentAvailable: true } } }
+               }).catch((e: any) => console.error("Limit Push Error:", e));
+            }
+         }
+      } else {
+         console.log("User has active plans. Limit increase skipped.");
+      }
     });
 
     return new Response(JSON.stringify({ status: "success" }), { 

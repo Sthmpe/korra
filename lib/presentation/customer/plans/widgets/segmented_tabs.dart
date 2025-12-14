@@ -36,7 +36,7 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
               _chip('Pending', PlansTab.pending), // ✅ ADDED
               _chip('Completed', PlansTab.completed),
               _chip('Overdue', PlansTab.overdue),
-              _chip('Cancelled', PlansTab.canceled),
+              _chip('Cancelled', PlansTab.cancelled),
             ],
           ),
         ),

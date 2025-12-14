@@ -37,11 +37,6 @@ class Vendor {
   final bool ninVerified;
   final bool bvnVerified;
 
-  // --- Monnify ---
-  final String? walletReference;
-  final String? accountNumber;
-  final String? accountName;
-
   // --- Socials (New) ---
   final String? whatsappGroup;
   final String? instagram;
@@ -80,9 +75,7 @@ class Vendor {
     required this.bvn,
     required this.ninVerified,
     required this.bvnVerified,
-    this.walletReference,
-    this.accountNumber,
-    this.accountName,
+
     // New Socials
     this.whatsappGroup,
     this.instagram,
@@ -172,9 +165,6 @@ class Vendor {
       bvn: bvn,
       ninVerified: ninVerified,
       bvnVerified: bvnVerified,
-      walletReference: walletReference ?? this.walletReference,
-      accountNumber: accountNumber ?? this.accountNumber,
-      accountName: accountName ?? this.accountName,
       whatsappGroup: whatsappGroup,
       instagram: instagram,
       tiktok: tiktok,
@@ -196,7 +186,6 @@ class Vendor {
     final location = map['location'] as Map<String, dynamic>? ?? {};
     final personal = map['personal'] as Map<String, dynamic>? ?? {};
     final kyc = map['kyc'] as Map<String, dynamic>? ?? {};
-    final monnify = map['monnify'] as Map<String, dynamic>? ?? {};
     // Extract Socials Map
     final socials = map['socials'] as Map<String, dynamic>? ?? {};
 
@@ -240,11 +229,6 @@ class Vendor {
       bvn: kyc['bvn'] ?? '',
       ninVerified: kyc['ninVerified'] ?? false,
       bvnVerified: kyc['bvnVerified'] ?? false,
-
-      // Monnify
-      walletReference: monnify['walletReference'],
-      accountNumber: monnify['accountNumber'],
-      accountName: monnify['accountName'],
 
       // Socials (Mapped directly from the 'socials' object)
       whatsappGroup: socials['whatsappGroup'],
@@ -315,11 +299,6 @@ class Vendor {
         'bvn': bvn,
         'ninVerified': ninVerified,
         'bvnVerified': bvnVerified,
-      }),
-      'monnify': omitNulls({
-        'walletReference': walletReference,
-        'accountNumber': accountNumber,
-        'accountName': accountName,
       }),
       
       // Inject Socials

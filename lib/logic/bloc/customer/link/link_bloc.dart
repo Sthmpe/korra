@@ -20,7 +20,7 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
   Future<void> _onLinkSubmitted(LinkSubmitted e, Emitter<LinkState> emit) async {
     emit(state.copyWith(status: LinkStatus.validating, message: "Validating link"));
 
-    final korraRegex = RegExp(r'^korra-[A-Z0-9]{4}-[a-f0-9]{7}$');
+    final korraRegex = RegExp(r'^K-[A-Z0-9]{4}-[a-f0-9]{7}$');
 
     if (e.value.trim().isEmpty) {
       emit(state.copyWith(

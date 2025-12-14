@@ -7,7 +7,6 @@ import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../../../config/constants/colors.dart';
-import '../../../../config/constants/sizes.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 

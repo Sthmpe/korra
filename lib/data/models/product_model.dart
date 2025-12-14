@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 
-import '../../logic/bloc/vendor/product/vendor_products_state.dart';
+// Ensure this import points to where ProductModelType and ProductStatus are defined
+import '../../logic/bloc/vendor/product/vendor_products_state.dart'; 
 
 class Product {
   final String id;
@@ -13,14 +14,25 @@ class Product {
   final String name;
   final String description;
   final double price;
-  final int initialStock; // set when created
+  final int initialStock; 
   final int availableStock;
   final List<String> images;
   final String category;
-  final ProductStatus status; // NEW
-  final String? rejectionReason; // AI / Supabase message
+  final ProductStatus status;
+  final String? rejectionReason;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // ✅ SMART CONTRACT FIELDS
+  final ProductModelType modelType;       // "strict" or "direct"
+  final String cancellationPolicy;        // e.g. "50% Refund"
+  final bool extensionsEnabled;           // true/false
+  final double? directDownPayment;        // Only for Direct model
+
+  // ✅ TIMELINE FIELDS (Pre-calculated)
+  final String baseDuration;  // e.g. "15 Days"
+  final String noticePeriod;  // e.g. "1 Day"
+  final String totalMaxTime;  // e.g. "16 Days"
 
   Product({
     required this.id,
@@ -38,6 +50,14 @@ class Product {
     this.rejectionReason,
     required this.createdAt,
     required this.updatedAt,
+    // New Fields
+    required this.modelType,
+    required this.cancellationPolicy,
+    required this.extensionsEnabled,
+    this.directDownPayment,
+    required this.baseDuration,
+    required this.noticePeriod,
+    required this.totalMaxTime,
   });
 
   /// Create new product as pending
@@ -52,6 +72,14 @@ class Product {
     required String category,
     required ProductStatus status,
     String? rejectionReason,
+    // New Params
+    required ProductModelType modelType,
+    required String cancellationPolicy,
+    required bool extensionsEnabled,
+    double? directDownPayment,
+    required String baseDuration,
+    required String noticePeriod,
+    required String totalMaxTime,
   }) {
     final now = DateTime.now();
     return Product(
@@ -70,6 +98,14 @@ class Product {
       rejectionReason: '',
       createdAt: now,
       updatedAt: now,
+      // Set New Fields
+      modelType: modelType,
+      cancellationPolicy: cancellationPolicy,
+      extensionsEnabled: extensionsEnabled,
+      directDownPayment: directDownPayment,
+      baseDuration: baseDuration,
+      noticePeriod: noticePeriod,
+      totalMaxTime: totalMaxTime,
     );
   }
 
@@ -89,6 +125,13 @@ class Product {
     String? rejectionReason,
     DateTime? createdAt,
     DateTime? updatedAt,
+    ProductModelType? modelType,
+    String? cancellationPolicy,
+    bool? extensionsEnabled,
+    double? directDownPayment,
+    String? baseDuration,
+    String? noticePeriod,
+    String? totalMaxTime,
   }) {
     return Product(
       id: id ?? this.id,
@@ -106,6 +149,13 @@ class Product {
       rejectionReason: rejectionReason ?? this.rejectionReason,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      modelType: modelType ?? this.modelType,
+      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
+      extensionsEnabled: extensionsEnabled ?? this.extensionsEnabled,
+      directDownPayment: directDownPayment ?? this.directDownPayment,
+      baseDuration: baseDuration ?? this.baseDuration,
+      noticePeriod: noticePeriod ?? this.noticePeriod,
+      totalMaxTime: totalMaxTime ?? this.totalMaxTime,
     );
   }
 
@@ -138,6 +188,17 @@ class Product {
       rejectionReason: map['rejectionReason'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      // ✅ Map New Fields
+      modelType: ProductModelType.values.firstWhere(
+        (m) => m.name == (map['modelType'] ?? 'strict'),
+        orElse: () => ProductModelType.strict,
+      ),
+      cancellationPolicy: map['cancellationPolicy'] ?? '50% Refund',
+      extensionsEnabled: map['extensionsEnabled'] ?? false,
+      directDownPayment: (map['directDownPayment'] as num?)?.toDouble(),
+      baseDuration: map['baseDuration'] ?? '15 Days',
+      noticePeriod: map['noticePeriod'] ?? '1 Day',
+      totalMaxTime: map['totalMaxTime'] ?? '16 Days',
     );
   }
 
@@ -157,6 +218,14 @@ class Product {
       'rejectionReason': rejectionReason,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      // ✅ Save New Fields
+      'modelType': modelType.name,
+      'cancellationPolicy': cancellationPolicy,
+      'extensionsEnabled': extensionsEnabled,
+      'directDownPayment': directDownPayment,
+      'baseDuration': baseDuration,
+      'noticePeriod': noticePeriod,
+      'totalMaxTime': totalMaxTime,
     };
   }
 }

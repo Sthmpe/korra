@@ -25,7 +25,7 @@
 //         _buildTab("Active", PlansTab.active),
 //         _buildTab("Completed", PlansTab.completed),
 //         _buildTab("Overdue", PlansTab.overdue),
-//         _buildTab("Canceled", PlansTab.canceled), // ✅ Added
+//         _buildTab("Cancelled", PlansTab.cancelled), // ✅ Added
 //       ],
 //     );
 //   }

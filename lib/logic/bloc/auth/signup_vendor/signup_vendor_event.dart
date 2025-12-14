@@ -31,6 +31,7 @@ class LegalNameChanged extends SignupVendorEvent {
   LegalNameChanged(this.value);
   @override List<Object?> get props => [value];
 }
+class VerifyCacRequested extends SignupVendorEvent {}
 
 // V2 — store details
 class StoreNameChanged extends SignupVendorEvent {
@@ -179,3 +180,10 @@ class OtherLinkChanged extends SignupVendorEvent {
   OtherLinkChanged(this.value);
 }
 
+class SelfieCaptured extends SignupVendorEvent {
+  final String path;
+  SelfieCaptured(this.path);
+  
+  @override
+  List<Object?> get props => [path];
+}

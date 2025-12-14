@@ -1,94 +1,72 @@
-class PayoutDetails {
-  final num withdrawableBalance;
-  final String walletAccountNumber;
-  final String walletAccountName;
-  final String walletAccountReference;
-  final String bankCode;
-  final String bankAccountNumber;
-  final String bankAccountName;
-  final String bankName;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-  PayoutDetails({
-    required this.withdrawableBalance,
-    required this.walletAccountNumber,
-    required this.walletAccountName,
-    required this.walletAccountReference,
+class PayoutDetails {
+  final String bankName;
+  final String bankCode;
+  final String bankAccountNumber; // Firestore key: 'accountNumber'
+  final String bankAccountName;   // Firestore key: 'accountName'
+  final DateTime? updatedAt;
+
+  // Note: We do NOT store 'withdrawableBalance' here anymore.
+  // Balance is a live calculated value from the Ledger, passed separately in the State.
+
+  const PayoutDetails({
+    required this.bankName,
     required this.bankCode,
     required this.bankAccountNumber,
     required this.bankAccountName,
-    required this.bankName,
+    this.updatedAt,
   });
 
-  factory PayoutDetails.fromMap(Map<String, dynamic> map) {
-    return PayoutDetails(
-      // It now correctly reads the snake_case keys from Firestore
-      withdrawableBalance: map['withdrawable_balance'] ?? 0,
-      walletAccountNumber: map['wallet_account_number'] ?? '',
-      walletAccountName: map['wallet_account_name'] ?? '',
-      walletAccountReference: map['wallet_account_reference'] ?? '',
-      bankCode: map['bank_code'] ?? '',
-      bankAccountNumber: map['bank_account_number'] ?? '',
-      bankAccountName: map['bank_account_name'] ?? '',
-      bankName: map['bank_name'] ?? '',
-    );
-  }
-
-  /// Create an empty PayoutDetails instance
+  /// Creates an empty instance for initial state
   factory PayoutDetails.empty() {
-    return PayoutDetails(
-      withdrawableBalance: 0,
-      walletAccountNumber: '',
-      walletAccountName: '',
-      walletAccountReference: '',
+    return const PayoutDetails(
+      bankName: '',
       bankCode: '',
       bankAccountNumber: '',
       bankAccountName: '',
-      bankName: '',
+      updatedAt: null,
     );
   }
 
+  /// Converts Firestore Document Data to Model
+  factory PayoutDetails.fromMap(Map<String, dynamic> data) {
+    return PayoutDetails(
+      bankName: data['bankName'] ?? '',
+      bankCode: data['bankCode'] ?? '',
+      // Map Firestore 'accountNumber' to our internal 'bankAccountNumber'
+      bankAccountNumber: data['accountNumber'] ?? '', 
+      // Map Firestore 'accountName' to our internal 'bankAccountName'
+      bankAccountName: data['accountName'] ?? '',
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  /// Converts Model to Map (If saving directly from Flutter)
   Map<String, dynamic> toMap() {
     return {
-      'withdrawable_balance': withdrawableBalance,
-      'wallet_account_number': walletAccountNumber,
-      'wallet_account_name': walletAccountName,
-      'wallet_account_reference': walletAccountReference,
-      'bank_code': bankCode,
-      'bank_account_number': bankAccountNumber,
-      'bank_account_name': bankAccountName,
-      'bank_name': bankName,
+      'bankName': bankName,
+      'bankCode': bankCode,
+      'accountNumber': bankAccountNumber,
+      'accountName': bankAccountName,
+      'updatedAt': FieldValue.serverTimestamp(), 
     };
   }
 
+  /// Helper for updating state immutably
   PayoutDetails copyWith({
-    num? withdrawableBalance,
-    String? walletAccountNumber,
-    String? walletAccountName,
-    String? walletAccountReference,
+    String? bankName,
     String? bankCode,
     String? bankAccountNumber,
     String? bankAccountName,
-    String? bankName,
+    DateTime? updatedAt,
   }) {
     return PayoutDetails(
-      withdrawableBalance: withdrawableBalance ?? this.withdrawableBalance,
-      walletAccountNumber: walletAccountNumber ?? this.walletAccountNumber,
-      walletAccountName: walletAccountName ?? this.walletAccountName,
-      walletAccountReference:
-          walletAccountReference ?? this.walletAccountReference,
+      bankName: bankName ?? this.bankName,
       bankCode: bankCode ?? this.bankCode,
       bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
       bankAccountName: bankAccountName ?? this.bankAccountName,
-      bankName: bankName ?? this.bankName,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
-  }
-
-  /// Masked bank account (e.g., "GTB ••1234")
-  String get masked {
-    if (bankAccountNumber.isEmpty || bankName.isEmpty) return '';
-    final last4 = bankAccountNumber.length >= 4
-        ? bankAccountNumber.substring(bankAccountNumber.length - 4)
-        : bankAccountNumber;
-    return '${bankName.toUpperCase()} •• $last4';
   }
 }

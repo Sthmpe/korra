@@ -4,7 +4,7 @@ import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 
-enum PlansTab { active, pending, completed, overdue, canceled }
+enum PlansTab { active, pending, completed, overdue, cancelled }
 enum SortBy { nextDue, amount, progress }
 
 // --- EVENTS ---

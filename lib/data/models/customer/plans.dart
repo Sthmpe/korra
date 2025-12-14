@@ -20,29 +20,31 @@ class Plan {
   // =========================================================
   // 3. FINANCIALS - GENERAL
   // =========================================================
-  final double totalAmount; // The full price of the product
-  final double amountPaid; // Total user has paid so far
-  final double nextAmount; // The specific value of the next installment
-  final double? amountPerPeriod; // How much per week/month
+  final double totalAmount; 
+  final double amountPaid; 
+  final double nextAmount; 
+  final double? amountPerPeriod;
 
   // =========================================================
   // 4. FINANCIALS - RISK ENGINE
-  //    These are required to track Debt and Limit Growth properly.
   // =========================================================
-  final double
-  initialDownPayment; // The total upfront paid (Gap + Skin in Game)
-  final double loanAmount; // The amount Korra actually lent (Limit Used)
-  final double
-  outstandingLoanAmount; // The remaining debt (decreases with payments)
-  final double dpPercentage; // The random % generated (for auditing)
+  final double initialDownPayment; 
+  final double loanAmount; 
+  final double outstandingLoanAmount; 
+  final double dpPercentage; 
 
   // =========================================================
-  // 5. PAYMENT CADENCE
+  // 5. PAYMENT CADENCE & LIMITS (MICRO-TIER)
   // =========================================================
-  final int? cadenceDays; // 1 = daily, 7 = weekly, 30 = monthly
-  final String? cadenceType; // "daily", "weekly", "monthly"
-  final bool commitmentEnabled; // Whether customer chose commitment plan
-  final int durationMonths;
+  final int? cadenceDays; 
+  final String? cadenceType; 
+  final bool commitmentEnabled; 
+  final int durationMonths; // For UI Display (e.g. "3 Months")
+  
+  // ✅ NEW: Strict Limit Fields
+  final int baseDurationDays;   // e.g. 15, 30, 90
+  final int noticePeriodDays;   // e.g. 3, 10
+  final int extensionGraceDays; // e.g. 0, 10, 30
 
   // =========================================================
   // 6. DATES
@@ -50,17 +52,14 @@ class Plan {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime nextDueDate;
-
-  // =========================================================
-  // 7. REMINDERS
-  // =========================================================
-  final DateTime reminderStartDate;
-  final DateTime nextReminderDate;
+  
+  // ✅ NEW: Automation Dates
+  final DateTime planExpiryDate;   // Hard stop date
+  final DateTime noticeStartDate;  // Warning date
 
   // =========================================================
   // 8. STATUS
   // =========================================================
-  // Values: 'active', 'completed', 'cancelled', 'defaulted'
   final String status;
 
   const Plan({
@@ -81,16 +80,20 @@ class Plan {
     required this.createdAt,
     required this.updatedAt,
     required this.nextDueDate,
-    required this.reminderStartDate,
-    required this.nextReminderDate,
+    required this.planExpiryDate,    // NEW
+    required this.noticeStartDate,   // NEW
     required this.durationMonths,
     this.amountPerPeriod,
-    // --- New Required Fields ---
     required this.initialDownPayment,
     required this.loanAmount,
     required this.outstandingLoanAmount,
     required this.dpPercentage,
     required this.status,
+    
+    // Micro-Tier Defaults
+    required this.baseDurationDays,
+    required this.noticePeriodDays,
+    required this.extensionGraceDays,
   });
 
   // =========================================================
@@ -105,30 +108,33 @@ class Plan {
     required String title,
     required String storeName,
     required List<String> imageUrls,
-    // Inputs from Risk Engine
-    required double totalProductPrice, // Was totalAmount
-    required double totalUpfrontPaid, // Was downPayment (Gap + Skin)
-    required double loanAmount, // New: The Risk Amount
-    required double dpPercentage, // New: The Random %
-    // Inputs from User Selection
+    required double totalProductPrice, 
+    required double totalUpfrontPaid, 
+    required double loanAmount, 
+    required double dpPercentage, 
     String? cadenceType,
     required bool commitmentEnabled,
     required int durationMonths,
     double? amountPerPeriod,
+    
+    // ✅ NEW: Tier Inputs (Passed from Bloc)
+    required int baseDurationDays, 
+    required int noticeDays, 
+    required int extensionDays, 
   }) {
     final now = DateTime.now();
 
     int cadenceDays;
     switch (cadenceType) {
-      case "daily":
-        cadenceDays = 1;
-        break;
-      case "weekly":
-        cadenceDays = 7;
-        break;
-      default:
-        cadenceDays = 30;
+      case "daily": cadenceDays = 1; break;
+      case "weekly": cadenceDays = 7; break;
+      case "bi-weekly": cadenceDays = 14; break; // Added bi-weekly
+      default: cadenceDays = 30;
     }
+    
+    // Calculate Hard Dates
+    final expiryDate = now.add(Duration(days: baseDurationDays));
+    final noticeDate = expiryDate.subtract(Duration(days: noticeDays));
 
     return Plan(
       id: generatedId,
@@ -140,36 +146,32 @@ class Plan {
       storeName: storeName,
       imageUrls: imageUrls,
 
-      // Mapped Financials
       totalAmount: totalProductPrice,
       amountPaid: totalUpfrontPaid,
-      nextAmount:
-          amountPerPeriod ??
-          0.0, // This should usually be the installment amount
+      nextAmount: amountPerPeriod ?? 0.0,
       amountPerPeriod: amountPerPeriod,
 
-      // New Risk Fields
       initialDownPayment: totalUpfrontPaid,
       loanAmount: loanAmount,
-      outstandingLoanAmount: loanAmount, // At start, debt = loan amount
+      outstandingLoanAmount: loanAmount,
       dpPercentage: dpPercentage,
 
-      // Scheduling
       cadenceDays: cadenceDays,
       cadenceType: cadenceType ?? "monthly",
       commitmentEnabled: commitmentEnabled,
       durationMonths: durationMonths,
 
-      // Dates
       createdAt: now,
       updatedAt: now,
       nextDueDate: now.add(Duration(days: cadenceDays)),
-      reminderStartDate: now.add(const Duration(days: 30)),
-      nextReminderDate: now
-          .add(const Duration(days: 30))
-          .add(const Duration(days: 7)),
+      
+      // New Fields
+      planExpiryDate: expiryDate,
+      noticeStartDate: noticeDate,
+      baseDurationDays: baseDurationDays,
+      noticePeriodDays: noticeDays,
+      extensionGraceDays: extensionDays,
 
-      // Status
       status: (totalUpfrontPaid >= totalProductPrice) ? 'completed' : 'active',
     );
   }
@@ -184,21 +186,57 @@ class Plan {
   double get amountRemaining =>
       (totalAmount - amountPaid).clamp(0, totalAmount);
 
-  // *** UPDATED: Using status check instead of boolean ***
   bool get isOverdue =>
       DateTime.now().isAfter(nextDueDate) &&
       status != 'completed' &&
       status != 'cancelled';
 
-  // *** COMPATIBILITY HELPERS: Keeps old UI code working ***
   bool get isCompleted => status == 'completed';
-  bool get isCancelled => status == 'cancelled';
+  bool get isCancelled => status == 'cancelled'; // Double L check
   bool get isActive => status == 'active';
-  bool get isDefaulted => status == 'defaulted';
 
   // =========================================================
-  // FIRESTORE SERIALIZATION
-  // Updated to include new fields
+  // 🏭 FACTORY: SHELL PLAN
+  // =========================================================
+  factory Plan.empty({required String id}) {
+    final now = DateTime.now();
+    return Plan(
+      id: id,
+      productId: '',
+      productCode: '',
+      customerId: '',
+      vendorId: '',
+      title: 'Loading...',
+      storeName: '...',
+      imageUrls: const [],
+      totalAmount: 0.0,
+      amountPaid: 0.0,
+      nextAmount: 0.0,
+      amountPerPeriod: 0.0,
+      initialDownPayment: 0.0,
+      loanAmount: 0.0,
+      outstandingLoanAmount: 0.0,
+      dpPercentage: 0.0,
+      cadenceDays: 30,
+      cadenceType: 'monthly',
+      commitmentEnabled: false,
+      durationMonths: 0,
+      createdAt: now,
+      updatedAt: now,
+      nextDueDate: now,
+      status: 'active',
+      
+      // Shell Defaults
+      planExpiryDate: now.add(const Duration(days: 30)),
+      noticeStartDate: now.add(const Duration(days: 25)),
+      baseDurationDays: 30,
+      noticePeriodDays: 5,
+      extensionGraceDays: 0,
+    );
+  }
+
+  // =========================================================
+  // SERIALIZATION
   // =========================================================
 
   Map<String, dynamic> toMap() {
@@ -219,66 +257,28 @@ class Plan {
       "createdAt": createdAt,
       "updatedAt": updatedAt,
       "nextDueDate": nextDueDate,
-      "reminderStartDate": reminderStartDate,
-      "nextReminderDate": nextReminderDate,
       "durationMonths": durationMonths,
       "amountPerPeriod": amountPerPeriod,
-      // --- New Fields ---
       "initialDownPayment": initialDownPayment,
       "loanAmount": loanAmount,
       "outstandingLoanAmount": outstandingLoanAmount,
       "dpPercentage": dpPercentage,
       "status": status,
+      
+      // ✅ NEW: Automation Fields
+      "planExpiryDate": planExpiryDate,
+      "noticeStartDate": noticeStartDate,
+      "baseDurationDays": baseDurationDays,
+      "noticePeriodDays": noticePeriodDays,
+      "extensionGraceDays": extensionGraceDays,
     };
   }
 
-  // =========================================================
-  // 🏭 FACTORY: SHELL PLAN (For Instant Navigation)
-  // =========================================================
-  factory Plan.empty({required String id}) {
-    final now = DateTime.now();
-    return Plan(
-      id: id,
-      // Identifiers
-      productId: '',
-      productCode: '',
-      customerId: '',
-      vendorId: '',
-      // Display
-      title: 'Loading...',
-      storeName: '...',
-      imageUrls: const [],
-      // Financials
-      totalAmount: 0.0,
-      amountPaid: 0.0,
-      nextAmount: 0.0,
-      amountPerPeriod: 0.0,
-      // Risk
-      initialDownPayment: 0.0,
-      loanAmount: 0.0,
-      outstandingLoanAmount: 0.0,
-      dpPercentage: 0.0,
-      // Cadence
-      cadenceDays: 30,
-      cadenceType: 'monthly',
-      commitmentEnabled: false,
-      durationMonths: 0,
-      // Dates
-      createdAt: now,
-      updatedAt: now,
-      nextDueDate: now,
-      reminderStartDate: now,
-      nextReminderDate: now,
-      // Status
-      status: 'active', // Default to active so UI renders normally
-    );
-  }
-  
   factory Plan.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDate(dynamic val) {
       if (val is Timestamp) return val.toDate();
       if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
-      return DateTime.now(); // Fallback if null
+      return DateTime.now();
     }
 
     return Plan(
@@ -290,22 +290,15 @@ class Plan {
       title: map["title"] ?? '',
       storeName: map["storeName"] ?? '',
       imageUrls: List<String>.from(map["imageUrls"] ?? []),
-
-      // Numbers
       totalAmount: (map["totalAmount"] ?? 0.0).toDouble(),
       amountPaid: (map["amountPaid"] ?? 0.0).toDouble(),
       nextAmount: (map["nextAmount"] ?? 0.0).toDouble(),
       cadenceDays: map["cadenceDays"] ?? 30,
       cadenceType: map["cadenceType"] ?? "monthly",
       commitmentEnabled: map["commitmentEnabled"] ?? false,
-
-      // ✅ THE FIX: Use parseDate() for all date fields
       createdAt: parseDate(map["createdAt"]),
       updatedAt: parseDate(map["updatedAt"]),
       nextDueDate: parseDate(map["nextDueDate"]),
-      reminderStartDate: parseDate(map["reminderStartDate"]),
-      nextReminderDate: parseDate(map["nextReminderDate"]),
-
       durationMonths: map["durationMonths"] ?? 0,
       amountPerPeriod: (map["amountPerPeriod"] ?? 0.0).toDouble(),
       initialDownPayment: (map["initialDownPayment"] ?? 0.0).toDouble(),
@@ -313,6 +306,13 @@ class Plan {
       outstandingLoanAmount: (map["outstandingLoanAmount"] ?? 0.0).toDouble(),
       dpPercentage: (map["dpPercentage"] ?? 0.0).toDouble(),
       status: map["status"] ?? 'active',
+      
+      // ✅ NEW: Map Automation Fields
+      planExpiryDate: parseDate(map["planExpiryDate"]),
+      noticeStartDate: parseDate(map["noticeStartDate"]),
+      baseDurationDays: map["baseDurationDays"] ?? 30,
+      noticePeriodDays: map["noticePeriodDays"] ?? 5,
+      extensionGraceDays: map["extensionGraceDays"] ?? 0,
     );
   }
 }
@@ -320,10 +320,6 @@ class Plan {
 class ProductFetchResult {
   final Map<String, dynamic> data;
   final String id;
-
   ProductFetchResult({required this.data, required this.id});
-
-  factory ProductFetchResult.empty() {
-    return ProductFetchResult(data: {}, id: '');
-  }
+  factory ProductFetchResult.empty() => ProductFetchResult(data: {}, id: '');
 }

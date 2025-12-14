@@ -69,115 +69,120 @@ class _StepPersonalState extends State<StepPersonal> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.symmetric(horizontal: 20.w),
-      child: Form(
-        key: widget.formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Personal Details',
-              style: GoogleFonts.inter(
-                fontSize: 24.sp,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF111111),
-                letterSpacing: -0.8,
-              ),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              'We need this to verify your identity later.',
-              style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                color: const Color(0xFF666666),
-                height: 1.4,
-              ),
-            ),
-            SizedBox(height: 32.h),
-
-            // --- ROW: FIRST & LAST NAME ---
-            Row(
+    return BlocBuilder<SignupVendorBloc, SignupVendorState>(
+      builder: (context, state) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: 20.w),
+          child: Form(
+            key: widget.formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _PremiumInput(
-                    controller: _firstCtl,
-                    focusNode: _firstFocus,
-                    label: 'First Name',
-                    hint: 'e.g. John',
-                    inputType: TextInputType.name,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (v) =>
-                        KorraValidators.name(v, field: 'First name'),
-                    onSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_lastFocus),
+                Text(
+                  'Personal Details',
+                  style: GoogleFonts.inter(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111111),
+                    letterSpacing: -0.8,
                   ),
                 ),
-                SizedBox(width: 16.w),
-                Expanded(
-                  child: _PremiumInput(
-                    controller: _lastCtl,
-                    focusNode: _lastFocus,
-                    label: 'Last Name',
-                    hint: 'e.g. Doe',
-                    inputType: TextInputType.name,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (v) =>
-                        KorraValidators.name(v, field: 'Last name'),
-                    onSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_otherFocus),
+                SizedBox(height: 8.h),
+                Text(
+                  'We need this to verify your identity later.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14.sp,
+                    color: const Color(0xFF666666),
+                    height: 1.4,
                   ),
                 ),
+        
+                SizedBox(height: 32.h),
+                
+                // --- ROW: FIRST & LAST NAME ---
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _PremiumInput(
+                        controller: _firstCtl,
+                        focusNode: _firstFocus,
+                        label: 'First Name',
+                        hint: 'e.g. John',
+                        inputType: TextInputType.name,
+                        textCapitalization: TextCapitalization.words,
+                        validator: (v) =>
+                            KorraValidators.name(v, field: 'First name'),
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(_lastFocus),
+                      ),
+                    ),
+                    SizedBox(width: 16.w),
+                    Expanded(
+                      child: _PremiumInput(
+                        controller: _lastCtl,
+                        focusNode: _lastFocus,
+                        label: 'Last Name',
+                        hint: 'e.g. Doe',
+                        inputType: TextInputType.name,
+                        textCapitalization: TextCapitalization.words,
+                        validator: (v) =>
+                            KorraValidators.name(v, field: 'Last name'),
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(_otherFocus),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 24.h),
+        
+                // --- OTHER NAME ---
+                _PremiumInput(
+                  controller: _otherCtl,
+                  focusNode: _otherFocus,
+                  label: 'Other Name',
+                  hint: 'Optional',
+                  inputType: TextInputType.name,
+                  textCapitalization: TextCapitalization.words,
+                  validator: KorraValidators.optionalName,
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_phoneFocus),
+                ),
+                SizedBox(height: 24.h),
+        
+                // --- PHONE ---
+                _PremiumInput(
+                  controller: _phoneCtl,
+                  focusNode: _phoneFocus,
+                  label: 'Phone Number',
+                  hint: '080...',
+                  inputType: TextInputType.phone,
+                  validator: KorraValidators.phoneNg,
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_emailFocus),
+                  suffixIcon: Icon(
+                    Iconsax.call,
+                    color: Colors.grey.shade400,
+                    size: 20.sp,
+                  ),
+                ),
+                SizedBox(height: 24.h),
+        
+                // --- EMAIL (Smart Status) ---
+                _EmailField(controller: _emailCtl, focusNode: _emailFocus),
+                SizedBox(height: 24.h),
+        
+                // --- DOB & GENDER ---
+                _DobAndGenderRow(),
+        
+                SizedBox(height: 40.h),
               ],
             ),
-            SizedBox(height: 24.h),
-
-            // --- OTHER NAME ---
-            _PremiumInput(
-              controller: _otherCtl,
-              focusNode: _otherFocus,
-              label: 'Other Name',
-              hint: 'Optional',
-              inputType: TextInputType.name,
-              textCapitalization: TextCapitalization.words,
-              validator: KorraValidators.optionalName,
-              onSubmitted: (_) =>
-                  FocusScope.of(context).requestFocus(_phoneFocus),
-            ),
-            SizedBox(height: 24.h),
-
-            // --- PHONE ---
-            _PremiumInput(
-              controller: _phoneCtl,
-              focusNode: _phoneFocus,
-              label: 'Phone Number',
-              hint: '080...',
-              inputType: TextInputType.phone,
-              validator: KorraValidators.phoneNg,
-              onSubmitted: (_) =>
-                  FocusScope.of(context).requestFocus(_emailFocus),
-              suffixIcon: Icon(
-                Iconsax.call,
-                color: Colors.grey.shade400,
-                size: 20.sp,
-              ),
-            ),
-            SizedBox(height: 24.h),
-
-            // --- EMAIL (Smart Status) ---
-            _EmailField(controller: _emailCtl, focusNode: _emailFocus),
-            SizedBox(height: 24.h),
-
-            // --- DOB & GENDER ---
-            _DobAndGenderRow(),
-
-            SizedBox(height: 40.h),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 }
@@ -413,174 +418,184 @@ class _EmailField extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// 3. DOB & GENDER ROW (Styled to match)
+// 3. DOB & GENDER ROW (With Validators & Error Styles)
 // -----------------------------------------------------------------------------
 class _DobAndGenderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SignupVendorBloc, SignupVendorState>(
+      // Optimization: Only rebuild if dob or gender changes
       buildWhen: (p, c) => p.dob != c.dob || p.gender != c.gender,
       builder: (context, s) {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- DATE PICKER ---
+            // --- DATE PICKER FORM FIELD ---
             Expanded(
               flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Date of Birth',
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF111111),
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                  GestureDetector(
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate:
-                            s.dob ??
-                            DateTime(now.year - 20, now.month, now.day),
-                        firstDate: DateTime(now.year - 100),
-                        lastDate: DateTime(now.year - 13),
-                        builder: (ctx, child) => Theme(
-                          data: Theme.of(ctx).copyWith(
-                            colorScheme: const ColorScheme.light(
-                              primary: KorraColors.brand,
+              child: FormField<DateTime>(
+                initialValue: s.dob,
+                validator: (value) {
+                  // Validate directly against the Bloc state to ensure accuracy
+                  if (s.dob == null) return "Date required";
+                  // Optional: Age Check
+                  final age = DateTime.now().year - s.dob!.year;
+                  if (age < 18) return "18+ only";
+                  return null;
+                },
+                builder: (FormFieldState<DateTime> field) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Date of Birth',
+                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF111111)),
+                      ),
+                      SizedBox(height: 8.h),
+                      
+                      GestureDetector(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: s.dob ?? DateTime(now.year - 20, now.month, now.day),
+                            firstDate: DateTime(now.year - 100),
+                            lastDate: DateTime(now.year - 13),
+                            builder: (ctx, child) => Theme(
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: const ColorScheme.light(primary: KorraColors.brand),
+                              ),
+                              child: child!,
+                            ),
+                          );
+                          if (picked != null) {
+                            // Update Bloc
+                            context.read<SignupVendorBloc>().add(DobChanged(picked));
+                            // Tell FormField it changed (removes error if valid)
+                            field.didChange(picked);
+                          }
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 52.h,
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F7F7),
+                            borderRadius: BorderRadius.circular(12.r),
+                            border: Border.all(
+                              // 🔥 RED BORDER ON ERROR
+                              color: field.hasError ?const Color.fromARGB(255, 196, 32, 20) : const Color(0xFFE5E5E5),
+                              width: field.hasError ? 1.0 : 1.0,
                             ),
                           ),
-                          child: child!,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                s.dob == null ? 'Select Date' : DateFormat('dd MMM yyyy').format(s.dob!),
+                                style: GoogleFonts.inter(
+                                  fontSize: 15.sp,
+                                  fontWeight: s.dob == null ? FontWeight.w400 : FontWeight.w600,
+                                  color: s.dob == null ? const Color(0xFFAAAAAA) : const Color(0xFF1B1B1B),
+                                ),
+                              ),
+                              Icon(Iconsax.calendar_1, size: 18.sp, color: Colors.grey.shade400),
+                            ],
+                          ),
                         ),
-                      );
-                      if (picked != null) {
-                        context.read<SignupVendorBloc>().add(
-                          DobChanged(picked),
-                        );
-                      }
-                    },
-                    child: Container(
-                      height: 52.h,
-                      padding: EdgeInsets.symmetric(horizontal: 16.w),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F7F7),
-                        borderRadius: BorderRadius.circular(12.r),
-                        border: Border.all(color: const Color(0xFFE5E5E5)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            s.dob == null
-                                ? 'Select Date'
-                                : DateFormat('dd MMM yyyy').format(s.dob!),
-                            style: GoogleFonts.inter(
-                              fontSize: 15.sp,
-                              fontWeight: s.dob == null
-                                  ? FontWeight.w400
-                                  : FontWeight.w600,
-                              color: s.dob == null
-                                  ? const Color(0xFFAAAAAA)
-                                  : const Color(0xFF1B1B1B),
-                            ),
+                      
+                      // 🔥 STYLED ERROR TEXT
+                      if (field.hasError)
+                        Padding(
+                          padding: EdgeInsets.only(top: 6.h, left: 4.w),
+                          child: Text(
+                            field.errorText!,
+                            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color.fromARGB(255, 196, 32, 20), fontWeight: FontWeight.w500),
                           ),
-                          Icon(
-                            Iconsax.calendar_1,
-                            size: 18.sp,
-                            color: Colors.grey.shade400,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
 
             SizedBox(width: 16.w),
 
-            // --- GENDER DROPDOWN ---
+            // --- GENDER DROPDOWN FORM FIELD ---
             Expanded(
               flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Gender',
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF111111),
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                  Container(
-                    height: 52.h,
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF7F7F7),
-                      borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: const Color(0xFFE5E5E5)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<Gender>(
-                        value: s.gender == Gender.undisclosed ? null : s.gender,
-                        hint: Text(
-                          'Select',
-                          style: GoogleFonts.inter(
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w400,
-                            color: const Color(0xFFAAAAAA),
-                          ),
-                        ),
-                        icon: Icon(
-                          Iconsax.arrow_down_1,
-                          size: 16.sp,
-                          color: Colors.grey.shade400,
-                        ),
-                        isExpanded: true,
-                        dropdownColor: Colors.white,
-                        borderRadius: BorderRadius.circular(12.r),
-                        items: [
-                          DropdownMenuItem(
-                            value: Gender.male,
-                            child: Text(
-                              'Male',
-                              style: GoogleFonts.inter(
-                                fontSize: 15.sp,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: Gender.female,
-                            child: Text(
-                              'Female',
-                              style: GoogleFonts.inter(
-                                fontSize: 15.sp,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (g) {
-                          if (g != null) {
-                            context.read<SignupVendorBloc>().add(
-                              GenderChanged(g),
-                            );
-                          }
-                        },
+              child: FormField<Gender>(
+                initialValue: s.gender,
+                validator: (value) {
+                  // Validate against Bloc State
+                  if (s.gender == Gender.undisclosed) return "Required";
+                  return null;
+                },
+                builder: (FormFieldState<Gender> field) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gender',
+                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF111111)),
                       ),
-                    ),
-                  ),
-                ],
+                      SizedBox(height: 8.h),
+                      
+                      Container(
+                        height: 52.h,
+                        padding: EdgeInsets.symmetric(horizontal: 16.w),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F7F7),
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(
+                            // 🔥 RED BORDER ON ERROR
+                            color: field.hasError ? const Color.fromARGB(255, 196, 32, 20) : const Color(0xFFE5E5E5)
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<Gender>(
+                            value: s.gender == Gender.undisclosed ? null : s.gender,
+                            hint: Text(
+                              'Select',
+                              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w400, color: const Color(0xFFAAAAAA)),
+                            ),
+                            icon: Icon(Iconsax.arrow_down_1, size: 16.sp, color: Colors.grey.shade400),
+                            isExpanded: true,
+                            dropdownColor: Colors.white,
+                            borderRadius: BorderRadius.circular(12.r),
+                            items: [
+                              DropdownMenuItem(
+                                value: Gender.male,
+                                child: Text('Male', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
+                              ),
+                              DropdownMenuItem(
+                                value: Gender.female,
+                                child: Text('Female', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
+                              ),
+                            ],
+                            onChanged: (g) {
+                              if (g != null) {
+                                context.read<SignupVendorBloc>().add(GenderChanged(g));
+                                field.didChange(g); // Clear error state
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      // 🔥 STYLED ERROR TEXT
+                      if (field.hasError)
+                        Padding(
+                          padding: EdgeInsets.only(top: 6.h, left: 4.w),
+                          child: Text(
+                            field.errorText!,
+                            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color.fromARGB(255, 196, 32, 20), fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],

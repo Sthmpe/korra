@@ -1,11 +1,11 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
-import '../../../../data/models/product_model.dart';
+import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/product_repository.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../presentation/vendor/product/widgets/share_link_sheet.dart';
@@ -38,12 +38,31 @@ class VendorProductsBloc
   }
 
   // Event Handlers 
-  void _onStarted(
+  Future<void> _onStarted(
     VendorProductsStarted event,
     Emitter<VendorProductsState> emit,
-  ) {
-    emit(state);
+  ) async {
+    // 1. Load Initial State
+    emit(state); 
+
+    // 2. Subscribe to Vendor Stats (Real-time Limit updates)
+    // We use emit.forEach to keep the state updated automatically
+    final statsStream = vendors.streamVendorStats(vendorUid);
+    
+    // Start listening to products immediately
     add(VendorProductsRequested());
+
+    // Listen to stats indefinitely
+    await emit.forEach<VendorStats>(
+      statsStream,
+      onData: (stats) => state.copyWith(
+        availableLimit: stats.remainingLimit, 
+      ),
+      onError: (e, s) {
+        debugPrint("Error fetching stats: $e");
+        return state;
+      } 
+    );
   }
 
   Future<void> _onRefresh(
@@ -72,305 +91,191 @@ class VendorProductsBloc
     VendorProductsAdd event,
     Emitter<VendorProductsState> emit,
   ) async {
-    emit(state.copyWith(isSubmitting: true, errorMessage: null));
-
-    debugPrint('Adding product...');
+    // 1. Start Loading
+    emit(state.copyWith(isSubmitting: true, errorMessage: null, success: false));
 
     try {
-      // 1️⃣ Validate Images with AI
-      final validation = await vendors.validateProductImagesWithAI(
-        event.images,
-        description: event.description,
-        category: event.category,
-      );
+      debugPrint('🚀 Starting Product Creation...');
 
-      if (!validation.success) {
-        emit(
-          state.copyWith(
-            isSubmitting: false,
-            errorMessage: validation.errorMessages.join("\n"),
-          ),
-        );
-        return;
-      }
-
-      // 2️⃣ Validate Price
-      final isPriceValid = await vendors.validateProductPrice(
-        event.category,
-        event.price.toInt(),
-      );
-
-      if (!isPriceValid) {
-        emit(
-          state.copyWith(
-            isSubmitting: false,
-            errorMessage:
-                "Product reservation price is beyond the acceptable range.",
-          ),
-        );
-        return;
-      }
-
-      // 3️⃣ Check vendor limit
-      final vendorLimit = await vendors.getVendorLimit(vendorUid);
-
-      if (vendorLimit != null) {
-        final limit = (vendorLimit['reservationLimit'] ?? 0).toInt();
-        final used = (vendorLimit['currentUsedAmount'] ?? 0).toInt();
-        final remaining = limit - used;
-        final totalValue = event.price.toInt() * event.stock;
-
-        if (totalValue > remaining) {
-          emit(
-            state.copyWith(
-              isSubmitting: false,
-              errorMessage:
-                  "Adding this product exceeds your reservation limit of ₦${NumberFormat('#,##0', 'en_US').format(remaining)}. Please contact support.",
-            ),
-          );
-          return;
-        }
-
-        // 4️⃣ Upload Images
-        final uploadedUrls = await vendors.uploadProductImagesToCloud(
-          event.images,
-        );
-
-        if (uploadedUrls.isEmpty) {
-          emit(
-            state.copyWith(
-              isSubmitting: false,
-              errorMessage: "Failed to upload images.",
-            ),
-          );
-          return;
-        }
-
-        final storeName = await vendors.getStoreName(vendorUid);
-
-        // Generate product ID + code
-        final newProduct = Product.create(
-          vendorId: vendorUid,
-          storeName: storeName,
-          name: event.name,
-          description: event.description,
-          price: event.price,
-          stock: event.stock,
-          category: event.category,
-          images: uploadedUrls,
-          status: ProductStatus.approved,
-        );
-
-        // Save to Firestore
-        await vendors.addProduct(newProduct);
-
-        await vendors.updateVendorUsedAmount(
-          vendorUid,
-          amount: totalValue.toDouble(),
-          increase: true,
-        );
-      } else {
-        emit(
-          state.copyWith(
-            isSubmitting: false,
-            errorMessage: "Failed to fetch vendor limits. Try again later.",
-          ),
-        );
-        return;
-      }
-
-      // // Fetch the latest list of products from Firestore
-      // final fetchedProducts = await vendors.fetchProductsByVendor(vendorUid);
-
-      // // Convert them to ProductItem list for state
-      // final updatedItems = fetchedProducts.map((p) {
-      //   return ProductItem(
-      //     id: p.id,
-      //     name: p.name,
-      //     code: p.code,
-      //     description: p.description,
-      //     category: p.category,
-      //     priceText: '₦${p.price.toStringAsFixed(0)}',
-      //     stock: p.availableStock,
-      //     status: p.status,
-      //     imageUrl: p.images.isNotEmpty ? [p.images.first] : [],
-      //     createdAt: p.createdAt,
-      //   );
-      // }).toList();
-
-      emit(
-        state.copyWith(
-          // items: updatedItems, 
-          isSubmitting: false, 
-          success: true
-        ),
-      );
-    } catch (err) {
-      emit(
-        state.copyWith(
-          isSubmitting: false,
-          success: false,
-          errorMessage: err.toString(),
-        ),
-      );
-    }
-  }
-
-Future<void> _onEditProduct(
-  VendorProductsEdit event,
-  Emitter<VendorProductsState> emit,
-) async {
-  emit(state.copyWith(isSubmitting: true, errorMessage: null));
-
-  try {
-    // 1️⃣ Get product record
-    final product = await vendors.fetchSingleProduct(vendorUid, event.productCode);
-    if (product == null) {
-      emit(state.copyWith(
-        isSubmitting: false,
-        errorMessage: "Product not found.",
-      ));
-      return;
-    }
-
-    // 2️⃣ If rejected — full revalidation
-    List<String> finalImageUrls = event.existingImageUrls;
-    debugPrint("🔄 Editing product ${event.status}...");
-    if (event.status == ProductStatus.rejected) {
-      debugPrint("newImages: ${event.newImages.length}");
-      debugPrint("🔄 Product was rejected, performing full revalidation...");
-      if (event.newImages.isNotEmpty) {
-        debugPrint("🔄 New images provided, validating with AI...");
-        // ✅ Validate new images with AI
-        final validation = await vendors.validateProductImagesWithAI(
-          event.newImages,
-          description: event.description,
-          category: event.category,
-        );
-
-        if (!validation.success) {
-          emit(state.copyWith(
-            isSubmitting: false,
-            errorMessage: validation.errorMessages.join("\n"),
-          ));
-          return;
-        }
-      }
-
-      // ✅ Validate price again
-      final isPriceValid = await vendors.validateProductPrice(
-        event.category,
-        event.price.toInt(),
-      );
-
-      if (!isPriceValid) {
+      // 2. Image Validation
+      if (event.images.isEmpty) {
         emit(state.copyWith(
-          isSubmitting: false,
-          errorMessage:
-              "Product reservation price is beyond the acceptable range.",
+          isSubmitting: false, 
+          errorMessage: "Please upload at least one product image."
         ));
         return;
       }
 
-      if (event.newImages.isNotEmpty) {
-        // ✅ Upload new images
-        final uploadedUrls = await vendors.uploadProductImagesToCloud(
-          event.newImages,
-        );
+      // 3. Upload Images
+      debugPrint('📤 Uploading images...');
+      final List<String> uploadedUrls = await vendors.uploadProductImagesToCloud(
+        event.images, 
+      );
 
-        if (uploadedUrls.isEmpty) {
-          emit(state.copyWith(
-            isSubmitting: false,
-            errorMessage: "Failed to upload new images.",
-          ));
-          return;
-        }
-
-        finalImageUrls = uploadedUrls;        
+      if (uploadedUrls.isEmpty) {
+        throw "Failed to upload images. Please check your internet connection.";
       }
-    }
 
-    // 3️⃣ Check and adjust vendor reserve limit if necessary
-    final vendorLimit = await vendors.getVendorLimit(vendorUid);
+      // 4. Calculate Timeline (Backend Logic Mirror)
+      // We calculate this here so it's ready for the DB.
+      final timeline = _calculateTimeline(event.price, event.modelType, event.extensionsEnabled);
 
-    if (vendorLimit == null) {
+      // 5. Prepare Data Payload
+      // Note: We do NOT generate ID, Code, or Status here. The Server does that.
+      final newProductMap = {
+        'vendorId': vendorUid,
+        'storeName': await vendors.getStoreName(vendorUid), 
+        'name': event.name,
+        'description': event.description,
+        'price': event.price,
+        'availableStock': event.stock, // "stock" from UI maps to "availableStock"
+        'initialStock': event.stock,
+        'category': event.category,
+        'images': uploadedUrls,
+        
+        // Smart Contract Fields
+        'modelType': event.modelType.name, 
+        'cancellationPolicy': event.cancellationPolicy,
+        'extensionsEnabled': event.extensionsEnabled,
+        'directDownPayment': event.directDownPayment,
+        
+        // Timeline Fields
+        'baseDuration': timeline['baseDuration'],
+        'noticePeriod': timeline['noticePeriod'],
+        'totalMaxTime': timeline['totalMaxTime'],
+      };
+
+      // 6. Call Secure Repository
+      await vendors.addProductSecure(newProductMap);
+
+      // 7. Success
       emit(state.copyWith(
-        isSubmitting: false,
-        errorMessage: "Failed to fetch vendor limits.",
+        isSubmitting: false, 
+        success: true
       ));
-      return;
-    }
 
-    final limit = (vendorLimit['reservationLimit'] ?? 0).toInt();
-    final used = (vendorLimit['currentUsedAmount'] ?? 0).toInt();
-
-    // Vendor’s *already reserved* value for this product
-    final oldReservedValue = (product.initialStock - product.availableStock) * product.price;
-    final unUsedReserved = (product.initialStock * product.price) - oldReservedValue;
-
-    final adjustedUsed =  used - unUsedReserved;
-    final remaining = limit - adjustedUsed;
-    final totalValue = event.price.toInt() * event.stock;
-
-    // Only check limit if totalValue increases
-    if (totalValue > remaining) {
+    } catch (e) {
+      debugPrint("❌ Add Product Error: $e");
       emit(state.copyWith(
-        isSubmitting: false,
-        errorMessage:
-            "Updating this product exceeds your reservation limit of ₦${NumberFormat('#,##0', 'en_US').format(remaining)}.",
+        isSubmitting: false, 
+        errorMessage: e.toString().replaceAll("Exception:", "").trim()
       ));
-      return;
     }
-
-    // 4️⃣ Update product fields
-    final updatedProduct = product.copyWith(
-      name: event.name,
-      description: event.description,
-      category: event.category,
-      price: event.price,
-      availableStock: event.stock,
-      images: finalImageUrls,
-      status: ProductStatus.approved,
-      updatedAt: DateTime.now(),
-    );
-
-    bool productsUpdated = await vendors.updateProduct(
-      vendorId: vendorUid,
-      productCode: event.productCode,
-      updatedProduct: updatedProduct,
-    );
-
-    if (!productsUpdated) {
-      emit(state.copyWith(
-        isSubmitting: false,
-        errorMessage: "Failed to update product. Try again.",
-      ));
-      return;
-    }
-
-    // 🧹 Delete old images
-    await vendors.deleteProductImages(product.images);
-
-    // 5️⃣ Adjust vendor used amount 
-    await vendors.updateVendorUsedAmount(
-      vendorUid,
-      amount: totalValue.toDouble(),
-      newCurrent: adjustedUsed.toDouble() + totalValue.toDouble(),
-      increase: false,
-    );
-
-    // 6️⃣ Update local state item
-    emit(state.copyWith(
-      isSubmitting: false,
-      success: true,
-    ));
-  } catch (e) {
-    emit(state.copyWith(
-      isSubmitting: false,
-      errorMessage: e.toString(),
-    ));
   }
-}
+
+  // --- HELPER: Timeline Logic ---
+  Map<String, String> _calculateTimeline(double price, ProductModelType model, bool extEnabled) {
+    int baseDays = 15;
+    int noticeDays = 1;
+    int extDays = 0;
+    bool priceAllowsExt = false;
+
+    // 1. Base Logic
+    if (price <= 7000) {
+      baseDays = 15; noticeDays = 1; priceAllowsExt = false;
+    } else if (price <= 15000) {
+      baseDays = 25; noticeDays = 2; priceAllowsExt = false;
+    } else if (price <= 20000) {
+      baseDays = 30; noticeDays = 3; extDays = 7; priceAllowsExt = true;
+    } else if (price <= 25000) {
+      baseDays = 30; noticeDays = 3; extDays = 15; priceAllowsExt = true;
+    } else if (price <= 35000) {
+      baseDays = 45; noticeDays = 5; extDays = 15; priceAllowsExt = true;
+    } else if (price <= 50000) {
+      baseDays = 45; noticeDays = 10; extDays = 21; priceAllowsExt = true;
+    } else if (price <= 75000) {
+      baseDays = 90; noticeDays = 10; extDays = 21; priceAllowsExt = true;
+    } else {
+      baseDays = 90; noticeDays = 10; extDays = 30; priceAllowsExt = true;
+    }
+
+    // 2. Direct Model Override (Your specific rule)
+    if (model == ProductModelType.direct) {
+      if (!extEnabled) {
+        noticeDays = 3; // Fixed 3 days if no extension in Direct
+        extDays = 0;
+      }
+    } else {
+      // Strict Model: Extension logic follows price table
+      if (!priceAllowsExt) extDays = 0;
+    }
+
+    // 3. Totals
+    int total = baseDays + noticeDays + extDays;
+
+    return {
+      'baseDuration': "$baseDays Days",
+      'noticePeriod': "$noticeDays Days",
+      'totalMaxTime': "$total Days",
+    };
+  }
+
+Future<void> _onEditProduct(
+    VendorProductsEdit event,
+    Emitter<VendorProductsState> emit,
+  ) async {
+    emit(state.copyWith(isSubmitting: true, errorMessage: null));
+
+    try {
+      // 1. Fetch Current Record (To get modelType for timeline calc)
+      final currentProduct = await vendors.fetchSingleProduct(vendorUid, event.productCode);
+      if (currentProduct == null) throw "Product not found.";
+
+      // 2. Handle Images
+      List<String> finalImages = [...event.existingImageUrls];
+      if (event.newImages.isNotEmpty) {
+        final newUrls = await vendors.uploadProductImagesToCloud(event.newImages);
+        if (newUrls.isEmpty) throw "Failed to upload new images.";
+        finalImages.addAll(newUrls);
+      }
+
+      if (finalImages.isEmpty) throw "Product must have at least one image.";
+
+      // 3. Recalculate Timeline (Important!)
+      // Price change = New Duration rules
+      final timeline = _calculateTimeline(
+        event.price, 
+        // We use the existing model type unless you allow changing model on edit (rare)
+        // Assuming currentProduct has the type. If event has it, use event.
+        currentProduct.modelType, 
+        currentProduct.extensionsEnabled
+      );
+
+      // 4. Prepare Update Payload
+      final updateData = {
+        'name': event.name,
+        'description': event.description,
+        'price': event.price,
+        'availableStock': event.stock, // UI "stock" -> DB "availableStock"
+        // Note: We usually don't update 'initialStock' on edit, just available.
+        'category': event.category,
+        'images': finalImages,
+        
+        // Update Timeline (Server saves this)
+        'baseDuration': timeline['baseDuration'],
+        'noticePeriod': timeline['noticePeriod'],
+        'totalMaxTime': timeline['totalMaxTime'],
+      };
+
+      // 5. Call Secure Update
+      await vendors.updateProductSecure(
+        vendorId: vendorUid,
+        productCode: event.productCode,
+        updateData: updateData,
+      );
+
+      // 6. Success
+      emit(state.copyWith(isSubmitting: false, success: true));
+      add(const VendorProductsRefresh());
+
+    } catch (e) {
+      debugPrint("❌ Edit Error: $e");
+      emit(state.copyWith(
+        isSubmitting: false, 
+        errorMessage: e.toString().replaceAll("Exception:", "").trim()
+      ));
+    }
+  }
 
   Future<void> _onSharePressed(
     VendorProductsSharePressed event,

@@ -4,10 +4,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../logic/bloc/customer/change_password_bloc.dart';
+import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 
@@ -49,7 +49,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             showAppSnackbar('Password updated successfully', SnackbarType.success);
           }
           if (state.status == ChangePassStatus.failure) {
-            showKorraFailureSheetCustomer(context, title: 'Password Update Failed', message: state.error ?? "Error");
+            showKorraFailureSheet(context, title: 'Password Update Failed', message: state.error ?? "Error");
           }
         },
         builder: (context, state) {

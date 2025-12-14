@@ -4,7 +4,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
@@ -12,10 +11,10 @@ import '../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
+import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../../vendor/vendor_shell.dart';
 import '../role_login/role_login_screen.dart';
-import '../sgnup_failure_sheet.dart';
 import 'steps_v/step_business_type.dart';
 import 'steps_v/step_identity.dart';
 import 'steps_v/step_personal.dart';
@@ -150,7 +149,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                     listener: (context, s) {
                       if (s.status == SignupStatus.failure) {
                         closeAllOverlays();
-                        showKorraFailureSheetCustomer(
+                        showKorraFailureSheet(
                           context,
                           title: 'Signup Failed',
                           message:

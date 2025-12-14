@@ -10,6 +10,7 @@ import '../../../../data/models/customer/customer_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 // BLOC
+import '../../../data/models/customer/cutomer_limit.dart';
 import '../../../logic/services/share_service.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer/profile/profile_event.dart';
@@ -25,6 +26,8 @@ import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 import 'help_center_screen.dart';
 import 'legal_screen.dart';
+import 'limit_upgrade_screen.dart';
+import 'liveness.dart';
 import 'statements_screen.dart';
 import 'widgets/identity_header_card.dart';
 import 'my_qr_screen.dart';
@@ -79,212 +82,289 @@ class ProfilePage extends StatelessWidget {
             }
 
             // 3. SUCCESS UI
-            return Scaffold(
-              backgroundColor: const Color(0xFFF9FAFB),
-              appBar: const KorraHeader(title: 'Profile'),
-              body: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Column(
-                      children: [
-                        // IDENTITY CARD (Using Extension Getters)
-                        IdentityHeaderCard(
-                          initials: customer.initials, // 👈 Extension
-                          name: customer.displayName, // 👈 Extension
-                          email: customer.email,
-                          phone: customer.phone,
-                          kycVerified: customer.isFullyVerified, // 👈 Extension
-                          basicTier: true,
-                          onMyQr: () {
-                            Get.to(() => MyQrScreen(customer: customer));
-                          },
-                          onShare: () {
-                            ShareService.shareAppReferral(referrerName: customer.firstName);
-                          },
-                          onEdit: () {
-                            Get.to(
-                              () => EditProfileScreen(
-                                customer:
-                                    customer, // Pass the current customer data
-                                repo: customerRepo, // Pass the repo
-                              ),
-                            );
-                          },
-                        ),
+            return StreamBuilder<CustomerLimit?>(
+              stream: customerRepo.streamCustomerLimit(customerUid),
+              builder: (context, limitSnap) {
+                final limitData = limitSnap.data;
+                final totalLimit = limitData?.totalCreditLimit ?? 15000.0;
+                final activeDebt = limitData?.activeDebt ?? 0.0;
 
-                        SizedBox(height: 16.h),
-
-                        // WALLET SECTION
-                        SectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionTitle('Wallet & payments'),
-                              SizedBox(height: 6.h),
-
-                              // Bank Details (Real Data from Extension)
-                              RowWithChevron(
-                                icon: Icons.account_balance_rounded,
-                                title: 'Bank Details',
-                                subtitle: customer.bankDisplay, // 👈 Extension
-                                onTap: () {
-                                  Get.to(() => BankDetailsScreen(customer: customer));
-                                },
-                              ),
-                              _divider(),
-
-                              // AutoPay (Disabled)
-                              SwitchRow(
-                                icon: Icons.autorenew_rounded,
-                                title: 'AutoPay',
-                                subtitle: 'Coming soon',
-                                value: false,
-                                onChanged: (_) =>
-                                    KorraNotify.info(context, "Coming soon!"),
-                              ),
-                              _divider(),
-
-                              RowWithChevron(
-                                icon: Icons.receipt_long_outlined,
-                                title: 'Statements & receipts',
-                                onTap: () {
-                                  Get.to(() => StatementsScreen(repo: customerRepo, customerUid: customerUid));
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // PREFERENCES
-                        SectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionTitle('Preferences'),
-                              SizedBox(height: 6.h),
-
-                              RowWithChevron(
-                                icon: Icons.brightness_6_outlined,
-                                title: 'App Theme',
-                                subtitle: 'Coming soon',
-                                onTap: () => KorraNotify.info(
-                                  context,
-                                  "Themes are coming soon!",
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
- // 3. SECURITY & LEGAL
-                        SectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionTitle('Security'),
-                              SizedBox(height: 6.h),
-                              
-                              SwitchRow(
-                                icon: Icons.fingerprint,
-                                title: 'Biometric Sign-in',
-                                subtitle: 'Coming soon',
-                                value: false,
-                                onChanged: (v) {
-                                   KorraNotify.info(context, "Biometrics coming soon!");
-                                },
-                              ),
-                              _divider(),
-                              
-                              RowWithChevron(
-                                icon: Icons.lock_outline,
-                                title: 'Change password',
-                                onTap: () {
-                                  Get.to(() => ChangePasswordScreen(repo: customerRepo));
-                                }, 
-                              ),
-                              _divider(),
-                              
-                              RowWithChevron(
-                                icon: Icons.description_outlined,
-                                title: 'Legal & Privacy',
-                                onTap: () {
-                                  Get.to(() => const LegalMenuScreen());
-                                }, 
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // HELP CENTER
-                        SectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionTitle('Help Center'),
-                              SizedBox(height: 6.h),
-                              
-                              RowWithChevron(
-                                icon: Icons.question_mark_outlined,
-                                title: 'Help Center',
-                                onTap: () {
-                                  Get.to(() => const HelpCenterScreen());
-                                }, 
-                              ),
-                            ],
-                          ),
-                        ),
-
-
-
-                        // LOGOUT
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 40.h),
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50.h,
-                                child: OutlinedButton(
-                                  onPressed: () => bloc.add(LogoutRequested()),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(
-                                      color: Color(0xFFD0D5DD),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12.r),
-                                    ),
-                                    foregroundColor: const Color(0xFF344054),
+                return Scaffold(
+                  backgroundColor: const Color(0xFFF9FAFB),
+                  appBar: const KorraHeader(title: 'Profile'),
+                  body: CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Column(
+                          children: [
+                            // IDENTITY CARD (Using Extension Getters)
+                            IdentityHeaderCard(
+                              initials: customer.initials, // 👈 Extension
+                              name: customer.displayName, // 👈 Extension
+                              email: customer.email,
+                              phone: customer.phone,
+                              kycVerified:
+                                  customer.isFullyVerified, // 👈 Extension
+                              basicTier: true,
+                              onMyQr: () {
+                                Get.to(() => MyQrScreen(customer: customer));
+                              },
+                              onShare: () {
+                                ShareService.shareAppReferral(
+                                  referrerName: customer.firstName,
+                                );
+                              },
+                              onEdit: () {
+                                Get.to(
+                                  () => EditProfileScreen(
+                                    customer:
+                                        customer, // Pass the current customer data
+                                    repo: customerRepo, // Pass the repo
                                   ),
-                                  child: Text(
-                                    'Log out',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 15.sp,
-                                      fontWeight: FontWeight.w600,
+                                );
+                              },
+                            ),
+
+                            SizedBox(height: 16.h),
+
+                            // WALLET SECTION
+                            SectionCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionTitle('Wallet & payments'),
+                                  SizedBox(height: 6.h),
+
+                                  // Bank Details (Real Data from Extension)
+                                  RowWithChevron(
+                                    icon: Icons.account_balance_rounded,
+                                    title: 'Bank Details',
+                                    subtitle:
+                                        customer.bankDisplay, // 👈 Extension
+                                    onTap: () {
+                                      Get.to(
+                                        () => BankDetailsScreen(
+                                          customer: customer,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons.receipt_long_outlined,
+                                    title: 'Liveness',
+                                    onTap: () {
+                                      Get.to(
+                                        () => LivenessScreen(
+                                          onVerificationSuccess: (base64Image) {
+                                            print(
+                                              "Success! Image data length: ${base64Image.length}",
+                                            );
+                                            // Send to Firebase/Backend here
+                                            Navigator.pop(context);
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons
+                                        .trending_up, // Use an "Upgrade" icon
+                                    title: 'Increase Limit',
+                                    subtitle: 'Check your buying power',
+                                    onTap: () {
+                                      Get.to(
+                                        () => LimitUpgradeScreen(
+                                          repo: customerRepo,
+                                          customer: customer,
+                                          currentTotalLimit: totalLimit,
+                                          activeDebt: activeDebt,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  _divider(),
+
+                                  // AutoPay (Disabled)
+                                  SwitchRow(
+                                    icon: Icons.autorenew_rounded,
+                                    title: 'AutoPay',
+                                    subtitle: 'Coming soon',
+                                    value: false,
+                                    onChanged: (_) => KorraNotify.info(
+                                      context,
+                                      "Coming soon!",
                                     ),
                                   ),
-                                ),
-                              ),
-                              SizedBox(height: 12.h),
-                              GestureDetector(
-                                onTap: () => _confirmDelete(context, bloc),
-                                child: Text(
-                                  "Delete account",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.w600,
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons.receipt_long_outlined,
+                                    title: 'Statements & receipts',
+                                    onTap: () {
+                                      Get.to(
+                                        () => StatementsScreen(
+                                          repo: customerRepo,
+                                          customerUid: customerUid,
+                                        ),
+                                      );
+                                    },
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+
+                            // PREFERENCES
+                            SectionCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionTitle('Preferences'),
+                                  SizedBox(height: 6.h),
+
+                                  RowWithChevron(
+                                    icon: Icons.brightness_6_outlined,
+                                    title: 'App Theme',
+                                    subtitle: 'Coming soon',
+                                    onTap: () => KorraNotify.info(
+                                      context,
+                                      "Themes are coming soon!",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // 3. SECURITY & LEGAL
+                            SectionCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionTitle('Security'),
+                                  SizedBox(height: 6.h),
+
+                                  SwitchRow(
+                                    icon: Icons.fingerprint,
+                                    title: 'Biometric Sign-in',
+                                    subtitle: 'Coming soon',
+                                    value: false,
+                                    onChanged: (v) {
+                                      KorraNotify.info(
+                                        context,
+                                        "Biometrics coming soon!",
+                                      );
+                                    },
+                                  ),
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons.lock_outline,
+                                    title: 'Change password',
+                                    onTap: () {
+                                      Get.to(
+                                        () => ChangePasswordScreen(
+                                          repo: customerRepo,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons.description_outlined,
+                                    title: 'Legal & Privacy',
+                                    onTap: () {
+                                      Get.to(() => const LegalMenuScreen());
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // HELP CENTER
+                            SectionCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionTitle('Help Center'),
+                                  SizedBox(height: 6.h),
+
+                                  RowWithChevron(
+                                    icon: Icons.question_mark_outlined,
+                                    title: 'Help Center',
+                                    onTap: () {
+                                      Get.to(() => const HelpCenterScreen());
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // LOGOUT
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                16.w,
+                                16.h,
+                                16.w,
+                                40.h,
+                              ),
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 50.h,
+                                    child: OutlinedButton(
+                                      onPressed: () =>
+                                          bloc.add(LogoutRequested()),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(
+                                          color: Color(0xFFD0D5DD),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12.r,
+                                          ),
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF344054,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Log out',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 15.sp,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 12.h),
+                                  GestureDetector(
+                                    onTap: () => _confirmDelete(context, bloc),
+                                    child: Text(
+                                      "Delete account",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13.sp,
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         ),
@@ -313,7 +393,13 @@ class ProfilePage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Delete Account?', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.red)),
+        title: Text(
+          'Delete Account?',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w800,
+            color: Colors.red,
+          ),
+        ),
         content: Text(
           'This action is permanent and cannot be undone.\n\n'
           'Note: You cannot delete your account if you have any active plans or unpaid debts.',
@@ -322,15 +408,26 @@ class ProfilePage extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('Keep Account', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.black)),
+            child: Text(
+              'Keep Account',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                color: Colors.black,
+              ),
+            ),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB3261E),
+            ),
             onPressed: () {
               Navigator.of(context).pop();
               bloc.add(DeleteAccountRequested());
             },
-            child: Text('Delete Permanently', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+            child: Text(
+              'Delete Permanently',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),

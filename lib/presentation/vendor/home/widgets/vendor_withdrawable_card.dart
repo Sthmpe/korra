@@ -6,105 +6,217 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/constants/colors.dart';
 
-class VendorWithdrawableCard extends StatelessWidget {
-  final String balanceText;          // withdrawable only
-  final String methodMasked;         // e.g., 'GTB ••1289' or 'Add payout method'
+class VendorWithdrawableCard extends StatefulWidget {
+  final String balanceText;       
+  final String? totalBalanceText; 
   final VoidCallback? onPayout;
   final bool loading;
-  
 
   const VendorWithdrawableCard({
     super.key,
     required this.balanceText,
-    required this.methodMasked,
+    this.totalBalanceText,
     required this.onPayout,
     required this.loading,
   });
 
-  static const _brand = Color(0xFFA54600);
+  @override
+  State<VendorWithdrawableCard> createState() => _VendorWithdrawableCardState();
+}
+
+class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
+  bool _isBalanceVisible = true;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
       child: Container(
-        padding: EdgeInsets.all(16.r),
+        height: 200.h,
+        width: double.infinity,
         decoration: BoxDecoration(
-          color: _brand.withOpacity(0.055),
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: const Color(0xFFEAE6E2).withOpacity(0.1), width: 1),
-        ),
-        child: Row(
-          children: [
-            // left tile
-            Container(
-              width: 44.w, height: 44.w,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4ECE7),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: const Icon(Iconsax.wallet, color: _brand),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF8B3A00), // Deep Burnt Orange
+              Color(0xFFA54600), // Korra Brand
+              Color(0xFF5C2600), // Darkest shadow
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24.r),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFA54600).withOpacity(0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-            SizedBox(width: 12.w),
-            
-            // center
-            Expanded(
+          ],
+        ),
+        child: Stack(
+          children: [
+            // 1. Background Decor (Naira Sign with spacing from right edge)
+            Positioned(
+              right: 24.w, // Added positive spacing from the right edge
+              bottom: -40.h,
+              top: 10,
+              child: Text(
+                '₦',
+                style: GoogleFonts.inter(
+                  fontSize: 200.sp,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white.withOpacity(0.05),
+                  height: 1, 
+                ),
+              ),
+            ),
+
+            // 2. Content
+            Padding(
+              padding: EdgeInsets.all(24.r),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Withdrawable balance',
-                    style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF5E5E5E))),
-                  SizedBox(height: 2.h),
-                  loading ?
-                  SizedBox(
-                    height: 25.h,
-                    width: 25.w,
-                    child: CircularProgressIndicator(
-                      color: KorraColors.brand,
-                      strokeWidth: 2,
-                    ),
-                  )
-                  : Text(balanceText,
-                    style: GoogleFonts.inter(
-                      fontSize: 22.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B),
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    )),
-                  SizedBox(height: 6.h),
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    SizedBox(
-                      width: 150.w,
-                      child: Text(
-                        (methodMasked.trim().isEmpty)
-                            ? 'Add payout method'
-                            : 'Default  $methodMasked',
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E))),
-                    ),
-                    SizedBox(width: 4.w),
-                    Icon(Icons.chevron_right, size: 18.sp, color: const Color(0xFF5E5E5E)),
-                  ]),
-                ],
-              ),
-            ),
-            
-            SizedBox(width: 12.w),
-            
-            // right CTA
-            ConstrainedBox(
-              constraints: BoxConstraints(minWidth: 96.w),
-              child: SizedBox(
-                height: 44.h,
-                child: FilledButton(
-                  onPressed: onPayout,
-                  style: FilledButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                    backgroundColor: _brand,
-                    disabledBackgroundColor: _brand.withOpacity(0.8),
+                  
+                  // TOP ROW: Icon + Label + Eye + Total Badge
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Left: Icon + Label + Toggle
+                      Row(
+                        children: [
+                          // Stacked Coins Icon
+                          Container(
+                            padding: EdgeInsets.all(6.r),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Iconsax.coin, color: Colors.white, size: 16.sp),
+                          ),
+                          SizedBox(width: 8.w),
+                          
+                          Text(
+                            'Available Balance',
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                          SizedBox(width: 8.w),
+                          
+                          // Eye Toggle
+                          GestureDetector(
+                            onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: EdgeInsets.all(4.r),
+                              child: Icon(
+                                _isBalanceVisible ? Iconsax.eye : Iconsax.eye_slash,
+                                color: Colors.white.withOpacity(0.7),
+                                size: 18.sp,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Right: Total Ledger Badge (With Overflow Protection)
+                      if (widget.totalBalanceText != null) ...[
+                        SizedBox(width: 12.w),
+                        Flexible(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(20.r),
+                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Net Worth: ',
+                                    style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white70),
+                                  ),
+                                  Text(
+                                    _isBalanceVisible ? widget.totalBalanceText! : '••••',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10.sp, 
+                                      fontWeight: FontWeight.w700, 
+                                      color: Colors.white
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]
+                    ],
                   ),
-                  child: Text('Payout',
-                    style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
+
+                  // MIDDLE: The Big Number
+                  widget.loading
+                      ? SizedBox(
+                          height: 30.h,
+                          width: 30.w,
+                          child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 0),
+                            child: Text(
+                              _isBalanceVisible ? widget.balanceText : '₦ ••••••',
+                              key: ValueKey(_isBalanceVisible),
+                              style: GoogleFonts.inter(
+                                fontSize: 34.sp,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: _isBalanceVisible ? -1.5 : 4.0,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                  // BOTTOM: Action Button (Withdraw)
+                  Row(
+                    children: [
+                      Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: InkWell(
+                          onTap: widget.onPayout,
+                          borderRadius: BorderRadius.circular(12.r),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Iconsax.export_1, size: 18.sp, color: const Color(0xFFA54600)), 
+                                SizedBox(width: 8.w),
+                                Text(
+                                  'Withdraw Funds',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFFA54600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],

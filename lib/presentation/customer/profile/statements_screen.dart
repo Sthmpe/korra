@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:get/get.dart';
 import 'package:collection/collection.dart'; // For grouping
 
-import '../../../../config/utils/currency_formatters.dart';
 import '../../../../data/models/customer/transaction_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../shared/widgets/korra_header.dart';
@@ -137,7 +136,7 @@ class _TransactionTile extends StatelessWidget {
         // We reuse the nice receipt screen we built earlier
         Get.to(() => TransactionReceiptScreen(
           amount: transaction.amount.abs(),
-          planName: transaction.description ?? "Transaction", // Mapping description to plan name area
+          planName: transaction.description, // Mapping description to plan name area
           date: transaction.createdAt,
         ));
       },

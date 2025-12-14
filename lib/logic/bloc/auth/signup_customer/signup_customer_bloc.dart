@@ -194,8 +194,50 @@ class SignupCustomerBloc
 
   /// On Identity step, verify only fields that need it; otherwise just advance.
   Future<void> _onNext(SignupCustomerNextPressed event, Emit emit) async {
+    const personalStepIndex = 0;
     const identityStepIndex = 1;
     final next = (state.pageIndex + 1).clamp(0, state.totalPages - 1);
+
+    // --- STEP 0: PERSONAL DETAILS (Validation Logic) ---
+    if (state.pageIndex == personalStepIndex) {
+      // 1. Check Empty Text Fields
+      if (state.firstName.trim().isEmpty || 
+          state.lastName.trim().isEmpty || 
+          state.phone.trim().isEmpty || 
+          state.email.trim().isEmpty) {
+        return;
+      }
+
+      // 2. Check Date of Birth
+      if (state.dob == null) {
+        return;
+      }
+      
+      // 3. Check Age (Optional but recommended)
+      final age = DateTime.now().year - state.dob!.year;
+      if (age < 18) {
+         return;
+      }
+
+      // 4. Check Gender
+      if (state.gender == Gender.undisclosed) { 
+        return;
+      }
+
+      // 5. Check Email Validity (If typed but not verified via regex)
+      if (state.emailError != null && state.emailError!.isNotEmpty) {
+         // The UI already shows the error under the field, but we block here too
+         return; 
+      }
+      
+      // 6. Check Email Availability (If we haven't checked yet or it failed)
+      // If user typed fast and clicked next before debounce finished
+      if (!state.emailUnused) {
+         // Trigger the check manually here to be safe
+         add(EmailChangedCU(state.email)); 
+         return;
+      }
+    }
 
     if (state.pageIndex != identityStepIndex) {
       emit(state.copyWith(pageIndex: next));

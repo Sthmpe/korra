@@ -321,7 +321,7 @@ class PlanDetailsScreen extends StatelessWidget {
     } else if (p.status == 'cancelled') {
       bg = Colors.grey.shade200;
       text = Colors.grey.shade600;
-      label = "Canceled";
+      label = "Cancelled";
     } else if (p.isOverdue) {
       bg = const Color(0xFFFEF2F2);
       text = const Color(0xFFDC2626);

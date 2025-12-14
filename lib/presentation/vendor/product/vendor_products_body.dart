@@ -3,146 +3,142 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:korra/config/constants/colors.dart';
+import 'package:iconsax/iconsax.dart'; // Premium Icons
 
+import '../../../config/constants/colors.dart';
 import '../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 
-import '../../shared/widgets/section_header.dart';
+// We will build these widgets next
+import 'widgets/product_list_item_premium.dart';
+import 'widgets/product_search_bar.dart';
+import 'widgets/product_filter_pills.dart';
 import 'widgets/product_details_screen.dart';
 import 'widgets/product_edit_screen.dart';
-import 'widgets/product_search_field.dart';
-import 'widgets/product_filters.dart';
-import 'widgets/product_list_item.dart';
-import 'widgets/product_empty_state.dart';
 
 class VendorProductsBody extends StatelessWidget {
   const VendorProductsBody({super.key});
 
-  String _emptyMessageForFilter(ProductFilter filter, int totalCount) {
-    switch (filter) {
-      case ProductFilter.approved:
-        return "No approved products yet.";
-      case ProductFilter.pending:
-        return "No pending products awaiting review.";
-      case ProductFilter.rejected:
-        return "No rejected products.";
-      case ProductFilter.outOfStock:
-        if (totalCount == 0) {
-          return "You haven’t added any products yet.";
-        } else {
-          return "All your products are in stock.";
-        }
-      case ProductFilter.all:
-      return "You haven’t added any products yet.";
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<VendorProductsBloc, VendorProductsState>(
-      builder: (context, s) {
+      builder: (context, state) {
+        // Handle "Init" Loading differently (Shimmer preferred, but spinner for now)
+        if (state.items.isEmpty && (state.isSubmitting ?? false)) {
+          return const Center(child: CircularProgressIndicator(color: KorraColors.brand));
+        }
+
         return RefreshIndicator(
-          onRefresh: () async => context.read<VendorProductsBloc>().add(
-            const VendorProductsRefresh(),
-          ),
+          color: KorraColors.brand,
+          backgroundColor: Colors.white,
+          onRefresh: () async => context.read<VendorProductsBloc>().add(const VendorProductsRefresh()),
           child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             slivers: [
+              // 1. Search & Filter Header (Sticky-ish feel via SliverToBox)
               SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 12.h),
-                    ProductSearchField(
-                      initial: s.query,
-                      onChanged: (q) => context.read<VendorProductsBloc>().add(
-                        VendorProductsQueryChanged(q),
-                      ),
-                      onClear: () => context.read<VendorProductsBloc>().add(
-                        const VendorProductsQueryChanged(''),
-                      ),
-                    ),
-
-                    SizedBox(height: 10.h),
-                    ProductFilters(
-                      active: s.filter,
-                      onChanged: (f) => context.read<VendorProductsBloc>().add(
-                        VendorProductsFilterChanged(f),
-                      ),
-                    ),
-
-                    SectionHeader(
-                      title: 'Your products',
-                      actionText: s.totalCountLabel,
-                    ),
-
-                    if (s.visibleItems.isEmpty)
-                      ProductEmptyState(
-                        message: _emptyMessageForFilter(s.filter, s.items.length),
-                      )
-                    else
-                      ...s.visibleItems
-                          .map(
-                            (p) => ProductListItem(
-                              p: p,
-                              onTap: () => Get.to(() => BlocProvider.value(
-                                value: context.read<VendorProductsBloc>(),
-                                child: ProductDetailsScreen(product: p),
-                              )),
-                              onShare:
-                                  p.status == ProductStatus.approved &&
-                                      p.stock > 0
-                                  ? () => context
-                                        .read<VendorProductsBloc>()
-                                        .add(VendorProductsSharePressed(p))
-                                  : null,
-                              onEdit: () => Get.to(() => MultiBlocProvider(
-                                providers: [
-                                  BlocProvider.value(
-                                    value: context.read<VendorProductsBloc>(),
-                                  ),
-                                  BlocProvider<ImageBloc>(
-                                    create: (_) => ImageBloc(),
-                                  ),
-                                ],
-                                child: ProductEditScreen(product: p),
-                              )),
-                              onRestock: () => context
-                                  .read<VendorProductsBloc>()
-                                  .add(VendorProductsRestockPressed(p.id)),
-                            ),
-                          )
-                          .toList(),
-                    SizedBox(height: 16.h),
-                    if (!(s.isSubmitting ?? false) && s.items.isNotEmpty &&
-                        s.visibleItems.length < s.items.length && s.visibleItems.length < s.statusCounts[s.filter]!)
-                      Center(
-                        child: TextButton(
-                          onPressed: () => context
-                              .read<VendorProductsBloc>()
-                              .add(VendorProductsLoadMore()),
-                          child: Text(
-                            "Load More",
-                            style: GoogleFonts.inter(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w600,
-                              color: KorraColors.brand,
-                            ),
-                          ),
+                child: Container(
+                  color: Colors.white, // Continues from AppBar
+                  padding: EdgeInsets.only(bottom: 16.h),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20.w),
+                        child: ProductSearchBar(
+                          initialValue: state.query,
+                          onChanged: (q) => context.read<VendorProductsBloc>().add(VendorProductsQueryChanged(q)),
                         ),
                       ),
-                    if ((s.isSubmitting!))
-                      Center(child: CircularProgressIndicator()),
-                  ],
+                      SizedBox(height: 16.h),
+                      ProductFilterPills(
+                        activeFilter: state.filter,
+                        counts: state.statusCounts,
+                        onChanged: (f) => context.read<VendorProductsBloc>().add(VendorProductsFilterChanged(f)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+
+              // 2. The List or Empty State
+              if (state.visibleItems.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _buildEmptyState(context, state),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final product = state.visibleItems[index];
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 12.h),
+                          child: ProductListItemPremium(
+                            product: product,
+                            onTap: () => Get.to(() => BlocProvider.value(
+                              value: context.read<VendorProductsBloc>(),
+                              child: ProductDetailsScreen(product: product),
+                            )),
+                            onEdit: () => _navigateToEdit(context, product),
+                            onShare: product.shareable
+                                ? () => context.read<VendorProductsBloc>().add(VendorProductsSharePressed(product))
+                                : null,
+                          ),
+                        );
+                      },
+                      childCount: state.visibleItems.length,
+                    ),
+                  ),
+                ),
+              
+              // 3. Bottom Padding for Scroll
+              SliverToBoxAdapter(child: SizedBox(height: 40.h)),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _navigateToEdit(BuildContext context, dynamic product) {
+    Get.to(() => MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: context.read<VendorProductsBloc>()),
+        BlocProvider(create: (_) => ImageBloc()),
+      ],
+      child: ProductEditScreen(product: product),
+    ));
+  }
+
+  Widget _buildEmptyState(BuildContext context, VendorProductsState state) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: EdgeInsets.all(24.r),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Iconsax.box_remove, size: 40.sp, color: Colors.grey.shade400),
+          ),
+          SizedBox(height: 16.h),
+          Text(
+            "No products found",
+            style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.black87),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            "Try adjusting your search or filters.",
+            style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
     );
   }
 }

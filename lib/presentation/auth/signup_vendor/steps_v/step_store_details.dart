@@ -7,11 +7,11 @@ import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../../../config/constants/colors.dart';
-import '../../../../config/constants/sizes.dart';
 import '../../../../config/constants/vendor_categories.dart';
 import '../../../../config/validators/validators.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
+import 'SocialValidators.dart';
 
 class StepStoreDetails extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -95,10 +95,6 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
     if (_filledCount != count) setState(() => _filledCount = count);
   }
   
-  String? _validateLinks(String? val) {
-    if (_filledCount < 3) return '3 links required';
-    return null;
-  }
 
   @override 
   void dispose() { 
@@ -113,13 +109,6 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<SignupVendorBloc>().state;
-    final needsPhysical = s.presence == Presence.physical || s.presence == Presence.both;
-
-    String? _requiredIfPhysical(String? v) {
-      if (!needsPhysical) return null;
-      if (v == null || v.trim().isEmpty) return 'Required';
-      return null;
-    }
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -233,19 +222,97 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
             SizedBox(height: 24.h),
 
             // Social Inputs
-            _SocialInput(controller: _instaCtl, focusNode: _instaFocus, label: 'Instagram', hint: 'username', icon: MdiIcons.instagram, brandColor: const Color(0xFFE1306C), prefixText: '@', validator: _validateLinks, onSubmitted: (_) => FocusScope.of(context).requestFocus(_twitterFocus)),
+            _SocialInput(
+              controller: _instaCtl,
+              focusNode: _instaFocus,
+              label: "Instagram",
+              baseUrl: "instagram.com/",
+              hint: 'username',
+              icon: MdiIcons.instagram,
+              brandColor: const Color(0xFFE1306C),
+              prefixText: '@',
+              validator: SocialValidators.instagram,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_twitterFocus),
+            ),
             SizedBox(height: 16.h),
-            _SocialInput(controller: _twitterCtl, focusNode: _twitterFocus, label: 'Twitter / X', hint: 'username', icon: MdiIcons.twitter, brandColor: Colors.black, prefixText: '@', validator: _validateLinks, onSubmitted: (_) => FocusScope.of(context).requestFocus(_waFocus)),
+            _SocialInput(
+              controller: _twitterCtl,
+              focusNode: _twitterFocus,
+              label: 'Twitter / X',
+              baseUrl: 'x.com/',
+              hint: 'username',
+              icon: MdiIcons.twitter,
+              brandColor: Colors.black,
+              prefixText: '@',
+              validator: SocialValidators.twitter,
+              onSubmitted: (_) => FocusScope.of(context).requestFocus(_waFocus),
+            ),
             SizedBox(height: 16.h),
-            _SocialInput(controller: _waCtl, focusNode: _waFocus, label: 'WhatsApp Group', hint: 'chat.whatsapp.com/...', icon: MdiIcons.whatsapp, brandColor: const Color(0xFF25D366), inputType: TextInputType.url, validator: _validateLinks, onSubmitted: (_) => FocusScope.of(context).requestFocus(_webFocus)),
+            _SocialInput(
+              controller: _waCtl,
+              focusNode: _waFocus,
+              label: 'WhatsApp Group',
+              baseUrl: 'wa.me/',
+              hint: 'wa.me/...',
+              icon: MdiIcons.whatsapp,
+              brandColor:  const Color(0xFF25D366),
+              inputType: TextInputType.url,
+              validator: SocialValidators.whatsapp,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_webFocus),
+            ),
             SizedBox(height: 16.h),
-            _SocialInput(controller: _webCtl, focusNode: _webFocus, label: 'Website', hint: 'www.yourstore.com', icon: Iconsax.global, brandColor: Colors.blue.shade700, inputType: TextInputType.url, validator: _validateLinks, onSubmitted: (_) => FocusScope.of(context).requestFocus(_fbFocus)),
+            _SocialInput(
+              controller: _webCtl,
+              focusNode: _webFocus,
+              label: 'Website',
+              baseUrl: 'www.',
+              hint: 'www.yourstore.com',
+              icon: Iconsax.global,
+              brandColor: Colors.blue.shade700,
+              inputType: TextInputType.url,
+              validator: SocialValidators.website,
+              onSubmitted: (_) => FocusScope.of(context).requestFocus(_fbFocus),
+            ),
             SizedBox(height: 16.h),
-            _SocialInput(controller: _fbCtl, focusNode: _fbFocus, label: 'Facebook', hint: 'facebook.com/page', icon: MdiIcons.facebook, brandColor: const Color(0xFF1877F2), inputType: TextInputType.url, validator: _validateLinks, onSubmitted: (_) => FocusScope.of(context).requestFocus(_tiktokFocus)),
+            _SocialInput(
+              controller: _fbCtl,
+              focusNode: _fbFocus,
+              label: 'Facebook',
+              baseUrl: 'facebook.com/',
+              hint: 'facebook.com/page',
+              icon: MdiIcons.facebook,
+              brandColor: const Color(0xFF1877F2),
+              inputType: TextInputType.url,
+              validator: SocialValidators.facebook,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_tiktokFocus),
+            ),
             SizedBox(height: 16.h),
-            _SocialInput(controller: _tiktokCtl, focusNode: _tiktokFocus, label: 'TikTok', hint: 'username', icon: Icons.tiktok, brandColor: Colors.black, prefixText: '@', validator: _validateLinks),
+            _SocialInput(
+              controller: _tiktokCtl,
+              focusNode: _tiktokFocus,
+              label: 'TikTok',
+              baseUrl: 'tiktok.com/@',
+              hint: 'username',
+              icon: Icons.tiktok,
+              brandColor: Colors.black,
+              prefixText: '@',
+              validator: SocialValidators.tiktok,
+            ),
             SizedBox(height: 16.h),
-             _SocialInput(controller: _otherCtl, focusNode: _otherFocus, label: 'Other (Linktree)', hint: 'https://...', icon: Iconsax.link_1, brandColor: Colors.grey.shade700, inputType: TextInputType.url, validator: _validateLinks),
+            _SocialInput(
+              controller: _otherCtl,
+              focusNode: _otherFocus,
+              label: 'Other (Linktree)',
+              baseUrl: '',
+              hint: 'https://...',
+              icon: Iconsax.link_1,
+              brandColor: Colors.grey.shade700,
+              inputType: TextInputType.url,
+              validator: SocialValidators.other,
+            ),
 
             SizedBox(height: 40.h),
           ],
@@ -413,6 +480,7 @@ class _PremiumInputState extends State<_PremiumInput> {
           child: TextFormField(
             controller: widget.controller,
             focusNode: widget.focusNode,
+            validator: widget.validator,
             keyboardType: widget.inputType,
             textCapitalization: widget.textCapitalization,
             onFieldSubmitted: (v) {
@@ -462,7 +530,6 @@ class _PremiumInputState extends State<_PremiumInput> {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            validator: widget.validator,
           ),
         ),
       ],
@@ -475,6 +542,7 @@ class _SocialInput extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String label;
+  final String baseUrl;
   final String hint;
   final IconData icon;
   final Color brandColor;
@@ -487,6 +555,7 @@ class _SocialInput extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.label,
+    required this.baseUrl,
     required this.hint,
     required this.icon,
     required this.brandColor,
@@ -502,11 +571,53 @@ class _SocialInput extends StatefulWidget {
 
 class _SocialInputState extends State<_SocialInput> {
   bool _isFocused = false;
+
   @override
-  void initState() { super.initState(); widget.focusNode.addListener(_handleFocus); }
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
   @override
-  void dispose() { widget.focusNode.removeListener(_handleFocus); super.dispose(); }
-  void _handleFocus() { setState(() => _isFocused = widget.focusNode.hasFocus); }
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() => _isFocused = widget.focusNode.hasFocus);
+
+    final fullPrefix = "https://${widget.baseUrl}";
+
+    if (widget.focusNode.hasFocus) {
+      // 🟢 ON CLICK (FOCUS): Auto-fill base URL if empty
+      if (widget.controller.text.isEmpty) {
+        widget.controller.text = fullPrefix;
+        
+        // Move cursor to the end so they can just type
+        widget.controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: widget.controller.text.length),
+        );
+      }
+    } else {
+      // 🔴 ON LEAVE (BLUR): Clean up
+      String text = widget.controller.text.trim();
+
+      // 1. If user didn't type a username (only the prefix exists), CLEAR IT.
+      // This ensures optional fields don't send "https://instagram.com/" as data.
+      if (text == fullPrefix) {
+        widget.controller.clear();
+        return;
+      }
+
+      // 2. If user deleted the prefix and typed "@username", FIX IT.
+      if (text.isNotEmpty && !text.startsWith('http')) {
+        // Remove @ if they added it
+        final cleanText = text.replaceAll('@', '');
+        widget.controller.text = "$fullPrefix$cleanText";
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +697,7 @@ class _SocialInputState extends State<_SocialInput> {
               // Hide error here, we can show it below if needed, or keep it simple
               errorStyle: GoogleFonts.inter(
                 height: 0.h,
-                fontSize: 0.sp,
+                fontSize: 12.sp,
                 fontWeight: FontWeight.w500,
               ),
             ),

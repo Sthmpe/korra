@@ -4,8 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:get/get.dart';
-
 import 'package:korra/config/constants/colors.dart';
 
 import '../../../../logic/bloc/customer/link/link_bloc.dart';

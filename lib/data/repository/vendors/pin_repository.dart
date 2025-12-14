@@ -1,60 +1,37 @@
-import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../models/vendor/payout/pin_model.dart';
+import '../../../config/utils/korra_exception.dart';
 import 'vendor_repository.dart';
 
 extension PinRepository on VendorRepository {
-  /// Hash PIN with bcrypt (via Supabase Edge Function or local)
-  Future<String> hashPin(String pin) async {
+  
+  Future<void> setTransactionPin(String uid, String pin) async {
     try {
-      final response = await fx.invoke('create-hash', body: {'pin': pin});
-      if (response.data != null && response.data['hash'] != null) {
-        return response.data['hash'] as String;
-      }
-      throw Exception('Failed to hash pin');
-    } catch (e) {
-      debugPrint("Error hashing pin: $e");
-      rethrow;
-    }
-  }
+      final response = await fx.invoke(
+        'vendor-transaction-ops',
+        body: {
+          'type': 'create_pin',
+          'uid': uid,
+          'pin': pin, 
+        },
+      );
 
-  /// Verify PIN against stored hash
-  Future<bool> verifyPin(String pin, String storedHash) async {
-    try {
-      final response = await fx.invoke('verify-pin', body: {
-        'pin': pin,
-        'storedHash': storedHash,
-      });
-      if (response.data != null && response.data['valid'] != null) {
-        return response.data['valid'] as bool;
+      if (response.data['success'] != true) {
+        throw Exception(response.data['error'] ?? "Failed to set PIN");
       }
-      throw Exception('Failed to verify pin');
     } catch (e) {
-      debugPrint("Error verifying pin: $e");
-      rethrow;
-    }
-  }
-
-  /// Save hashed PIN to Firestore
-  Future<void> savePin(PinModel pin) async {
-    await firestore.collection('user_pins').doc(pin.userId).set(
-          pin.toMap(),
-          SetOptions(merge: true),
+      // Reuse the logic or a simple translator
+      final msg = e.toString().toLowerCase();
+      
+      if (msg.contains('socketexception')) {
+        throw KorraException(
+          "Connection failed. Could not save your PIN.",
+          technicalDetails: "Network Error",
         );
-  }
-
-  /// Get stored PinModel
-  Future<PinModel?> getPin(String userId) async {
-    final doc = await firestore.collection('user_pins').doc(userId).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return PinModel.fromMap(doc.data()!);
-  }
-
-  /// Get only the hashed pin for verification
-  Future<String?> getPinHash(String userId) async {
-    final doc = await firestore.collection('user_pins').doc(userId).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return doc.data()!['pinHash'] as String?;
+      }
+      
+      throw KorraException(
+        "We couldn't verify your PIN securely. Please try again.",
+        technicalDetails: e.toString(),
+      );
+    }
   }
 }

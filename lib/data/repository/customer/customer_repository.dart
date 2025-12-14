@@ -194,12 +194,6 @@ class CustomerRepository {
       // C. Save Profile
       await _saveCustomerToFirestore(customer, bankData['bankName']);
 
-      // D. Initialize Ledger (Transaction History)
-      await _initializeLedger(uid, bankData);
-
-      // E. Initialize Limits (Risk Engine Profile)
-      await _initializeCustomerLimit(customer); // ✅ Renamed for clarity
-
       // F. Send Welcome Email
       await _sendWelcomeEmail(customer);
 
@@ -301,52 +295,6 @@ class CustomerRepository {
         .collection('customer')
         .doc(customer.uid)
         .set(map, SetOptions(merge: true));
-  }
-
-  /// ✅ CORRECTED: Uses TransactionModel to ensure data consistency
-  Future<void> _initializeLedger(
-    String uid,
-    Map<String, dynamic> bankData,
-  ) async {
-    final newDocRef = db
-        .collection('customer')
-        .doc(uid)
-        .collection('ledger_transactions')
-        .doc();
-
-    final initialTx = TransactionModel(
-      id: newDocRef.id,
-      customerId: uid,
-      type: 'system',
-      amount: 0.00,
-      description: 'Account Opened: ${bankData['bankName']}',
-      planId: 'none',
-      reference: 'INIT-${newDocRef.id.substring(0, 8)}',
-      status: 'success',
-      balanceBefore: 0.00,
-      balanceAfter: 0.00,
-      createdAt: DateTime.now(),
-    );
-
-    await newDocRef.set(initialTx.toMap());
-  }
-
-  /// ✅ CORRECTED: Matches CustomerLimit Model Fields exactly
-  Future<void> _initializeCustomerLimit(Customer customer) async {
-    // We define the collection name here.
-    // MUST match what you use in StreamBuilder and Security Rules.
-    final limitRef = firestore.collection('customer_limits').doc(customer.uid);
-
-    // We manually construct the map to ensure it matches the Model 100%
-    // Or we could instantiate the model and use .toFirestore(), but manual is explicit here.
-    await limitRef.set({
-      'uid': customer.uid,
-      'totalCreditLimit': 15000.00, // ✅ Correct Field Name
-      'activeDebt': 0.00, // ✅ Correct Field Name
-      'successfulRepayments': 0,
-      'defaultCount': 0,
-      'lastUpdated': FieldValue.serverTimestamp(),
-    });
   }
 
   Future<void> _sendWelcomeEmail(Customer customer) async {
@@ -517,6 +465,40 @@ class CustomerRepository {
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Failed to update FCM Token: $e");
+    }
+  }
+
+  // Efficient check: Returns TRUE if user has any plan that isn't closed
+  Future<bool> hasActivePlans(String uid) async {
+    try {
+      final query = await db.collection('plans')
+          .where('customerId', isEqualTo: uid)
+          .where('status', whereIn: ['active', 'overdue', 'pending_approval'])
+          .limit(1) // Optimization: We only need to know if ONE exists
+          .get();
+      
+      return query.docs.isNotEmpty;
+    } catch (e) {
+      return false; // Fallback
+    }
+  }
+
+  Future<void> recalculateLimit(String uid) async {
+    try {
+      final res = await fx.invoke('recalculate-limit', body: {'customerUid': uid});
+      final data = res.data;
+      
+      if (data['success'] != true) {
+         throw KorraException(data['message'] ?? "Limit update failed.");
+      }
+    } catch (e) {
+      if (e is FunctionException) {
+         final details = e.details;
+         if (details is Map && details['message'] != null) {
+            throw KorraException(details['message']);
+         }
+      }
+      throw KorraException("Could not update limit.", technicalDetails: e.toString());
     }
   }
 }

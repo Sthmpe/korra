@@ -2,27 +2,59 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../config/utils/korra_exception.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../models/product_model.dart';
+import '../../models/vendor/vendor_stat.dart';
 import 'vendor_repository.dart';
 
 extension ProductRepository on VendorRepository {
-  Future<Product?> addProduct(Product product) async {
+ // 🔹 SECURE ADD (Calls Edge Function)
+  Future<void> addProductSecure(Map<String, dynamic> productMap) async {
     try {
-      final docRef = firestore.collection('products').doc();
-      final newProduct = product.copyWith(id: docRef.id);
+      debugPrint("🔒 Calling add-product-secure...");
+      
+      final response = await fx.invoke(
+        'add-product-secure',
+        body: {
+          'vendorId': productMap['vendorId'],
+          'productData': productMap, // Contains all fields including timeline
+        },
+      );
 
-      await docRef.set(newProduct.toMap());
+      final data = response.data;
 
-      return newProduct;
+      if (data['success'] != true) {
+        throw KorraException(
+          data['error'] ?? "Failed to create product",
+          technicalDetails: "Server Validation Failed"
+        );
+      }
+
+      debugPrint("✅ Product Created Successfully: ${data['data']['code']}");
+
     } catch (e) {
-      debugPrint('Error adding product: $e');
-      return null;
+      debugPrint('Secure Upload Error: $e');
+      if (e is FunctionException) {
+         throw KorraException(
+           "Server Error: ${e.reasonPhrase}", 
+           technicalDetails: e.details.toString()
+         );
+      }
+      rethrow;
     }
+  }
+
+  // Stream stats (Limit, Used, Available)
+  Stream<VendorStats> streamVendorStats(String uid) {
+    return firestore.collection('vendor_stats').doc(uid).snapshots().map((doc) {
+      return VendorStats.fromFirestore(doc);
+    });
   }
 
   Future<List<Product>> fetchProductsByVendor(String vendorId) async {
@@ -63,41 +95,44 @@ extension ProductRepository on VendorRepository {
     }
   }
 
-  // 🔹 Update product (using vendorId + code)
-  Future<bool> updateProduct({
+  // 🔹 SECURE EDIT
+  Future<void> updateProductSecure({
     required String vendorId,
     required String productCode,
-    required Product updatedProduct,
+    required Map<String, dynamic> updateData,
   }) async {
     try {
-      // --- 1️⃣ Fetch the product by vendorId and code ---
-      final snapshot = await firestore
-          .collection('products')
-          .where('vendorId', isEqualTo: vendorId)
-          .where('code', isEqualTo: productCode)
-          .limit(1)
-          .get();
+      debugPrint("🔒 Calling edit-product-secure...");
+      
+      final response = await fx.invoke(
+        'edit-product-secure',
+        body: {
+          'vendorId': vendorId,
+          'productCode': productCode,
+          'updateData': updateData,
+        },
+      );
 
-        if (snapshot.docs.isEmpty) {
-          debugPrint("❌ Product not found for vendorId=$vendorId, code=$productCode");
-          return false;
-        }
+      final data = response.data;
 
-      final doc = snapshot.docs.first;
-      final data = doc.data();
-      final oldProduct = Product.fromMap(data, doc.id);
+      if (data['success'] != true) {
+        throw KorraException(
+          data['error'] ?? "Failed to update product",
+          technicalDetails: "Server Limit Check Failed"
+        );
+      }
 
-      // ---2️⃣ Push update to Firestore ---
-      await firestore
-          .collection('products')
-          .doc(oldProduct.id)
-          .update(updatedProduct.toMap());
+      debugPrint("✅ Product Updated: ${data['data']['status']}");
 
-      debugPrint("✅ Product updated successfully for code=$productCode");
-      return true;
     } catch (e) {
-      debugPrint('Error updating product: $e');
-      return false;
+      debugPrint('Secure Edit Error: $e');
+      if (e is FunctionException) {
+         throw KorraException(
+           "Server Error: ${e.reasonPhrase}", 
+           technicalDetails: e.details.toString()
+         );
+      }
+      rethrow;
     }
   }
 
@@ -278,130 +313,6 @@ extension ProductRepository on VendorRepository {
             : (data['images'] != null ? [data['images'] as String] : []),
       );
     }).toList();
-  }
-
-  Future<ImageValidationResult> validateProductImagesWithAI(
-    List<File> images, {
-    String? description,
-    String? category,
-  }) async {
-    List<File> validImages = [];
-    List<String> errorMessages = [];
-
-    for (var img in images) {
-      try {
-        final bytes = await img.readAsBytes();
-        final imagePart = InlineDataPart('image/jpeg', bytes);
-
-        final model = FirebaseAI.googleAI().generativeModel(
-          model: 'gemini-2.0-flash-lite-001',
-        );
-
-        final prompt = TextPart("""
-        You are checking if a product image is suitable for an e-commerce platform where vendors upload products.
-
-        Product Description: "${description ?? "N/A"}"
-        Product Category: "${category ?? "N/A"}"
-
-        Evaluate the image based on real-world vendor uploads — not perfection. 
-        Be lenient with lighting or background issues as long as the product is clear and relevant.
-
-        Return **only raw JSON** with no explanation, no markdown, and no code block:
-        {
-          "isValidProductImage": true/false, // true if it clearly shows a real product
-          "matchesDescription": true/false, // true if it visually fits the description
-          "matchesCategory": true/false, // true if it belongs in the stated category
-          "recommendedCategory": "string", // suggest best-fit category if mismatch
-          "isGoodForUpload": true/false, // true if overall acceptable for listing
-          "reason": "short explanation for result"
-        }
-        """);
-
-        final response = await model.generateContent([
-          Content.multi([prompt, imagePart]),
-        ]);
-
-        var rawText = response.text ?? "{}";
-
-        debugPrint("AI response: $rawText");
-
-        // 🧹 Clean markdown fences and stray spaces
-        final cleaned = rawText
-            .replaceAll(RegExp(r'```json|```', caseSensitive: false), '')
-            .trim();
-
-        debugPrint("Cleaned JSON: $cleaned");
-
-        // 🧩 Safe decode
-        Map<String, dynamic> result;
-        try {
-          result = jsonDecode(cleaned);
-        } catch (e) {
-          debugPrint("AI returned invalid JSON after cleanup: $cleaned");
-          errorMessages.add("AI returned unreadable result for an image.");
-          continue;
-        }
-
-        final isValid =
-            result["isValidProductImage"] == true &&
-            result["isGoodForUpload"] == true;
-
-        if (isValid) {
-          validImages.add(img);
-        } else {
-          errorMessages.add(result["reason"] ?? "Unknown issue with image.");
-        }
-
-        await Future.delayed(
-          const Duration(seconds: 3),
-        ); // To avoid rate limits
-      } catch (e) {
-        debugPrint("AI validation error: $e");
-        errorMessages.add("AI validation error: $e");
-      }
-    }
-
-    if (validImages.length < 3) {
-      errorMessages.add(
-        "You need at least 3 valid images to upload this product.",
-      );
-      return ImageValidationResult(
-        success: false,
-        validImages: validImages,
-        errorMessages: errorMessages,
-      );
-    }
-
-    return ImageValidationResult(
-      success: true,
-      validImages: validImages,
-      errorMessages: [],
-    );
-  }
-
-  Future<bool> validateProductPrice(String category, int price) async {
-    final supabase = Supabase.instance.client;
-
-    try {
-      final response = await supabase.functions.invoke(
-        'validate-product-price', // <-- your Supabase Edge Function name
-        body: {'category': category, 'price': price},
-      );
-
-      if (response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        final success = data['success'] as bool? ?? false;
-        final valid = data['valid'] as bool? ?? false;
-
-        if (success && valid) {
-          return true; // ✅ Price is valid
-        }
-      }
-      return false; // ❌ Invalid
-    } catch (e) {
-      debugPrint("Error validating price: $e");
-      return false;
-    }
   }
 
   Future<String?> uploadToSupabase(File file) async {

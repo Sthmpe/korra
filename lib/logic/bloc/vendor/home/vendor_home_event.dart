@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../data/models/vendor/vendor_stat.dart';
 import 'vendor_home_state.dart';
 
 abstract class VendorHomeEvent extends Equatable {
@@ -9,6 +10,11 @@ abstract class VendorHomeEvent extends Equatable {
 
 class VendorHomeStarted extends VendorHomeEvent {
   const VendorHomeStarted();
+}
+
+class VendorStatsUpdated extends VendorHomeEvent {
+  final VendorStats stats;
+  const VendorStatsUpdated(this.stats);
 }
 
 class VendorHomeRefresh extends VendorHomeEvent {

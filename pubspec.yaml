@@ -8,7 +8,9 @@ environment:
 
 dependencies:
   auto_size_text: ^3.0.0
+  blur: ^4.0.2
   cached_network_image: ^3.4.1
+  camera: ^0.11.2+1
   carousel_slider: ^5.1.1
   cloud_firestore: ^6.0.0
   connectivity_plus: ^6.1.5
@@ -26,6 +28,7 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   get: ^4.7.2
   google_fonts: ^6.3.0
+  google_mlkit_face_detection: ^0.13.1
   http: ^1.5.0
   iconsax: ^0.0.8
   image_picker: ^1.2.0
@@ -34,6 +37,7 @@ dependencies:
   lottie: ^3.3.1
   material_design_icons_flutter: ^7.0.7296
   path_provider: ^2.1.5
+  permission_handler: ^12.0.1
   pin_code_fields: ^8.0.1
   pinput: ^5.0.2
   qr_flutter: ^4.1.0

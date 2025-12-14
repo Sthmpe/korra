@@ -12,6 +12,7 @@ import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 
 import '../../customer/customer_shell.dart';
+import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../role_login/role_login_screen.dart';
 import 'steps/step_personal.dart';
@@ -144,7 +145,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                     listener: (context, s) {
                       if (s.status == SignupStatus.failure) {
                         closeAllOverlays();
-                        showKorraFailureSheetCustomer(
+                        showKorraFailureSheet(
                           context,
                           title: 'Signup Failed',
                           message:

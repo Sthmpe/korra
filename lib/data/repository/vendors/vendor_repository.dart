@@ -1,15 +1,21 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; // Required for debugPrint
-import 'package:korra/data/repository/vendors/payout_repository.dart';
-import 'package:korra/data/repository/vendors/wallet_repository.dart';
+import 'package:flutter/foundation.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart'
-    show Supabase, FunctionsClient;
+    show Supabase, FunctionsClient, FunctionException;
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 import 'package:korra/data/models/vendor/vendor_model.dart';
 
+import '../../../config/utils/korra_exception.dart';
+import '../../../logic/bloc/vendor/payout/bank.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../models/vendor/payout/payout_details.dart';
+import '../../models/vendor/transaction_model.dart';
+import '../../models/vendor/vendor_setting.dart';
+import '../../models/vendor/vendor_stat.dart';
 import '../remote/monnify_functions.dart';
 
 class VendorRepository {
@@ -34,6 +40,8 @@ class VendorRepository {
   // 🔹 Local in-memory cache (lives with the repository instance)
   // 🔹 Local cache for ProductItems
   final List<ProductItem> productItemCache = [];
+  List<Bank>? cachedBankList;
+  VendorSettings? cachedSettings;
 
   final supabase = Supabase.instance.client;
 
@@ -46,149 +54,203 @@ class VendorRepository {
       ..addAll(products);
   }
 
-  Future<void> updateVendorUsedAmount(
-    String vendorId, {
-    required double amount,
-    required bool increase,
-    double? newCurrent,
-  }) async {
-    try {
-      final docRef = firestore.collection('vendor_limits').doc(vendorId);
-      final docSnap = await docRef.get();
+  KorraException handleError(Object error, {String context = "operation"}) {
+    debugPrint("❌ BankRepository Error ($context): $error");
 
-      if (!docSnap.exists) {
-        debugPrint('No vendor limit found for $vendorId');
-        return;
-      }
+    final String msg = error.toString().toLowerCase();
 
-      final data = docSnap.data()!;
-      double current = (data['currentUsedAmount'] ?? 0).toDouble();
-
-      if (newCurrent != null) {
-        current = newCurrent;
-      } else if (increase) {
-        current += amount; // vendor adds a product worth "amount"
-      } else {
-        current = current - amount < 0
-            ? 0
-            : current - amount; // vendor completes a reservation
-      }
-
-      await docRef.update({'currentUsedAmount': current});
-      debugPrint('Vendor used amount updated for $vendorId');
-    } catch (e) {
-      debugPrint('Error updating vendor used amount: $e');
+    // 1. User Mistakes (Logic Errors)
+    if (msg.contains('account not found') || msg.contains('invalid account')) {
+      return KorraException(
+        "Account not found. Please check the number and try again.",
+        technicalDetails: "404/Invalid Account",
+      );
     }
-  }
-
-  Future<Map<String, dynamic>?> getVendorLimit(String vendorId) async {
-    try {
-      final doc = await firestore
-          .collection('vendor_limits')
-          .doc(vendorId)
-          .get();
-
-      if (doc.exists && doc.data() != null) {
-        return doc.data();
-      } else {
-        debugPrint('No vendor limit found for $vendorId');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('Error getting vendor limit: $e');
-      return null;
+    
+    // 2. Network Issues
+    if (error is SocketException || msg.contains('socketexception') || msg.contains('connection refused')) {
+      return KorraException(
+        "No internet connection. Please check your network.",
+        technicalDetails: "SocketException",
+      );
     }
+    if (error is TimeoutException || msg.contains('timeout')) {
+      return KorraException(
+        "The bank network is taking too long to respond. Please try again.",
+        technicalDetails: "TimeoutException",
+      );
+    }
+
+    // 3. Server Issues
+    if (msg.contains('500') || msg.contains('internal server error')) {
+      return KorraException(
+        "Our banking partner is having a moment. Please try again shortly.",
+        technicalDetails: "500 Server Error",
+      );
+    }
+    
+    if (msg.contains('503') || msg.contains('service unavailable')) {
+      return KorraException(
+        "Bank verification is currently down for maintenance.",
+        technicalDetails: "503 Service Unavailable",
+      );
+    }
+
+    // 4. Pass-through (If it's already a clean KorraException)
+    if (error is KorraException) return error;
+
+    // 5. Catch-All
+    return KorraException(
+      "Something went wrong. Please try again.",
+      technicalDetails: error.toString(),
+    );
   }
 
-  Future<void> createVendorWithLimit(Vendor vendor) async {
-    final vendorDoc = firestore.collection('vendors').doc(vendor.uid);
-    await vendorDoc.set(vendor.toMap());
-
-    final vendorLimitDoc = firestore
-        .collection('vendor_limits')
-        .doc(vendor.uid);
-    await vendorLimitDoc.set({
-      'vendorId': vendor.uid,
-      'reservationLimit': 100000, // default limit for new vendor
-      'currentUsedAmount': 0,
-    });
-  }
-
-  /// Creates a new vendor account with Firebase Auth, a Monnify wallet,
-  /// and a Firestore document.
+  /// Creates a new vendor account securely using Supabase Functions (Ledger Only)
   Future<String> createVendorFromState(SignupVendorState state) async {
     if (!state.ninVerified || !state.bvnVerified) {
       throw Exception('NIN and BVN must be verified before account creation.');
     }
 
-    debugPrint('vendor state: $state');
-
     final email = state.email.trim().toLowerCase();
+    User? firebaseUser;
+    String? uid;
 
     try {
+      // --- STEP 1: Create Firebase Auth User ---
       final authCredential = await auth.createUserWithEmailAndPassword(
         email: email,
         password: state.password,
       );
-      final uid = authCredential.user!.uid;
-      debugPrint('Firebase user created with UID: $uid');
+      firebaseUser = authCredential.user;
+      uid = firebaseUser!.uid;
+      debugPrint('Step 1: Firebase Vendor created: $uid');
 
-      var vendor = Vendor.fromState(state, uid, status: 'pending-wallet');
+      // --- STEP 2: Call Supabase (Initialize Ledger) ---
+      // No Monnify wallet is created here. Just internal DB setup.
+      final response = await fx.invoke(
+        'create-vendor-account', 
+        body: {
+          'uid': uid,
+          'email': email,
+          'firstName': state.firstName,
+          'lastName': state.lastName,
+          'storeName': state.storeName,
+          // We don't strictly need BVN/NIN in Supabase unless you want to save them 
+          // to a secure collection. For now, we rely on the Flutter Profile save.
+        },
+      );
 
-      final walletData = await createWallet(vendor, uid); // 👈 use wrapper
-      vendor = vendor.copyWithMonnify(
-        walletReference: walletData['walletReference'] as String?,
-        accountNumber: walletData['accountNumber'] as String?,
-        accountName: walletData['accountName'] as String?,
-        status: 'active',
-      );
-      debugPrint(
-        'Monnify wallet created successfully for vendor: ${vendor.storeName}',
-      );
+      final responseData = response.data;
+      if (responseData['success'] != true) {
+        throw Exception('Vendor Setup Failed: ${responseData['error'] ?? "Unknown Error"}');
+      }
+      debugPrint('Step 2: Vendor Ledger Initialized');
 
-      // Save payout details immediately, even if bank account is not set yet
-      final payout = PayoutDetails(
-        withdrawableBalance: 0,
-        walletAccountNumber: vendor.accountNumber ?? '',
-        walletAccountName: vendor.accountName ?? '',
-        walletAccountReference: vendor.walletReference ?? '',
-        bankCode: '',
-        bankAccountNumber: '',
-        bankAccountName: '',
-        bankName: '',
-      );
-      await savePayoutDetails(uid, payout);
-      await updateWithdrawableBalance(uid, vendor.accountNumber ?? '');
-      await createVendorWithLimit(vendor);
-      debugPrint('Payout details initialized in Firestore.');
+      // --- STEP 3: Construct & Save Profile to Firestore ---
+      
+      // Create Base Vendor Object
+      // Status is 'active' immediately because we removed the "Pending Call" requirement
+      var vendor = Vendor.fromState(state, uid, status: 'active');
+
+      // Save Profile
       await _saveVendorToFirestore(vendor);
-      debugPrint('Vendor data saved to Firestore.');
+      debugPrint('Step 3: Vendor Profile Saved');
 
-      await _sendWelcomeEmail(vendor);
-      debugPrint('Welcome email function triggered.');
+      // --- STEP 4: Send Welcome Email ---
+      try {
+        await _sendWelcomeEmail(vendor);
+      } catch (e) {
+        debugPrint("Email failed but account created: $e");
+        // Don't fail the whole signup just because email failed
+      }
 
       return uid;
-    } on FirebaseAuthException catch (err) {
-      debugPrint('FirebaseAuth error: ${err.message}');
-      throw Exception(err.message ?? 'Failed to create account.');
+
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Auth Error: ${e.message}');
+      throw Exception(e.message ?? 'Failed to create account.');
+    } on FunctionException catch (e) {
+      debugPrint('Supabase Error: $e');
+      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Server setup failed.';
+      throw Exception(serverError);
     } catch (err) {
-      debugPrint('Unexpected error during signup: $err');
-      throw Exception('Unexpected signup error: $err');
+      // --- ROLLBACK LOGIC ---
+      debugPrint('CRITICAL ERROR: Vendor Signup failed. Rolling back...');
+      if (uid != null) {
+        try {
+           // Cleanup Firestore using Admin SDK logic implies manual fix, 
+           // but we try to delete the main doc here if possible.
+           await db.collection('vendors').doc(uid).delete();
+           // Note: Cannot delete subcollections (ledger) from Client SDK easily, 
+           // but the orphaned data is harmless without the main doc.
+        } catch (_) {}
+      }
+      if (firebaseUser != null) {
+        try { await firebaseUser.delete(); } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+  
+  /// Authenticates a vendor using email and password.
+  Future<String> signInVendor(String email, String password) async {
+    try {
+      final credential = await auth.signInWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+      
+      debugPrint('Vendor signed in successfully: ${credential.user!.uid}');
+      return credential.user!.uid;
+      
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthError(e);
+    } catch (e) {
+      throw KorraException(
+        'Login failed. Please check your connection and try again.',
+        technicalDetails: "Unknown Error",
+      );
     }
   }
 
-  /// Authenticates a vendor using email and password.
-  Future<String> signInVendor(String email, String password) async {
-    final credential = await auth.signInWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
-      password: password,
-    );
-    debugPrint(
-      'Vendor signed in successfully with UID: ${credential.user!.uid}',
-    );
-    return credential.user!.uid;
+  // --- HELPER: FIREBASE ERROR TRANSLATOR ---
+  KorraException _handleAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return KorraException(
+          'Incorrect email or password.',
+          technicalDetails: 'Invalid Credentials',
+        );
+      case 'invalid-email':
+        return KorraException(
+          'Please enter a valid email address.',
+          technicalDetails: 'Malformed Email',
+        );
+      case 'user-disabled':
+        return KorraException(
+          'This account has been disabled. Please contact support.',
+          technicalDetails: 'User Disabled',
+        );
+      case 'too-many-requests':
+        return KorraException(
+          'Too many failed attempts. Please try again in a few minutes.',
+          technicalDetails: 'Rate Limited',
+        );
+      case 'network-request-failed':
+        return KorraException(
+          'Network error. Please check your internet connection.',
+          technicalDetails: 'No Internet',
+        );
+      default:
+        return KorraException(
+          'Authentication failed. Please try again.',
+          technicalDetails: e.code,
+        );
+    }
   }
-
   /// Logs out the current vendor.
   Future<void> logout() async {
     try {
@@ -196,6 +258,32 @@ class VendorRepository {
     } catch (e) {
       throw Exception('Logout failed: $e');
     }
+  }
+
+  /// Listen to the Vendor's Risk/Stats Profile in real-time
+  Stream<VendorStats> streamVendorStats(String uid) {
+    return firestore
+        .collection('vendor_stats')
+        .doc(uid)
+        .snapshots()
+        .map((doc) => VendorStats.fromFirestore(doc));
+  }
+  
+  /// Stream the Ledger for the Vendor
+  /// This listens to the 'ledger_transactions' subcollection in real-time.
+  Stream<List<TransactionModel>> streamLedger(String uid) {
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('ledger_transactions')
+        .orderBy('createdAt', descending: true) // Newest transactions first
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            // Convert Firestore Document to TransactionModel
+            return TransactionModel.fromMap(doc.data(), doc.id);
+          }).toList();
+        });
   }
 
   /// Checks if Email exists securely (Works for Vendors OR Customers)
@@ -240,6 +328,71 @@ class VendorRepository {
       );
     } catch (e) {
       debugPrint('Failed to send welcome email: $e');
+    }
+  }
+
+  /// Fetches both Payout Details and PIN Status in one go.
+  Future<VendorSettings> getVendorSettings(String uid, {bool forceRefresh = false}) async {
+    if (cachedSettings != null && !forceRefresh) {
+      return cachedSettings!;
+    }
+
+    try {
+      // Run both queries in parallel for speed
+      final results = await Future.wait([
+        firestore.collection('vendors').doc(uid).collection('settings').doc('payout_details').get(),
+        firestore.collection('vendors').doc(uid).collection('security').doc('transaction_pin').get(),
+      ]);
+
+      final payoutDoc = results[0];
+      final pinDoc = results[1];
+
+      // 1. Parse Payout Details
+      PayoutDetails details = PayoutDetails.empty();
+      if (payoutDoc.exists && payoutDoc.data() != null) {
+        details = PayoutDetails.fromMap(payoutDoc.data() as Map<String, dynamic>);
+      }
+
+      // 2. Check if PIN exists
+      final bool isPinSet = pinDoc.exists;
+
+      cachedSettings = VendorSettings(
+        payoutDetails: details,
+        isPinSet: isPinSet,
+      );
+
+      return cachedSettings!;
+    } catch (e) {
+      // If error, return empty settings so the UI doesn't crash
+      return VendorSettings(payoutDetails: PayoutDetails.empty(), isPinSet: false);
+    }
+  }
+
+    // -------------------------------------------------------
+  // 4. SAVE PAYOUT DETAILS (Direct Write)
+  // -------------------------------------------------------
+  Future<void> savePayoutDetails(String uid, PayoutDetails details) async {
+    try {
+      await firestore
+          .collection('vendors')
+          .doc(uid)
+          .collection('settings')
+          .doc('payout_details')
+          .set({
+            'bankName': details.bankName,
+            'accountNumber': details.bankAccountNumber,
+            'accountName': details.bankAccountName,
+            'bankCode': details.bankCode,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true)); // Merge prevents overwriting unrelated fields
+      if (cachedSettings != null) {
+        cachedSettings = VendorSettings(
+          payoutDetails: details, 
+          isPinSet: cachedSettings!.isPinSet
+        );
+      }
+    } catch (e) {
+      throw Exception("Error saving details: $e");
     }
   }
 }
