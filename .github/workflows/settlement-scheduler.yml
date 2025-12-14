@@ -1,0 +1,24 @@
+name: Settlement Scheduler
+
+# 1. TRIGGERS: When should this run?
+on:
+  schedule:
+    # This is a Cron expression. '0 * * * *' means "At minute 0 of every hour"
+    - cron: '0 * * * *'
+  
+  # This allows you to click a "Run Now" button in GitHub Actions tab for testing
+  workflow_dispatch:
+
+# 2. JOBS: The actual work to do
+jobs:
+  trigger-settlement:
+    runs-on: ubuntu-latest  # The computer GitHub provides to run this script
+    
+    steps:
+      - name: Call Supabase Function
+        # We use 'curl' (a standard command line tool) to send the POST request
+        run: |
+          curl -X POST '${{ secrets.SUPABASE_URL }}/functions/v1/process-settlements' \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          -H "Content-Type: application/json" \
+          --fail  # This makes the Action fail visibly if the server returns an error (4xx/5xx)
