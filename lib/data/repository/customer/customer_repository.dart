@@ -7,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 // --- MODELS ---
 import '../../../config/utils/korra_exception.dart';
 import '../../../data/models/customer/customer_model.dart';
-import '../../models/customer/cutomer_limit.dart';
+import '../../models/customer/customer_account_stats.dart';
 import '../../models/customer/transaction_model.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 
@@ -37,6 +37,26 @@ class CustomerRepository {
   // ---------------------------------------------------------------------------
   // UTILITY METHODS
   // ---------------------------------------------------------------------------
+
+  /// Upgrades the customer's tier
+  Future<void> upgradeTier(String uid, String tierName) async {
+    try {
+      // Logic: Update the 'tier' field. 
+      // The 'maxSlots' getter in the model will handle the rest when data is fetched.
+      await db.collection('customers')
+          .doc(uid)
+          .collection('account_stats')
+          .doc('main')
+          .set({
+            'tier': tierName, 
+            'lastUpdated': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          
+      debugPrint("✅ Tier Upgraded to $tierName");
+    } catch (e) {
+      throw KorraException("Failed to upgrade tier. Please check your connection.");
+    }
+  }
 
   /// Checks if Email exists securely (Works for Vendors OR Customers)
   Future<bool> checkCollectionForEmail(
@@ -316,13 +336,17 @@ class CustomerRepository {
   // ---------------------------------------------------------------------------
 
   /// Stream Limit for Dashboard
-  Stream<CustomerLimit?> streamCustomerLimit(String uid) {
-    return firestore.collection('customer_limits').doc(uid).snapshots().map((
-      doc,
-    ) {
-      if (!doc.exists) return null;
-      return CustomerLimit.fromFirestore(doc);
-    });
+  Stream<CustomerAccountStats?> streamCustomerStats(String uid) {
+    return firestore
+      .collection('customers')
+        .doc(uid)
+        .collection('account_stats')
+        .doc('main')
+        .snapshots()
+        .map((doc) {
+          if (!doc.exists) return null;
+          return CustomerAccountStats.fromFirestore(doc);
+        });
   }
 
   /// Stream Balance & Profile

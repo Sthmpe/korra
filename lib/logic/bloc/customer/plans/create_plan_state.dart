@@ -17,7 +17,10 @@ class CreatePlanState extends Equatable {
   final int baseDurationDays;   
   final int noticeDays;         
   final int extensionDays;      
-  final bool canExtend;         
+  final bool canExtend;     
+
+  // 🔐 Security
+  final String? secureToken; // Holds the JWT    
 
   const CreatePlanState({
     this.status = CreatePlanStatus.initial,
@@ -32,6 +35,7 @@ class CreatePlanState extends Equatable {
     this.noticeDays = 10,
     this.extensionDays = 30,
     this.canExtend = true,
+    this.secureToken,
   });
 
   CreatePlanState copyWith({
@@ -46,6 +50,7 @@ class CreatePlanState extends Equatable {
     int? noticeDays,
     int? extensionDays,
     bool? canExtend,
+    String? secureToken,
   }) {
     return CreatePlanState(
       status: status ?? this.status,
@@ -59,12 +64,13 @@ class CreatePlanState extends Equatable {
       noticeDays: noticeDays ?? this.noticeDays,
       extensionDays: extensionDays ?? this.extensionDays,
       canExtend: canExtend ?? this.canExtend,
+      secureToken: secureToken ?? this.secureToken,
     );
   }
 
   @override
   List<Object?> get props => [
     status, hasActivePlans,errorMessage, riskEngineUpfront, loanAmount, gap, dpPercentage,
-    baseDurationDays, noticeDays, extensionDays, canExtend
+    baseDurationDays, noticeDays, extensionDays, canExtend, secureToken
   ];
 }

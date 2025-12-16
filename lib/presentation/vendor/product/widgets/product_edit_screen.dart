@@ -34,45 +34,85 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   late TextEditingController categoryCtrl;
   late TextEditingController codeCtrl;
 
-  // Permissions
-  bool _canEditDetails = true;
+  // --- 🔒 PERMISSIONS ---
+  // Identity: Name, Desc, Images, Category (Locked if Approved)
+  bool _canEditIdentity = true;
+  // Commerce: Price, Stock (Always Open if Approved)
+  bool _canEditCommerce = true;
+
   String? _helperMessage;
+
+  final List<String> _categories = [
+    "Mens Clothing",
+    "Womens Clothing",
+    "Kids & Baby",
+    "Shoes & Footwear",
+    "Bags & Handbags",
+    "Jewelry & Watches",
+    "Wigs & Hair",
+    "Accessories",
+    "Phones",
+    "Laptops",
+    "Gadgets",
+    "Home Appliances",
+    "Furniture",
+    "Health & Beauty",
+    "Food & Drinks",
+    "Automotive",
+  ];
 
   @override
   void initState() {
     super.initState();
     final p = widget.product;
-    
+
     // Init Controllers
     nameCtrl = TextEditingController(text: p.name);
     descCtrl = TextEditingController(text: p.description);
-    // Strip symbols for raw editing
-    priceCtrl = TextEditingController(text: p.priceText.replaceAll(RegExp(r'[^0-9.]'), ''));
+    priceCtrl = TextEditingController(
+      text: p.priceText.replaceAll(RegExp(r'[^0-9.]'), ''),
+    );
     stockCtrl = TextEditingController(text: p.stock.toString());
     categoryCtrl = TextEditingController(text: p.category);
     codeCtrl = TextEditingController(text: p.code);
-    
-    // Determine Logic
+
+    // --- DETERMINE PERMISSIONS ---
     if (p.status == ProductStatus.approved) {
-      _canEditDetails = false;
-      _helperMessage = "Active products cannot be renamed. Only stock can be updated.";
+      // ✅ APPROVED: Lock Identity, Allow Price/Stock change
+      _canEditIdentity = false;
+      _canEditCommerce = true;
+      _helperMessage =
+          "Product is Live. You can update Price & Stock, but Name/Description are locked.";
     } else if (p.status == ProductStatus.pending) {
-      _canEditDetails = false;
-      _helperMessage = "Product is under review.";
+      // ⏳ PENDING: Lock Everything
+      _canEditIdentity = false;
+      _canEditCommerce = false;
+      _helperMessage = "Product is under review and cannot be edited.";
     } else if (p.status == ProductStatus.rejected) {
-      _canEditDetails = true;
-      _helperMessage = "This product was rejected. Please fix issues and resubmit.";
+      // ❌ REJECTED: Unlock Everything
+      _canEditIdentity = true;
+      _canEditCommerce = true;
+      _helperMessage =
+          "This product was rejected. Please fix issues and resubmit.";
     }
   }
 
   @override
   void dispose() {
-    nameCtrl.dispose(); descCtrl.dispose(); priceCtrl.dispose();
-    stockCtrl.dispose(); categoryCtrl.dispose(); codeCtrl.dispose();
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    priceCtrl.dispose();
+    stockCtrl.dispose();
+    categoryCtrl.dispose();
+    codeCtrl.dispose();
     super.dispose();
   }
 
-  void _saveChanges(ImageBloc imageBloc, VendorProductsBloc productBloc, VendorProductsState state) {
+  void _saveChanges(
+    ImageBloc imageBloc,
+    VendorProductsBloc productBloc,
+    VendorProductsState state,
+  ) {
     if (!_formKey.currentState!.validate()) {
       showAppSnackbar("Please check your inputs", SnackbarType.error);
       return;
@@ -82,24 +122,6 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final price = double.tryParse(priceTxt) ?? 0.0;
     final stock = int.tryParse(stockCtrl.text) ?? 0;
 
-    // 🛑 LIMIT CHECK
-    // Logic: Calculate the CHANGE in value. 
-    // Old Value = OldPrice * OldStock. New Value = NewPrice * NewStock.
-    // Difference = NewValue - OldValue.
-    // If Difference > AvailableLimit -> Block.
-    
-    // Note: Since 'availableLimit' in state is "what's left", we need to see if the *increase* fits.
-    // However, keeping it simple: Total Value > (Limit + OldValue) is technically the check.
-    // But for UI simplicity, we can just check if new value is insane.
-    // Better logic: Let server handle complex checks. UI just warns.
-    
-    final totalValue = price * stock;
-    
-    // Rough Client-Side Check (Optional but helpful)
-    // We assume state.availableLimit is accurate. 
-    // If this product's value increased, we check if we have room.
-    // (Skipping complex math here to rely on Server Limit Check for safety)
-
     productBloc.add(
       VendorProductsEdit(
         productCode: widget.product.code,
@@ -108,7 +130,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         price: price,
         stock: stock,
         category: categoryCtrl.text,
-        newImages: _canEditDetails ? imageBloc.state.images : [],
+        // Only send new images if identity editing is allowed
+        newImages: _canEditIdentity ? imageBloc.state.images : [],
         existingImageUrls: widget.product.imageUrl,
         status: widget.product.status,
       ),
@@ -127,10 +150,15 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         listener: (context, state) {
           if (state.success == true && state.isSubmitting == false) {
             showAppSnackbar("Changes saved successfully", SnackbarType.success);
-            context.read<VendorProductsBloc>().add(const VendorProductsRefresh());
+            context.read<VendorProductsBloc>().add(
+              const VendorProductsRefresh(),
+            );
             Navigator.pop(context);
           } else if (state.success == false && state.isSubmitting == false) {
-            showAppSnackbar(state.errorMessage ?? "Failed to save", SnackbarType.error);
+            showAppSnackbar(
+              state.errorMessage ?? "Failed to save",
+              SnackbarType.error,
+            );
           }
         },
         child: BlocBuilder<VendorProductsBloc, VendorProductsState>(
@@ -143,7 +171,6 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
                 children: [
-                  
                   // 1. LIMIT HEADER (Live Feedback)
                   _buildLimitHeader(state.availableLimit),
 
@@ -158,12 +185,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Iconsax.info_circle, size: 20.sp, color: Colors.grey.shade600),
+                          Icon(
+                            Iconsax.info_circle,
+                            size: 20.sp,
+                            color: Colors.grey.shade600,
+                          ),
                           SizedBox(width: 12.w),
                           Expanded(
                             child: Text(
                               _helperMessage!,
-                              style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade700, height: 1.4),
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                color: Colors.grey.shade700,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ],
@@ -176,47 +211,47 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   Text("Product Code", style: _labelStyle()),
                   SizedBox(height: 6.h),
                   _buildInput(
-                    controller: codeCtrl, 
-                    hint: "Code", 
-                    enabled: false, 
-                    readOnly: true
+                    controller: codeCtrl,
+                    hint: "Code",
+                    enabled: false,
+                    readOnly: true,
                   ),
                   SizedBox(height: 20.h),
 
-                  // 4. IMAGES
+                  // 4. IMAGES (Identity)
                   Text("Product Photos", style: _labelStyle()),
                   SizedBox(height: 6.h),
                   BlocBuilder<ImageBloc, ImageState>(
                     builder: (context, imgState) {
                       return ImageUploadBox(
-                        editable: _canEditDetails, 
+                        editable: _canEditIdentity,
                         imagesUrl: widget.product.imageUrl,
-                      ); 
+                      );
                     },
                   ),
                   SizedBox(height: 24.h),
 
-                  // 5. DETAILS
+                  // 5. DETAILS (Identity)
                   Text("Details", style: _labelStyle()),
                   SizedBox(height: 6.h),
                   _buildInput(
-                    controller: nameCtrl, 
-                    hint: "Name", 
-                    enabled: _canEditDetails,
+                    controller: nameCtrl,
+                    hint: "Name",
+                    enabled: _canEditIdentity,
                     validator: (v) => v!.isEmpty ? "Required" : null,
                   ),
                   SizedBox(height: 12.h),
                   _buildInput(
-                    controller: descCtrl, 
-                    hint: "Description", 
-                    maxLines: 4, 
-                    enabled: _canEditDetails,
+                    controller: descCtrl,
+                    hint: "Description",
+                    maxLines: 4,
+                    enabled: _canEditIdentity,
                     validator: (v) => v!.isEmpty ? "Required" : null,
                   ),
 
                   SizedBox(height: 20.h),
 
-                  // 6. PRICE & STOCK
+                  // 6. PRICE & STOCK (Commerce - OPEN FOR APPROVED)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -230,17 +265,35 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             _buildInput(
                               controller: priceCtrl,
                               hint: "0.00",
-                              // Price locked if approved (security)
-                              enabled: _canEditDetails, 
+                              enabled:
+                                  _canEditCommerce, // ✅ Editable even if Approved
                               prefixIcon: Padding(
-                                padding: EdgeInsets.only(left: 14.w, right: 4.w), 
-                                child: Text("₦", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: _canEditDetails ? Colors.grey.shade600 : Colors.grey.shade400)),
+                                padding: EdgeInsets.only(
+                                  left: 14.w,
+                                  right: 4.w,
+                                ),
+                                child: Text(
+                                  "₦",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: _canEditCommerce
+                                        ? Colors.grey.shade600
+                                        : Colors.grey.shade400,
+                                  ),
+                                ),
                               ),
-                              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 0,
+                                minHeight: 0,
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
-                                CurrencyInputFormatter()
+                                CurrencyInputFormatter(),
                               ],
                             ),
                           ],
@@ -257,9 +310,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             _buildInput(
                               controller: stockCtrl,
                               hint: "Qty",
-                              enabled: true, // Always editable!
+                              enabled:
+                                  true, // ✅ Always editable (add/remove stock)
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                             ),
                           ],
                         ),
@@ -269,15 +325,24 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
                   SizedBox(height: 20.h),
 
-                  // 7. CATEGORY
+                  // 7. CATEGORY (Identity - Sheet Logic Added)
                   Text("Category", style: _labelStyle()),
                   SizedBox(height: 6.h),
-                  _buildInput(
-                    controller: categoryCtrl,
-                    hint: "Category",
-                    enabled: _canEditDetails,
-                    readOnly: true, 
-                    suffixIcon: _canEditDetails ? const Icon(Iconsax.arrow_down_1, size: 18) : null,
+                  GestureDetector(
+                    onTap: _canEditIdentity
+                        ? () => _showCategorySheet(context)
+                        : null,
+                    child: AbsorbPointer(
+                      child: _buildInput(
+                        controller: categoryCtrl,
+                        hint: "Category",
+                        enabled: _canEditIdentity,
+                        readOnly: true,
+                        suffixIcon: _canEditIdentity
+                            ? const Icon(Iconsax.arrow_down_1, size: 18)
+                            : null,
+                      ),
+                    ),
                   ),
 
                   SizedBox(height: 40.h),
@@ -287,16 +352,36 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     width: double.infinity,
                     height: 52.h,
                     child: ElevatedButton(
-                      onPressed: isLoading ? null : () => _saveChanges(imageBloc, productBloc, state),
+                      onPressed: isLoading
+                          ? null
+                          : () => _saveChanges(imageBloc, productBloc, state),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: KorraColors.brand,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                        disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14.r),
+                        ),
+                        disabledBackgroundColor: KorraColors.brand.withOpacity(
+                          0.6,
+                        ),
                       ),
-                      child: isLoading 
-                        ? SizedBox(width: 24.w, height: 24.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Text("Save Changes", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                      child: isLoading
+                          ? SizedBox(
+                              width: 24.w,
+                              height: 24.w,
+                              child: const CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              "Save Changes",
+                              style: GoogleFonts.inter(
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                   SizedBox(height: 32.h),
@@ -312,11 +397,6 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // --- WIDGET HELPERS ---
 
   Widget _buildLimitHeader(double availableLimit) {
-    // Basic Estimation Logic
-    // In edit mode, we are modifying existing limit usage.
-    // Calculating "Exact" availability is complex client-side.
-    // We just show "Remaining" here as a guide.
-    
     return Container(
       margin: EdgeInsets.only(bottom: 24.h),
       padding: EdgeInsets.all(16.r),
@@ -379,9 +459,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       inputFormatters: inputFormatters,
       validator: validator,
       style: GoogleFonts.inter(
-        fontSize: 15.sp, 
-        fontWeight: FontWeight.w600, 
-        color: enabled ? const Color(0xFF101828) : Colors.grey.shade500
+        fontSize: 15.sp,
+        fontWeight: FontWeight.w600,
+        color: enabled ? const Color(0xFF101828) : Colors.grey.shade500,
       ),
       cursorColor: KorraColors.brand,
       decoration: InputDecoration(
@@ -392,10 +472,85 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         prefixIconConstraints: prefixIconConstraints,
         suffixIcon: suffixIcon,
         contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFEAECF0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFEAECF0))),
-        disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Colors.transparent)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: KorraColors.brand, width: 1.5)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: Colors.transparent),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: KorraColors.brand, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  void _showCategorySheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            SizedBox(height: 12.h),
+            Container(
+              width: 40.w,
+              height: 4.h,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              "Select Category",
+              style: GoogleFonts.inter(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: 16.h),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollController,
+                itemCount: _categories.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: Color(0xFFF2F4F7)),
+                itemBuilder: (context, index) {
+                  final cat = _categories[index];
+                  return ListTile(
+                    title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
+                    onTap: () {
+                      setState(() => categoryCtrl.text = cat);
+                      Navigator.pop(context);
+                    },
+                    trailing: categoryCtrl.text == cat
+                        ? const Icon(
+                            Iconsax.tick_circle,
+                            color: KorraColors.brand,
+                          )
+                        : null,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

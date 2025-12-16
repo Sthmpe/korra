@@ -98,27 +98,12 @@ class _HomePageState extends State<HomePage> {
               BlocListener<LinkBloc, LinkState>(
                 listenWhen: (p, c) => p.status != c.status,
                 listener: (context, state) {
-                  if (state.status == LinkStatus.empty) {
-                    showKorraFailureSheetCustomer(
-                      context,
-                      title: 'Empty Link',
-                      message: 'Please enter a link to proceed.',
-                      onCancel: () => Get.back(),
-                    );
-                  }
-                  if (state.status == LinkStatus.invalid) {
-                    showKorraFailureSheetCustomer(
-                      context,
-                      title: 'Invalid Link',
-                      message: 'The link you provided is invalid.',
-                      onCancel: () => Get.back(),
-                    );
-                  } 
                   if (state.status == LinkStatus.loaded) {
                     final product = state.productFetch ?? ProductFetchResult.empty();
                     Get.to(() => CreatePlanScreen(
                       product: product,
                       customerRepo: widget.customerRepo,
+                      customer: customer!, // Non-null due to stream state
                       customerUid: widget.customerUid,
                       walletBalance: currentBalance,
                       onJumpToHome: () => widget.onJumpTo(0),
@@ -252,6 +237,46 @@ class _HomePageState extends State<HomePage> {
                           BlocBuilder<LinkBloc, LinkState>(
                             builder: (context, state) {
                               final showLoader = state.status == LinkStatus.validating || state.status == LinkStatus.loadingProduct;
+
+                              if (state.status == LinkStatus.empty) {
+                                return Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
+                                      SizedBox(width: 8.w),
+                                      Expanded(child: Text('Please enter a link to proceed', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              if (state.status == LinkStatus.invalid) {
+                                return Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
+                                      SizedBox(width: 8.w),
+                                      Expanded(child: Text('The link you provided is invalid', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              if (state.status == LinkStatus.failed) {
+                                return Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
+                                      SizedBox(width: 8.w),
+                                      Expanded(child: Text(state.message ?? 'Error occurred', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
+                                    ],
+                                  ),
+                                );
+                              }
+
                               if (!showLoader) return const SizedBox.shrink();
                               
                               return Padding(
@@ -260,44 +285,9 @@ class _HomePageState extends State<HomePage> {
                                   children: [
                                     SizedBox(width: 16.w, height: 16.w, child: const CircularProgressIndicator(strokeWidth: 2, color: KorraColors.brand)),
                                     SizedBox(width: 8.w),
-                                    Expanded(child: Text(state.message ?? '', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, fontStyle: FontStyle.italic, color: KorraColors.textMuted))),
+                                    Expanded(child: Text(state.message ?? 'Processing...', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, fontStyle: FontStyle.italic, color: KorraColors.textMuted))),
                                   ],
                                 ),
-                              );
-                            },
-                          ),
-
-                          SizedBox(height: 16.h),
-
-                          // D. VENDORS
-                          BlocBuilder<HomeBloc, HomeState>(
-                            builder: (context, state) {
-                              if (state.vendors.isEmpty) return const SizedBox.shrink();
-                              return Column(
-                                children: [
-                                  SectionHeader(title: 'Your vendors', actionText: ''),
-                                  SizedBox(
-                                    height: 96.h,
-                                    child: ListView.separated(
-                                      padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: state.vendors.length,
-                                      separatorBuilder: (_, __) => SizedBox(width: 16.w),
-                                      itemBuilder: (_, i) {
-                                        final v = state.vendors[i];
-                                        return VendorChip(
-                                          name: v.name,
-                                          avatarUrl: v.avatarUrl,
-                                          onOpen: () {},
-                                          onInstagram: () {},
-                                          onRemove: () {},
-                                          onWeb: () {},
-                                          onWhatsapp: () {},
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
                               );
                             },
                           ),

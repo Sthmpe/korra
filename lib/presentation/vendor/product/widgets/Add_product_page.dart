@@ -44,29 +44,42 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // --- LOGIC STATE ---
   ProductModelType _selectedModel = ProductModelType.strict;
-  String _selectedStrictPolicy = "50% Refund";
-  String _selectedDirectPolicy = "100% Refund";
-  bool _isExtensionEnabled = false; 
+  String _selectedStrictPolicy = "50% Refund"; // Default for Strict
+
+  // For Direct, policy is fixed to Store Credit, but we track extension toggle
+  bool _isDirectExtensionEnabled = true;
+
   bool _termsAccepted = false;
-  
+
   // DYNAMIC DISPLAY STRINGS
-  bool _canOfferExtension = false;
-  String _baseDuration = "15 Days";
-  String _noticePeriod = "1 Day";
-  String _extensionDuration = "0 Days";
-  String _totalMaxTime = "16 Days";
+  String _baseDuration = "14 Days";
+  String _noticePeriod = "3 Days";
+  String _extensionDuration = "0 Days"; // Visual only
+  String _totalMaxTime = "17 Days";
+  bool _priceAllowsExtension = false;
 
   final List<String> _categories = [
-    "Mens Clothing", "Womens Clothing", "Kids & Baby", "Shoes & Footwear",
-    "Bags & Handbags", "Jewelry & Watches", "Wigs & Hair", "Accessories",
-    "Phones", "Laptops", "Gadgets", "Home Appliances", "Furniture", 
-    "Health & Beauty", "Food & Drinks", "Automotive" 
+    "Mens Clothing",
+    "Womens Clothing",
+    "Kids & Baby",
+    "Shoes & Footwear",
+    "Bags & Handbags",
+    "Jewelry & Watches",
+    "Wigs & Hair",
+    "Accessories",
+    "Phones",
+    "Laptops",
+    "Gadgets",
+    "Home Appliances",
+    "Furniture",
+    "Health & Beauty",
+    "Food & Drinks",
+    "Automotive",
   ];
 
   @override
   void initState() {
     super.initState();
-    // Listen to price changes to update Duration & Extension logic real-time
     _priceCtrl.addListener(_updatePlanLogic);
   }
 
@@ -81,144 +94,162 @@ class _AddProductPageState extends State<AddProductPage> {
     super.dispose();
   }
 
-  // --- 🧠 THE UPDATED LOGIC BRAIN ---
+  // --- 🧠 CORE LOGIC ENGINE ---
   void _updatePlanLogic() {
-    final cleanPrice = double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
-    
-    int baseDays = 15;
-    int noticeDays = 1;
-    int extDays = 0;
-    bool priceAllowsExt = false;
-    
-    // NEW: Invalid State Flag
-    bool isPriceTooHigh = false; 
+    final cleanPrice =
+        double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
 
+    int baseDays = 14;
+    int noticeDays = 3;
+    int extDays = 0;
+    bool allowExt = false;
+
+    bool isPriceTooHigh = false;
+
+    // 1. Determine Base Duration & Max Extension from Price Table
     if (cleanPrice > 100000) {
-      // 🛑 Over 100k Case
       isPriceTooHigh = true;
       _totalMaxTime = "--";
       _baseDuration = "--";
-      _noticePeriod = "--";
-    } 
-    else if (cleanPrice <= 7000) {
-      baseDays = 15; noticeDays = 1; priceAllowsExt = false;
+      return; // Stop calc
+    } else if (cleanPrice <= 7000) {
+      baseDays = 14;
+      allowExt = false;
+      extDays = 0;
     } else if (cleanPrice <= 15000) {
-      baseDays = 25; noticeDays = 2; priceAllowsExt = false;
+      baseDays = 21;
+      allowExt = false;
+      extDays = 0;
     } else if (cleanPrice <= 20000) {
-      baseDays = 30; noticeDays = 3; extDays = 7; priceAllowsExt = true;
+      baseDays = 21;
+      allowExt = true;
+      extDays = 7;
     } else if (cleanPrice <= 25000) {
-      baseDays = 30; noticeDays = 3; extDays = 15; priceAllowsExt = true;
+      baseDays = 25;
+      allowExt = true;
+      extDays = 7;
     } else if (cleanPrice <= 35000) {
-      baseDays = 45; noticeDays = 5; extDays = 15; priceAllowsExt = true;
+      baseDays = 30;
+      allowExt = true;
+      extDays = 7;
     } else if (cleanPrice <= 50000) {
-      baseDays = 45; noticeDays = 10; extDays = 21; priceAllowsExt = true;
+      baseDays = 35;
+      allowExt = true;
+      extDays = 14;
     } else if (cleanPrice <= 75000) {
-      baseDays = 90; noticeDays = 10; extDays = 21; priceAllowsExt = true;
+      baseDays = 45;
+      allowExt = true;
+      extDays = 14;
     } else {
-      baseDays = 90; noticeDays = 10; extDays = 30; priceAllowsExt = true;
+      // 75k - 100k
+      baseDays = 56;
+      allowExt = true;
+      extDays = 14;
     }
 
-    // 2. APPLY "DIRECT MODEL" OVERRIDE
-    // Logic: If Direct Model AND Extension is Disabled -> Notice is fixed to 3 Days
+    // 2. Apply Model Logic
     if (_selectedModel == ProductModelType.direct) {
-      if (!_isExtensionEnabled) {
-        noticeDays = 3; // ✅ The override you requested
-        extDays = 0;    // No extension
-      } 
-      // If extension IS enabled in Direct, we keep the table values
+      // Direct Model Rules:
+      // - Extensions are always 14 days if enabled (or match strict table logic if preferred)
+      // - Let's stick to your table logic for consistency:
+      if (!allowExt) {
+        // Even Direct can't extend cheap items
+        _isDirectExtensionEnabled = false;
+        extDays = 0;
+      } else {
+        // If price allows, check user toggle
+        if (!_isDirectExtensionEnabled) {
+          extDays = 0;
+        }
+      }
     } else {
-      // STRICT MODEL: Extension is forced if price allows
-      if (!priceAllowsExt) extDays = 0;
+      // Strict Model Rules:
+      // - Extensions are fixed based on price table
+      if (!allowExt) extDays = 0;
     }
 
-    // 3. CALCULATE TOTAL
+    // 3. Calculate Total
     int totalDays = baseDays + noticeDays + extDays;
 
-    if (isPriceTooHigh) {
-        // Force disable extension toggles if price is invalid
-        _canOfferExtension = false;
-        _isExtensionEnabled = false;
-    }
-
     setState(() {
-      _canOfferExtension = priceAllowsExt;
-      
-      // Update Strings
+      _priceAllowsExtension = allowExt;
+
       _baseDuration = "$baseDays Days";
       _noticePeriod = "$noticeDays Days";
-      _extensionDuration = "$extDays Days";
+      _extensionDuration = allowExt ? "$extDays Days" : "None";
       _totalMaxTime = "$totalDays Days";
-      
-      // Safety: If price drops and extension no longer allowed, turn off toggle
-      if (!priceAllowsExt) _isExtensionEnabled = false;
     });
   }
 
-  void _saveProduct(ImageBloc imageBloc, VendorProductsBloc productBloc, VendorProductsState state) {
-    // 1. Form Validation
+  void _saveProduct(
+    ImageBloc imageBloc,
+    VendorProductsBloc productBloc,
+    VendorProductsState state,
+  ) {
     if (!_formKey.currentState!.validate()) {
       showAppSnackbar("Please check your inputs.", SnackbarType.error);
       return;
     }
 
-    // 2. Image Validation
     if (imageBloc.state.images.isEmpty) {
-      showAppSnackbar("Please add at least one product image.", SnackbarType.error);
+      showAppSnackbar(
+        "Please add at least one product image.",
+        SnackbarType.error,
+      );
       return;
     }
 
-    // 3. Terms Validation
     if (!_termsAccepted) {
-      showAppSnackbar("You must agree to the cancellation terms.", SnackbarType.error);
+      showAppSnackbar("You must agree to the terms.", SnackbarType.error);
       return;
     }
 
-    // 4. Parse Values
     final priceTxt = _priceCtrl.text.replaceAll(',', '');
     final price = double.tryParse(priceTxt) ?? 0.0;
     final stock = int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
-    
-    // 🛑 RULE 1: MAX PRICE CAP (₦100,000)
+
+    // Rule 1: Cap
     if (price > 100000) {
       showAppSnackbar(
-        "Single product price cannot exceed ₦100,000.", 
-        SnackbarType.error
+        "Single product price cannot exceed ₦100,000.",
+        SnackbarType.error,
       );
-      return; // Stop execution
+      return;
     }
 
-    // 🛑 RULE 2: RESERVATION LIMIT CHECK
+    // Rule 2: Limit
     final totalValue = price * stock;
     if (totalValue > state.availableLimit) {
-      // Format numbers for a clear error message
-      final formattedTotal = NumberFormat.compact().format(totalValue);
-      final formattedLimit = NumberFormat.compact().format(state.availableLimit);
-      
       showAppSnackbar(
-        "Total value (₦$formattedTotal) exceeds your available limit (₦$formattedLimit). Reduce stock or price.", 
-        SnackbarType.error
+        "Total value exceeds your available limit.",
+        SnackbarType.error,
       );
-      return; // Stop execution
+      return;
     }
 
-    // 🛑 RULE 3: DIRECT MODEL CHECKS
+    // Rule 3: Direct Down Payment
     if (_selectedModel == ProductModelType.direct) {
-       final dp = double.tryParse(_downPaymentCtrl.text.replaceAll(',', '')) ?? 0;
-       
-       if (dp >= price) {
-         showAppSnackbar("Down payment must be less than the product price.", SnackbarType.error);
-         return;
-       }
-       if (dp <= 0) {
-         showAppSnackbar("Please enter a valid down payment.", SnackbarType.error);
-         return;
-       }
+      final dp =
+          double.tryParse(_downPaymentCtrl.text.replaceAll(',', '')) ?? 0;
+      if (dp >= price) {
+        showAppSnackbar(
+          "Down payment must be less than price.",
+          SnackbarType.error,
+        );
+        return;
+      }
+      if (dp <= 0) {
+        showAppSnackbar("Enter valid down payment.", SnackbarType.error);
+        return;
+      }
     }
 
-    // ✅ If all pass, proceed to Bloc
-    final finalPolicy = _selectedModel == ProductModelType.strict 
-        ? _selectedStrictPolicy 
-        : _selectedDirectPolicy;
+    // Prepare Policy
+    // Strict: User Choice (50% / Store Credit)
+    // Direct: Always "Store Credit"
+    final finalPolicy = _selectedModel == ProductModelType.strict
+        ? _selectedStrictPolicy
+        : "Store Credit"; // Forced for Direct
 
     productBloc.add(
       VendorProductsAdd(
@@ -231,11 +262,14 @@ class _AddProductPageState extends State<AddProductPage> {
         termsAccepted: _termsAccepted,
         modelType: _selectedModel,
         cancellationPolicy: finalPolicy,
-        extensionsEnabled: _selectedModel == ProductModelType.strict 
-            ? _canOfferExtension 
-            : (_canOfferExtension && _isExtensionEnabled),
-        directDownPayment: _selectedModel == ProductModelType.direct 
-            ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', '')) 
+        // Extension Logic:
+        // Strict: Automatic if price allows
+        // Direct: User Toggle if price allows
+        extensionsEnabled: _selectedModel == ProductModelType.strict
+            ? _priceAllowsExtension
+            : (_priceAllowsExtension && _isDirectExtensionEnabled),
+        directDownPayment: _selectedModel == ProductModelType.direct
+            ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
             : null,
       ),
     );
@@ -251,12 +285,14 @@ class _AddProductPageState extends State<AddProductPage> {
       appBar: const KorraHeader(title: "New Product", showLeadingIcon: true),
       body: BlocListener<VendorProductsBloc, VendorProductsState>(
         listener: (context, state) {
-          if (state.success == true && state.isSubmitting == false) {
-            showAppSnackbar("Product created successfully!", SnackbarType.success);
-            context.read<VendorProductsBloc>().add(const VendorProductsRefresh());
+          if (state.success == true && !state.isSubmitting!) {
+            showAppSnackbar("Product created!", SnackbarType.success);
+            context.read<VendorProductsBloc>().add(
+              const VendorProductsRefresh(),
+            );
             Navigator.pop(context);
-          } else if (state.success == false && state.isSubmitting == false) {
-            showAppSnackbar(state.errorMessage ?? "Failed to create product", SnackbarType.error);
+          } else if (state.success == false && !state.isSubmitting!) {
+            showAppSnackbar(state.errorMessage ?? "Failed", SnackbarType.error);
           }
         },
         child: BlocBuilder<VendorProductsBloc, VendorProductsState>(
@@ -270,12 +306,16 @@ class _AddProductPageState extends State<AddProductPage> {
                 padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
                 children: [
                   _buildLimitHeader(state.availableLimit),
+
                   // 1. IMAGES
                   Text("Product Photos", style: _labelStyle()),
                   SizedBox(height: 8.h),
                   BlocBuilder<ImageBloc, ImageState>(
                     builder: (context, imgState) {
-                      return ImageUploadBox(editable: true, imagesUrl: const []); 
+                      return ImageUploadBox(
+                        editable: true,
+                        imagesUrl: const [],
+                      );
                     },
                   ),
                   SizedBox(height: 24.h),
@@ -285,10 +325,14 @@ class _AddProductPageState extends State<AddProductPage> {
                   SizedBox(height: 8.h),
                   _buildInput(controller: _nameCtrl, hint: "Product Name"),
                   SizedBox(height: 12.h),
-                  _buildInput(controller: _descCtrl, hint: "Description", maxLines: 3),
+                  _buildInput(
+                    controller: _descCtrl,
+                    hint: "Description",
+                    maxLines: 3,
+                  ),
                   SizedBox(height: 24.h),
 
-                  // 3. PRICE & DURATION (Grid)
+                  // 3. PRICE & DURATION GRID
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -303,25 +347,42 @@ class _AddProductPageState extends State<AddProductPage> {
                               controller: _priceCtrl,
                               hint: "0.00",
                               prefixIcon: Padding(
-                                padding: EdgeInsets.only(left: 14.w, right: 4.w), 
-                                child: Text("₦", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                                padding: EdgeInsets.only(
+                                  left: 14.w,
+                                  right: 4.w,
+                                ),
+                                child: Text(
+                                  "₦",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
                               ),
-                              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 0,
+                                minHeight: 0,
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                CurrencyInputFormatter(),
+                              ],
                             ),
                           ],
                         ),
                       ),
                       SizedBox(width: 12.w),
-                      // DURATION DISPLAY (Read Only, calculated from Price)
-                      // Duration Readout
                       Expanded(
                         flex: 4,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Max Duration", style: _labelStyle()),
+                            Text("Max Time", style: _labelStyle()),
                             SizedBox(height: 8.h),
                             Container(
                               height: 48.h,
@@ -330,11 +391,17 @@ class _AddProductPageState extends State<AddProductPage> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF2F4F7),
                                 borderRadius: BorderRadius.circular(12.r),
-                                border: Border.all(color: const Color(0xFFEAECF0)),
+                                border: Border.all(
+                                  color: const Color(0xFFEAECF0),
+                                ),
                               ),
                               child: Text(
-                                _baseDuration,
-                                style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                                _totalMaxTime,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
                               ),
                             ),
                           ],
@@ -342,10 +409,10 @@ class _AddProductPageState extends State<AddProductPage> {
                       ),
                     ],
                   ),
-                  
+
                   SizedBox(height: 12.h),
-                  
-                  // Stock & Category Row
+
+                  // STOCK & CATEGORY
                   Row(
                     children: [
                       Expanded(
@@ -358,7 +425,9 @@ class _AddProductPageState extends State<AddProductPage> {
                               controller: _stockCtrl,
                               hint: "Qty",
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                             ),
                           ],
                         ),
@@ -378,23 +447,36 @@ class _AddProductPageState extends State<AddProductPage> {
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF9FAFB),
                                   borderRadius: BorderRadius.circular(12.r),
-                                  border: Border.all(color: const Color(0xFFEAECF0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFEAECF0),
+                                  ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        _categoryCtrl.text.isEmpty ? "Select" : _categoryCtrl.text,
+                                        _categoryCtrl.text.isEmpty
+                                            ? "Select"
+                                            : _categoryCtrl.text,
                                         style: GoogleFonts.inter(
                                           fontSize: 14.sp,
-                                          fontWeight: _categoryCtrl.text.isEmpty ? FontWeight.w400 : FontWeight.w600,
-                                          color: _categoryCtrl.text.isEmpty ? Colors.grey.shade400 : const Color(0xFF101828),
+                                          fontWeight: _categoryCtrl.text.isEmpty
+                                              ? FontWeight.w400
+                                              : FontWeight.w600,
+                                          color: _categoryCtrl.text.isEmpty
+                                              ? Colors.grey.shade400
+                                              : const Color(0xFF101828),
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    Icon(Iconsax.arrow_down_1, size: 16.sp, color: Colors.grey),
+                                    Icon(
+                                      Iconsax.arrow_down_1,
+                                      size: 16.sp,
+                                      color: Colors.grey,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -406,7 +488,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   ),
 
                   // ----------------------------------------------------
-                  // DYNAMIC TIMELINE INFO
+                  // TIMELINE INFO
                   // ----------------------------------------------------
                   SizedBox(height: 20.h),
                   Container(
@@ -419,38 +501,36 @@ class _AddProductPageState extends State<AddProductPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("Timeline Breakdown", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.black87)),
-                            if (_selectedModel == ProductModelType.direct && !_isExtensionEnabled)
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4.r)),
-                                child: Text("Direct Mode", style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.blue.shade800, fontWeight: FontWeight.w600)),
-                              )
-                          ],
+                        Text(
+                          "Timeline Logic",
+                          style: GoogleFonts.inter(
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
                         ),
                         SizedBox(height: 12.h),
                         _buildTimelineRow("Base Duration", _baseDuration),
-                        _buildTimelineRow("Notice Period", _noticePeriod, isAlert: true),
-                        
-                        // Only show extension row if it actually adds days
-                        if (_selectedModel == ProductModelType.strict && _canOfferExtension)
-                           _buildTimelineRow("Extension", _extensionDuration),
-                        if (_selectedModel == ProductModelType.direct && _isExtensionEnabled)
-                           _buildTimelineRow("Extension", _extensionDuration),
-
-                        Divider(height: 24.h),
-                        _buildTimelineRow("Total Max Time", _totalMaxTime, isBold: true),
-                        
-                        SizedBox(height: 12.h),
-                        Text(
-                          _selectedModel == ProductModelType.direct && !_isExtensionEnabled
-                            ? "Standard 3-day notice applies because extensions are disabled."
-                            : "Notice Period: The customer has $_noticePeriod to respond. If no response, plan defaults to Store Credit.",
-                          style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade600, height: 1.4, fontStyle: FontStyle.italic),
+                        _buildTimelineRow(
+                          "Notice Period",
+                          _noticePeriod,
+                          isAlert: true,
                         ),
+                        _buildTimelineRow(
+                          "Potential Extension",
+                          _extensionDuration,
+                        ),
+                        if (_priceAllowsExtension) ...[
+                          SizedBox(height: 4.h),
+                          Text(
+                            "* Extension unlocks only if customer pays 80% of total.",
+                            style: GoogleFonts.inter(
+                              fontSize: 10.sp,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -459,7 +539,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   const Divider(color: Color(0xFFEAECF0)),
                   SizedBox(height: 24.h),
 
-                  // 4. MODEL SELECTION (The Complex Part)
+                  // 4. MODEL SELECTION
                   Text("Sales Model", style: _labelStyle()),
                   SizedBox(height: 12.h),
                   Container(
@@ -480,7 +560,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
                   // 5. DYNAMIC MODEL SETTINGS
                   AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 0),
+                    duration: const Duration(milliseconds: 200),
                     child: _selectedModel == ProductModelType.strict
                         ? _buildStrictSettings()
                         : _buildDirectSettings(),
@@ -490,29 +570,42 @@ class _AddProductPageState extends State<AddProductPage> {
 
                   // 6. TERMS
                   GestureDetector(
-                    onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+                    onTap: () =>
+                        setState(() => _termsAccepted = !_termsAccepted),
                     child: Container(
                       padding: EdgeInsets.all(12.r),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: _termsAccepted ? KorraColors.brand : const Color(0xFFEAECF0),
+                          color: _termsAccepted
+                              ? KorraColors.brand
+                              : const Color(0xFFEAECF0),
                         ),
                         borderRadius: BorderRadius.circular(12.r),
-                        color: _termsAccepted ? const Color(0xFFFFF4ED) : Colors.white,
+                        color: _termsAccepted
+                            ? const Color(0xFFFFF4ED)
+                            : Colors.white,
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            _termsAccepted ? Iconsax.tick_square : Iconsax.square,
+                            _termsAccepted
+                                ? Iconsax.tick_square
+                                : Iconsax.square,
                             size: 20.sp,
-                            color: _termsAccepted ? KorraColors.brand : Colors.grey,
+                            color: _termsAccepted
+                                ? KorraColors.brand
+                                : Colors.grey,
                           ),
                           SizedBox(width: 12.w),
                           Expanded(
                             child: Text(
-                              "I accept the cancellation terms and agree to offer extensions if requested by the customer.",
-                              style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF475467), height: 1.4),
+                              "I confirm this item is in stock and reserved for Korra customers.",
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                color: const Color(0xFF475467),
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ],
@@ -527,16 +620,36 @@ class _AddProductPageState extends State<AddProductPage> {
                     width: double.infinity,
                     height: 52.h,
                     child: ElevatedButton(
-                      onPressed: isLoading ? null : () => _saveProduct(imageBloc, productBloc, state),
+                      onPressed: isLoading
+                          ? null
+                          : () => _saveProduct(imageBloc, productBloc, state),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: KorraColors.brand,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                        disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14.r),
+                        ),
+                        disabledBackgroundColor: KorraColors.brand.withOpacity(
+                          0.6,
+                        ),
                       ),
-                      child: isLoading 
-                        ? SizedBox(width: 24.w, height: 24.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Text("Create Product", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                      child: isLoading
+                          ? SizedBox(
+                              width: 24.w,
+                              height: 24.w,
+                              child: const CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              "Create Product",
+                              style: GoogleFonts.inter(
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                   SizedBox(height: 40.h),
@@ -548,7 +661,6 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
     );
   }
-
   // --- MODEL SPECIFIC WIDGETS ---
 
   Widget _buildStrictSettings() {
@@ -557,9 +669,9 @@ class _AddProductPageState extends State<AddProductPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildInfoBox(
-          "Strict Model", 
-          "Down payments are auto-calculated by Korra. You only set the cancellation penalty.",
-          Iconsax.shield_tick
+          "Strict Model",
+          "System handles payments. If customer defaults, you keep the penalty fee.",
+          Iconsax.shield_tick,
         ),
         SizedBox(height: 20.h),
         Text("If customer defaults, you offer:", style: _labelStyle()),
@@ -569,19 +681,16 @@ class _AddProductPageState extends State<AddProductPage> {
           items: ["50% Refund", "Store Credit"],
           onChanged: (v) => setState(() => _selectedStrictPolicy = v!),
         ),
-        SizedBox(height: 20.h),
-        // Strict Extension Info (Auto)
-        Row(
-          children: [
-            Icon(_canOfferExtension ? Iconsax.tick_circle : Iconsax.close_circle, 
-                 size: 20.sp, 
-                 color: _canOfferExtension ? Colors.green : Colors.grey),
-            SizedBox(width: 8.w),
-            Text(
-              _canOfferExtension ? "Extensions are available for this price." : "No extensions available for this price range.",
-              style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-            ),
-          ],
+        SizedBox(height: 12.h),
+        Text(
+          _priceAllowsExtension
+              ? "Extensions: Automatic (Available at 80% payment)"
+              : "Extensions: Not available for this price range.",
+          style: GoogleFonts.inter(
+            fontSize: 12.sp,
+            color: Colors.grey.shade500,
+            fontStyle: FontStyle.italic,
+          ),
         ),
       ],
     );
@@ -595,72 +704,94 @@ class _AddProductPageState extends State<AddProductPage> {
         Container(
           padding: EdgeInsets.all(12.r),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF4ED), // Warning Orange
+            color: const Color(0xFFFFF4ED),
             borderRadius: BorderRadius.circular(8.r),
             border: Border.all(color: const Color(0xFFFFE0D0)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Iconsax.warning_2, size: 20.sp, color: const Color(0xFFA54600)),
+              Icon(
+                Iconsax.warning_2,
+                size: 20.sp,
+                color: const Color(0xFFA54600),
+              ),
               SizedBox(width: 10.w),
               Expanded(
                 child: Text(
-                  "Recommended for repeat customers only. For new customers, use Strict Lock for better security.",
-                  style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF344054), height: 1.4),
+                  "Flexible Plan. Refunds are strictly 'Store Credit' to protect you from cancellations.",
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    color: const Color(0xFF344054),
+                    height: 1.4,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         SizedBox(height: 20.h),
-        
+
         Text("Required Down Payment", style: _labelStyle()),
         SizedBox(height: 8.h),
         _buildInput(
           controller: _downPaymentCtrl,
           hint: "0.00",
           prefixIcon: Padding(
-            padding: EdgeInsets.only(left: 14.w, right: 4.w), 
-            child: Text("₦", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+            padding: EdgeInsets.only(left: 14.w, right: 4.w),
+            child: Text(
+              "₦",
+              style: GoogleFonts.inter(
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            CurrencyInputFormatter(),
+          ],
         ),
 
-        SizedBox(height: 20.h),
-        Text("Refund Policy (If Defaulted)", style: _labelStyle()),
-        SizedBox(height: 8.h),
-        _buildDropdown(
-          value: _selectedDirectPolicy,
-          items: ["100% Refund", "90% Refund", "80% Refund", "70% Refund", "60% Refund", "50% Refund", "Store Credit"],
-          onChanged: (v) => setState(() => _selectedDirectPolicy = v!),
-        ),
-
-        if (_canOfferExtension) ...[
+        if (_priceAllowsExtension) ...[
           SizedBox(height: 20.h),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             activeColor: KorraColors.brand,
-            title: Text("Allow Extension?", style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+            title: Text(
+              "Allow Extension?",
+              style: GoogleFonts.inter(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             subtitle: Text(
-              "If enabled, final resolve defaults to 50% Refund or Store Credit.",
+              "If enabled, gives customer extra time if they reach 80% payment.",
               style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey),
             ),
-            value: _isExtensionEnabled,
+            value: _isDirectExtensionEnabled,
             onChanged: (val) {
-               setState(() => _isExtensionEnabled = val);
-               _updatePlanLogic(); // ✅ RE-CALCULATE TIMELINE
+              setState(() => _isDirectExtensionEnabled = val);
+              _updatePlanLogic(); // Re-calc total time
             },
           ),
         ] else ...[
           SizedBox(height: 12.h),
           Text(
-            "Extensions not available for this price range.",
-            style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
-          )
-        ]
+            "Extensions disabled for this price range.",
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: Colors.grey.shade500,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -669,18 +800,24 @@ class _AddProductPageState extends State<AddProductPage> {
 
   Widget _buildLimitHeader(double availableLimit) {
     // Parse current price input
-    final priceInput = double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0.0;
+    final priceInput =
+        double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0.0;
     final stockInput = int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
-    final totalValue = priceInput * (stockInput > 0 ? stockInput : 1); // Estimate value
+    final totalValue =
+        priceInput * (stockInput > 0 ? stockInput : 1); // Estimate value
 
     final isExceeded = totalValue > availableLimit;
-    final progress = (availableLimit > 0) ? (totalValue / availableLimit).clamp(0.0, 1.0) : 0.0;
+    final progress = (availableLimit > 0)
+        ? (totalValue / availableLimit).clamp(0.0, 1.0)
+        : 0.0;
 
     return Container(
       margin: EdgeInsets.only(bottom: 24.h),
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
-        color: isExceeded ? const Color(0xFFFEF3F2) : const Color(0xFFF0F9FF), // Red or Blue bg
+        color: isExceeded
+            ? const Color(0xFFFEF3F2)
+            : const Color(0xFFF0F9FF), // Red or Blue bg
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(
           color: isExceeded ? const Color(0xFFFECDCA) : const Color(0xFFB2DDFF),
@@ -697,7 +834,9 @@ class _AddProductPageState extends State<AddProductPage> {
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w600,
-                  color: isExceeded ? const Color(0xFFB42318) : const Color(0xFF004EEB),
+                  color: isExceeded
+                      ? const Color(0xFFB42318)
+                      : const Color(0xFF004EEB),
                 ),
               ),
               Text(
@@ -705,13 +844,15 @@ class _AddProductPageState extends State<AddProductPage> {
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w700,
-                  color: isExceeded ? const Color(0xFFB42318) : const Color(0xFF004EEB),
+                  color: isExceeded
+                      ? const Color(0xFFB42318)
+                      : const Color(0xFF004EEB),
                 ),
               ),
             ],
           ),
           SizedBox(height: 8.h),
-          
+
           // Progress Bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4.r),
@@ -724,12 +865,16 @@ class _AddProductPageState extends State<AddProductPage> {
               minHeight: 6.h,
             ),
           ),
-          
+
           if (isExceeded) ...[
             SizedBox(height: 8.h),
             Row(
               children: [
-                Icon(Iconsax.warning_2, size: 14.sp, color: const Color(0xFFB42318)),
+                Icon(
+                  Iconsax.warning_2,
+                  size: 14.sp,
+                  color: const Color(0xFFB42318),
+                ),
                 SizedBox(width: 6.w),
                 Expanded(
                   child: Text(
@@ -737,40 +882,45 @@ class _AddProductPageState extends State<AddProductPage> {
                     style: GoogleFonts.inter(
                       fontSize: 11.sp,
                       color: const Color(0xFFB42318),
-                      fontWeight: FontWeight.w500
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
               ],
-            )
-          ]
+            ),
+          ],
         ],
       ),
     );
   }
 
   // --- HELPER FOR TIMELINE ---
-  Widget _buildTimelineRow(String label, String value, {bool isBold = false, bool isAlert = false}) {
+  Widget _buildTimelineRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    bool isAlert = false,
+  }) {
     return Padding(
       padding: EdgeInsets.only(bottom: 6.h),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label, 
+            label,
             style: GoogleFonts.inter(
-              fontSize: 13.sp, 
+              fontSize: 13.sp,
               color: isAlert ? const Color(0xFFA54600) : Colors.grey.shade600,
-              fontWeight: isAlert ? FontWeight.w600 : FontWeight.w500
-            )
+              fontWeight: isAlert ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
           Text(
-            value, 
+            value,
             style: GoogleFonts.inter(
-              fontSize: 13.sp, 
-              color: const Color(0xFF101828), 
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500
-            )
+              fontSize: 13.sp,
+              color: const Color(0xFF101828),
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -791,7 +941,14 @@ class _AddProductPageState extends State<AddProductPage> {
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
             borderRadius: BorderRadius.circular(10.r),
-            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)] : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                    ),
+                  ]
+                : null,
           ),
           alignment: Alignment.center,
           child: Text(
@@ -799,7 +956,9 @@ class _AddProductPageState extends State<AddProductPage> {
             style: GoogleFonts.inter(
               fontSize: 14.sp,
               fontWeight: FontWeight.w600,
-              color: isSelected ? const Color(0xFF101828) : Colors.grey.shade500,
+              color: isSelected
+                  ? const Color(0xFF101828)
+                  : Colors.grey.shade500,
             ),
           ),
         ),
@@ -807,7 +966,11 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  Widget _buildDropdown({required String value, required List<String> items, required Function(String?) onChanged}) {
+  Widget _buildDropdown({
+    required String value,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       decoration: BoxDecoration(
@@ -820,15 +983,75 @@ class _AddProductPageState extends State<AddProductPage> {
           value: value,
           isExpanded: true,
           icon: const Icon(Iconsax.arrow_down_1, size: 18, color: Colors.grey),
-          items: items.map((e) => DropdownMenuItem(
-            value: e,
-            child: Text(e, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w500, color: const Color(0xFF101828))),
-          )).toList(),
+          items: items
+              .map(
+                (e) => DropdownMenuItem(
+                  value: e,
+                  child: Text(
+                    e,
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF101828),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
+
+  Widget _buildInput({
+    required TextEditingController controller,
+    required String hint,
+    int maxLines = 1,
+    Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      validator: (v) => v!.isEmpty ? "Required" : null,
+      style: GoogleFonts.inter(
+        fontSize: 15.sp,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF101828),
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        prefixIcon: prefixIcon,
+        prefixIconConstraints: prefixIconConstraints,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.r),
+          borderSide: const BorderSide(color: KorraColors.brand, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  TextStyle _labelStyle() => GoogleFonts.inter(
+    fontSize: 13.sp,
+    fontWeight: FontWeight.w600,
+    color: const Color(0xFF344054),
+  );
 
   Widget _buildInfoBox(String title, String desc, IconData icon) {
     return Container(
@@ -847,9 +1070,23 @@ class _AddProductPageState extends State<AddProductPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF344054))),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF344054),
+                  ),
+                ),
                 SizedBox(height: 4.h),
-                Text(desc, style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085), height: 1.4)),
+                Text(
+                  desc,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    color: const Color(0xFF667085),
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
@@ -858,39 +1095,14 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  Widget _buildInput({required TextEditingController controller, required String hint, int maxLines = 1, Widget? prefixIcon, BoxConstraints? prefixIconConstraints, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters}) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      validator: (v) => v!.isEmpty ? "Required" : null,
-      style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828)),
-      cursorColor: KorraColors.brand,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 14.sp),
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        prefixIcon: prefixIcon,
-        prefixIconConstraints: prefixIconConstraints,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFEAECF0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFEAECF0))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: KorraColors.brand, width: 1.5)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFFDA29B))),
-      ),
-    );
-  }
-
-  TextStyle _labelStyle() => GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054));
-
   void _showCategorySheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.r))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.4,
@@ -899,21 +1111,43 @@ class _AddProductPageState extends State<AddProductPage> {
         builder: (context, scrollController) => Column(
           children: [
             SizedBox(height: 12.h),
-            Container(width: 40.w, height: 4.h, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            Container(
+              width: 40.w,
+              height: 4.h,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             SizedBox(height: 16.h),
-            Text("Select Category", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700)),
+            Text(
+              "Select Category",
+              style: GoogleFonts.inter(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             SizedBox(height: 16.h),
             Expanded(
               child: ListView.separated(
                 controller: scrollController,
                 itemCount: _categories.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF2F4F7)),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: Color(0xFFF2F4F7)),
                 itemBuilder: (context, index) {
                   final cat = _categories[index];
                   return ListTile(
                     title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
-                    onTap: () { setState(() => _categoryCtrl.text = cat); Navigator.pop(context); },
-                    trailing: _categoryCtrl.text == cat ? const Icon(Iconsax.tick_circle, color: KorraColors.brand) : null,
+                    onTap: () {
+                      setState(() => _categoryCtrl.text = cat);
+                      Navigator.pop(context);
+                    },
+                    trailing: _categoryCtrl.text == cat
+                        ? const Icon(
+                            Iconsax.tick_circle,
+                            color: KorraColors.brand,
+                          )
+                        : null,
                   );
                 },
               ),

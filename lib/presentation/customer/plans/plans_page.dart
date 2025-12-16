@@ -14,8 +14,7 @@ import '../../../logic/bloc/customer/link/link_event.dart';
 import '../../../logic/bloc/customer/link/link_state.dart';
 import '../../../logic/bloc/customer/plans/plan_action_bloc.dart';
 import '../../shared/widgets/korra_header.dart';
-import '../customer_failure_sheet.dart';
-import 'widgets/new_plan_sheer.dart';
+import 'widgets/new_plan_sheet.dart';
 import 'widgets/pay_plan_input_screen.dart';
 import 'widgets/plan_card.dart';
 import 'widgets/plan_details_screen.dart';
@@ -73,23 +72,7 @@ class _PlansPageState extends State<PlansPage> {
           return BlocListener<LinkBloc, LinkState>(
             listenWhen: (p, c) => p.status != c.status,
             listener: (context, state) {
-              if (state.status == LinkStatus.empty) {
-                showKorraFailureSheetCustomer(
-                  context,
-                  title: 'Empty Link',
-                  message: 'Please enter a link to proceed.',
-                  onCancel: () => Get.back(),
-                );
-              }
-
-              if (state.status == LinkStatus.invalid) {
-                showKorraFailureSheetCustomer(
-                  context,
-                  title: 'Invalid Link',
-                  message: 'The link you provided is invalid.',
-                  onCancel: () => Get.back(),
-                );
-              } else if (state.status == LinkStatus.loaded) {
+              if (state.status == LinkStatus.loaded) {
                 // 1. Get the product from the LinkBloc state
                 final product =
                     state.productFetch ?? ProductFetchResult.empty();
@@ -99,6 +82,7 @@ class _PlansPageState extends State<PlansPage> {
                 Get.to(
                   () => CreatePlanScreen(
                     product: product,
+                    customer: customer!, //null check on non-null stream data
                     customerRepo: widget.customerRepo,
                     customerUid: widget.customerUid,
                     walletBalance: currentBalance,

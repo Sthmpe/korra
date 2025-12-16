@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:korra/data/models/customer/customer_ui_extentsion.dart';
 
 // REPO & MODELS
@@ -10,7 +11,7 @@ import '../../../../data/models/customer/customer_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 // BLOC
-import '../../../data/models/customer/cutomer_limit.dart';
+import '../../../data/models/customer/customer_account_stats.dart';
 import '../../../logic/services/share_service.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer/profile/profile_event.dart';
@@ -28,6 +29,8 @@ import 'help_center_screen.dart';
 import 'legal_screen.dart';
 import 'limit_upgrade_screen.dart';
 import 'liveness.dart';
+import 'my_store_credit_screen.dart';
+import 'my_vendors_screen.dart';
 import 'statements_screen.dart';
 import 'widgets/identity_header_card.dart';
 import 'my_qr_screen.dart';
@@ -82,12 +85,12 @@ class ProfilePage extends StatelessWidget {
             }
 
             // 3. SUCCESS UI
-            return StreamBuilder<CustomerLimit?>(
-              stream: customerRepo.streamCustomerLimit(customerUid),
+            return StreamBuilder<CustomerAccountStats?>(
+              stream: customerRepo.streamCustomerStats(customerUid),
               builder: (context, limitSnap) {
                 final limitData = limitSnap.data;
-                final totalLimit = limitData?.totalCreditLimit ?? 15000.0;
-                final activeDebt = limitData?.activeDebt ?? 0.0;
+                final totalLimit = 15000.00; //limitData?.totalCreditLimit ?? 15000.0;
+                final activeDebt =  0.0; //limitData?.activeDebt ?? 0.0;
 
                 return Scaffold(
                   backgroundColor: const Color(0xFFF9FAFB),
@@ -153,40 +156,80 @@ class ProfilePage extends StatelessWidget {
                                   _divider(),
 
                                   RowWithChevron(
-                                    icon: Icons.receipt_long_outlined,
-                                    title: 'Liveness',
+                                    icon: Icons.store_mall_directory_outlined,
+                                    title: 'My Store Credits',
+                                    subtitle: 'View your credits',
                                     onTap: () {
                                       Get.to(
-                                        () => LivenessScreen(
-                                          onVerificationSuccess: (base64Image) {
-                                            print(
-                                              "Success! Image data length: ${base64Image.length}",
-                                            );
-                                            // Send to Firebase/Backend here
-                                            Navigator.pop(context);
-                                          },
-                                        ),
+                                        () => MyStoreCreditsScreen(customerUid: customerUid)
                                       );
                                     },
                                   ),
+                                  _divider(),
 
+                                  // RowWithChevron(
+                                  //   icon: Icons.receipt_long_outlined,
+                                  //   title: 'Liveness',
+                                  //   onTap: () {
+                                  //     Get.to(
+                                  //       () => LivenessScreen(
+                                  //         onVerificationSuccess: (base64Image) {
+                                  //           print(
+                                  //             "Success! Image data length: ${base64Image.length}",
+                                  //           );
+                                  //           // Send to Firebase/Backend here
+                                  //           Navigator.pop(context);
+                                  //         },
+                                  //       ),
+                                  //     );
+                                  //   },
+                                  // ),
+
+                                  // _divider(),
+
+                                  StreamBuilder(
+                                    stream: customerRepo.streamCustomerStats(
+                                      customer.uid,
+                                    ),
+                                    builder: (context, snapshot) {
+                                      // 2. Define 'stats' safely (Default to empty if loading)
+                                      final stats =
+                                          snapshot.data ??
+                                          CustomerAccountStats.empty(
+                                            customer.uid,
+                                          );
+                                      return RowWithChevron(
+                                        icon: Iconsax.trend_up,
+                                        title:
+                                            'Level Up Slots', // Updated title
+                                        subtitle:
+                                            'Unlock more reservation slots', // Updated subtitle
+                                        onTap: () {
+                                          Get.to(
+                                            () => LimitUpgradeScreen(
+                                              repo: customerRepo,
+                                              customer: customer,
+                                              // ✅ Pass the new "Game Stats"
+                                              currentMaxSlots: stats.maxSlots,
+                                              completedPlansCount:
+                                                  stats.completedPlansCount,
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
                                   _divider(),
 
                                   RowWithChevron(
-                                    icon: Icons
-                                        .trending_up, // Use an "Upgrade" icon
-                                    title: 'Increase Limit',
-                                    subtitle: 'Check your buying power',
-                                    onTap: () {
-                                      Get.to(
-                                        () => LimitUpgradeScreen(
-                                          repo: customerRepo,
-                                          customer: customer,
-                                          currentTotalLimit: totalLimit,
-                                          activeDebt: activeDebt,
-                                        ),
-                                      );
-                                    },
+                                    icon: Iconsax.shop,
+                                    title: 'My Vendors',
+                                    subtitle: 'Vendors you interact with',
+                                    onTap: () => Get.to(
+                                      () => MyVendorsScreen(
+                                        customerUid: customer.uid,
+                                      ),
+                                    ),
                                   ),
                                   _divider(),
 

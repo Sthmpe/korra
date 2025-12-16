@@ -1,14 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Required for FunctionException
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 import '../../../config/utils/korra_exception.dart';
 import '../../models/customer/plans.dart';
 import 'customer_repository.dart';
 
 extension CustomerPlans on CustomerRepository { 
+  
   // ===========================================================================
-  // 1. PREVIEW (Risk Engine)
+  // 1. PREVIEW (Risk Engine & Token Generation)
   // ===========================================================================
   Future<Map<String, dynamic>> fetchPlanPreview({
     required String customerUid,
@@ -26,73 +27,80 @@ extension CustomerPlans on CustomerRepository {
 
       final data = response.data;
 
-      if (data['status'] == 'DECLINED') {
-        throw KorraException(data['reason'] ?? 'Plan declined by risk engine.');
+      if (data == null || data['status'] != 'SUCCESS') {
+        throw KorraException(data?['error'] ?? 'Plan declined by risk engine.');
       }
 
-      return data['result'] as Map<String, dynamic>;
+      // Return { minDownPayment: 123.0, secureToken: "ey..." }
+      return data as Map<String, dynamic>;
+      
     } catch (e) {
       debugPrint("❌ Preview Error: $e");
       
       if (e is FunctionException) {
          final details = e.details;
+         // Handle standard Supabase error format
          if (details is Map && details['error'] != null) {
             throw KorraException(details['error']);
+         }
+         if (details is String) {
+            throw KorraException(details);
          }
       }
       
       if (e is KorraException) rethrow;
-      throw KorraException("Could not calculate plan preview.", technicalDetails: e.toString());
+      throw KorraException("Could not calculate plan preview. Check connection.");
     }
   }
 
   // ===========================================================================
   // 2. CREATE PLAN (Atomic Transaction)
   // ===========================================================================
-  Future<void> createPlanSecurely({required Plan plan}) async {
+  Future<void> createPlanSecurely({
+    required Plan plan,
+    required double totalDebitAmount,
+    required String secureToken // ✅ New Param
+  }) async {
     try {
       final rawMap = plan.toMap();
       final safeMap = _sanitizeMap(rawMap);
 
       final response = await fx.invoke(
-        'plan-manager',
+        'plan-manager', 
         body: {
           "action": "CREATE",
+          "secureToken": secureToken, // ✅ Send Token
           "customerUid": plan.customerId,
+          "downPaymentAmount": totalDebitAmount, // (User Principal + Fee)
+          "productId": plan.productId,
           "productPrice": plan.totalAmount,
-          "planData": safeMap,
+          "planData": safeMap, 
         },
       );
 
       final data = response.data;
 
-      // Handle Soft Failures (200 OK but logic error)
-      if (data['status'] != 'SUCCESS') {
-        _handleBusinessErrors(data['error']);
+      // Handle Soft Failures
+      if (data != null && data['status'] != 'SUCCESS') {
+        _handleBusinessErrors(data['error'] ?? "Unknown error occurred");
       }
 
       debugPrint("✅ Plan Created via Supabase. ID: ${data['planId']}");
+
     } catch (e) {
       debugPrint("❌ Create Error (Technical): $e");
 
-      // 1. Pass through existing KorraExceptions
       if (e is KorraException) rethrow;
 
-      // 2. Handle Supabase 500 Errors (FunctionException)
-      if (e is FunctionException) {
-        // The log says: details: {error: Out of Stock.}
-        final details = e.details; 
-        
-        if (details is Map && details['error'] != null) {
-           // We found the error message inside the exception!
-           // Pass it to our helper to translate it into user-friendly text
-           _handleBusinessErrors(details['error'].toString());
-        }
-      }
+      if (e is FunctionException) { 
+       final details = e.details;
+       if (details is Map && details['error'] != null) {
+          throw KorraException(details['error']);
+       }
+    }
 
-      // 3. Fallback for Crashes / Network Issues
       throw KorraException(
-        "Something went wrong while creating your plan. Please check your connection.",
+        "Something went wrong while creating your plan.",
         technicalDetails: e.toString(),
       );
     }
@@ -136,10 +144,7 @@ extension CustomerPlans on CustomerRepository {
          }
       }
 
-      throw KorraException(
-        "Payment could not be processed.",
-        technicalDetails: e.toString(),
-      );
+      throw KorraException("Payment could not be processed.");
     }
   }
 
@@ -181,57 +186,57 @@ extension CustomerPlans on CustomerRepository {
          }
       }
 
-      throw KorraException(
-        "Could not cancel plan.",
-        technicalDetails: e.toString(),
-      );
+      throw KorraException("Could not cancel plan.");
     }
   }
 
   // ===========================================================================
-  // 🔸 ERROR TRANSLATORS (Keeps code clean)
+  // 🔸 ERROR TRANSLATORS (UI Friendly Messages)
   // ===========================================================================
   
   void _handleBusinessErrors(String? error) {
     final err = error?.toLowerCase() ?? '';
     
+    // 1. Money Issues
     if (err.contains('insufficient') || err.contains('wallet')) {
       throw KorraException("Your wallet balance is too low for this down payment.");
     }
+    
+    // 2. Inventory Issues
     if (err.contains('out of stock')) {
       throw KorraException("This item just went out of stock!");
-    } if (err.contains('gap') && err.contains('high')) {
-      throw KorraException("You have low reservation limit complete outstanding plans");
+    } 
+    
+    // 3. Slot / Limit Issues
+    // Handles: "Slot Limit Reached"
+    if (err.contains('slot limit')) {
+      throw KorraException("Slot Limit Reached. Please complete or cancel an active plan first.");
     }
     
-    // Default
-    throw KorraException("Could not create plan.", technicalDetails: error);
+    // 4. Security / Validation Issues
+    if (err.contains('security') || err.contains('session')) {
+      throw KorraException("Session expired. Please go back and try again.");
+    }
+    if (err.contains('payment too low')) {
+      throw KorraException("The payment amount does not meet the required down payment.");
+    }
+    
+    // Default Fallback
+    throw KorraException(error ?? "Could not create plan.");
   }
 
   void _handlePaymentErrors(String? error) {
     final err = error?.toLowerCase() ?? '';
-    
-    if (err.contains('insufficient')) {
-       throw KorraException("Insufficient wallet balance for this payment.");
-    }
-    if (err.contains('active')) {
-       throw KorraException("This plan is already completed or cancelled.");
-    }
+    if (err.contains('insufficient')) throw KorraException("Insufficient wallet balance.");
+    if (err.contains('active')) throw KorraException("This plan is not active.");
     throw KorraException(error ?? "Payment failed.");
   }
 
   void _handleCancelErrors(String? error) {
     final err = error?.toLowerCase() ?? '';
-
-    if (err.contains('expired')) {
-       throw KorraException("The cancellation window has closed.");
-    }
-    if (err.contains('refund') && err.contains('negative')) {
-       throw KorraException("Cannot cancel: Breakage fee exceeds paid amount.");
-    }
+    if (err.contains('inactive')) throw KorraException("Cannot cancel an inactive plan.");
     throw KorraException(error ?? "Cancellation failed.");
   }
-
 
   // ===========================================================================
   // 🔸 HELPERS & READS
@@ -266,9 +271,12 @@ extension CustomerPlans on CustomerRepository {
         .limit(1)
         .get();
 
+    debugPrint("🔍 Product Fetch Snap: ${snap.docs.length} found for code $productCode");
+
     if (snap.docs.isEmpty) {
-      throw Exception('Product not found for code: $productCode');
+      return null;
     }
+
     final doc = snap.docs.first;
     return ProductFetchResult(data: doc.data(), id: doc.id);
   }

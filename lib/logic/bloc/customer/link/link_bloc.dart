@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
@@ -55,15 +56,26 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
     try {
       final productFetch = await customerRepo.getProduct(e.productCode.trim());
 
+      debugPrint("product fetch result from bloc: $productFetch");
+
+      if (productFetch == null) {
+        emit(state.copyWith(
+          status: LinkStatus.failed,
+          message: "Product not found for code: ${e.productCode.trim()}",
+        ));
+        return;
+      }
+
       emit(state.copyWith(
         status: LinkStatus.loaded,
         message: "Product fetched",
         productFetch: productFetch,
       ));
-    } catch (_) {
+    } catch (e) {
+      debugPrint("❌ Bloc Catch: $e");
       emit(state.copyWith(
         status: LinkStatus.failed,
-        message: "Failed to fetch product details, pleasse check the link and try again",
+        message: "Connection error. Please try again.",
       ));
     }
   }

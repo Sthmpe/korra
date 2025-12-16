@@ -9,12 +9,14 @@ import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/colors.dart';
-import '../../../data/models/customer/cutomer_limit.dart';
+import '../../../data/models/customer/customer_account_stats.dart';
+import '../../../data/models/customer/customer_model.dart';
 import '../../../data/models/customer/plans.dart';
 import '../../../data/repository/customer/customer_repository.dart';
 import '../../../logic/bloc/customer/plans/create_plan_bloc.dart';
 import '../../../logic/bloc/customer/plans/create_plan_event.dart';
 import '../../../logic/bloc/customer/plans/create_plan_state.dart';
+import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../topup_screen.dart';
@@ -24,6 +26,7 @@ class CreatePlanScreen extends StatefulWidget {
   final ProductFetchResult product;
   final CustomerRepository customerRepo;
   final String customerUid;
+  final Customer customer;
   final VoidCallback onJumpToHome;
   final VoidCallback onJumpToPlan;
   final double walletBalance;
@@ -33,6 +36,7 @@ class CreatePlanScreen extends StatefulWidget {
     required this.product,
     required this.customerRepo,
     required this.customerUid,
+    required this.customer,
     required this.walletBalance,
     required this.onJumpToHome,
     required this.onJumpToPlan,
@@ -44,20 +48,20 @@ class CreatePlanScreen extends StatefulWidget {
 
 class _CreatePlanScreenState extends State<CreatePlanScreen> {
   late TextEditingController _amountCtrl;
-
-  // --- RESTORED UI VARIABLES ---
   late FocusNode _amountFocusNode;
   final GlobalKey _scrollKey = GlobalKey();
-  // -----------------------------
 
   String? cadenceType;
   int _currentImageIndex = 0;
   bool _agreedToTerms = false;
-
   int _selectedGoalDays = 0;
-
-  // Tracks the actual amount the user has typed/accepted
   double userEnteredDownPayment = 0.0;
+  double processingFee = 0.0;
+  double totalDueNow = 0.0;
+
+  // Store Credit Logic
+  double _storeCredit = 0.0; // Available credit
+  bool _useStoreCredit = true; // Default to true if they have credit
 
   final currencyFormat = NumberFormat.currency(
     locale: 'en_NG',
@@ -65,28 +69,71 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     decimalDigits: 0,
   );
 
+  ProductModelType get modelType {
+    final typeStr = widget.product.data['modelType'] as String? ?? 'strict';
+    return typeStr == 'direct'
+        ? ProductModelType.direct
+        : ProductModelType.strict;
+  }
+
+  String get _policyString {
+    // RULE A: If it is Direct, it is ALWAYS Store Credit (Ignore DB string)
+    if (modelType == ProductModelType.direct) {
+      return "Store Credit";
+    }
+
+    // RULE B: If Strict, read the vendor's choice from DB.
+    // Default to "50% Refund" if missing (Safety net for Strict)
+    return widget.product.data['cancellationPolicy'] as String? ?? "50% Refund";
+  }
+
   @override
   void initState() {
     super.initState();
     _amountCtrl = TextEditingController();
-
-    // --- RESTORED SCROLL LOGIC ---
     _amountFocusNode = FocusNode();
     _amountFocusNode.addListener(() {
-      if (_amountFocusNode.hasFocus) {
-        _scrollToInput();
-      }
+      if (_amountFocusNode.hasFocus) _scrollToInput();
     });
+
+    _fetchStoreCredit(); // ✅ Fetch on init
+  }
+
+  // Helper to fetch credit (You might want to move this to Bloc/Repo properly later)
+  Future<void> _fetchStoreCredit() async {
+    try {
+      final vendorId = widget.product.data['vendorId'];
+      if (vendorId != null) {
+        // Assuming you expose a method like this or similar query
+        // For now, let's simulate or mock if method doesn't exist
+        // real impl: final credit = await widget.customerRepo.getStoreCredit(widget.customerUid, vendorId);
+
+        // Direct Firestore fetch for now to unblock UI logic
+        final doc = await widget.customerRepo.db
+            .collection('customers')
+            .doc(widget.customerUid)
+            .collection('my_vendors')
+            .doc(vendorId)
+            .get();
+
+        if (doc.exists && mounted) {
+          setState(() {
+            _storeCredit = (doc.data()?['storeCredit'] ?? 0.0).toDouble();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching store credit: $e");
+    }
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
-    _amountFocusNode.dispose(); // Dispose focus node
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
-  // --- RESTORED SCROLL METHOD ---
   void _scrollToInput() {
     Future.delayed(const Duration(milliseconds: 400), () {
       if (_scrollKey.currentContext != null) {
@@ -106,14 +153,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     double val = double.tryParse(clean) ?? 0.0;
 
     setState(() {
-      if (val > price) {
-        val = price;
-      }
+      if (val > price) val = price;
       userEnteredDownPayment = val;
+      processingFee = price * 0.035;
+
+      totalDueNow = userEnteredDownPayment + processingFee;
     });
   }
 
-  // Helper to calculate remaining amount dynamically based on input
   double getRemainingBalance(double price) {
     return (price - userEnteredDownPayment).clamp(0.0, double.infinity);
   }
@@ -121,407 +168,634 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   @override
   Widget build(BuildContext context) {
     final double productPrice = widget.product.data['price']?.toDouble() ?? 0.0;
-    // Used for bottom padding logic
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final storeName = widget.product.data['storeName'] ?? 'Store';
 
-    final bool isLowTicket = productPrice < 25000;
+    return StreamBuilder<CustomerAccountStats?>(
+      stream: widget.customerRepo.streamCustomerStats(widget.customerUid),
+      builder: (context, snapshot) {
+        final stats =
+            snapshot.data ?? CustomerAccountStats.empty(widget.customerUid);
+        final isSlotsFull = stats.isSlotsFull;
 
-    final bool isShortDuration = productPrice <= 25000;
+        return BlocProvider(
+          create: (context) =>
+              CreatePlanBloc(repo: widget.customerRepo)
+                ..add(LoadPlanPreview(productPrice, widget.customerUid)),
+          child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
+            listenWhen: (previous, current) =>
+                previous.status != current.status,
+            listener: (context, state) {
+              if (state.status == CreatePlanStatus.previewLoaded) {
+                setState(() {
+                  userEnteredDownPayment = state.riskEngineUpfront;
+                  _amountCtrl.text = NumberFormat(
+                    "#,###",
+                  ).format(userEnteredDownPayment.toInt());
+                  _selectedGoalDays = state.baseDurationDays;
+                  _onAmountChanged(_amountCtrl.text); // Trigger calc
+                });
+              }
+              if (state.status == CreatePlanStatus.success) {
+                showAppSnackbar(
+                  "Plan created successfully",
+                  SnackbarType.success,
+                );
+                widget.onJumpToHome();
+              }
+              if (state.status == CreatePlanStatus.error) {
+                showKorraFailureSheetCustomer(
+                  context,
+                  title: 'Plan creation error',
+                  message: state.errorMessage ?? "Failed to create plan",
+                  isDismissible: true,
+                  onCancel: () => Get.back(),
+                );
+              }
+            },
+            builder: (context, state) {
+              if (state.status == CreatePlanStatus.loadingPreview ||
+                  state.status == CreatePlanStatus.initial) {
+                return const Scaffold(
+                  backgroundColor: Colors.white,
+                  body: Center(
+                    child: CircularProgressIndicator(color: KorraColors.brand),
+                  ),
+                );
+              }
 
-    return BlocProvider(
-      create: (context) =>
-          CreatePlanBloc(repo: widget.customerRepo)
-            ..add(LoadPlanPreview(productPrice, widget.customerUid)),
+              final minDownPayment = state.riskEngineUpfront;
+              if (totalDueNow == 0 && userEnteredDownPayment == 0) {
+                // Init logic moved to listener or here if listener missed
+              }
 
-      child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
-        listenWhen: (previous, current) => previous.status != current.status,
-        listener: (context, state) {
-          if (state.status == CreatePlanStatus.previewLoaded) {
-            setState(() {
-              userEnteredDownPayment = state.riskEngineUpfront;
-              _amountCtrl.text = NumberFormat(
-                "#,###",
-              ).format(userEnteredDownPayment.toInt());
+              final remainingBalance = getRemainingBalance(productPrice);
+              final isFullPayment = remainingBalance <= 0;
 
-              _selectedGoalDays = state.baseDurationDays;
-            });
-          }
-          if (state.status == CreatePlanStatus.success) {
-            showAppSnackbar("Plan created successfully", SnackbarType.success);
-            widget.onJumpToHome();
-          }
-          if (state.status == CreatePlanStatus.error) {
-            showKorraFailureSheetCustomer(
-              context,
-              title: 'Plan creation error',
-              message: state.errorMessage ?? "Failed to create plan",
-              isDismissible: true,
-              onCancel: () => Get.back(),
-            );
-          }
-        },
-        builder: (context, state) {
-          // Loading State
-          if (state.status == CreatePlanStatus.loadingPreview ||
-              state.status == CreatePlanStatus.initial) {
-            return Scaffold(
-              backgroundColor: Colors.white,
-              appBar: KorraHeader(title: 'Plan Setup'),
-              body: const Center(
-                child: CircularProgressIndicator(color: KorraColors.brand),
-              ),
-            );
-          }
+              // --- 💰 PAYMENT CALCULATION LOGIC ---
+              double amountToPayFromWallet = totalDueNow;
+              double creditApplied = 0.0;
 
-          final minDownPayment = state.riskEngineUpfront;
-          final remainingBalance = getRemainingBalance(productPrice);
-          final isFullPayment = remainingBalance <= 0;
-          final isInsufficient = widget.walletBalance < userEnteredDownPayment;
-          final isLowLimit = minDownPayment == 0 && productPrice != 0;
+              if (_useStoreCredit && _storeCredit > 0) {
+                if (_storeCredit >= totalDueNow) {
+                  creditApplied = totalDueNow;
+                  amountToPayFromWallet = 0.0;
+                } else {
+                  creditApplied = _storeCredit;
+                  amountToPayFromWallet = totalDueNow - _storeCredit;
+                }
+              }
 
-          return GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            child: Scaffold(
-              backgroundColor: Colors.white,
-              resizeToAvoidBottomInset: true,
-              appBar: KorraHeader(title: 'Plan Setup', showLeadingIcon: true),
-              body: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildImageCarousel(
-                            widget.product.data['images'] ?? [],
-                          ),
+              // 🛑 CHECK WALLET AGAINST REMAINING (After credit)
+              final isInsufficient =
+                  widget.walletBalance < amountToPayFromWallet;
 
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 20.w,
-                              vertical: 24.h,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildVendorHeader(
-                                  widget.product.data['storeName'] ?? 'Store',
+              return GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: Scaffold(
+                  backgroundColor: Colors.white,
+                  resizeToAvoidBottomInset: true,
+                  appBar: KorraHeader(
+                    title: 'Plan Setup',
+                    showLeadingIcon: true,
+                  ),
+                  body: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildImageCarousel(
+                                widget.product.data['images'] ?? [],
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 20.w,
+                                  vertical: 24.h,
                                 ),
-                                SizedBox(height: 12.h),
-                                Text(
-                                  widget.product.data['name'] ?? 'Product Name',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 20.sp,
-                                    fontWeight: FontWeight.w800,
-                                    color: KorraColors.text,
-                                    height: 1.2,
-                                  ),
-                                ),
-                                SizedBox(height: 8.h),
-                                Text(
-                                  "Total Price: ${currencyFormat.format(productPrice)}",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-
-                                SizedBox(height: 24.h),
-
-                                // STREAMED LIMIT STATUS
-                                _buildLimitStatus(productPrice),
-
-                                SizedBox(height: 32.h),
-
-                                Text(
-                                  "INITIAL DEPOSIT",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: KorraColors.textMuted,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                SizedBox(height: 12.h),
-
-                                // --- RESTORED SCROLL KEY AND FOCUS NODE ---
-                                Container(
-                                  key: _scrollKey, // <--- KEY RESTORED
-                                  padding: EdgeInsets.all(16.r),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16.r),
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // 1. VENDOR + MODEL HEADER
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _buildVendorHeader(
+                                          widget.product.data['storeName'] ??
+                                              'Store',
+                                        ),
+                                        _buildModelPill(modelType),
+                                      ],
                                     ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.02),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
+                                    SizedBox(height: 12.h),
+                                    Text(
+                                      widget.product.data['name'] ??
+                                          'Product Name',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20.sp,
+                                        fontWeight: FontWeight.w800,
+                                        color: KorraColors.text,
+                                        height: 1.2,
                                       ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        "₦",
-                                        style: GoogleFonts.inter(
-                                          fontSize: 24.sp,
-                                          fontWeight: FontWeight.w700,
-                                          color: KorraColors.black,
+                                    ),
+                                    SizedBox(height: 8.h),
+                                    Text(
+                                      "Total Price: ${currencyFormat.format(productPrice)}",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+
+                                    if (_storeCredit > 0) ...[
+                                      SizedBox(height: 16.h),
+                                      GestureDetector(
+                                        onTap: () => setState(
+                                          () => _useStoreCredit =
+                                              !_useStoreCredit,
+                                        ),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 16.w,
+                                            vertical: 12.h,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _useStoreCredit
+                                                ? KorraColors.brand.withOpacity(
+                                                    0.08,
+                                                  )
+                                                : const Color(0xFFF9FAFB),
+                                            borderRadius: BorderRadius.circular(
+                                              12.r,
+                                            ),
+                                            border: Border.all(
+                                              color: _useStoreCredit
+                                                  ? KorraColors.brand
+                                                  : const Color(0xFFEAECF0),
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              // 1. Icon that clearly indicates "Store"
+                                              Container(
+                                                padding: EdgeInsets.all(8.r),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.grey.shade200,
+                                                  ),
+                                                ),
+                                                child: Icon(
+                                                  Iconsax.shop,
+                                                  size: 18.sp,
+                                                  color: KorraColors.brand,
+                                                ),
+                                              ),
+                                              SizedBox(width: 12.w),
+
+                                              // 2. Explicit Text
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      "Use $storeName Credit", // ✅ Explicit Context
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 13.sp,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: const Color(
+                                                          0xFF101828,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      "Available: ${currencyFormat.format(_storeCredit)}",
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 12.sp,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // 3. The Checkbox visual
+                                              if (_useStoreCredit)
+                                                Icon(
+                                                  Icons.check_circle,
+                                                  color: KorraColors.brand,
+                                                  size: 24.sp,
+                                                )
+                                              else
+                                                Icon(
+                                                  Icons.radio_button_unchecked,
+                                                  color: Colors.grey.shade400,
+                                                  size: 24.sp,
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                      SizedBox(width: 4.w),
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _amountCtrl,
-                                          focusNode:
-                                              _amountFocusNode, // <--- FOCUS NODE RESTORED
-                                          keyboardType: TextInputType.number,
-                                          onChanged: _onAmountChanged,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(
-                                              15,
+                                    ],
+
+                                    SizedBox(height: 24.h),
+
+                                    // ✅ SLOT LIMIT STATUS
+                                    _buildLimitContainer(
+                                      activePlans: stats.activePlansCount,
+                                      maxSlots: stats.maxSlots,
+                                      isSlotsFull: isSlotsFull,
+                                    ),
+
+                                    SizedBox(height: 32.h),
+                                    Text(
+                                      "INITIAL DEPOSIT",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.sp,
+                                        fontWeight: FontWeight.w700,
+                                        color: KorraColors.textMuted,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12.h),
+
+                                    // Amount Input
+                                    Container(
+                                      key: _scrollKey,
+                                      padding: EdgeInsets.all(16.r),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(
+                                          16.r,
+                                        ),
+                                        border: Border.all(
+                                          color: const Color(0xFFE5E7EB),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.02,
                                             ),
-                                            CurrencyInputFormatter(),
-                                          ],
-                                          style: GoogleFonts.inter(
-                                            fontSize: 36.sp,
-                                            fontWeight: FontWeight.w800,
-                                            color: KorraColors.black,
-                                            height: 1.0,
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
                                           ),
-                                          decoration: InputDecoration(
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                  horizontal: 8.w,
+                                        ],
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                "₦",
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 24.sp,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: KorraColors.black,
+                                                ),
+                                              ),
+                                              SizedBox(width: 4.w),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: _amountCtrl,
+                                                  focusNode: _amountFocusNode,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  onChanged: _onAmountChanged,
+                                                  inputFormatters: [
+                                                    LengthLimitingTextInputFormatter(
+                                                      15,
+                                                    ),
+                                                    CurrencyInputFormatter(),
+                                                  ],
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 36.sp,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: KorraColors.black,
+                                                    height: 1.0,
+                                                  ),
+                                                  decoration: InputDecoration(
+                                                    border: InputBorder.none,
+                                                    isDense: true,
+                                                    contentPadding:
+                                                        EdgeInsets.symmetric(
+                                                          horizontal: 8.w,
+                                                          vertical: 8.h,
+                                                        ),
+                                                    hintText: NumberFormat(
+                                                      "#,###",
+                                                    ).format(minDownPayment),
+                                                    hintStyle:
+                                                        GoogleFonts.inter(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade300,
+                                                        ),
+                                                    labelText:
+                                                        "Down Payment Amount",
+                                                    labelStyle:
+                                                        GoogleFonts.inter(
+                                                          fontSize: 12.sp,
+                                                          color: Colors.grey,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: EdgeInsets.only(top: 12.h),
+                                            child: const Divider(
+                                              height: 1,
+                                              color: Color(0xFFF3F4F6),
+                                            ),
+                                          ),
+                                          // 3. The Math
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "+ Processing Fee (3.5%)",
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12.sp,
+                                                  color: Colors.grey.shade500,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              Text(
+                                                currencyFormat.format(
+                                                  processingFee,
+                                                ),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12.sp,
+                                                  color: Colors.grey.shade600,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+
+                                          // ✅ STORE CREDIT TOGGLE (If available)
+                                          if (_storeCredit > 0) ...[
+                                            SizedBox(height: 12.h),
+                                            GestureDetector(
+                                              onTap: () => setState(
+                                                () => _useStoreCredit =
+                                                    !_useStoreCredit,
+                                              ),
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 12.w,
                                                   vertical: 8.h,
                                                 ),
-                                            hintText: NumberFormat(
-                                              "#,###",
-                                            ).format(minDownPayment),
-                                            hintStyle: GoogleFonts.inter(
-                                              color: Colors.grey.shade300,
+                                                decoration: BoxDecoration(
+                                                  color: _useStoreCredit
+                                                      ? KorraColors.brand
+                                                            .withOpacity(0.1)
+                                                      : Colors.grey.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        8.r,
+                                                      ),
+                                                  border: Border.all(
+                                                    color: _useStoreCredit
+                                                        ? KorraColors.brand
+                                                              .withOpacity(0.3)
+                                                        : Colors.grey.shade200,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      _useStoreCredit
+                                                          ? Icons.check_box
+                                                          : Icons
+                                                                .check_box_outline_blank,
+                                                      color: _useStoreCredit
+                                                          ? KorraColors.brand
+                                                          : Colors.grey,
+                                                      size: 20.sp,
+                                                    ),
+                                                    SizedBox(width: 8.w),
+                                                    Expanded(
+                                                      child: Text(
+                                                        "Use Store Credit (${currencyFormat.format(_storeCredit)})",
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 12.sp,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: _useStoreCredit
+                                                              ? KorraColors
+                                                                    .brand
+                                                              : Colors
+                                                                    .grey
+                                                                    .shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    if (_useStoreCredit)
+                                                      Text(
+                                                        "-${currencyFormat.format(creditApplied)}",
+                                                        style:
+                                                            GoogleFonts.inter(
+                                                              fontSize: 12.sp,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              color: KorraColors
+                                                                  .brand,
+                                                            ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
+                                          ],
+
+                                          SizedBox(height: 12.h),
+
+                                          // TOTAL DUE ROW
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Net Payable Now",
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13.sp,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: KorraColors.text,
+                                                ),
+                                              ),
+                                              Text(
+                                                currencyFormat.format(
+                                                  amountToPayFromWallet,
+                                                ),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14.sp,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: KorraColors.brand,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                SizedBox(height: 12.h),
-
-                                // Validation / Feedback
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    isLowLimit
-                                        ? Text(
-                                            "Clear active plans",
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12.sp,
-                                              color: Colors.red,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          )
-                                        : Text(
-                                            "Minimum: ${currencyFormat.format(minDownPayment)}",
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12.sp,
-                                              color:
-                                                  (userEnteredDownPayment <
-                                                      minDownPayment)
-                                                  ? Colors.red
-                                                  : Colors.grey.shade500,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-
-                                    AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                      child: isInsufficient
-                                          ? Text(
-                                              "Insufficient Funds",
-                                              key: const ValueKey(
-                                                'insufficient',
-                                              ),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12.sp,
-                                                color: Colors.red,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            )
-                                          : Text(
-                                              "Remaining: ${currencyFormat.format(remainingBalance)}",
-                                              key: ValueKey(remainingBalance),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12.sp,
-                                                color: KorraColors.brand,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                    ),
-                                  ],
-                                ),
-
-                                SizedBox(height: 40.h),
-
-                                if (!isFullPayment) ...[
-                                  _buildStrictDeadlineCard(
-                                    duration: state.baseDurationDays,
-                                    canExtend: state.canExtend,
-                                  ),
-                                  SizedBox(height: 32.h),
-                                  _buildSectionLabel("Duration Limit"),
-                                  SizedBox(height: 12.h),
-
-                                  // 3. SIMPLE DURATION DISPLAY (No Choice)
-                                  Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.all(16.r),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF9FAFB),
-                                      borderRadius: BorderRadius.circular(12.r),
-                                      border: Border.all(
-                                        color: const Color(0xFFEAECF0),
+                                        ],
                                       ),
                                     ),
-                                    child: Row(
+                                    SizedBox(height: 12.h),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Icon(
-                                          Iconsax.timer_1,
-                                          color: KorraColors.brand,
-                                          size: 20.sp,
-                                        ),
-                                        SizedBox(width: 12.w),
-                                        Expanded(
-                                          child: Text(
-                                            "You have ${state.baseDurationDays} days to complete payment.",
-                                            style: GoogleFonts.inter(
-                                              fontSize: 13.sp,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black,
-                                            ),
+                                        Text(
+                                          "Minimum: ${currencyFormat.format(minDownPayment)}",
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12.sp,
+                                            color:
+                                                userEnteredDownPayment <
+                                                    minDownPayment
+                                                ? Colors.red
+                                                : Colors.grey.shade500,
+                                            fontWeight: FontWeight.w500,
                                           ),
+                                        ),
+                                        AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          child: isInsufficient
+                                              ? Text(
+                                                  "Insufficient Wallet Balance",
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12.sp,
+                                                    color: Colors.red,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                )
+                                              : Text(
+                                                  "Remaining: ${currencyFormat.format(remainingBalance)}",
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12.sp,
+                                                    color: KorraColors.brand,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  SizedBox(height: 32.h),
-                                  _buildSectionLabel("Set your goal"),
-                                  SizedBox(height: 12.h),
-                                  _buildGoalSelector(state.baseDurationDays),
+                                    SizedBox(height: 40.h),
 
-                                  SizedBox(height: 32.h),
+                                    if (!isFullPayment) ...[
+                                      // DYNAMIC DEADLINE CARD
+                                      _buildDurationCard(
+                                        duration: state.baseDurationDays,
+                                        canExtend: state.canExtend,
+                                        type: modelType,
+                                      ),
+                                      SizedBox(height: 32.h),
 
-                                  _buildSectionLabel("Choose Schedule"),
-                                  SizedBox(height: 12.h),
+                                      _buildSectionLabel("Duration"),
+                                      SizedBox(height: 12.h),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: EdgeInsets.all(16.r),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF9FAFB),
+                                          borderRadius: BorderRadius.circular(
+                                            12.r,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFEAECF0),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Iconsax.timer_1,
+                                              color: KorraColors.brand,
+                                              size: 20.sp,
+                                            ),
+                                            SizedBox(width: 12.w),
+                                            Expanded(
+                                              child: Text(
+                                                "You have ${state.baseDurationDays} days to complete payment.",
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13.sp,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      SizedBox(height: 32.h),
+                                      _buildSectionLabel("Set your goal"),
+                                      SizedBox(height: 12.h),
+                                      _buildGoalSelector(
+                                        state.baseDurationDays,
+                                      ),
+                                      SizedBox(height: 32.h),
+                                      _buildSectionLabel("Choose Schedule"),
+                                      SizedBox(height: 12.h),
+                                      _buildScheduleGrid(remainingBalance),
+                                      _buildCommitmentMessage(
+                                        state.baseDurationDays,
+                                      ),
+                                    ] else ...[
+                                      _buildFullPaymentSuccess(),
+                                    ],
 
-                                  // 4. DYNAMIC SCHEDULE (Based on Goal)
-                                  _buildScheduleGrid(remainingBalance),
-
-                                  _buildCommitmentMessage(
-                                    state.baseDurationDays,
-                                  ),
-                                ] else ...[
-                                  _buildFullPaymentSuccess(),
-                                ],
-
-                                if (!isLowLimit)
-                                  _buildLiabilityCheckbox(
-                                    _agreedToTerms,
-                                    (v) => setState(
-                                      () => _agreedToTerms = v ?? false,
+                                    if (!isSlotsFull) ...[
+                                      _buildLiabilityCheckbox(
+                                        isChecked: _agreedToTerms,
+                                        policyString: _policyString,
+                                        onChanged: (v) => setState(
+                                          () => _agreedToTerms = v ?? false,
+                                        ),
+                                      ),
+                                      _buildLiabilityDisclaimer(),
+                                    ],
+                                    SizedBox(
+                                      height: isKeyboardOpen ? 300.h : 40.h,
                                     ),
-                                  ),
-
-                                _buildLiabilityDisclaimer(),
-                                SizedBox(height: isKeyboardOpen ? 300.h : 40.h),
-                              ],
-                            ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      if (!isKeyboardOpen)
+                        _buildBottomBar(
+                          context,
+                          state,
+                          isFullPayment,
+                          minDownPayment,
+                          isInsufficient,
+                          isSlotsFull,
+                          totalDueNow, // Pass raw total for event
+                          amountToPayFromWallet, // For UI check
+                          creditApplied,
+                        ),
+                    ],
                   ),
-
-                  if (!isKeyboardOpen)
-                    _buildBottomBar(
-                      context,
-                      state,
-                      isFullPayment,
-                      minDownPayment,
-                      isInsufficient,
-                      isLowLimit,
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStrictDeadlineCard({
-    required int duration,
-    required bool canExtend,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(12.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E5), // Warning Orange
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFFFDDB3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Iconsax.shield_tick,
-            size: 20.sp,
-            color: const Color(0xFFB95000),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF96490B),
-                  height: 1.4,
                 ),
-                children: [
-                  const TextSpan(text: "Strict "),
-                  TextSpan(
-                    text: "$duration-Day ",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const TextSpan(
-                    text: "Limit. Late completion defaults trigger the ",
-                  ),
-                  TextSpan(
-                    text: "50% penalty.",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              );
+            },
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -579,80 +853,399 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
+  Widget _buildStrictDeadlineCard({
+    required int duration,
+    required bool canExtend,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(12.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5), // Warning Orange
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFFFDDB3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Iconsax.shield_tick,
+            size: 20.sp,
+            color: const Color(0xFFB95000),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF96490B),
+                  height: 1.4,
+                ),
+                children: [
+                  const TextSpan(text: "Strict "),
+                  TextSpan(
+                    text: "$duration-Day ",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(
+                    text: " Late completion defaults trigger the ",
+                  ),
+                  TextSpan(
+                    text: "50% penalty.",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelPill(ProductModelType type) {
+    final isStrict = type == ProductModelType.strict;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+      decoration: BoxDecoration(
+        color: isStrict ? const Color(0xFFFFF7ED) : const Color(0xFFF0F9FF),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(
+          color: isStrict ? const Color(0xFFFFEDD5) : const Color(0xFFE0F2FE),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isStrict ? Iconsax.shield_tick : Icons.handshake_rounded,
+            size: 14.sp,
+            color: isStrict ? const Color(0xFF9A3412) : const Color(0xFF0369A1),
+          ),
+          SizedBox(width: 4.w),
+          Text(
+            isStrict ? "Strict Lock" : "Korra Direct",
+            style: GoogleFonts.inter(
+              fontSize: 11.sp,
+              fontWeight: FontWeight.w700,
+              color: isStrict
+                  ? const Color(0xFF9A3412)
+                  : const Color(0xFF0369A1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDurationCard({
+    required int duration,
+    required bool canExtend,
+    required ProductModelType type,
+  }) {
+    // Customize text/color based on model if needed, currently both use orange for "Deadline"
+    return Container(
+      padding: EdgeInsets.all(12.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFFFDDB3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Iconsax.timer_1, size: 20.sp, color: const Color(0xFFB95000)),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF96490B),
+                  height: 1.4,
+                ),
+                children: [
+                  const TextSpan(text: "Duration: "),
+                  TextSpan(
+                    text: "$duration Days.\n",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(
+                    text: type == ProductModelType.strict
+                        ? "Failure to complete triggers the penalty."
+                        : "Flexible timeline, but refund is Store Credit only.",
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiabilityCheckbox({
+    required bool isChecked,
+    required String policyString, // Received from helper
+    required ValueChanged<bool?> onChanged,
+  }) {
+    // Logic: Does the string contain "50%"?
+    final bool is50Percent = policyString.contains("50%");
+
+    final String highlightText = is50Percent
+        ? "50% Non-Refundable Penalty"
+        : "Store Credit Only Policy";
+
+    return Padding(
+      padding: EdgeInsets.only(top: 24.h, bottom: 16.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 24.w,
+            height: 24.w,
+            child: Checkbox(
+              value: isChecked,
+              onChanged: onChanged,
+              activeColor: KorraColors.brand,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4.r),
+              ),
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+                children: [
+                  const TextSpan(
+                    text:
+                        "I agree to complete this plan. If I cancel or default, I accept the ",
+                  ),
+                  TextSpan(
+                    text: highlightText,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFD92D20),
+                      decoration: TextDecoration.underline,
+                      decorationColor: const Color(0xFFD92D20).withOpacity(0.5),
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () =>
+                          _showPenaltyExplainer(context, policyString),
+                  ),
+                  const TextSpan(text: "."),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPenaltyExplainer(BuildContext context, String policyString) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PenaltyExplainerSheet(policyString: policyString),
+    );
+  }
+
+  // THE UPGRADE SHEET
+  // void _showUpgradePrompt(BuildContext context) {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     backgroundColor: Colors.white,
+  //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.r))),
+  //     builder: (_) => Container(
+  //       padding: EdgeInsets.all(24.r),
+  //       child: Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         children: [
+  //           Container(
+  //             padding: EdgeInsets.all(16.r),
+  //             decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle),
+  //             child: Icon(Iconsax.wallet_add, size: 32.sp, color: Colors.blue.shade800),
+  //           ),
+  //           SizedBox(height: 16.h),
+  //           Text("Increase Your Limit", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800)),
+  //           SizedBox(height: 8.h),
+  //           Text(
+  //             "This item is above your current reservation limit. To unlock higher limits instantly, fund your wallet with at least ₦20,000.",
+  //             textAlign: TextAlign.center,
+  //             style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade600, height: 1.4),
+  //           ),
+  //           SizedBox(height: 24.h),
+  //           SizedBox(
+  //             width: double.infinity,
+  //             height: 50.h,
+  //             child: FilledButton(
+  //               onPressed: () {
+  //                  Navigator.pop(context); // Close sheet
+  //                  Get.to(() => TopUpScreen(customer: null)); // Go to Top Up
+  //               },
+  //               style: FilledButton.styleFrom(backgroundColor: KorraColors.brand),
+  //               child: Text("Fund Wallet Now", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+  //             ),
+  //           )
+  //         ],
+  //       ),
+  //     )
+  //   );
+  // }
+
+  Widget _buildSectionLabel(String title) {
+    return Text(
+      title.toUpperCase(),
+      style: GoogleFonts.inter(
+        fontSize: 11.sp,
+        fontWeight: FontWeight.w700,
+        color: KorraColors.textMuted,
+        letterSpacing: 1.2,
+      ),
+    );
+  }
+
+  // --- 🎨 NEW SLOT UI ---
+  Widget _buildLimitContainer({
+    required int activePlans,
+    required int maxSlots,
+    required bool isSlotsFull,
+  }) {
+    final color = isSlotsFull ? Colors.orange : Colors.green;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: isSlotsFull ? Colors.orange.shade100 : const Color(0xFFF3F4F6),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(6.r),
+            decoration: BoxDecoration(
+              color: isSlotsFull ? Colors.orange.shade50 : Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSlotsFull
+                    ? Colors.orange.shade100
+                    : Colors.grey.shade200,
+              ),
+            ),
+            child: Icon(
+              Iconsax.box,
+              size: 16.sp,
+              color: isSlotsFull ? Colors.orange : KorraColors.text,
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Active Slot Limit",
+                style: GoogleFonts.inter(
+                  fontSize: 11.sp,
+                  color: Colors.grey.shade500,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                isSlotsFull
+                    ? "Limit Reached ($activePlans/$maxSlots)"
+                    : "$activePlans of $maxSlots Slots Used",
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  color: isSlotsFull
+                      ? Colors.orange.shade800
+                      : KorraColors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Icon(
+            isSlotsFull ? Icons.info_outline_rounded : Icons.check_circle,
+            color: color,
+            size: 20.sp,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 🏗️ UPDATED BOTTOM BAR ---
   Widget _buildBottomBar(
     BuildContext context,
     CreatePlanState state,
     bool isFullPayment,
     double minDown,
     bool isInsufficient,
-    bool isLowLimit,
+    bool isSlotsFull,
+    double totalRawAmount, // For Bloc
+    double walletAmount, // For Insufficient Check
+    double storeCreditUsed,
   ) {
     final bool isAmountValid = userEnteredDownPayment >= minDown;
     final bool isSchedulePicked = isFullPayment || cadenceType != null;
     final bool isFormComplete = isAmountValid && isSchedulePicked;
 
-    // 5. VALIDATION: Must agree to terms
-    final bool canProceed = isLowLimit
-        ? true
-        : (isFormComplete && _agreedToTerms);
+    final bool canProceed = !isSlotsFull && isFormComplete && _agreedToTerms;
 
     String btnText = "Pay & Start Plan";
+    if (storeCreditUsed > 0 && walletAmount == 0) {
+      btnText = "Pay with Store Credit";
+    } else if (storeCreditUsed > 0) {
+      btnText = "Pay Balance (${currencyFormat.format(walletAmount)})";
+    }
+
     Color btnColor = KorraColors.brand;
     VoidCallback? customAction;
-    
 
-    if (isLowLimit) {
-      // The user CANNOT afford this based on current limit. Why?
-      debugPrint("has active plans: ${state.hasActivePlans}");
-      if (state.hasActivePlans) {
-        // CASE A: They have baggage.
-        btnText = "View Outstanding Plans";
-        btnColor = Colors.orange.shade800;
-      } else {
-        debugPrint("cutome acction: accepted");
-        // CASE B: They are new/clean, just need higher limit.
-        btnText = "Upgrade Account"; // Or "Fund to Upgrade"
-        btnColor = const Color(0xFF0F172A); // Premium Dark
-        customAction = () {
-           _showUpgradePrompt(context); // Show the sheet to fund wallet
-        };
-      }
+    if (isSlotsFull) {
+      btnText = "View Active Plans";
+      btnColor = Colors.orange.shade800;
+      customAction = widget.onJumpToPlan;
     } else if (isInsufficient) {
       btnText = "Top Up Wallet & Start";
       btnColor = Colors.black;
-    } else if (isFullPayment) {
+      customAction = () {
+        Get.to(() => TopUpScreen(customer: null));
+      };
+    } else if (isFullPayment && walletAmount > 0) {
       btnText = "Pay Full Amount";
     }
 
     final VoidCallback? onPressed =
         (state.status == CreatePlanStatus.creating ||
-            (!canProceed && !isInsufficient))
+            (!canProceed && !isInsufficient && !isSlotsFull))
         ? null
         : () async {
-
             if (customAction != null) {
-               customAction();
-               return;
-            }
-            
-            // 2. Handle Debt
-            if (isLowLimit && state.hasActivePlans) {
-               widget.onJumpToPlan();
-               return;
-            }
-
-            if (isInsufficient) {
-              //
+              customAction!();
               return;
             }
-            if (isLowLimit) return;
 
             final newPlanRef = widget.customerRepo.db.collection('plans').doc();
             final plan = Plan.create(
               generatedId: newPlanRef.id,
-              // ... (Standard Fields)
               vendorId: widget.product.data['vendorId'] ?? '',
               customerId: widget.customerUid,
+              customerName: "${widget.customer.firstName} ${widget.customer.lastName}",
+              customerPhone: widget.customer.phone,
               productId: widget.product.id,
               productCode: widget.product.data['code'] ?? '',
               title: widget.product.data['name'] ?? 'Unknown',
@@ -661,23 +1254,27 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               totalProductPrice:
                   widget.product.data['price']?.toDouble() ?? 0.0,
               totalUpfrontPaid: userEnteredDownPayment,
+              processingFee: processingFee,
               loanAmount: state.loanAmount,
               dpPercentage: state.dpPercentage,
-
               cadenceType: isFullPayment ? 'full_payment' : cadenceType,
               commitmentEnabled: true,
-
-              // *** Pass the Calculated Days ***
               baseDurationDays: state.baseDurationDays,
               noticeDays: state.noticeDays,
               extensionDays: state.extensionDays,
-
-              // Fallback for backward compatibility if needed
               durationMonths: (state.baseDurationDays / 30).ceil(),
+              cancellationPolicy: _policyString,
             );
 
+            // Pass the FULL required amount to Bloc.
+            // The Backend logic we wrote earlier AUTOMATICALLY checks store credit usage.
+            // So we just send the total, and backend splits it.
+            // Note: If you want to force explicit credit usage, pass a flag to Bloc -> Repo -> Backend.
+            // Based on backend code: 'useStoreCredit' flag is accepted but logic prioritizes logic.
+            // Let's assume sending total is fine and backend handles deduction as programmed.
+
             context.read<CreatePlanBloc>().add(
-              ConfirmPlanCreation(plan, userEnteredDownPayment),
+              ConfirmPlanCreation(plan, totalRawAmount),
             );
           };
 
@@ -724,181 +1321,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                   ),
                 ),
         ),
-      ),
-    );
-  }
-
-  // THE UPGRADE SHEET
-  void _showUpgradePrompt(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.r))),
-      builder: (_) => Container(
-        padding: EdgeInsets.all(24.r),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle),
-              child: Icon(Iconsax.wallet_add, size: 32.sp, color: Colors.blue.shade800),
-            ),
-            SizedBox(height: 16.h),
-            Text("Increase Your Limit", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800)),
-            SizedBox(height: 8.h),
-            Text(
-              "This item is above your current reservation limit. To unlock higher limits instantly, fund your wallet with at least ₦20,000.",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade600, height: 1.4),
-            ),
-            SizedBox(height: 24.h),
-            SizedBox(
-              width: double.infinity,
-              height: 50.h,
-              child: FilledButton(
-                onPressed: () {
-                   Navigator.pop(context); // Close sheet
-                   Get.to(() => TopUpScreen(customer: null)); // Go to Top Up
-                },
-                style: FilledButton.styleFrom(backgroundColor: KorraColors.brand),
-                child: Text("Fund Wallet Now", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-              ),
-            )
-          ],
-        ),
-      )
-    );
-  }
-
-  Widget _buildSectionLabel(String title) {
-    return Text(
-      title.toUpperCase(),
-      style: GoogleFonts.inter(
-        fontSize: 11.sp,
-        fontWeight: FontWeight.w700,
-        color: KorraColors.textMuted,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-
-  // ✅ REAL-TIME LIMIT STATUS
-  Widget _buildLimitStatus(double productPrice) {
-    return StreamBuilder<CustomerLimit?>(
-      // 1. Listen to the specific Limit Document
-      stream: widget.customerRepo.streamCustomerLimit(widget.customerUid),
-      builder: (context, snapshot) {
-        // A. Loading State
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLimitContainer(
-            isLoading: true,
-            available: 0,
-            isOverLimit: false,
-          );
-        }
-
-        // B. Data Loaded
-        final limitData = snapshot.data;
-
-        // Default to 0 if no limit doc found (New user edge case)
-        final total = limitData?.totalCreditLimit ?? 0.0;
-        final debt = limitData?.activeDebt ?? 0.0;
-
-        // 2. Calculate Available Logic
-        // (Ensure we don't show negative numbers if debt > total temporarily)
-        final double available = (total - debt).clamp(0.0, double.infinity);
-
-        // 3. Check if Product fits in limit
-        final bool isOverLimit = productPrice > available;
-
-        return _buildLimitContainer(
-          isLoading: false,
-          available: available,
-          isOverLimit: isOverLimit,
-        );
-      },
-    );
-  }
-
-  // Helper to keep the StreamBuilder clean
-  Widget _buildLimitContainer({
-    required bool isLoading,
-    required double available,
-    required bool isOverLimit,
-  }) {
-    final color = isOverLimit
-        ? Colors.orange
-        : Colors.green; // Orange is less scary than Red
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: isOverLimit ? Colors.orange.shade100 : const Color(0xFFF3F4F6),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(6.r),
-            decoration: BoxDecoration(
-              color: isOverLimit ? Colors.orange.shade50 : Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isOverLimit
-                    ? Colors.orange.shade100
-                    : Colors.grey.shade200,
-              ),
-            ),
-            child: isLoading
-                ? SizedBox(
-                    width: 16.sp,
-                    height: 16.sp,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    Iconsax.card,
-                    size: 16.sp,
-                    color: isOverLimit ? Colors.orange : KorraColors.text,
-                  ),
-          ),
-          SizedBox(width: 12.w),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Reservation Limit",
-                style: GoogleFonts.inter(
-                  fontSize: 11.sp,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                isLoading
-                    ? "Checking..."
-                    : "${currencyFormat.format(available)} Available",
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  color: isOverLimit
-                      ? Colors.orange.shade800
-                      : KorraColors.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          if (!isLoading)
-            Icon(
-              isOverLimit ? Icons.info_outline_rounded : Icons.check_circle,
-              color: color,
-              size: 20.sp,
-            ),
-        ],
       ),
     );
   }
@@ -988,7 +1410,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             Row(
               children: [
                 Text(
-                  storeName,
+                  storeName ?? 'Store',
                   style: GoogleFonts.inter(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
@@ -1011,7 +1433,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       ],
     );
   }
-
 
   Widget _buildSmartCadenceOption({
     required String label,
@@ -1247,70 +1668,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildLiabilityCheckbox(
-    bool isChecked,
-    ValueChanged<bool?> onChanged,
-  ) {
-    return Padding(
-      padding: EdgeInsets.only(top: 24.h, bottom: 16.h),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 24.w,
-            height: 24.w,
-            child: Checkbox(
-              value: isChecked,
-              onChanged: onChanged,
-              activeColor: KorraColors.brand,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4.r),
-              ),
-            ),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-                children: [
-                  const TextSpan(
-                    text:
-                        "I agree to complete this plan within the timeline. If I fail, I accept the ",
-                  ),
-                  TextSpan(
-                    text: "50% Non-Refundable Penalty",
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFFD92D20),
-                      decoration: TextDecoration.underline,
-                      decorationColor: const Color(0xFFD92D20).withOpacity(0.5),
-                    ),
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () => _showPenaltyExplainer(context),
-                  ),
-                  const TextSpan(text: " policy."),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPenaltyExplainer(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _PenaltyExplainerSheet(),
-    );
-  }
-
   Widget _buildCommitmentMessage(int days) {
     if (cadenceType == null) return const SizedBox.shrink();
     final isFlex = cadenceType == 'flexible';
@@ -1409,9 +1766,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 }
 
 class _PenaltyExplainerSheet extends StatelessWidget {
-  const _PenaltyExplainerSheet();
+  final String policyString; // "50% Refund" or "Store Credit"
+
+  const _PenaltyExplainerSheet({required this.policyString});
+
   @override
   Widget build(BuildContext context) {
+    final is50Percent = policyString.contains("50%");
+
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
@@ -1430,7 +1792,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Iconsax.shield_cross,
+                  is50Percent ? Iconsax.shield_cross : Iconsax.card_remove,
                   color: const Color(0xFFD92D20),
                   size: 24.sp,
                 ),
@@ -1441,7 +1803,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "The 50% Penalty",
+                      is50Percent ? "The 50% Penalty" : "Store Credit Only",
                       style: GoogleFonts.inter(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w700,
@@ -1449,7 +1811,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      "Why is this necessary?",
+                      "Cancellation Terms",
                       style: GoogleFonts.inter(
                         fontSize: 12.sp,
                         color: const Color(0xFF667085),
@@ -1461,26 +1823,50 @@ class _PenaltyExplainerSheet extends StatelessWidget {
             ],
           ),
           SizedBox(height: 24.h),
+
+          // REASON 1 (Universal)
           _buildReasonRow(
             icon: Iconsax.shop,
             title: "Vendor Commitment",
             desc:
-                "The vendor removes this item from the shelf for you. They lose other potential buyers while waiting for you.",
+                "The vendor removes this item from the shelf for you. They lose other potential buyers while waiting.",
           ),
           SizedBox(height: 16.h),
-          _buildReasonRow(
-            icon: Iconsax.clock,
-            title: "Time Compensation",
-            desc:
-                "If you default, the 50% compensates the vendor for lost time.",
-          ),
+
+          // REASON 2 (Dynamic)
+          if (is50Percent)
+            _buildReasonRow(
+              icon: Iconsax.clock,
+              title: "Time Compensation",
+              desc:
+                  "If you default, the 50% fee compensates the vendor for lost time and holding costs.",
+            )
+          else
+            _buildReasonRow(
+              icon: Iconsax.bag_2,
+              title: "Use Anywhere",
+              desc:
+                  "Since cash refunds aren't available for this item, your funds will be returned as Korra Store Credit instantly.",
+            ),
+
           SizedBox(height: 16.h),
-          _buildReasonRow(
-            icon: Iconsax.wallet_check,
-            title: "Your Refund",
-            desc:
-                "The remaining 50% is refunded to your wallet instantly. We don't hold your balance.",
-          ),
+
+          // REASON 3 (Dynamic)
+          if (is50Percent)
+            _buildReasonRow(
+              icon: Iconsax.wallet_check,
+              title: "Your Refund",
+              desc:
+                  "The remaining 50% is refunded to your wallet instantly. We don't hold your balance.",
+            )
+          else
+            _buildReasonRow(
+              icon: Iconsax.refresh_circle, // Or loop icon
+              title: "Flexible Spending",
+              desc:
+                  "You can use your credit to purchase any other item on Korra immediately.",
+            ),
+
           SizedBox(height: 32.h),
           SizedBox(
             width: double.infinity,
@@ -1514,6 +1900,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
     required String title,
     required String desc,
   }) {
+    // ... (Keep existing implementation)
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

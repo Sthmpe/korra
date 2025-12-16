@@ -1,8 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts"; 
 import admin from "npm:firebase-admin@11.11.0";
 
 // 1. SETUP
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
+const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY') || "your-production-secret-key-123"; 
 
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -12,307 +14,303 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
-// =========================================================
-// 2. HELPER FUNCTIONS (LOGIC)
-// =========================================================
-
-// ✅ NEW HELPER: Forces 2 Decimal Places
+// 2. HELPERS
 function to2DP(num: number): number {
   return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
-// A. Random DP%
-function generateRandomPercentage(price: number): number {
-  let minPct = 0.0; let maxPct = 0.0;
+function generateRandomDp(price: number): number {
+  let minPct = 0.30; 
+  let maxPct = 0.40;
+
   if (price <= 15000) { minPct = 0.35; maxPct = 0.45; } 
-  else if (price <= 25000) { minPct = 0.30; maxPct = 0.35; } 
-  else if (price <= 35000) { minPct = 0.32; maxPct = 0.38; } 
-  else if (price <= 40000) { minPct = 0.35; maxPct = 0.40; } 
-  else if (price <= 55000) { minPct = 0.38; maxPct = 0.43; } 
-  else { minPct = 0.40; maxPct = 0.45; }
-  return minPct + Math.random() * (maxPct - minPct);
+  else if (price <= 35000) { minPct = 0.30; maxPct = 0.40; } 
+  else if (price <= 75000) { minPct = 0.35; maxPct = 0.45; } 
+  else { minPct = 0.40; maxPct = 0.50; }
+
+  const randomPct = minPct + Math.random() * (maxPct - minPct);
+  return to2DP(price * randomPct);
 }
 
-// B. Buying Logic (Preview)
-function calculateBuyingLogic(productPrice: number, availableLimit: number, isEligible: boolean, lastLimit: number | null) {
-  let gap = 0.0;
-  let lendablePortion = 0.0;
-
-  if (productPrice > availableLimit) {
-    gap = to2DP(productPrice - availableLimit); // Round Gap
-    lendablePortion = availableLimit;
-  } else {
-    gap = 0.0;
-    lendablePortion = productPrice;
-  }
-
-  if (gap > (productPrice * 0.65)) {
-    return { status: "DECLINED", reason: "Low resevation limit the gap is too high" };
-  }
-
-  const dpPercentage = generateRandomPercentage(productPrice);
-  const percentageAmount = to2DP(lendablePortion * dpPercentage); // Round % amount
-  const totalUpfront = to2DP(gap + percentageAmount); // Round total
-  const loanAmount = to2DP(productPrice - totalUpfront); // Round loan
-
-  return {
-    status: "APPROVED",
-    result: {
-      productPrice: to2DP(productPrice), 
-      totalUpfront, 
-      loanAmount,
-      gap, 
-      dpPercentage // Keep percentage raw for precision, or round if display needed
-    }
-  };
+async function getCustomerStats(uid: string) {
+  const statsRef = db.collection('customers').doc(uid).collection('account_stats').doc('main');
+  const doc = await statsRef.get();
+  if (doc.exists) return { ref: statsRef, data: doc.data() };
+  return { ref: statsRef, data: { activePlansCount: 0, walletBalance: 0, tier: 'Starter' } };
 }
 
-// C. STANDARD LIMIT GROWTH (Runs on every completion)
-function calculateNewLimit(currentLimit: number, daysTaken: number, hasDefaulted: boolean) {
-  const MAX_CAP = 100000.0;
-  const BASE_LIMIT = 15000.0;
-
-  if (hasDefaulted || daysTaken > 90) {
-    if (currentLimit <= 35000) return BASE_LIMIT;
-    return to2DP(Math.max(BASE_LIMIT, currentLimit * 0.50)); // Round penalty
-  }
-
-  let increase = 0.0;
-  // Category A: Low Limit
-  if (currentLimit <= 35000) {
-    if (daysTaken <= 14) increase = 0.70;
-    else if (daysTaken <= 30) increase = 0.50;
-    else if (daysTaken <= 45) increase = 0.25;
-    else if (daysTaken <= 60) increase = 0.20;
-    else if (daysTaken <= 80) increase = 0.15;
-    else if (daysTaken <= 90) increase = 0.05;
-  } 
-  // Category B: High Limit
-  else if (currentLimit <= 50000) {
-    if (daysTaken <= 14) increase = 0.30;
-    else if (daysTaken <= 30) increase = 0.20;
-    else if (daysTaken <= 45) increase = 0.10;
-    else if (daysTaken <= 65) increase = 0.05;
-  } 
-  // Category C: Higher Limit
-  else {
-    if (daysTaken <= 14) increase = 0.25;
-    else if (daysTaken <= 30) increase = 0.15;
-    else if (daysTaken <= 45) increase = 0.05;
-  }
-
-  const newLimit = to2DP(currentLimit + (currentLimit * increase)); // Round new limit
-  return Math.min(newLimit, MAX_CAP);
+// Helper to get Vendor Relationship (Store Credit)
+async function getVendorRelation(customerUid: string, vendorId: string) {
+    const relRef = db.collection('customers').doc(customerUid).collection('my_vendors').doc(vendorId);
+    const doc = await relRef.get();
+    if (doc.exists) return { ref: relRef, data: doc.data() };
+    return { ref: relRef, data: { storeCredit: 0 } }; // Default
 }
 
-// D. BONUS BOOSTER (Runs separately, updates strictly if criteria met)
-async function checkAndApplyCreditBooster(db: any, customerUid: string) {
-  const limitRef = db.collection("customer_limits").doc(customerUid);
-  
+// Reusable Notification Helper
+async function sendFcm(uid: string, title: string, body: string, data: any) {
   try {
-    await db.runTransaction(async (t: any) => {
-      const doc = await t.get(limitRef);
-      if (!doc.exists) return;
+    const userDoc = await db.collection('customers').doc(uid).get();
+    const fcmToken = userDoc.data()?.fcmToken;
 
-      const data = doc.data();
-      const completions = data.successfulRepayments || 0;
-      const cancels = data.cancellationCount || 0;
-      const historyCount = completions + cancels;
-      const currentLimit = data.totalCreditLimit || 0;
-
-      // RULE 1: Minimum History
-      if (historyCount < 20) return;
-
-      // RULE 2: Completion Rate > 80%
-      const completionRate = completions / historyCount;
-      if (completionRate < 0.80) return;
-
-      // RULE 3: Analyze Speed (Last 5 completed)
-      const recentPlans = await db.collection("plans")
-                                .where("customerId", "==", customerUid)
-                                .where("status", "==", "completed")
-                                .orderBy("completedAt", "desc")
-                                .limit(5)
-                                .get();
-      
-      let fastCount = 0;
-      recentPlans.forEach((planDoc: any) => {
-        const p = planDoc.data();
-        const start = p.createdAt.toDate();
-        const end = p.completedAt.toDate();
-        const days = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-        if (days <= 14) fastCount++;
+    if (fcmToken) {
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: { title, body },
+        data: data
       });
-
-      let speedBonus = 0.05; // Base 5% boost
-      if (fastCount >= 3) speedBonus = 0.15; // 15% boost
-
-      const newLimit = to2DP(currentLimit * (1 + speedBonus)); // Round Booster
-      const MAX_CAP = 500000;
-
-      if (newLimit > currentLimit && newLimit <= MAX_CAP) {
-        t.update(limitRef, {
-          totalCreditLimit: newLimit,
-          lastBoosterDate: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`🚀 Booster Applied for ${customerUid}`);
-      }
-    });
+      console.log(`🔔 Notification sent to ${uid}: ${title}`);
+    }
   } catch (e) {
-    console.error("Booster Check Failed:", e);
+    console.error(`🔕 Notification failed for ${uid}:`, e);
   }
 }
 
-// =========================================================
-// 3. REQUEST HANDLER
-// =========================================================
+// 3. MAIN HANDLER
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
 
   try {
-    const { action, customerUid, productPrice, planData, planId, amount, reason } = await req.json();
+    const { 
+      action, customerUid, productId, productPrice, 
+      downPaymentAmount, planData, secureToken, 
+      planId, amount, useStoreCredit // New flag if we want to be explicit, but logic below auto-uses it
+    } = await req.json();
 
-    // --- ACTION: PREVIEW ---
+    const secretKey = new TextEncoder().encode(HMAC_SECRET);
+
+    // =======================================================================
+    // 🔍 ACTION: PREVIEW
+    // =======================================================================
     if (action === 'PREVIEW') {
-      const limitRef = db.collection("customer_limits").doc(customerUid);
-      const limitDoc = await limitRef.get();
-      let available = 0;
-      let isEligible = true;
-      if (limitDoc.exists) {
-        const d = limitDoc.data();
-        available = to2DP((d.totalCreditLimit || 0) - (d.activeDebt || 0)); // Round Available
-        isEligible = (d.defaultCount || 0) === 0;
-      }
-      const riskResult = calculateBuyingLogic(Number(productPrice), available, isEligible, null);
-      return new Response(JSON.stringify(riskResult), { headers: { "Content-Type": "application/json" } });
+        const { data: stats } = await getCustomerStats(customerUid);
+        
+        const activeCount = stats.activePlansCount || 0;
+        const tier = stats.tier || 'Starter';
+        
+        let maxSlots = 3;
+        if (tier === 'Keeper') maxSlots = 5;
+        if (tier === 'Collector') maxSlots = 10;
+        if (tier === 'VIP') maxSlots = 9999;
+
+        if (activeCount >= maxSlots) {
+            throw `Slot Limit Reached (${activeCount}/${maxSlots}). You cannot open a new reservation.`;
+        }
+
+        const price = Number(productPrice);
+        const minPrincipal = generateRandomDp(price);
+        
+        const jwt = await new jose.SignJWT({ 
+            min_principal: minPrincipal,
+            product_id: productId,
+            uid: customerUid
+        })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime('15m')
+        .sign(secretKey);
+
+        return new Response(JSON.stringify({ 
+            status: "SUCCESS", 
+            minDownPayment: minPrincipal,
+            secureToken: jwt 
+        }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // --- ACTION: CREATE ---
+    // =======================================================================
+    // 🚀 ACTION: CREATE
+    // =======================================================================
     if (action === 'CREATE') {
-      const productQuery = await db.collection("products").where("code", "==", planData.productCode).limit(1).get();
-      if (productQuery.empty) throw `Product '${planData.productCode}' not found.`;
-      const productDocRef = productQuery.docs[0].ref;
+      if (!secureToken) throw "Security token missing.";
+      
+      let payload;
+      try {
+         const result = await jose.jwtVerify(secureToken, secretKey);
+         payload = result.payload;
+      } catch (_) {
+         throw "Session expired. Please refresh.";
+      }
 
-      const result = await db.runTransaction(async (t: any) => {
-        const limitRef = db.collection("customer_limits").doc(customerUid);
-        const userRef = db.collection("customer").doc(customerUid);
+      if (payload.product_id !== productId || payload.uid !== customerUid) throw "Security mismatch.";
+
+      const requiredPrincipal = Number(payload.min_principal);
+
+      // TRANSACTION
+      const result = await db.runTransaction(async (t) => {
+        const productRef = db.collection('products').doc(productId);
+        const { ref: statsRef } = await getCustomerStats(customerUid); 
         
-        const limitDoc = await t.get(limitRef);
-        const productDoc = await t.get(productDocRef);
-        const userDoc = await t.get(userRef);
+        const productDoc = await t.get(productRef);
+        const statsDoc = await t.get(statsRef);
 
-        if (!limitDoc.exists || !userDoc.exists) throw "User profile missing";
+        if (!productDoc.exists) throw "Product not found";
+        const product = productDoc.data();
         
-        const limitData = limitDoc.data();
-        const productData = productDoc.data();
-        const userData = userDoc.data();
-        
-        const availableCredit = to2DP((limitData.totalCreditLimit || 0) - (limitData.activeDebt || 0)); // Round
-        const currentStock = productData.availableStock || 0;
-        const walletBalance = userData.monnify?.availableBalance || 0;
-        const downPayment = to2DP(planData.initialDownPayment); // Round input
+        if (product.availableStock < 1) throw "Out of Stock";
+        if (product.status !== 'approved') throw "Product unavailable";
 
-        // --- CRITICAL GAP CHECK (Added Here) ---
-        const price = to2DP(productData.price || planData.totalAmount); // Round
+        const stats = statsDoc.exists ? statsDoc.data() : { walletBalance: 0, activePlansCount: 0, tier: 'Starter' };
+        const walletBalance = to2DP(stats.walletBalance || 0);
+        const activeCount = stats.activePlansCount || 0;
 
-        let gap = 0;
-        if (price > availableCredit) {
-           gap = to2DP(price - availableCredit); // Round
+        // Slot Check
+        let maxSlots = 3;
+        if (stats.tier === 'Keeper') maxSlots = 5;
+        if (stats.tier === 'Collector') maxSlots = 10;
+        if (stats.tier === 'VIP') maxSlots = 9999;
+
+        if (activeCount >= maxSlots) throw `Slot Limit Reached.`;
+
+        // Financials
+        const price = to2DP(product.price);
+        const fee = to2DP(price * 0.035);
+        const userTotalDebit = to2DP(downPaymentAmount);
+        const userPrincipal = to2DP(userTotalDebit - fee);
+
+        if (userPrincipal < (requiredPrincipal - 50)) throw `Payment too low. System required ₦${requiredPrincipal} + Fee.`;
+
+        // --- STORE CREDIT LOGIC START ---
+        // 1. Get Store Credit for this Vendor
+        const vendorId = product.vendorId; // Assuming product has vendorId
+        const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
+        const availableStoreCredit = to2DP(vendorRel.storeCredit || 0);
+
+        let creditUsed = 0;
+        let walletUsed = 0;
+
+        // 2. Logic: Use Store Credit First
+        if (availableStoreCredit >= userTotalDebit) {
+            creditUsed = userTotalDebit;
+            walletUsed = 0;
+        } else {
+            creditUsed = availableStoreCredit;
+            walletUsed = to2DP(userTotalDebit - creditUsed);
         }
 
-        // Reject if Gap is > 65% of Price (Your Logic)
-        if (gap > (price * 0.65)) {
-            throw `Reservation declined, low reservation limit.`;
-        }
+        // 3. Check sufficiency
+        if (walletBalance < walletUsed) throw "Insufficient wallet balance (after applying store credit).";
+        // --- STORE CREDIT LOGIC END ---
 
-        if (availableCredit < planData.loanAmount) throw "Insufficient Credit Limit.";
-        if (currentStock < 1) throw "Out of Stock.";
-        if (walletBalance < downPayment) throw "Insufficient Wallet Balance.";
+        const newPlanRef = db.collection('plans').doc();
+        const planId = newPlanRef.id;
 
-        const newPlanRef = db.collection("plans").doc();
-        
+        // Writes
         t.set(newPlanRef, {
           ...planData,
-          id: newPlanRef.id,
-          productId: productDocRef.id,
+          id: planId,
+          productId: productId,
+          vendorId: vendorId, // Ensure vendorId is saved
+          status: 'active',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          status: 'active',
-          // Ensure stored values are rounded
-          totalAmount: to2DP(planData.totalAmount),
-          amountPaid: to2DP(planData.amountPaid),
-          initialDownPayment: to2DP(planData.initialDownPayment),
-          loanAmount: to2DP(planData.loanAmount),
-          outstandingLoanAmount: to2DP(planData.outstandingLoanAmount),
+          totalAmount: price,
+          amountPaid: userPrincipal, 
+          processingFee: fee,        
+          initialDownPayment: userPrincipal,
+          loanAmount: to2DP(price - userPrincipal),
+          outstandingLoanAmount: to2DP(price - userPrincipal),
         });
 
-        t.update(userRef, { "monnify.availableBalance": admin.firestore.FieldValue.increment(-downPayment) });
-        t.update(limitRef, {
-          activeDebt: admin.firestore.FieldValue.increment(to2DP(planData.loanAmount)),
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        // Update Ledger
+        const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+        t.set(ledgerRef, {
+          id: ledgerRef.id,
+          customerId: customerUid,
+          amount: -userTotalDebit, 
+          type: 'plan_creation',
+          description: `Down Payment + Fee for ${product.name}`,
+          planId: planId,
+          reference: ledgerRef.id,
+          status: 'success',
+          balanceBefore: walletBalance,
+          balanceAfter: to2DP(walletBalance - walletUsed), // Only wallet balance drops
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          metadata: { 
+              principal: userPrincipal, 
+              fee: fee,
+              paidWithWallet: walletUsed,
+              paidWithCredit: creditUsed,
+              vendorId: vendorId
+          }
         });
-        t.update(productDocRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
 
-        const txnRef = db.collection('customer').doc(customerUid).collection('ledger_transactions').doc();
-        t.set(txnRef, {
-          id: txnRef.id, customerId: customerUid, amount: -downPayment,
-          type: 'down_payment', description: `Down payment for ${planData.title}`,
-          planId: newPlanRef.id, reference: txnRef.id, status: 'success',
-          balanceBefore: walletBalance, balanceAfter: walletBalance - downPayment,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        const myVendorRef = db.collection('customer').doc(customerUid).collection('my_vendors').doc(planData.vendorId);
-        t.set(myVendorRef, {
-          vendorId: planData.vendorId, storeName: planData.storeName,
-          lastInteractionAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Update Wallet & Slot
+        t.set(statsRef, {
+           walletBalance: to2DP(walletBalance - walletUsed),
+           activePlansCount: admin.firestore.FieldValue.increment(1),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
-        return { planId: newPlanRef.id };
+        // Update Store Credit (Deduct used credit)
+        // Also ensure vendor details are saved/updated in my_vendors
+        t.set(vendorRelRef, {
+            storeCredit: to2DP(availableStoreCredit - creditUsed),
+            storeName: planData.storeName || 'Unknown Store', // Capture basic details
+            // Add other fields from vendor profile if available in request or fetched
+            lastInteraction: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
+
+        return { planId, productName: product.name, duration: planData.baseDurationDays };
       });
+
+      // 🔔 NOTIFICATION
+      await sendFcm(
+        customerUid,
+        "Reservation Confirmed 🔒",
+        `Your plan for ${result.productName} is active! You have ${result.duration} days to complete it.`,
+        { type: "plan_detail", click_action: "FLUTTER_NOTIFICATION_CLICK", planId: result.planId }
+      );
 
       return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planId }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // --- ACTION: PAY_INSTALLMENT (Logic updated to include Standard Growth) ---
+    // =======================================================================
+    // 💸 ACTION: PAY INSTALLMENT
+    // =======================================================================
     if (action === 'PAY_INSTALLMENT') {
-      const paymentAmount = to2DP(Number(amount)); // Round Input
-      let isFinished = false;
+      const paymentAmount = to2DP(Number(amount));
       
-      await db.runTransaction(async (t: any) => {
+      const result = await db.runTransaction(async (t) => {
         const planRef = db.collection("plans").doc(planId);
-        const userRef = db.collection("customer").doc(customerUid);
-        const limitRef = db.collection("customer_limits").doc(customerUid);
-
+        const statsRef = db.collection('customers').doc(customerUid).collection('account_stats').doc('main');
+        
         const planDoc = await t.get(planRef);
-        const userDoc = await t.get(userRef);
-        const limitDoc = await t.get(limitRef);
-        
+        const statsDoc = await t.get(statsRef);
+
         if (!planDoc.exists) throw "Plan not found";
-        
-        const planData = planDoc.data();
-        const limitData = limitDoc.data();
-        const currentBalance = userDoc.data()?.monnify?.availableBalance || 0;
+        if (!statsDoc.exists) throw "Account stats missing";
 
-        if (planData.status !== 'active') throw "Plan is not active";
-        if (currentBalance < paymentAmount) throw "Insufficient Balance";
+        const plan = planDoc.data();
+        const stats = statsDoc.data();
+        const walletBalance = to2DP(stats.walletBalance || 0);
 
-        const newAmountPaid = to2DP(planData.amountPaid + paymentAmount); // Round
-        const newOutstanding = to2DP(Math.max(0, planData.outstandingLoanAmount - paymentAmount)); // Round
-        isFinished = newAmountPaid >= to2DP(planData.totalAmount);
+        if (plan.status !== 'active') throw "Plan is not active";
 
-        // 1. Standard Logic: Determine new limit if finished
-        let newTotalLimit = limitData.totalCreditLimit;
-        if (isFinished) {
-           const created = planData.createdAt.toDate();
-           const now = new Date();
-           const daysTaken = Math.ceil((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-           
-           // Apply Standard Growth Function
-           newTotalLimit = calculateNewLimit(newTotalLimit, daysTaken, false);
+        // --- STORE CREDIT LOGIC START ---
+        const vendorId = plan.vendorId;
+        const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
+        const availableStoreCredit = to2DP(vendorRel.storeCredit || 0);
+
+        let creditUsed = 0;
+        let walletUsed = 0;
+
+        if (availableStoreCredit >= paymentAmount) {
+            creditUsed = paymentAmount;
+            walletUsed = 0;
+        } else {
+            creditUsed = availableStoreCredit;
+            walletUsed = to2DP(paymentAmount - creditUsed);
         }
 
-        // 2. Writes
+        if (walletBalance < walletUsed) throw "Insufficient funds (Wallet + Store Credit).";
+        // --- STORE CREDIT LOGIC END ---
+
+        const newAmountPaid = to2DP(plan.amountPaid + paymentAmount);
+        const newOutstanding = to2DP(Math.max(0, plan.outstandingLoanAmount - paymentAmount)); 
+        const isFinished = newAmountPaid >= to2DP(plan.totalAmount - 0.1); 
+
         t.update(planRef, {
           amountPaid: newAmountPaid,
           outstandingLoanAmount: newOutstanding,
@@ -321,135 +319,180 @@ serve(async (req) => {
           completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null
         });
 
-        t.update(userRef, { "monnify.availableBalance": admin.firestore.FieldValue.increment(-paymentAmount) });
-        
-        // Release Debt & Apply New Limit
-        t.update(limitRef, { 
-          activeDebt: admin.firestore.FieldValue.increment(-paymentAmount),
-          successfulRepayments: isFinished ? admin.firestore.FieldValue.increment(1) : admin.firestore.FieldValue.increment(0),
-          totalCreditLimit: newTotalLimit, // Already rounded in function
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+        t.set(ledgerRef, {
+          id: ledgerRef.id,
+          customerId: customerUid,
+          amount: -paymentAmount,
+          type: 'installment',
+          description: `Installment for ${plan.title}`,
+          planId: planId,
+          reference: ledgerRef.id,
+          status: 'success',
+          balanceBefore: walletBalance,
+          balanceAfter: to2DP(walletBalance - walletUsed),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          metadata: {
+              paidWithWallet: walletUsed,
+              paidWithCredit: creditUsed
+          }
         });
 
-        const txnRef = db.collection('customer').doc(customerUid).collection('ledger_transactions').doc();
-        t.set(txnRef, {
-          id: txnRef.id, customerId: customerUid, amount: -paymentAmount,
-          type: 'repayment', description: `Installment for ${planData.title}`,
-          planId: planId, reference: txnRef.id, status: 'success',
-          balanceBefore: currentBalance, balanceAfter: currentBalance - paymentAmount,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        const statsUpdate: any = {
+           walletBalance: to2DP(walletBalance - walletUsed),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (isFinished) {
+           statsUpdate.activePlansCount = admin.firestore.FieldValue.increment(-1);
+           statsUpdate.completedPlansCount = admin.firestore.FieldValue.increment(1);
+        }
+
+        t.update(statsRef, statsUpdate);
+
+        // Deduct used store credit
+        if (creditUsed > 0) {
+            t.update(vendorRelRef, {
+                storeCredit: to2DP(availableStoreCredit - creditUsed),
+                lastInteraction: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        return { title: plan.title, isFinished };
       });
 
-      // 3. Check Booster (Async/Bonus)
-      // Runs only if finished, to see if they qualify for EXTRA bonus
-      if (isFinished) {
-         checkAndApplyCreditBooster(db, customerUid);
-      }
-      
+      // 🔔 NOTIFICATION
+      await sendFcm(
+        customerUid,
+        result.isFinished ? "Plan Completed! 🎉" : "Payment Successful 💸",
+        result.isFinished 
+            ? `Congratulations! You have fully paid for ${result.title}.`
+            : `You successfully paid ₦${paymentAmount.toLocaleString()} towards ${result.title}.`,
+        { type: "plan_detail", click_action: "FLUTTER_NOTIFICATION_CLICK", planId: planId }
+      );
+
       return new Response(JSON.stringify({ status: "SUCCESS" }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // --- ACTION: CANCEL (10% Fee, 42h Delay, 10-Day Rule) ---
+    // =======================================================================
+    // 🛑 ACTION: CANCEL PLAN
+    // =======================================================================
     if (action === 'CANCEL') {
-      await db.runTransaction(async (t: any) => {
+      const result = await db.runTransaction(async (t) => {
         const planRef = db.collection("plans").doc(planId);
-        const userRef = db.collection("customer").doc(customerUid);
-        const limitRef = db.collection("customer_limits").doc(customerUid);
+        const statsRef = db.collection('customers').doc(customerUid).collection('account_stats').doc('main');
         
         const planDoc = await t.get(planRef);
-        const userDoc = await t.get(userRef);
-        const limitDoc = await t.get(limitRef); // Get limit to apply penalty
-        
+        const statsDoc = await t.get(statsRef);
+
         if (!planDoc.exists) throw "Plan not found";
-        const planData = planDoc.data();
-        const userData = userDoc.data();
+        const plan = planDoc.data();
+        const stats = statsDoc.exists ? statsDoc.data() : { walletBalance: 0 };
+        const walletBalance = to2DP(stats.walletBalance || 0);
 
-        if (planData.status !== 'active') throw "Cannot cancel inactive plan";
+        if (plan.status !== 'active') throw "Cannot cancel inactive plan";
 
-        // A. 10-Day Rule Check
-        const created = planData.createdAt.toDate();
-        const now = new Date();
-        const diffTime = Math.abs(now.getTime() - created.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays > 10) {
-            throw "Cancellation period expired. You can only cancel within 10 days of reservation.";
+        const policy = plan.cancellationPolicy || "Store Credit"; 
+        const totalPaid = to2DP(plan.amountPaid);
+        let refundAmount = 0;
+        let penaltyAmount = 0;
+        let isStoreCreditRefund = false;
+
+        // Policy Logic
+        if (policy.includes("50%")) {
+           // STRICT: 50% Refund to Wallet
+           penaltyAmount = to2DP(totalPaid * 0.50);
+           refundAmount = to2DP(totalPaid - penaltyAmount);
+           isStoreCreditRefund = false;
+        } else {
+           // DIRECT: 100% Refund to Store Credit
+           refundAmount = totalPaid;
+           penaltyAmount = 0;
+           isStoreCreditRefund = true;
         }
 
-        // B. Breakage Fee Logic
-        const initialDP = planData.initialDownPayment || 0;
-        const breakingFee = to2DP(initialDP * 0.10); // Round Fee
-        const totalPaid = planData.amountPaid;
-        const refundAmount = to2DP(totalPaid - breakingFee); // Round Refund
-
-        if (refundAmount < 0) throw "Refund amount negative. Contact support.";
-
-        // C. Create Payout Request
-        const payoutRef = db.collection("customers_payouts").doc();
-        t.set(payoutRef, {
-          id: payoutRef.id,
-          customerId: customerUid,
-          planId: planId,
-          amount: refundAmount,
-          feeDeducted: breakingFee,
-          status: 'pending', 
-          reason: reason || 'plan_cancellation',
-          bankName: userData.monnify?.bankName || 'Unknown',
-          accountNumber: userData.monnify?.accountNumber || 'Unknown',
-          accountName: userData.monnify?.accountName || 'Unknown',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          scheduledFor: admin.firestore.Timestamp.fromMillis(Date.now() + (42 * 60 * 60 * 1000))
-        });
-
-        // D. Update Plan
         t.update(planRef, {
           status: 'cancelled',
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          refundStatus: 'processing_42hr_hold'
+          refundAmount: refundAmount,
+          penaltyAmount: penaltyAmount
         });
 
-        // E. Ledger
-        const txnRef = db.collection('customer').doc(customerUid).collection('ledger_transactions').doc();
-        t.set(txnRef, {
-          id: txnRef.id, customerId: customerUid, amount: 0,
-          type: 'cancellation', description: `Cancelled. Fee: ${breakingFee}. Refund Pending: ${refundAmount}`,
-          planId: planId, reference: payoutRef.id, status: 'pending',
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        // F. Penalty Logic (Decrease Limit)
-        const limitData = limitDoc.data();
-        let currentLimit = limitData.totalCreditLimit;
-        const totalHistory = (limitData.successfulRepayments || 0) + (limitData.cancellationCount || 0) + 1;
-        const cancels = (limitData.cancellationCount || 0) + 1;
-        
-        // If cancellation rate > 30%, reduce by 15%
-        if (totalHistory > 5 && (cancels / totalHistory) > 0.30) {
-             currentLimit = to2DP(currentLimit * 0.85); // Round Penalty
+        if (refundAmount > 0) {
+           const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+           t.set(ledgerRef, {
+             id: ledgerRef.id,
+             customerId: customerUid,
+             amount: refundAmount, 
+             type: 'refund',
+             description: isStoreCreditRefund 
+                ? `Store Credit Refund for ${plan.title}` 
+                : `Wallet Refund for ${plan.title}`,
+             planId: planId,
+             reference: ledgerRef.id,
+             status: 'success',
+             balanceBefore: walletBalance,
+             balanceAfter: isStoreCreditRefund ? walletBalance : to2DP(walletBalance + refundAmount), // Wallet bal only changes if NOT store credit
+             createdAt: admin.firestore.FieldValue.serverTimestamp(),
+             metadata: {
+                 refundDestination: isStoreCreditRefund ? 'store_credit' : 'wallet'
+             }
+           });
         }
 
-        t.update(limitRef, {
-          activeDebt: admin.firestore.FieldValue.increment(-to2DP(planData.outstandingLoanAmount)), // Round Debt Release
-          cancellationCount: admin.firestore.FieldValue.increment(1),
-          totalCreditLimit: currentLimit,
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        // Apply Refund
+        if (isStoreCreditRefund) {
+            // Update My Vendors Store Credit
+            const vendorId = plan.vendorId;
+            const { ref: vendorRelRef } = await getVendorRelation(customerUid, vendorId);
+            
+            // Use set with merge to ensure doc exists if it was somehow deleted
+            t.set(vendorRelRef, {
+                storeCredit: admin.firestore.FieldValue.increment(refundAmount),
+                storeName: plan.storeName || 'Unknown Store',
+                lastInteraction: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+        } else {
+            // Update Main Wallet
+            t.update(statsRef, {
+               walletBalance: admin.firestore.FieldValue.increment(refundAmount)
+            });
+        }
+
+        // Always release the slot
+        t.update(statsRef, {
+           activePlansCount: admin.firestore.FieldValue.increment(-1),
+           cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // G. Restock
-        if (planData.productId) {
-           const productRef = db.collection("products").doc(planData.productId);
-           t.update(productRef, { stockCount: admin.firestore.FieldValue.increment(1) });
+        if (plan.productId) {
+           const productRef = db.collection("products").doc(plan.productId);
+           t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(1) });
         }
+
+        return { title: plan.title, refundAmount, penaltyAmount, isStoreCredit: isStoreCreditRefund };
       });
 
-      return new Response(JSON.stringify({ status: "SUCCESS", message: "Plan cancelled. Refund processing." }), { headers: { "Content-Type": "application/json" } });
+      // 🔔 NOTIFICATION
+      await sendFcm(
+        customerUid,
+        "Plan Cancelled 🛑",
+        result.isStoreCredit 
+            ? `Plan Cancelled. ₦${result.refundAmount} has been added to your Store Credit.`
+            : `Refund: ₦${result.refundAmount}. Penalty: ₦${result.penaltyAmount}. Wallet credited.`,
+        { type: "wallet_history", click_action: "FLUTTER_NOTIFICATION_CLICK" }
+      );
+
+      return new Response(JSON.stringify({ status: "SUCCESS", message: "Plan cancelled." }), { headers: { "Content-Type": "application/json" } });
     }
 
-    return new Response("Invalid Action", { status: 400 });
+    return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400 });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.toString() }), { status: 500, headers: { "Content-Type": "application/json" } });
+    const msg = err.toString().replace("Error: ", "");
+    return new Response(JSON.stringify({ status: "ERROR", error: msg }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
 });

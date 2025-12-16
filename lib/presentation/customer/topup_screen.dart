@@ -58,7 +58,7 @@ class TopUpScreen extends StatelessWidget {
                       SizedBox(height: 32.h),
 
                       // --- 2. FEE CALCULATOR ---
-                      const _FeeCalculatorSection(),
+                     // const _FeeCalculatorSection(),
 
                       SizedBox(height: 24.h),
 

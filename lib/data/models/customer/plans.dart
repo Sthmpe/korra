@@ -33,15 +33,17 @@ class Plan {
   final double outstandingLoanAmount; 
   final double dpPercentage; 
 
+  final double processingFee;
+
   // =========================================================
   // 5. PAYMENT CADENCE & LIMITS (MICRO-TIER)
   // =========================================================
   final int? cadenceDays; 
   final String? cadenceType; 
   final bool commitmentEnabled; 
-  final int durationMonths; // For UI Display (e.g. "3 Months")
+  final int durationMonths; 
   
-  // ✅ NEW: Strict Limit Fields
+  // Strict Limit Fields
   final int baseDurationDays;   // e.g. 15, 30, 90
   final int noticePeriodDays;   // e.g. 3, 10
   final int extensionGraceDays; // e.g. 0, 10, 30
@@ -53,14 +55,20 @@ class Plan {
   final DateTime updatedAt;
   final DateTime nextDueDate;
   
-  // ✅ NEW: Automation Dates
+  // Automation Dates
   final DateTime planExpiryDate;   // Hard stop date
   final DateTime noticeStartDate;  // Warning date
 
   // =========================================================
-  // 8. STATUS
+  // 7. STATUS & POLICY
   // =========================================================
   final String status;
+  
+  // ✅ NEW: The policy locked in at purchase time
+  // Values: "50% Refund" OR "Store Credit"
+  final String cancellationPolicy;
+  final String customerName;
+  final String customerPhone; 
 
   const Plan({
     required this.id,
@@ -80,20 +88,25 @@ class Plan {
     required this.createdAt,
     required this.updatedAt,
     required this.nextDueDate,
-    required this.planExpiryDate,    // NEW
-    required this.noticeStartDate,   // NEW
+    required this.planExpiryDate,    
+    required this.noticeStartDate,   
     required this.durationMonths,
     this.amountPerPeriod,
     required this.initialDownPayment,
     required this.loanAmount,
     required this.outstandingLoanAmount,
     required this.dpPercentage,
+    required this.processingFee,
     required this.status,
+    required this.cancellationPolicy, // ✅ Required
     
     // Micro-Tier Defaults
     required this.baseDurationDays,
     required this.noticePeriodDays,
     required this.extensionGraceDays,
+
+    this.customerName = '',
+    this.customerPhone = '',
   });
 
   // =========================================================
@@ -111,13 +124,17 @@ class Plan {
     required double totalProductPrice, 
     required double totalUpfrontPaid, 
     required double loanAmount, 
-    required double dpPercentage, 
+    required double dpPercentage,
+    required double processingFee, 
+    required String cancellationPolicy, // ✅ PASSED FROM UI
     String? cadenceType,
     required bool commitmentEnabled,
     required int durationMonths,
     double? amountPerPeriod,
+    required String customerName,  // ✅ Require this from UI
+    required String customerPhone,
     
-    // ✅ NEW: Tier Inputs (Passed from Bloc)
+    // Tier Inputs (Passed from Bloc)
     required int baseDurationDays, 
     required int noticeDays, 
     required int extensionDays, 
@@ -128,7 +145,7 @@ class Plan {
     switch (cadenceType) {
       case "daily": cadenceDays = 1; break;
       case "weekly": cadenceDays = 7; break;
-      case "bi-weekly": cadenceDays = 14; break; // Added bi-weekly
+      case "bi-weekly": cadenceDays = 14; break; 
       default: cadenceDays = 30;
     }
     
@@ -139,6 +156,8 @@ class Plan {
     return Plan(
       id: generatedId,
       customerId: customerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
       productId: productId,
       productCode: productCode,
       vendorId: vendorId,
@@ -155,6 +174,7 @@ class Plan {
       loanAmount: loanAmount,
       outstandingLoanAmount: loanAmount,
       dpPercentage: dpPercentage,
+      processingFee: processingFee,
 
       cadenceDays: cadenceDays,
       cadenceType: cadenceType ?? "monthly",
@@ -173,6 +193,7 @@ class Plan {
       extensionGraceDays: extensionDays,
 
       status: (totalUpfrontPaid >= totalProductPrice) ? 'completed' : 'active',
+      cancellationPolicy: cancellationPolicy, // ✅ Saved
     );
   }
 
@@ -192,7 +213,7 @@ class Plan {
       status != 'cancelled';
 
   bool get isCompleted => status == 'completed';
-  bool get isCancelled => status == 'cancelled'; // Double L check
+  bool get isCancelled => status == 'cancelled'; 
   bool get isActive => status == 'active';
 
   // =========================================================
@@ -205,6 +226,8 @@ class Plan {
       productId: '',
       productCode: '',
       customerId: '',
+      customerName: '',
+      customerPhone: '',
       vendorId: '',
       title: 'Loading...',
       storeName: '...',
@@ -217,6 +240,7 @@ class Plan {
       loanAmount: 0.0,
       outstandingLoanAmount: 0.0,
       dpPercentage: 0.0,
+      processingFee: 0.0,
       cadenceDays: 30,
       cadenceType: 'monthly',
       commitmentEnabled: false,
@@ -225,6 +249,7 @@ class Plan {
       updatedAt: now,
       nextDueDate: now,
       status: 'active',
+      cancellationPolicy: 'Store Credit', // ✅ Default Safety
       
       // Shell Defaults
       planExpiryDate: now.add(const Duration(days: 30)),
@@ -244,6 +269,8 @@ class Plan {
       "productId": productId,
       "productCode": productCode,
       "customerId": customerId,
+      "customerName": customerName,
+      "customerPhone": customerPhone,
       "vendorId": vendorId,
       "title": title,
       "storeName": storeName,
@@ -263,9 +290,11 @@ class Plan {
       "loanAmount": loanAmount,
       "outstandingLoanAmount": outstandingLoanAmount,
       "dpPercentage": dpPercentage,
+      "processingFee": processingFee,
       "status": status,
+      "cancellationPolicy": cancellationPolicy, // ✅
       
-      // ✅ NEW: Automation Fields
+      // Automation Fields
       "planExpiryDate": planExpiryDate,
       "noticeStartDate": noticeStartDate,
       "baseDurationDays": baseDurationDays,
@@ -286,6 +315,8 @@ class Plan {
       productId: map["productId"] ?? '',
       productCode: map["productCode"] ?? '',
       customerId: map["customerId"] ?? '',
+      customerName: map["customerName"] ?? "Unknown Customer",
+      customerPhone: map["customerPhone"] ?? "",
       vendorId: map["vendorId"] ?? '',
       title: map["title"] ?? '',
       storeName: map["storeName"] ?? '',
@@ -305,9 +336,11 @@ class Plan {
       loanAmount: (map["loanAmount"] ?? 0.0).toDouble(),
       outstandingLoanAmount: (map["outstandingLoanAmount"] ?? 0.0).toDouble(),
       dpPercentage: (map["dpPercentage"] ?? 0.0).toDouble(),
+      processingFee: (map["processingFee"] ?? 0.0).toDouble(),
       status: map["status"] ?? 'active',
+      cancellationPolicy: map["cancellationPolicy"] ?? 'Store Credit', // ✅
       
-      // ✅ NEW: Map Automation Fields
+      // Map Automation Fields
       planExpiryDate: parseDate(map["planExpiryDate"]),
       noticeStartDate: parseDate(map["noticeStartDate"]),
       baseDurationDays: map["baseDurationDays"] ?? 30,
