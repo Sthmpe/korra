@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum VendorActivityType { newReservation, paymentMissed, lowStock, info }
+enum VendorActivityType { newReservation, paymentMissed, lowStock, info, stockLow, payout, planCompleted, cancelled }
 
 class VendorActivity extends Equatable {
   final String id;      // activity id

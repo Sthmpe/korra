@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
 
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
+import '../../../logic/services/notification_service.dart'; // Reuse service
 import '../../shared/widgets/korra_header.dart';
 import 'vendor_home_body.dart';
+import 'widgets/notification_screen.dart';
 
-class VendorHomePage extends StatelessWidget {
+class VendorHomePage extends StatefulWidget {
   final VendorRepository vendors;
   final String vendorUid;
 
@@ -19,26 +24,82 @@ class VendorHomePage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // vendors.fetchWallets();
+  State<VendorHomePage> createState() => _VendorHomePageState();
+}
 
+class _VendorHomePageState extends State<VendorHomePage> {
+  
+  @override
+  void initState() {
+    super.initState();
+    // 🔔 Initialize Push Notifications
+    NotificationService(widget.vendors).initialize(widget.vendorUid);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
         BlocProvider(
           create: (_) => VendorHomeBloc(
-            vendors: vendors,
-            vendorUid: vendorUid,
+            vendors: widget.vendors,
+            vendorUid: widget.vendorUid,
             net: context.read<NetCubit>(),
           )..add(const VendorHomeStarted()),
         ),
-        // Add more blocs here if needed
       ],
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: const KorraHeader(title: 'Home'),
+        
+        // --- 1. APP BAR (Bell Wired Up) ---
+        appBar: KorraHeader(
+          title: 'Home',
+          trailingActions: [
+            StreamBuilder<int>(
+              stream: widget.vendors.streamUnreadCount(widget.vendorUid),
+              initialData: 0,
+              builder: (context, notifSnap) {
+                final count = notifSnap.data ?? 0;
+                final hasUnread = count > 0;
+
+                return IconButton(
+                  onPressed: () {
+                    Get.to(() => NotificationScreen(
+                      repo: widget.vendors,
+                      uid: widget.vendorUid,
+                      onJumpToPlans: () {}, // Optional/Null for vendor
+                    ));
+                  },
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Iconsax.notification, color: const Color(0xFF1B1B1B), size: 24.sp),
+                      if (hasUnread)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 10.w,
+                            height: 10.w,
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                          ),
+                        )
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+
+        // --- 2. BODY ---
         body: VendorHomeBody(
-          vendorUid: vendorUid,
-          vendors: vendors,
+          vendors: widget.vendors,
+          vendorUid: widget.vendorUid,
         ),
       ),
     );

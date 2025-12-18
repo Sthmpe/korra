@@ -1,15 +1,21 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:korra/data/repository/customer/customer_repository.dart';
+
+// Import the interface definition (or define it in this file)
+abstract class INotificationRepository {
+  Future<void> updateFcmToken(String uid, String token);
+}
 
 class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-  final CustomerRepository repo;
+  
+  // 👇 Accept the Interface, not a specific class
+  final INotificationRepository repo;
 
   NotificationService(this.repo);
 
-  Future<void> initialize(String customerUid) async {
-    // 1. Request Permission (Critical for iOS & Android 13+)
+  Future<void> initialize(String uid) async {
+    // 1. Request Permission
     NotificationSettings settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
@@ -19,24 +25,24 @@ class NotificationService {
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       
-      // 2. ENGINEERING FIX: Force Foreground Presentation
-      // This makes the notification pop up even if the app is open!
+      // 2. Force Foreground Presentation
       await _fcm.setForegroundNotificationPresentationOptions(
-        alert: true, // Show Banner
+        alert: true,
         badge: true,
-        sound: true, // Play Sound
+        sound: true,
       );
 
       // 3. Get & Save Token
       String? token = await _fcm.getToken();
       if (token != null) {
         debugPrint("🔥 FCM Token: $token");
-        await repo.updateFcmToken(customerUid, token);
+        // This works for ANY repo that implements the interface
+        await repo.updateFcmToken(uid, token);
       }
 
       // 4. Token Refresh Listener
       _fcm.onTokenRefresh.listen((newToken) {
-        repo.updateFcmToken(customerUid, newToken);
+        repo.updateFcmToken(uid, newToken);
       });
     }
   }

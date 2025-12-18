@@ -40,9 +40,9 @@ class _ReservationSearchBarState extends State<ReservationSearchBar> {
       decoration: BoxDecoration(
         color: const Color(0xFFF7F3EF),
         borderRadius: BorderRadius.circular(14.r),
-        border: Border.all(color: const Color(0xFFEAE6E2)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      padding: EdgeInsets.symmetric(horizontal: 12.w),
+      padding: EdgeInsets.only(left: 12.w),
       child: Row(children: [
         const Icon(Icons.search_rounded, color: Color(0xFF8B8B8B)),
         SizedBox(width: 8.w),
@@ -53,9 +53,11 @@ class _ReservationSearchBarState extends State<ReservationSearchBar> {
             textInputAction: TextInputAction.search,
             style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
+              contentPadding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 12.w),
               isCollapsed: true,
               border: InputBorder.none,
-              hintText: 'Search customer, product or SKU',
+              focusedBorder: InputBorder.none,
+              hintText: 'Search customer, product...',
               hintStyle: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF8B8B8B)),
             ),
           ),

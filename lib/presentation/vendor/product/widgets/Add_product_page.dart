@@ -668,29 +668,71 @@ class _AddProductPageState extends State<AddProductPage> {
       key: const ValueKey('strict'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 1. Info Card
         _buildInfoBox(
           "Strict Model",
-          "System handles payments. If customer defaults, you keep the penalty fee.",
+          "Best for high-demand items. Payments are collected by Korra. You are protected from cancellations.",
           Iconsax.shield_tick,
         ),
         SizedBox(height: 20.h),
-        Text("If customer defaults, you offer:", style: _labelStyle()),
+
+        // 2. Fixed Policy Display (No Dropdown)
+        Text("Cancellation Policy", style: _labelStyle()),
         SizedBox(height: 8.h),
-        _buildDropdown(
-          value: _selectedStrictPolicy,
-          items: ["50% Refund", "Store Credit"],
-          onChanged: (v) => setState(() => _selectedStrictPolicy = v!),
-        ),
-        SizedBox(height: 12.h),
-        Text(
-          _priceAllowsExtension
-              ? "Extensions: Automatic (Available at 80% payment)"
-              : "Extensions: Not available for this price range.",
-          style: GoogleFonts.inter(
-            fontSize: 12.sp,
-            color: Colors.grey.shade500,
-            fontStyle: FontStyle.italic,
+
+        Container(
+          padding: EdgeInsets.all(12.r),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12.r),
+            border: Border.all(color: const Color(0xFFEAECF0)),
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Standard Strict Policy", // Or "50% Refund"
+                style: GoogleFonts.inter(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF101828),
+                ),
+              ),
+              SizedBox(height: 4.h),
+              Text(
+                "If the customer cancels after the grace period, they receive 50% refund. You keep the rest as compensation or convert to store credit.",
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF667085),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        SizedBox(height: 12.h),
+
+        // 3. Extension Info
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 16.sp, color: Colors.blue),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                _priceAllowsExtension
+                    ? "Automatic Extensions: Enabled (Customer gets extra time if 80% paid)."
+                    : "Extensions: Not available for this price range.",
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: Colors.grey.shade600,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

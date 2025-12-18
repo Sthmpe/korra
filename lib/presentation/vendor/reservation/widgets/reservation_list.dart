@@ -3,7 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../data/models/vendor/vendor_reservation.dart';
-import 'reservation_tile.dart';
+import 'reservation_tile.dart'; // Ensure you have this tile widget
 
 class ReservationList extends StatelessWidget {
   final bool loading;
@@ -27,7 +27,7 @@ class ReservationList extends StatelessWidget {
       return const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(22),
-          child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+          child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFA54600)))),
         ),
       );
     }
@@ -39,18 +39,18 @@ class ReservationList extends StatelessWidget {
         ReservationStatus.completed   => 'No completed reservations.',
         ReservationStatus.cancelled   => 'No cancelled reservations.',
       };
+      
       return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.all(16.r),
-          child: Container(
-            padding: EdgeInsets.all(18.r),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: const Color(0xFFEAE6E2)),
+          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(Icons.inbox_rounded, size: 40.sp, color: Colors.grey.shade300),
+                SizedBox(height: 8.h),
+                Text(emptyText, style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF5E5E5E))),
+              ],
             ),
-            child: Text(emptyText,
-              style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF5E5E5E))),
           ),
         ),
       );
@@ -58,14 +58,14 @@ class ReservationList extends StatelessWidget {
 
     return SliverList.separated(
       itemCount: items.length,
-      separatorBuilder: (_, __) => SizedBox(height: 16.h), // extra gap between cards
+      separatorBuilder: (_, __) => SizedBox(height: 12.h),
       itemBuilder: (_, i) {
         final r = items[i];
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: 12.w),
           child: ReservationTile(
             data: r,
-            onTap: () => onOpen(r.id),                   // ← FIX: pass onTap
+            onTap: () => onOpen(r.id),
             onArrangeDelivery: () => onArrangeDelivery(r.id),
           ),
         );

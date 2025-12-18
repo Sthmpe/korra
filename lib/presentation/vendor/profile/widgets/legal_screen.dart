@@ -3,8 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../auth/legal/legal_sheet.dart';
-import '../../shared/widgets/korra_header.dart';
+import '../../../auth/legal/legal_sheet.dart';
+import '../../../shared/widgets/korra_header.dart';
 
 // Import your sheet functions here (or keep them in this file for now)
 // import 'legal_sheets.dart'; 
@@ -31,9 +31,14 @@ class LegalMenuScreen extends StatelessWidget {
     // Define the list of available documents here
     final List<LegalItem> documents = [
       LegalItem(
-        title: "Customer Terms of Service",
+        title: "Vendor Terms of Service",
         lastUpdated: "Dec 2025",
-        onTap: () => showKorraTermsSheet(context), // Defined in previous steps
+        onTap: () => showKorraVendorTermsSheet(context), // Defined in previous steps
+      ),
+      LegalItem(
+        title: "Partnership & Integrity Policy",
+        lastUpdated: "Nov 2025",
+        onTap: () => showKorraVendorPartnershipSheet(context), // Defined in previous steps
       ),
       LegalItem(
         title: "Privacy Policy",

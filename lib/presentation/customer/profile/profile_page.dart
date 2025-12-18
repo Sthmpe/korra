@@ -20,15 +20,15 @@ import '../../../logic/core/net/net_cubit.dart';
 
 // WIDGETS
 import '../../auth/role_login/role_login_screen.dart';
-import '../../shared/notify/korra_notify.dart';
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/show_app_snackbar.dart';
 import 'bank_details_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 import 'help_center_screen.dart';
 import 'legal_screen.dart';
 import 'limit_upgrade_screen.dart';
-import 'liveness.dart';
+// import 'liveness.dart';
 import 'my_store_credit_screen.dart';
 import 'my_vendors_screen.dart';
 import 'statements_screen.dart';
@@ -58,9 +58,10 @@ class ProfilePage extends StatelessWidget {
       ),
       child: BlocListener<ProfileBloc, ProfileState>(
         listener: (context, state) {
-          if (state.message != null) KorraNotify.info(context, state.message!);
-          if (state.status == ProfileStatus.logout)
+          if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
+          if (state.status == ProfileStatus.logout) {
             Get.offAll(() => const RoleLoginScreen());
+          }
         },
         // REAL-TIME DATA STREAM
         child: StreamBuilder<Customer?>(
@@ -88,9 +89,6 @@ class ProfilePage extends StatelessWidget {
             return StreamBuilder<CustomerAccountStats?>(
               stream: customerRepo.streamCustomerStats(customerUid),
               builder: (context, limitSnap) {
-                final limitData = limitSnap.data;
-                final totalLimit = 15000.00; //limitData?.totalCreditLimit ?? 15000.0;
-                final activeDebt =  0.0; //limitData?.activeDebt ?? 0.0;
 
                 return Scaffold(
                   backgroundColor: const Color(0xFFF9FAFB),
@@ -239,10 +237,7 @@ class ProfilePage extends StatelessWidget {
                                     title: 'AutoPay',
                                     subtitle: 'Coming soon',
                                     value: false,
-                                    onChanged: (_) => KorraNotify.info(
-                                      context,
-                                      "Coming soon!",
-                                    ),
+                                    onChanged: (_) => showAppSnackbar('Coming soon!', SnackbarType.info)
                                   ),
                                   _divider(),
 
@@ -274,9 +269,9 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.brightness_6_outlined,
                                     title: 'App Theme',
                                     subtitle: 'Coming soon',
-                                    onTap: () => KorraNotify.info(
-                                      context,
+                                    onTap: () => showAppSnackbar(
                                       "Themes are coming soon!",
+                                      SnackbarType.info,
                                     ),
                                   ),
                                 ],
@@ -297,9 +292,9 @@ class ProfilePage extends StatelessWidget {
                                     subtitle: 'Coming soon',
                                     value: false,
                                     onChanged: (v) {
-                                      KorraNotify.info(
-                                        context,
+                                      showAppSnackbar(
                                         "Biometrics coming soon!",
+                                        SnackbarType.info,
                                       );
                                     },
                                   ),
@@ -362,8 +357,7 @@ class ProfilePage extends StatelessWidget {
                                     width: double.infinity,
                                     height: 50.h,
                                     child: OutlinedButton(
-                                      onPressed: () =>
-                                          bloc.add(LogoutRequested()),
+                                      onPressed: () => _confirmLogout(context, bloc),
                                       style: OutlinedButton.styleFrom(
                                         side: const BorderSide(
                                           color: Color(0xFFD0D5DD),
@@ -432,45 +426,59 @@ class ProfilePage extends StatelessWidget {
     return Divider(height: 24.h, color: const Color(0xFFF2F4F7), thickness: 1);
   }
 
+   // --- ACTIONS ---
+
+  void _confirmLogout(BuildContext context, ProfileBloc bloc) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Log out', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to log out?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              // Perform logout via Auth Bloc or Repository
+              Navigator.pop(context);
+              bloc.add(LogoutRequested());
+            },
+            child: const Text("Log out", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmDelete(BuildContext context, ProfileBloc bloc) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(
           'Delete Account?',
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.w800,
-            color: Colors.red,
-          ),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.red),
         ),
         content: Text(
           'This action is permanent and cannot be undone.\n\n'
-          'Note: You cannot delete your account if you have any active plans or unpaid debts.',
+          'Note: You cannot delete your account if you have active orders or pending payouts.',
           style: GoogleFonts.inter(fontSize: 14.sp),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Keep Account',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700,
-                color: Colors.black,
-              ),
-            ),
+            child: Text('Keep Account', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.black)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB3261E),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E)),
             onPressed: () {
               Navigator.of(context).pop();
-              bloc.add(DeleteAccountRequested());
+              // bloc.add(DeleteAccountRequested());
+              // Trigger Delete Logic
+              showAppSnackbar("Contact support to delete account.", SnackbarType.info);
             },
-            child: Text(
-              'Delete Permanently',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-            ),
+            child: Text('Delete Permanently', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
           ),
         ],
       ),

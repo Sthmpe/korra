@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 // --- MODELS ---
 import '../../../config/utils/korra_exception.dart';
 import '../../../data/models/customer/customer_model.dart';
+import '../../../logic/services/notification_service.dart';
 import '../../models/customer/customer_account_stats.dart';
 import '../../models/customer/transaction_model.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
@@ -15,7 +16,7 @@ import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 import '../../models/customer/vendor_profile.dart';
 import '../remote/monnify_functions.dart';
 
-class CustomerRepository {
+class CustomerRepository implements INotificationRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseFirestore db;
@@ -37,6 +38,19 @@ class CustomerRepository {
   // ---------------------------------------------------------------------------
   // UTILITY METHODS
   // ---------------------------------------------------------------------------
+
+  @override // 👈 Add override annotation
+  Future<void> updateFcmToken(String uid, String token) async {
+    try {
+      // We merge it so we don't overwrite other data
+      await db.collection('customer').doc(uid).set({
+        'fcmToken': token,
+        'lastSeen': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Failed to update FCM Token: $e");
+    }
+  }
 
   /// Upgrades the customer's tier
   Future<void> upgradeTier(String uid, String tierName) async {
@@ -480,18 +494,7 @@ class CustomerRepository {
     }
   }
 
-  Future<void> updateFcmToken(String uid, String token) async {
-    try {
-      // We merge it so we don't overwrite other data
-      await db.collection('customer').doc(uid).set({
-        'fcmToken': token,
-        'lastSeen': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint("Failed to update FCM Token: $e");
-    }
-  }
-
+  
   // Efficient check: Returns TRUE if user has any plan that isn't closed
   Future<bool> hasActivePlans(String uid) async {
     try {

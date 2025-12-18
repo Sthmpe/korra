@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-enum SnackbarType { success, warning, error }
+enum SnackbarType { success, warning, error, info }
 
 void showAppSnackbar(String message, SnackbarType type) {
   // 1. Haptic Feedback (Immediate physical response)
@@ -35,6 +35,11 @@ void showAppSnackbar(String message, SnackbarType type) {
       icon = Iconsax.warning_2;
       primaryColor = const Color(0xFFEF4444); // Red
       backgroundColor = const Color(0xFFFEF2F2); // Soft Red Bg
+      break;
+    case SnackbarType.info:
+      icon = Iconsax.info_circle;
+      primaryColor = const Color(0xFF3B82F6); // Blue
+      backgroundColor = const Color(0xFFEFF6FF); // Soft Blue Bg
       break;
   }
 

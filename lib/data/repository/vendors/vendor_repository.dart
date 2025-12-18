@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FunctionsClient, FunctionException;
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
@@ -12,13 +12,15 @@ import 'package:korra/data/models/vendor/vendor_model.dart';
 import '../../../config/utils/korra_exception.dart';
 import '../../../logic/bloc/vendor/payout/bank.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
+import '../../../logic/services/notification_service.dart';
 import '../../models/vendor/payout/payout_details.dart';
 import '../../models/vendor/transaction_model.dart';
+import '../../models/vendor/vendor_activity_type.dart';
 import '../../models/vendor/vendor_setting.dart';
 import '../../models/vendor/vendor_stat.dart';
 import '../remote/monnify_functions.dart';
 
-class VendorRepository {
+class VendorRepository implements INotificationRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseFirestore db;
@@ -48,6 +50,141 @@ class VendorRepository {
   /// Optional helpers
   void clearProductCache() => productItemCache.clear();
 
+  @override
+  Future<void> updateFcmToken(String uid, String token) async {
+    try {
+      // We merge it so we don't overwrite other data
+      await db.collection('vendors').doc(uid).set({
+        'fcmToken': token,
+        'lastSeen': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Failed to update FCM Token: $e");
+    }
+  }
+
+  Stream<int> streamUnreadCount(String uid) {
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('notifications')
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  // 2. Stream Recent Activity Feed
+  Stream<List<VendorActivityItem>> streamActivityFeed(String uid) {
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('activity_feed') 
+        .orderBy('date', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => VendorActivityItem.fromMap(doc.data(), doc.id))
+              .toList();
+        });
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = auth.currentUser;
+    if (user == null) throw KorraException("User not logged in");
+
+    // 1. Create Credential for Re-Auth
+    final cred = EmailAuthProvider.credential(
+      email: user.email!, 
+      password: currentPassword
+    );
+
+    try {
+      // 2. Re-Authenticate (Critical Security Step)
+      await user.reauthenticateWithCredential(cred);
+
+      // 3. Update Password
+      await user.updatePassword(newPassword);
+      
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        throw KorraException("The current password is incorrect.");
+      } else if (e.code == 'weak-password') {
+        throw KorraException("New password is too weak.");
+      } else if (e.code == 'requires-recent-login') {
+        throw KorraException("Please log out and log back in before changing your password.");
+      }
+      throw KorraException("Update failed: ${e.message}");
+    } catch (e) {
+      throw KorraException("An unknown error occurred.");
+    }
+  }
+
+  // 1. Stream CASH LEDGER (Real Money: Money In, Out, Vault)
+  // path: vendors/{uid}/ledger_transactions
+  Stream<List<TransactionModel>> streamCashLedger(String uid) {
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('ledger_transactions')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            // Your TransactionModel.fromMap handles the parsing
+            return TransactionModel.fromMap(doc.data(), doc.id);
+          }).toList();
+        });
+  }
+
+  // 2. Stream LIABILITY LEDGER (Store Credit Owed)
+  // path: vendors/{uid}/liabilities
+  Stream<List<TransactionModel>> streamLiabilityLedger(String uid) {
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('liabilities')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            // Reusing TransactionModel since structure is identical
+            return TransactionModel.fromMap(doc.data(), doc.id);
+          }).toList();
+        });
+  }
+
+  Stream<Vendor?> streamVendor(String uid) {
+    return firestore
+        .collection(
+          'vendors',
+        ) // Ensure this matches your Firestore collection name
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) {
+          if (!snapshot.exists || snapshot.data() == null) {
+            return null;
+          }
+
+          // Get data map
+          final data = snapshot.data()!;
+
+          // Safety: Ensure UID is included in the map before converting
+          // (In case it wasn't explicitly saved as a field)
+          data['uid'] = snapshot.id;
+
+          try {
+            return Vendor.fromMap(data);
+          } catch (e) {
+            print("Error parsing Vendor data: $e");
+            return null;
+          }
+        });
+  }
+
   void updateProductCache(List<ProductItem> products) {
     productItemCache
       ..clear()
@@ -66,9 +203,11 @@ class VendorRepository {
         technicalDetails: "404/Invalid Account",
       );
     }
-    
+
     // 2. Network Issues
-    if (error is SocketException || msg.contains('socketexception') || msg.contains('connection refused')) {
+    if (error is SocketException ||
+        msg.contains('socketexception') ||
+        msg.contains('connection refused')) {
       return KorraException(
         "No internet connection. Please check your network.",
         technicalDetails: "SocketException",
@@ -88,7 +227,7 @@ class VendorRepository {
         technicalDetails: "500 Server Error",
       );
     }
-    
+
     if (msg.contains('503') || msg.contains('service unavailable')) {
       return KorraException(
         "Bank verification is currently down for maintenance.",
@@ -129,26 +268,28 @@ class VendorRepository {
       // --- STEP 2: Call Supabase (Initialize Ledger) ---
       // No Monnify wallet is created here. Just internal DB setup.
       final response = await fx.invoke(
-        'create-vendor-account', 
+        'create-vendor-account',
         body: {
           'uid': uid,
           'email': email,
           'firstName': state.firstName,
           'lastName': state.lastName,
           'storeName': state.storeName,
-          // We don't strictly need BVN/NIN in Supabase unless you want to save them 
+          // We don't strictly need BVN/NIN in Supabase unless you want to save them
           // to a secure collection. For now, we rely on the Flutter Profile save.
         },
       );
 
       final responseData = response.data;
       if (responseData['success'] != true) {
-        throw Exception('Vendor Setup Failed: ${responseData['error'] ?? "Unknown Error"}');
+        throw Exception(
+          'Vendor Setup Failed: ${responseData['error'] ?? "Unknown Error"}',
+        );
       }
       debugPrint('Step 2: Vendor Ledger Initialized');
 
       // --- STEP 3: Construct & Save Profile to Firestore ---
-      
+
       // Create Base Vendor Object
       // Status is 'active' immediately because we removed the "Pending Call" requirement
       var vendor = Vendor.fromState(state, uid, status: 'active');
@@ -166,33 +307,37 @@ class VendorRepository {
       }
 
       return uid;
-
     } on FirebaseAuthException catch (e) {
       debugPrint('Auth Error: ${e.message}');
       throw Exception(e.message ?? 'Failed to create account.');
     } on FunctionException catch (e) {
       debugPrint('Supabase Error: $e');
-      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Server setup failed.';
+      final serverError =
+          (e.details as Map?)?['error'] ??
+          e.reasonPhrase ??
+          'Server setup failed.';
       throw Exception(serverError);
     } catch (err) {
       // --- ROLLBACK LOGIC ---
       debugPrint('CRITICAL ERROR: Vendor Signup failed. Rolling back...');
       if (uid != null) {
         try {
-           // Cleanup Firestore using Admin SDK logic implies manual fix, 
-           // but we try to delete the main doc here if possible.
-           await db.collection('vendors').doc(uid).delete();
-           // Note: Cannot delete subcollections (ledger) from Client SDK easily, 
-           // but the orphaned data is harmless without the main doc.
+          // Cleanup Firestore using Admin SDK logic implies manual fix,
+          // but we try to delete the main doc here if possible.
+          await db.collection('vendors').doc(uid).delete();
+          // Note: Cannot delete subcollections (ledger) from Client SDK easily,
+          // but the orphaned data is harmless without the main doc.
         } catch (_) {}
       }
       if (firebaseUser != null) {
-        try { await firebaseUser.delete(); } catch (_) {}
+        try {
+          await firebaseUser.delete();
+        } catch (_) {}
       }
       rethrow;
     }
   }
-  
+
   /// Authenticates a vendor using email and password.
   Future<String> signInVendor(String email, String password) async {
     try {
@@ -200,10 +345,9 @@ class VendorRepository {
         email: email.trim().toLowerCase(),
         password: password,
       );
-      
+
       debugPrint('Vendor signed in successfully: ${credential.user!.uid}');
       return credential.user!.uid;
-      
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
     } catch (e) {
@@ -251,6 +395,7 @@ class VendorRepository {
         );
     }
   }
+
   /// Logs out the current vendor.
   Future<void> logout() async {
     try {
@@ -268,7 +413,7 @@ class VendorRepository {
         .snapshots()
         .map((doc) => VendorStats.fromFirestore(doc));
   }
-  
+
   /// Stream the Ledger for the Vendor
   /// This listens to the 'ledger_transactions' subcollection in real-time.
   Stream<List<TransactionModel>> streamLedger(String uid) {
@@ -287,13 +432,15 @@ class VendorRepository {
   }
 
   /// Checks if Email exists securely (Works for Vendors OR Customers)
-  Future<bool> checkCollectionForEmail(String collectionName, String email) async {
+  Future<bool> checkCollectionForEmail(
+    String collectionName,
+    String email,
+  ) async {
     try {
-      final res = await fx.invoke('check_uniqueness', body: {
-        'type': 'email',
-        'value': email,
-        'collection': collectionName,
-      });
+      final res = await fx.invoke(
+        'check_uniqueness',
+        body: {'type': 'email', 'value': email, 'collection': collectionName},
+      );
       return res.data['exists'] == true;
     } catch (e) {
       debugPrint('Check Email Failed: $e');
@@ -310,10 +457,15 @@ class VendorRepository {
   }
 
   Future<String> getStoreName(String vendorUid) async {
-    return await firestore.collection("vendors")
-          .doc(vendorUid)
-          .get()
-          .then((snap) => snap.data()?["store"]["storeName"] ?? "Korra_Vendor-${vendorUid.substring(0, 5)}");
+    return await firestore
+        .collection("vendors")
+        .doc(vendorUid)
+        .get()
+        .then(
+          (snap) =>
+              snap.data()?["store"]["storeName"] ??
+              "Korra_Vendor-${vendorUid.substring(0, 5)}",
+        );
   }
 
   /// Calls a Supabase Edge Function to send a welcome email.
@@ -332,7 +484,10 @@ class VendorRepository {
   }
 
   /// Fetches both Payout Details and PIN Status in one go.
-  Future<VendorSettings> getVendorSettings(String uid, {bool forceRefresh = false}) async {
+  Future<VendorSettings> getVendorSettings(
+    String uid, {
+    bool forceRefresh = false,
+  }) async {
     if (cachedSettings != null && !forceRefresh) {
       return cachedSettings!;
     }
@@ -340,8 +495,18 @@ class VendorRepository {
     try {
       // Run both queries in parallel for speed
       final results = await Future.wait([
-        firestore.collection('vendors').doc(uid).collection('settings').doc('payout_details').get(),
-        firestore.collection('vendors').doc(uid).collection('security').doc('transaction_pin').get(),
+        firestore
+            .collection('vendors')
+            .doc(uid)
+            .collection('settings')
+            .doc('payout_details')
+            .get(),
+        firestore
+            .collection('vendors')
+            .doc(uid)
+            .collection('security')
+            .doc('transaction_pin')
+            .get(),
       ]);
 
       final payoutDoc = results[0];
@@ -350,7 +515,9 @@ class VendorRepository {
       // 1. Parse Payout Details
       PayoutDetails details = PayoutDetails.empty();
       if (payoutDoc.exists && payoutDoc.data() != null) {
-        details = PayoutDetails.fromMap(payoutDoc.data() as Map<String, dynamic>);
+        details = PayoutDetails.fromMap(
+          payoutDoc.data() as Map<String, dynamic>,
+        );
       }
 
       // 2. Check if PIN exists
@@ -364,11 +531,14 @@ class VendorRepository {
       return cachedSettings!;
     } catch (e) {
       // If error, return empty settings so the UI doesn't crash
-      return VendorSettings(payoutDetails: PayoutDetails.empty(), isPinSet: false);
+      return VendorSettings(
+        payoutDetails: PayoutDetails.empty(),
+        isPinSet: false,
+      );
     }
   }
 
-    // -------------------------------------------------------
+  // -------------------------------------------------------
   // 4. SAVE PAYOUT DETAILS (Direct Write)
   // -------------------------------------------------------
   Future<void> savePayoutDetails(String uid, PayoutDetails details) async {
@@ -378,17 +548,20 @@ class VendorRepository {
           .doc(uid)
           .collection('settings')
           .doc('payout_details')
-          .set({
-            'bankName': details.bankName,
-            'accountNumber': details.bankAccountNumber,
-            'accountName': details.bankAccountName,
-            'bankCode': details.bankCode,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true)); // Merge prevents overwriting unrelated fields
+          .set(
+            {
+              'bankName': details.bankName,
+              'accountNumber': details.bankAccountNumber,
+              'accountName': details.bankAccountName,
+              'bankCode': details.bankCode,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          ); // Merge prevents overwriting unrelated fields
       if (cachedSettings != null) {
         cachedSettings = VendorSettings(
-          payoutDetails: details, 
-          isPinSet: cachedSettings!.isPinSet
+          payoutDetails: details,
+          isPinSet: cachedSettings!.isPinSet,
         );
       }
     } catch (e) {

@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+// REPO & LOGIC
+import '../../../data/models/vendor/vendor_activity_type.dart';
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
 import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
 import '../../../logic/bloc/vendor/payout/payout_event.dart';
-import '../../../config/utils/currency_formatters.dart';
 import '../../../logic/core/net/net_cubit.dart';
+
+// UI HELPERS
+import '../../../config/utils/currency_formatters.dart';
 import '../../shared/korra_error_bannar.dart';
 import '../../shared/widgets/section_header.dart';
 import '../payout/payout_screen_ui.dart';
+
+// WIDGETS
+import 'widgets/vault_screen.dart';
 import 'widgets/vendor_capacity_card.dart';
 import 'widgets/vendor_withdrawable_card.dart';
 import 'widgets/vendor_hold_vault.dart';
@@ -34,13 +44,10 @@ class VendorHomeBody extends StatelessWidget {
       listenWhen: (previous, current) =>
           previous == NetState.offline && current == NetState.online,
       listener: (context, state) {
-        // Trigger refresh automatically
         context.read<VendorHomeBloc>().add(const VendorHomeRefresh());
       },
       child: BlocBuilder<VendorHomeBloc, VendorHomeState>(
         builder: (context, s) {
-          // Determine if the UI should be interactive.
-          // It's enabled only on success. During loading/failure, buttons are frozen.
           final bool isEnabled = s.status == VendorHomeStatus.success;
 
           return RefreshIndicator(
@@ -57,120 +64,123 @@ class VendorHomeBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ▼ Subtle loading indicator at the top when refreshing
                       if (s.status == VendorHomeStatus.loading)
                         const LinearProgressIndicator(minHeight: 2),
                       if (s.status == VendorHomeStatus.failure)
-                        ErrorBanner(
-                          message: 'failed to load data, drag down to refresh',
+                        const ErrorBanner(
+                          message: 'Failed to load data, drag down to refresh',
                         ),
 
+                      // 1. BALANCE CARD
                       VendorWithdrawableCard(
-                        balanceText: '₦${formatToCurrency(s.withdrawable)}', //s.withdrawable
-                        // Pass Total Balance if you add a property for it later
-                        totalBalanceText: '₦${formatToCurrency(s.walletBalance)}', //s.walletBalance
+                        balanceText: '₦${formatToCurrency(s.withdrawable)}',
+                        totalBalanceText: '₦${formatToCurrency(s.walletBalance)}',
                         loading: s.status == VendorHomeStatus.loading,
                         onPayout: isEnabled ? () {
-                          Get.to(
-                                () => BlocProvider(
-                                  create: (_) => PayoutBloc(
-                                    vendorUid: vendorUid, repo: vendors,
-                                  )..add(PayoutStarted(s.withdrawable)),
-                                  child: PayoutScreen(),
-                                ),
-                              );
+                          Get.to(() => BlocProvider(
+                            create: (_) => PayoutBloc(
+                              vendorUid: vendorUid, repo: vendors,
+                            )..add(PayoutStarted(s.withdrawable)),
+                            child: PayoutScreen(),
+                          ));
                         } : null,
                       ),
 
-                      // =======================
-                      // 2. VAULT (Locked Funds)
-                      // =======================
+                      // 2. VAULT
                       VendorHoldVault(
-                        // 1. Format the Double to String
                         holdText: '₦${formatToCurrency(s.onHold)}', 
-                        
-                        // 2. Pass the Integer calculated in Bloc
                         daysRemaining: s.daysRemaining, 
-                        
-                        // 3. Pass the Date String
                         nextRelease: s.nextReleaseDate,
-                        
-                        // 4. Pass the List<HoldEntry> from State
                         entries: s.upcomingReleases, 
-                        
-                        onViewSchedule: isEnabled
-                            ? () {
-                                // context.read<VendorHomeBloc>().add(const ViewHoldSchedule());
-                              }
-                            : null,
+                        onViewSchedule: isEnabled ? () {
+                           Get.to(() => VendorVaultScreen(
+                             repo: vendors, 
+                             vendorUid: vendorUid
+                           ));
+                        } : null,
                       ),
 
+                      // 3. CAPACITY
                       VendorCapacityCard(
                         maxLimit: s.maxLimit,
                         activePlanValue: s.activePlanValue,
                         storeCreditValue: s.liabilityValue,
                       ),
                       
-                      // ===== Reservations KPIs =====
-                      SectionHeader(title: 'Reservations', actionText: ''),
+                      SizedBox(height: 16.h), 
+
+                      // 4. KPI BUTTONS
                       VendorKpiBlock(
                         newCount: s.newCount,
                         ongoingCount: s.ongoingCount,
                         completedCount: s.completedCount,
                         cancelledCount: s.cancelledCount,
                         onTapNew: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const OpenReservations(
-                                  filter: ResvFilter.newRes,
-                                ),
-                              )
+                            ? () => context.read<VendorHomeBloc>().add(const OpenReservations(filter: ResvFilter.newRes))
                             : null,
                         onTapOngoing: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const OpenReservations(
-                                  filter: ResvFilter.ongoing,
-                                ),
-                              )
+                            ? () => context.read<VendorHomeBloc>().add(const OpenReservations(filter: ResvFilter.ongoing))
                             : null,
                         onTapCompleted: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const OpenReservations(
-                                  filter: ResvFilter.completed,
-                                ),
-                              )
+                            ? () => context.read<VendorHomeBloc>().add(const OpenReservations(filter: ResvFilter.completed))
                             : null,
                         onTapCancelled: isEnabled
-                            ? () => context.read<VendorHomeBloc>().add(
-                                const OpenReservations(
-                                  filter: ResvFilter.cancelled,
-                                ),
-                              )
+                            ? () => context.read<VendorHomeBloc>().add(const OpenReservations(filter: ResvFilter.cancelled))
                             : null,
                       ),
 
-                      // ===== Activity Timeline =====
-                      SectionHeader(
-                        title: 'Recent activity',
-                        actionText: 'View all',
+                      // 5. STREAMING ACTIVITY TIMELINE (Real-Time)
+                      StreamBuilder<List<VendorActivityItem>>(
+                        stream: vendors.streamActivityFeed(vendorUid),
+                        builder: (context, snapshot) {
+                          // Default to empty list while loading/error
+                          final activities = snapshot.data ?? [];
+                          final bool hasActivities = activities.isNotEmpty;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // HEADER IS NOW INSIDE STREAM BUILDER
+                              SectionHeader(
+                                title: 'Recent activity',
+                                // Only show 'View all' if there are items
+                                actionText: hasActivities ? 'View all' : null, 
+                                onAction: hasActivities ? () {
+                                  // Navigate to full activity feed
+                                } : null,
+                              ),
+
+                              if (snapshot.connectionState == ConnectionState.waiting) 
+                                Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20.h),
+                                  child: const Center(child: CircularProgressIndicator()),
+                                )
+                              else if (!hasActivities)
+                                Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20.h),
+                                  child: Center(
+                                    child: Text("No recent activity", style: GoogleFonts.inter(color: Colors.grey)),
+                                  ),
+                                )
+                              else
+                                VendorActivityTimeline(
+                                  items: activities.take(5).toList(), // Show top 5
+                                  onOpenReservation: isEnabled
+                                      ? (a) => context.read<VendorHomeBloc>().add(OpenReservationDetail(a.refId))
+                                      : null,
+                                  onAdjustStock: isEnabled
+                                      ? (a) => context.read<VendorHomeBloc>().add(AdjustStockFor(a.refId))
+                                      : null,
+                                  onViewPlan: isEnabled
+                                      ? (a) => context.read<VendorHomeBloc>().add(OpenPlanFor(a.refId))
+                                      : null,
+                                ),
+                            ],
+                          );
+                        },
                       ),
-                      VendorActivityTimeline(
-                        items: s.activities,
-                        onOpenReservation: isEnabled
-                            ? (a) => context.read<VendorHomeBloc>().add(
-                                OpenReservationDetail(a.id),
-                              )
-                            : null,
-                        onAdjustStock: isEnabled
-                            ? (a) => context.read<VendorHomeBloc>().add(
-                                AdjustStockFor(a.refId),
-                              )
-                            : null,
-                        onViewPlan: isEnabled
-                            ? (a) => context.read<VendorHomeBloc>().add(
-                                OpenPlanFor(a.refId),
-                              )
-                            : null,
-                      ),
+                      
+                      SizedBox(height: 40.h),
                     ],
                   ),
                 ),

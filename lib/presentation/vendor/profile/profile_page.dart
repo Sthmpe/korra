@@ -4,274 +4,508 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:korra/logic/bloc/multi_bloc_builder.dart';
-import 'package:korra/logic/bloc/vendor/profile/profile_event.dart';
+import 'package:korra/data/repository/vendors/vendor_repository.dart';
+import 'package:korra/logic/bloc/vendor/profile/profile_state.dart';
+import 'package:korra/presentation/shared/widgets/korra_header.dart';
 
-import '../../../data/repository/vendors/vendor_repository.dart';
+// --- WIDGET IMPORTS (From your snippets) ---
+import '../../../data/models/vendor/vendor_model.dart';
 import '../../../logic/bloc/vendor/profile/profile_bloc.dart';
-import '../../../logic/bloc/vendor/profile/profile_state.dart';
+import '../../../logic/bloc/vendor/profile/profile_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
-import '../../../logic/cubit/vendor/vendor_profile_cubit.dart';
-import '../../auth/role_login/role_login_screen.dart';
-import '../../shared/widgets/korra_header.dart';
-import 'widgets/vendor_identity_header_card.dart';
-import 'widgets/v_section_card.dart';
-import 'widgets/v_rows.dart';
+import '../../shared/widgets/show_app_snackbar.dart';
+import 'change_password_screen.dart';
+import 'vendor_settlement_screen.dart';
+import 'widgets/identity_header_card.dart';
+import 'widgets/legal_screen.dart';
+import 'widgets/section_card.dart';
+import 'widgets/rows.dart';
+import '../../auth/role_login/role_login_screen.dart'; // For logout navigation
+
+// --- MODEL ---
+// import 'path/to/vendor_model.dart'; 
+
+const _brand = Color(0xFFA54600);
 
 class VendorProfilePage extends StatelessWidget {
   final VendorRepository vendors;
   final String vendorUid;
-  const VendorProfilePage({super.key, required this.vendors, required this.vendorUid});
 
-  static const _brand = Color(0xFFA54600);
+  const VendorProfilePage({
+    super.key, 
+    required this.vendors, 
+    required this.vendorUid
+  });
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (_) => VendorProfileCubit()..load()),
-        BlocProvider(create: (_) => ProfileBloc(vendors: vendors, vendorUid: vendorUid, net: context.read<NetCubit>(),)),
-      ],
-      child: MultiBlocBuilder2<VendorProfileCubit, VendorProfileState, ProfileBloc, ProfileState>(
-        builder: (context, s, profileState) {
-          final cubit = context.read<VendorProfileCubit>();
-          final bloc = context.read<ProfileBloc>();
+    return BlocProvider(
+      create: (context) => ProfileBloc(
+        vendorRepo: vendors,
+        net: context.read<NetCubit>(),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: KorraHeader(title:  'Profile'),
+        body: BlocListener<ProfileBloc, ProfileState>(
+          listener: (context, state) {
+            if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
+            if (state.status == ProfileStatus.logout) {
+              Get.offAll(() => const RoleLoginScreen());
+            }
+          },
+          child: StreamBuilder<Vendor?>(
+            stream: vendors.streamVendor(vendorUid), 
+            builder: (context, snapshot) {
+              final bloc = context.read<ProfileBloc>();
 
-          return Scaffold(
-            backgroundColor: Colors.white,
-            appBar: const KorraHeader(title: 'Profile'),
-            body: s.loading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                : CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      // Identity header with quick actions
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.all(12.r),
-                          child: VendorIdentityHeaderCard(
-                            name: s.name,
-                            email: s.email,
-                            phone: s.phone,
-                            verified: s.verified,
-                            tier: s.tier,
-                            onEdit: () {},         // TODO: wire
-                            onShowQr: () {},
-                            onShareHandle: () {},
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: _brand));
+              }
+                
+              if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+                return Center(
+                  child: Text("Vendor profile not found.", style: GoogleFonts.inter(color: Colors.grey)),
+                );
+              }
+                
+              final vendor = snapshot.data!;
+                
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(bottom: 40.h),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    
+                    // --- 1. HEADER (WIRED UP) ---
+                    IdentityHeaderCard(
+                      initials: vendor.storeName.isNotEmpty ? vendor.storeName[0] : 'V',
+                      name: vendor.storeName,
+                      email: vendor.email,
+                      phone: vendor.phone,
+                      kycVerified: vendor.ninVerified && vendor.bvnVerified,
+                      basicTier: false,
+                      onEdit: () {
+                        // Navigate to Edit Profile
+                        // Get.to(() => EditVendorProfileScreen(vendor: vendor));
+                        showAppSnackbar("Edit Profile coming soon!", SnackbarType.info);
+                      },
+                      onShare: () {
+                         // Share Logic
+                         showAppSnackbar("Sharing coming soon!", SnackbarType.info);
+                      },
+                      onMyQr: () {
+                        // Navigate to Vendor QR
+                        // Get.to(() => VendorQrScreen(vendor: vendor));
+                        showAppSnackbar("QR Code coming soon!", SnackbarType.info);
+                      },
+                    ),
+                
+                    SizedBox(height: 16.h),
+                
+                    // --- 2. BUSINESS INFO ---
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Business Details'),
+                          SizedBox(height: 12.h),
+                
+                          _StaticInfoRow(
+                            icon: Iconsax.briefcase,
+                            title: 'Legal Name',
+                            value: vendor.legalName,
                           ),
+                          _divider(),
+                          
+                          _StaticInfoRow(
+                            icon: Iconsax.document,
+                            title: 'CAC Number',
+                            value: vendor.cac.isNotEmpty ? vendor.cac : "Not Provided",
+                          ),
+                          _divider(),
+                
+                          _StaticInfoRow(
+                            icon: Iconsax.verify,
+                            title: 'Status',
+                            value: vendor.status.toUpperCase(),
+                            valueColor: _getStatusColor(vendor.status),
+                          ),
+                          _divider(),
+                
+                          _StaticInfoRow(
+                            icon: Iconsax.category,
+                            title: 'Categories',
+                            value: vendor.categories.join(", "),
+                          ),
+                        ],
+                      ),
+                    ),
+                
+                    // --- 3. LOCATION ---
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Location & Contact'),
+                          SizedBox(height: 12.h),
+                
+                          _StaticInfoRow(
+                            icon: Iconsax.location,
+                            title: 'Address',
+                            // FIX: Logic for missing address
+                            value: vendor.address.isNotEmpty ? vendor.address : "Not Available",
+                            subtitle: vendor.city.isNotEmpty 
+                                ? "${vendor.city}, ${vendor.stateName}" 
+                                : null,
+                          ),
+                          
+                          if (vendor.mapsLink.isNotEmpty) ...[
+                            _divider(),
+                            RowWithChevron(
+                              icon: Iconsax.map,
+                              title: 'View on Maps',
+                              subtitle: 'Open Google Maps',
+                              onTap: () {
+                                // launchUrl(Uri.parse(vendor.mapsLink));
+                              },
+                            ),
+                          ]
+                        ],
+                      ),
+                    ),
+                
+                    // --- 4. PREFERENCES (ADDED) ---
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Preferences'),
+                          SizedBox(height: 6.h),
+                          RowWithChevron(
+                            icon: Icons.brightness_6_outlined,
+                            title: 'App Theme',
+                            subtitle: 'Coming soon',
+                            onTap: () => showAppSnackbar(
+                              "Themes are coming soon!",
+                              SnackbarType.info,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                
+                    // ====================================================
+                    // 🆕 NEW FINANCE SECTION (Call Settlement Screen)
+                    // ====================================================
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Finance'),
+                          SizedBox(height: 12.h),
+                
+                          RowWithChevron(
+                            icon: Iconsax.wallet_1, // Good icon for finance
+                            title: 'Settlements & Ledger',
+                            subtitle: 'Earnings, vault & history',
+                            onTap: () {
+                              // 🚀 NAVIGATE TO SETTLEMENT SCREEN
+                              Get.to(() => VendorSettlementScreen(
+                                repo: vendors,       // Pass the existing repo
+                                vendorUid: vendorUid // Pass the existing uid
+                              ));
+                            },
+                          ),
+                          
+                          _divider(),
+                
+                          RowWithChevron(
+                            icon: Iconsax.bank,
+                            title: 'Payout Details',
+                            subtitle: 'Manage bank account',
+                            onTap: () {
+                              // Future: Navigate to Payout Settings
+                              showAppSnackbar("Payout settings coming soon!", SnackbarType.info);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                
+                    // --- 5. SECURITY & LEGAL (ADDED) ---
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Security'),
+                          SizedBox(height: 6.h),
+                          SwitchRow(
+                            icon: Icons.fingerprint,
+                            title: 'Biometric Sign-in',
+                            subtitle: 'Coming soon',
+                            value: false,
+                            onChanged: (v) {
+                              showAppSnackbar("Biometrics coming soon!", SnackbarType.info);
+                            },
+                          ),
+                          _divider(),
+                          RowWithChevron(
+                            icon: Icons.lock_outline,
+                            title: 'Change password',
+                            onTap: () {
+                                          Get.to(
+                                            () => ChangePasswordScreen(
+                                              repo: vendors,
+                                            ),
+                                          );
+                                        },
+                          ),
+                          _divider(),
+                          RowWithChevron(
+                            icon: Icons.description_outlined,
+                            title: 'Legal & Privacy',
+                            onTap: () {
+                                      Get.to(() => const LegalMenuScreen());
+                                    },
+                          ),
+                        ],
+                      ),
+                    ),
+                
+                    // --- 6. SOCIALS (CONDITIONAL) ---
+                    if (!_allSocialsEmpty(vendor))
+                      SectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitle('Social Media'),
+                            SizedBox(height: 12.h),
+                            if (vendor.whatsappGroup != null) 
+                              RowWithChevron(icon: Iconsax.message, title: 'WhatsApp', onTap: (){}),
+                            if (vendor.instagram != null) 
+                              RowWithChevron(icon: Iconsax.camera, title: 'Instagram', onTap: (){}),
+                            if (vendor.website != null) 
+                              RowWithChevron(icon: Iconsax.global, title: 'Website', onTap: (){}),
+                          ],
                         ),
                       ),
-
-                      // Wallet & payments
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12.w),
-                          child: VSectionCard(
-                            title: 'Wallet & payments',
-                            children: [
-                              VRowNav(
-                                icon: Iconsax.wallet_3,
-                                title: s.walletBalanceText,
-                                subtitle: 'Wallet balance • Top up',
-                                onTap: () {},
-                              ),
-                              VDivider(),
-                              VRowNav(
-                                icon: Iconsax.card,
-                                title: 'Default method',
-                                subtitle: s.defaultMethodMasked,
-                                onTap: () {},
-                              ),
-                              VDivider(),
-                              VRowSwitch(
-                                icon: Iconsax.refresh_left_square,
-                                title: 'AutoPay (default)',
-                                subtitle: 'Use AutoPay when available',
-                                value: s.autoPay,
-                                onChanged: cubit.toggleAutoPay,
-                              ),
-                              VDivider(),
-                              VRowNav(
-                                icon: Iconsax.document_text,
-                                title: 'Statements & receipts',
-                                onTap: () {},
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Preferences
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 0),
-                          child: VSectionCard(
-                            title: 'Preferences',
-                            children: [
-                              VRowSwitch(
-                                icon: Iconsax.notification,
-                                title: 'Push notifications',
-                                value: s.push,
-                                onChanged: cubit.togglePush,
-                              ),
-                              VDivider(),
-                              VRowSwitch(
-                                icon: Iconsax.sms_tracking,
-                                title: 'Email notifications',
-                                value: s.emailNotif,
-                                onChanged: cubit.toggleEmail,
-                              ),
-                              VDivider(),
-                              VRowSwitch(
-                                icon: Iconsax.message_question,
-                                title: 'SMS notifications',
-                                value: s.sms,
-                                onChanged: cubit.toggleSms,
-                              ),
-                              VDivider(space: 14.h),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                                child: Text('Reminders',
-                                  style: GoogleFonts.inter(fontSize: 14.5.sp, fontWeight: FontWeight.w800)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 12.h),
-                                child: Wrap(spacing: 10.w, runSpacing: 10.h, children: [
-                                  VRadioPill(
-                                    selected: s.reminderDays == 0,
-                                    text: 'Same day',
-                                    onTap: () => cubit.setReminder(0),
-                                  ),
-                                  VRadioPill(
-                                    selected: s.reminderDays == 1,
-                                    text: '1 day before',
-                                    leadingCheck: true,
-                                    onTap: () => cubit.setReminder(1),
-                                  ),
-                                  VRadioPill(
-                                    selected: s.reminderDays == 3,
-                                    text: '3 days before',
-                                    onTap: () => cubit.setReminder(3),
-                                  ),
-                                ]),
-                              ),
-                              VDivider(),
-                              VRowLabel(
-                                icon: Iconsax.brush_4,
-                                title: 'Theme',
-                                trailingText: 'Coming soon',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Security
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 0),
-                          child: VSectionCard(
-                            title: 'Security',
-                            children: [
-                              VRowSwitch(
-                                icon: Iconsax.finger_scan,
-                                title: 'Biometric sign-in',
-                                value: s.biometric,
-                                onChanged: cubit.toggleBio,
-                              ),
-                              VDivider(),
-                              VRowNav(
-                                icon: Iconsax.lock,
-                                title: 'Change password',
-                                onTap: () {},
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Support & legal
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 0),
-                          child: VSectionCard(
-                            title: 'Support & legal',
-                            children: [
-                              VRowNav(icon: Iconsax.info_circle, title: 'Help Center (FAQ)', onTap: () {}),
-                              VDivider(),
-                              VRowNav(icon: Iconsax.document_text_1, title: 'Terms of Service', onTap: () {}),
-                              VDivider(),
-                              VRowNav(icon: Iconsax.shield_tick, title: 'Privacy Policy', onTap: () {}),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // About
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 0),
-                          child: VSectionCard(
-                            title: 'About',
-                            children: [
-                              VRowNav(
-                                icon: Iconsax.information,
-                                title: 'Version',
-                                trailingText: s.versionText,
-                                onTap: () {},
-                              ),
-                              VDivider(),
-                              VRowNav(
-                                icon: Icons.scale,
-                                title: 'Open source licenses',
-                                onTap: () {},
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Logout / Delete account
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12.w, 16.h, 12.w, 22.h),
-                          child: Row(children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {
-                                  bloc.add(LogoutRequested());
-                                  Get.offAll(() => const RoleLoginScreen());
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: _brand),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                                  padding: EdgeInsets.symmetric(vertical: 14.h),
-                                  foregroundColor: _brand,
+                
+                    // --- 7. LOGOUT & DELETE (ADDED) ---
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 40.h),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50.h,
+                            child: OutlinedButton(
+                              onPressed: () => _confirmLogout(context, bloc),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFFD0D5DD)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12.r),
                                 ),
-                                child: Text('Logout',
-                                  style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800)),
+                                foregroundColor: const Color(0xFF344054),
+                              ),
+                              child: Text(
+                                'Log out',
+                                style: GoogleFonts.inter(
+                                  fontSize: 15.sp,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () {},
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFFD32F2F),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                                  padding: EdgeInsets.symmetric(vertical: 14.h),
-                                ),
-                                child: Text('Delete account',
-                                  style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: Colors.white)),
+                          ),
+                          SizedBox(height: 12.h),
+                          GestureDetector(
+                            onTap: () => _confirmDelete(context, bloc),
+                            child: Text(
+                              "Delete account",
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ]),
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-          );
-        },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- HELPERS ---
+
+  Widget _sectionTitle(String title) {
+    return Text(
+      title.toUpperCase(),
+      style: GoogleFonts.inter(
+        fontSize: 11.sp,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF98A2B3),
+        letterSpacing: 1.0,
+      ),
+    );
+  }
+
+  Widget _divider() {
+    return Divider(height: 24.h, color: const Color(0xFFF2F4F7), thickness: 1);
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved': return Colors.green;
+      case 'pending': return Colors.orange;
+      case 'suspended': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
+  bool _allSocialsEmpty(Vendor vendor) {
+    return vendor.whatsappGroup == null &&
+        vendor.instagram == null &&
+        vendor.website == null &&
+        vendor.tiktok == null &&
+        vendor.twitter == null &&
+        vendor.facebook == null &&
+        vendor.otherLink == null;
+  }
+
+  // --- ACTIONS ---
+
+  void _confirmLogout(BuildContext context, ProfileBloc bloc) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Log out', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to log out?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              bloc.add(LogoutRequested());
+            },
+            child: const Text("Log out", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, ProfileBloc bloc) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(
+          'Delete Account?',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.red),
+        ),
+        content: Text(
+          'This action is permanent and cannot be undone.\n\n'
+          'Note: You cannot delete your account if you have active orders or pending payouts.',
+          style: GoogleFonts.inter(fontSize: 14.sp),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Keep Account', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.black)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E)),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Trigger Delete Logic
+              showAppSnackbar("Contact support to delete vendor account.", SnackbarType.info);
+            },
+            child: Text('Delete Permanently', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- LOCAL WIDGET: STATIC INFO ROW ---
+class _StaticInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final String? subtitle;
+  final Color? valueColor;
+  final Widget? trailingIcon;
+
+  const _StaticInfoRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    this.subtitle,
+    this.valueColor,
+    this.trailingIcon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 6.h),
+      child: Row(
+        children: [
+          Container(
+            width: 34.w, height: 34.w,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAF7F4),
+              borderRadius: BorderRadius.circular(10.r),
+              border: Border.all(color: const Color(0xFFEAE6E2)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18.sp, color: _brand),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF5E5E5E))),
+                SizedBox(height: 2.h),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        value,
+                        style: GoogleFonts.inter(
+                          fontSize: 14.sp, 
+                          fontWeight: FontWeight.w600,
+                          color: valueColor ?? Colors.black87
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (trailingIcon != null) ...[
+                      SizedBox(width: 6.w),
+                      trailingIcon!,
+                    ]
+                  ],
+                ),
+                if (subtitle != null) ...[
+                   SizedBox(height: 2.h),
+                   Text(subtitle!, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey)),
+                ]
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

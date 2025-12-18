@@ -309,7 +309,15 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     void handleNext() {
       FocusScope.of(context).unfocus();
+
+      debugPrint("Debug: Attempting validation for page $pageIndex");
+
       final ok = formKey.currentState?.validate() ?? true;
+      if (!ok) {
+        debugPrint("Debug: Validation failed for page $pageIndex");
+      } else {
+        debugPrint("Debug: Validation succeeded for page $pageIndex");
+      }
       if (!ok) return;
 
       if (isLast) {
@@ -329,6 +337,8 @@ class _BottomNav extends StatelessWidget {
           openKycSheet();
         }
       }
+
+      debugPrint("Debug: Moving to next page from page $pageIndex");
 
       context.read<SignupCustomerBloc>().add(SignupCustomerNextPressed());
     }

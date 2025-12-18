@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
 enum ReservationStatus { newRes, ongoing, completed, cancelled }
@@ -6,15 +7,15 @@ class VendorReservation extends Equatable {
   // ---- Source-of-truth fields (from DB/API) ----
   final String id;
   final String productTitle;
-  final String productImageUrl; // canonical
-  final String sku;
+  final String productImageUrl; 
+  final String productCode;
   final int quantity;
-  final int unitPrice; // in NGN whole units
-  final int total;     // in NGN whole units
-  final int paid;      // in NGN whole units
+  final double unitPrice; 
+  final double total;     
+  final double paid;      
   final DateTime createdAt;
   final DateTime? nextDueAt;
-  final bool approved;
+  final bool approved;    
   final bool cancelled;
   final bool autoPay;
   final String customerName;
@@ -23,7 +24,7 @@ class VendorReservation extends Equatable {
     required this.id,
     required this.productTitle,
     required this.productImageUrl,
-    required this.sku,
+    required this.productCode,
     required this.quantity,
     required this.unitPrice,
     required this.total,
@@ -36,20 +37,49 @@ class VendorReservation extends Equatable {
     required this.customerName,
   });
 
-  // ---- Computed/derived for UI (keep logic out of widgets) ----
+  // ---- 🏭 Factory: Match Backend Data Structure ----
+  factory VendorReservation.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    // 1. Extract Basic Fields
+    final statusStr = data['status'] ?? 'active';
+    final totalAmt = (data['totalAmount'] ?? 0).toDouble();
+    final amtPaid = (data['amountPaid'] ?? 0).toDouble();
+    final initDown = (data['initialDownPayment'] ?? 0).toDouble();
 
-  /// Alias for legacy UI that references `imageUrl`.
+    // 2. Determine Logic Flags
+    final bool isCancelled = statusStr == 'cancelled';
+    final bool isCompleted = statusStr == 'completed';
+    
+    // Logic: Approved if Active AND Paid > DownPayment
+    final bool isApproved = isCompleted || (statusStr == 'active' && amtPaid > (initDown + 100));
+
+    return VendorReservation(
+      id: doc.id,
+      productTitle: data['title'] ?? 'Unknown Product',
+      productImageUrl: (data['imageUrls'] as List?)?.firstOrNull ?? '',
+      productCode: data['productCode'] ?? 'N/A', // Using productCode as productCode
+      quantity: 1, 
+      unitPrice: (data['totalProductPrice'] ?? 0).toDouble(),
+      total: totalAmt,
+      paid: amtPaid,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      nextDueAt: (data['nextPaymentDate'] as Timestamp?)?.toDate(), 
+      approved: isApproved,
+      cancelled: isCancelled,
+      autoPay: false, 
+      customerName: data['customerName'] ?? 'Unknown Customer',
+    );
+  }
+
+  // ---- Computed/derived for UI ----
+
+  // ✅ FIX: Added this getter because ReservationTile uses data.imageUrl
   String get imageUrl => productImageUrl;
 
-  /// 0..1 progress (safe for charts)
-  double get progress01 =>
-      total <= 0 ? 0.0 : (paid / total).clamp(0.0, 1.0);
-
-  /// 0..100 progress (used by your tile)
+  double get progress01 => total <= 0 ? 0.0 : (paid / total).clamp(0.0, 1.0);
   int get progress => (progress01 * 100).round();
-
-  int get remaining => (total - paid).clamp(0, total);
-
+  double get remaining => (total - paid).clamp(0.0, total);
   bool get isCompleted => paid >= total && total > 0;
 
   bool get overdue {
@@ -61,29 +91,28 @@ class VendorReservation extends Equatable {
 
   ReservationStatus get status {
     if (cancelled) return ReservationStatus.cancelled;
-    if (!approved) return ReservationStatus.newRes;
     if (isCompleted) return ReservationStatus.completed;
-    return ReservationStatus.ongoing;
+    if (!approved) return ReservationStatus.newRes;
+    return ReservationStatus.ongoing;              
   }
 
-  // ---- Formatted strings (UI-ready, no intl dependency) ----
+  // ---- Formatted strings ----
 
   String get unitPriceText => _naira(unitPrice);
   String get totalText => _naira(total);
   String get remainingText => '${_naira(remaining)} left';
+  String get paidText => _naira(paid);
 
   String get createdAtText {
     final m = _monthsShort[createdAt.month - 1];
     final dd = createdAt.day.toString();
-    final hh = _two(createdAt.hour);
-    final mm = _two(createdAt.minute);
-    return '$m $dd • $hh:$mm';
+    return '$m $dd';
   }
 
   String get nextDueText {
     if (cancelled) return 'Cancelled';
     if (isCompleted) return 'Paid off';
-    if (nextDueAt == null) return '—';
+    if (nextDueAt == null) return 'No due date';
     final dow = _weekdaysShort[nextDueAt!.weekday % 7];
     final prefix = overdue ? 'Was due' : 'Due';
     return '$prefix $dow';
@@ -98,21 +127,17 @@ class VendorReservation extends Equatable {
     'Sun','Mon','Tue','Wed','Thu','Fri','Sat'
   ];
 
-  static String _two(int n) => n < 10 ? '0$n' : '$n';
-
-  static String _naira(int amount) {
-    final s = amount.abs().toString();
+  static String _naira(double amount) {
+    final s = amount.toStringAsFixed(0);
     final withCommas = s.replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
       (m) => '${m[1]},',
     );
-    final sign = amount < 0 ? '-' : '';
-    return '$sign₦$withCommas';
+    return '₦$withCommas';
   }
 
   @override
   List<Object?> get props => [
-    id, productTitle, productImageUrl, sku, quantity, unitPrice, total, paid,
-    createdAt, nextDueAt, approved, cancelled, autoPay, customerName
+    id, productTitle, total, paid, cancelled, approved, customerName
   ];
 }

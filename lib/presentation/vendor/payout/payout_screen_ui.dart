@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:korra/data/repository/vendors/bank_repository.dart';
 
 import '../../../../config/utils/currency_formatters.dart' hide CurrencyInputFormatter;
@@ -18,6 +19,7 @@ import 'widgets/bank_selector_sheet.dart';
 import 'widgets/decimal_input_formatter.dart';
 import 'widgets/korra_button.dart';
 import 'widgets/korra_loading_overlay.dart';
+import 'widgets/password_verification_sheet.dart';
 import 'widgets/payout_balance_card.dart';
 import 'widgets/payout_success_screen.dart';
 import 'widgets/transaction_pin_sheet.dart';
@@ -113,10 +115,18 @@ class PayoutScreen extends StatelessWidget {
         } else if (state.status == PayoutStatus.failure) {
           FocusManager.instance.primaryFocus?.unfocus();
           closeAllOverlays();
-          showKorraFailureSheet(context, title: 'Withdrawal Failed', message: state.errorMessage ?? "Error", onCancel: () {
-           closeAllOverlays();
-            context.read<PayoutBloc>().add(PayoutReset());
-          });
+          final errorMsg = state.errorMessage?.toLowerCase() ?? "";
+          
+          if (errorMsg.contains("incorrect") && errorMsg.contains("pin")) {
+            // 🛑 OPTION A: WRONG PIN (Show Choice Dialog)
+            _showWrongPinDialog(context);
+          } else {
+            // 🛑 OPTION B: GENERIC FAILURE
+            showKorraFailureSheet(context, title: 'Withdrawal Failed', message: state.errorMessage ?? "Error", onCancel: () {
+            closeAllOverlays();
+              context.read<PayoutBloc>().add(PayoutReset());
+            });
+          }
         }
       },
       builder: (context, state) {
@@ -384,6 +394,125 @@ class PayoutScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 1. SHOW "WRONG PIN" DIALOG
+  // ---------------------------------------------------------
+  void _showWrongPinDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Container(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Error Icon
+            Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: BoxDecoration(color: const Color(0xFFFEF2F2), shape: BoxShape.circle),
+              child: Icon(Iconsax.lock_circle, size: 32.sp, color: const Color(0xFFD92D20)),
+            ),
+            SizedBox(height: 16.h),
+            
+            Text("Incorrect PIN", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700)),
+            SizedBox(height: 8.h),
+            
+            Text(
+              "The PIN you entered is incorrect. You can try again or reset it securely.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF667085), height: 1.4),
+            ),
+            SizedBox(height: 32.h),
+            
+            // Button: Try Again
+            SizedBox(
+              width: double.infinity,
+              height: 50.h,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFA54600),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context); // Close Dialog
+                  _openPinSheet(context, isCreating: false); // Re-open Verify
+                },
+                child: Text("Try Again", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15.sp)),
+              ),
+            ),
+            SizedBox(height: 12.h),
+
+            // Button: Forgot PIN
+            SizedBox(
+              width: double.infinity,
+              height: 50.h,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close Dialog
+                  _openPasswordVerification(context); // Open Password Check
+                },
+                child: Text("Forgot PIN? Reset it", style: GoogleFonts.inter(color: const Color(0xFF475467), fontWeight: FontWeight.w600, fontSize: 15.sp)),
+              ),
+            ),
+            SizedBox(height: 10.h),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 2. OPEN PASSWORD CHECKER
+  // ---------------------------------------------------------
+  void _openPasswordVerification(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PasswordVerificationSheet(
+        onVerified: () {
+          // If password correct -> Open Create PIN Sheet
+          // We wait a tiny bit for the sheet animation to close
+          Future.delayed(const Duration(milliseconds: 300), () {
+             _openPinSheet(context, isCreating: true);
+          });
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 3. OPEN PIN SHEET (REUSED)
+  // ---------------------------------------------------------
+  void _openPinSheet(BuildContext context, {required bool isCreating}) {
+    showModalBottomSheet(
+      enableDrag: false,
+      isDismissible: false,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => TransactionPinSheet(
+        isCreating: isCreating,
+        onCancel: () {
+          Navigator.pop(context);
+          context.read<PayoutBloc>().add(PayoutReset());
+        },
+        onSubmit: (pin) {
+          Navigator.pop(context);
+          if (isCreating) {
+            context.read<PayoutBloc>().add(NewPinCreated(pin));
+          } else {
+            context.read<PayoutBloc>().add(PinSubmitted(pin));
+          }
+        },
+      ),
     );
   }
 }

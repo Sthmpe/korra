@@ -4,15 +4,15 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/data/repository/vendors/vendor_repository.dart';
 
-import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../logic/bloc/customer/change_password_bloc.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  final CustomerRepository repo;
+  final VendorRepository repo;
   const ChangePasswordScreen({super.key, required this.repo});
 
   @override

@@ -49,7 +49,7 @@ class VendorShell extends StatelessWidget {
               final pages = [
                 VendorHomePage(vendors: repo, vendorUid: uid),
                 VendorProductsPage(vendors: repo, vendorUid: uid),
-                VendorReservationsPage(),
+                VendorReservationsPage(vendorId: uid),
                 VendorProfilePage(vendors: repo, vendorUid: uid),
               ];
         

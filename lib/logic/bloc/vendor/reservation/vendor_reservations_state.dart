@@ -5,9 +5,14 @@ class VendorReservationsState extends Equatable {
   final bool loading;
   final ReservationStatus filter;
   final String query;
-  final List<VendorReservation> all;      // source of truth
-  final List<VendorReservation> visible;  // filtered for UI
-  final String countNew, countOngoing, countCompleted, countCancelled;
+  final List<VendorReservation> all;
+  final List<VendorReservation> visible;
+  
+  // ✅ Changed to int to match the UI helper _formatCount(int)
+  final int countNew;
+  final int countOngoing;
+  final int countCompleted;
+  final int countCancelled;
 
   const VendorReservationsState({
     required this.loading,
@@ -21,11 +26,19 @@ class VendorReservationsState extends Equatable {
     required this.countCancelled,
   });
 
-  factory VendorReservationsState.initial(ReservationStatus f) => VendorReservationsState(
-    loading: true, filter: f, query: '',
-    all: const [], visible: const [],
-    countNew: '0', countOngoing: '0', countCompleted: '0', countCancelled: '0',
-  );
+  factory VendorReservationsState.initial(ReservationStatus initial) {
+    return VendorReservationsState(
+      loading: false,
+      filter: initial,
+      query: '',
+      all: const [],
+      visible: const [],
+      countNew: 0,
+      countOngoing: 0,
+      countCompleted: 0,
+      countCancelled: 0,
+    );
+  }
 
   VendorReservationsState copyWith({
     bool? loading,
@@ -33,22 +46,27 @@ class VendorReservationsState extends Equatable {
     String? query,
     List<VendorReservation>? all,
     List<VendorReservation>? visible,
-    String? countNew,
-    String? countOngoing,
-    String? countCompleted,
-    String? countCancelled,
-  }) => VendorReservationsState(
-    loading: loading ?? this.loading,
-    filter: filter ?? this.filter,
-    query: query ?? this.query,
-    all: all ?? this.all,
-    visible: visible ?? this.visible,
-    countNew: countNew ?? this.countNew,
-    countOngoing: countOngoing ?? this.countOngoing,
-    countCompleted: countCompleted ?? this.countCompleted,
-    countCancelled: countCancelled ?? this.countCancelled,
-  );
+    int? countNew,
+    int? countOngoing,
+    int? countCompleted,
+    int? countCancelled,
+  }) {
+    return VendorReservationsState(
+      loading: loading ?? this.loading,
+      filter: filter ?? this.filter,
+      query: query ?? this.query,
+      all: all ?? this.all,
+      visible: visible ?? this.visible,
+      countNew: countNew ?? this.countNew,
+      countOngoing: countOngoing ?? this.countOngoing,
+      countCompleted: countCompleted ?? this.countCompleted,
+      countCancelled: countCancelled ?? this.countCancelled,
+    );
+  }
 
   @override
-  List<Object?> get props => [loading, filter, query, all, visible, countNew, countOngoing, countCompleted, countCancelled];
+  List<Object?> get props => [
+    loading, filter, query, all, visible, 
+    countNew, countOngoing, countCompleted, countCancelled
+  ];
 }

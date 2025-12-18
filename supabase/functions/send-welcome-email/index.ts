@@ -139,7 +139,8 @@ const handler = async (request: Request): Promise<Response> => {
         'Authorization': `Bearer ${RESEND_API_KEY}`
       },
       body: JSON.stringify({
-        from: 'Korra <onboarding@resend.dev>',
+        // 👇 UPDATE THIS LINE
+        from: 'Korra Team <hello@mail.korra.com.ng>', 
         to: [email],
         subject: 'Welcome to Korra!',
         html: htmlContent,
@@ -151,7 +152,6 @@ const handler = async (request: Request): Promise<Response> => {
         ],
       })
     });
-
     const data = await res.json();
 
     if (!res.ok) {

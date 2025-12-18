@@ -2,103 +2,74 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
 // --- 1. FIREBASE INIT ---
-console.log("[DEBUG] Starting Function Initialization...");
+console.log("[INIT] Starting Function...");
 
 try {
   const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
   if (!serviceAccountRaw) {
-    console.error("[CRITICAL] FIREBASE_SERVICE_ACCOUNT is missing in env vars");
+    console.error("[CRITICAL] FIREBASE_SERVICE_ACCOUNT is missing");
   } else {
-    // Attempt parse to check validity
     const serviceAccount = JSON.parse(serviceAccountRaw);
-    console.log(`[DEBUG] Firebase Config Found for project: ${serviceAccount.project_id}`);
-    
     if (admin.apps.length === 0) {
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
-      console.log("[DEBUG] Firebase App Initialized Successfully");
+      console.log(`[INIT] Connected to project: ${serviceAccount.project_id}`);
     }
   }
 } catch (err) {
-  console.error("[CRITICAL] Failed to initialize Firebase:", err.message);
+  console.error("[CRITICAL] Firebase Init Failed:", err.message);
 }
 
 const db = admin.firestore();
 
 // --- 2. MAIN LOGIC ---
 serve(async (req) => {
-  const requestMethod = req.method;
-  console.log(`[DEBUG] Received ${requestMethod} request`);
-
   try {
     // --- A. SECURITY CHECK ---
     const cronSecret = Deno.env.get('CRON_SECRET');
     const authHeader = req.headers.get('Authorization');
 
-    // Debugging Secrets (Check logs to see what matches)
-    console.log(`[DEBUG] Server CRON_SECRET exists: ${!!cronSecret}`);
-    console.log(`[DEBUG] Received Authorization Header: ${authHeader}`);
-
-    // 1. Server Config Check
     if (!cronSecret) {
-      console.error("[ERROR] CRON_SECRET is not set in Supabase Secrets.");
-      return new Response(JSON.stringify({ error: "Server Misconfiguration: Missing CRON_SECRET" }), { 
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Server Misconfiguration: Missing CRON_SECRET" }), { status: 500 });
     }
 
-    // 2. Auth Check
-    const expectedHeader = `Bearer ${cronSecret}`;
-    if (authHeader !== expectedHeader) {
-      console.warn("[WARN] Auth Mismatch!");
-      console.warn(`[WARN] Expected: ${expectedHeader}`);
-      console.warn(`[WARN] Received: ${authHeader}`);
-      return new Response(JSON.stringify({ error: "Unauthorized: Secret mismatch" }), { 
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      console.warn(`[WARN] Unauthorized access attempt.`);
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
-
-    console.log("[DEBUG] Authentication Successful. Proceeding to DB...");
-
-    const now = admin.firestore.Timestamp.now();
-    console.log(`[DEBUG] Current Server Time: ${now.toDate().toISOString()}`);
 
     // --- B. QUERY ---
-    // Log the query attempt
-    console.log("[DEBUG] Querying 'ledger_transactions' where status='locked' AND releaseDate <= now...");
-
+    const now = admin.firestore.Timestamp.now();
+    
+    // ⚠️ BATCH LIMIT FIX: 
+    // We do 2 writes per doc (Update Ledger + Create Notif).
+    // Firestore limit is 500 writes. So we must limit query to 250 max.
+    // We use 200 to be safe.
     const snapshot = await db.collectionGroup('ledger_transactions')
       .where('status', '==', 'locked')
       .where('releaseDate', '<=', now)
-      .limit(500)
+      .limit(200) 
       .get();
 
-    console.log(`[DEBUG] Query Complete. Found ${snapshot.size} documents to release.`);
-
     if (snapshot.empty) {
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: "No funds to release", 
-        processed: 0 
-      }), { 
+      console.log("[INFO] No locked funds due for release.");
+      return new Response(JSON.stringify({ success: true, processed: 0 }), { 
         headers: { "Content-Type": "application/json" } 
       });
     }
 
+    console.log(`[INFO] Found ${snapshot.size} transactions to release.`);
+
     // --- C. BATCH UPDATES ---
-    console.log("[DEBUG] Starting Batch Write...");
     const batch = db.batch();
     
     snapshot.docs.forEach(doc => {
       const data = doc.data();
+      // Locate the vendor ID from the path: vendors/{vendorId}/ledger_transactions/{docId}
       const vendorId = doc.ref.parent.parent!.id; 
-      
-      console.log(`[DEBUG] releasing doc: ${doc.id} for vendor: ${vendorId}, amount: ${data.amount}`);
 
-      // 1. Update Ledger
+      // 1. Update Ledger Status
       batch.update(doc.ref, { 
         status: 'available',
         releasedAt: now,
@@ -115,11 +86,16 @@ serve(async (req) => {
         createdAt: now,
         refId: doc.id
       });
+      
+      // OPTIONAL: If you track 'activeLocks' in vendor_stats, you would decrement it here.
+      // However, updating stats for multiple vendors in one batch is complex.
+      // Ideally, your 'Liquid Cash' logic should calculate 'locked' by querying the ledger directly 
+      // or using a cloud function trigger on the ledger update.
     });
 
     // --- D. COMMIT ---
     await batch.commit();
-    console.log("[DEBUG] Batch Commit Successful.");
+    console.log(`[SUCCESS] Released ${snapshot.size} transactions.`);
 
     return new Response(JSON.stringify({ 
       success: true, 
@@ -129,13 +105,8 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    // Catch-all for crashes
     console.error("[CRITICAL EXCEPTION]", error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message,
-      stack: error.stack 
-    }), { 
+    return new Response(JSON.stringify({ success: false, error: error.message }), { 
       status: 500,
       headers: { "Content-Type": "application/json" } 
     });

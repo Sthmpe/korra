@@ -112,9 +112,9 @@ class _Info extends StatelessWidget {
       ]),
       SizedBox(height: 4.h),
 
-      // Meta: customer • created • SKU
+      // Meta: customer • created • productCode
       Text(
-        '${data.customerName} • ${data.createdAtText} • ${data.sku}',
+        '${data.customerName} • ${data.createdAtText} • ${data.productCode}',
         maxLines: 1, overflow: TextOverflow.ellipsis,
         style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E)),
       ),

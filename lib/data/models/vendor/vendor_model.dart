@@ -180,26 +180,26 @@ class Vendor {
 
   // --- FACTORY: From Firestore Map ---
   factory Vendor.fromMap(Map<String, dynamic> map) {
-    // Safely extract nested maps
+    // 1. Safely extract nested maps (defaults to empty map if missing)
     final business = map['business'] as Map<String, dynamic>? ?? {};
     final store = map['store'] as Map<String, dynamic>? ?? {};
     final location = map['location'] as Map<String, dynamic>? ?? {};
     final personal = map['personal'] as Map<String, dynamic>? ?? {};
     final kyc = map['kyc'] as Map<String, dynamic>? ?? {};
-    // Extract Socials Map
     final socials = map['socials'] as Map<String, dynamic>? ?? {};
 
     return Vendor(
-      uid: map['uid'] ?? '',
+      uid: map['uid']?.toString() ?? '',
       
       // Business
       registered: business['registered'] ?? false,
-      cac: business['cac'] ?? '',
-      legalName: business['legalName'] ?? '',
+      cac: business['cac']?.toString() ?? '',
+      legalName: business['legalName']?.toString() ?? '',
 
       // Store
-      logoUrl: store['logoUrl'],
-      storeName: store['storeName'] ?? '',
+      // FIX: Added '?? ""' to logoUrl to prevent crash if missing
+      logoUrl: store['logoUrl']?.toString() ?? '', 
+      storeName: store['storeName']?.toString() ?? '',
       presence: Presence.values.firstWhere(
         (e) => e.name == (store['presence'] ?? 'online'),
         orElse: () => Presence.online,
@@ -207,17 +207,17 @@ class Vendor {
       categories: List<String>.from(store['categories'] ?? []),
 
       // Location
-      address: location['address'] ?? '',
-      city: location['city'] ?? '',
-      stateName: location['state'] ?? '',
-      mapsLink: location['mapsLink'] ?? '',
+      address: location['address']?.toString() ?? '',
+      city: location['city']?.toString() ?? '',
+      stateName: location['state']?.toString() ?? '',
+      mapsLink: location['mapsLink']?.toString() ?? '',
 
       // Personal
-      firstName: personal['first'] ?? '',
-      lastName: personal['last'] ?? '',
-      otherName: personal['other'] ?? '',
-      phone: personal['phone'] ?? '',
-      email: personal['email'] ?? '',
+      firstName: personal['first']?.toString() ?? '',
+      lastName: personal['last']?.toString() ?? '',
+      otherName: personal['other']?.toString() ?? '',
+      phone: personal['phone']?.toString() ?? '',
+      email: personal['email']?.toString() ?? '',
       dob: personal['dob'] != null ? (personal['dob'] as Timestamp).toDate() : null,
       gender: Gender.values.firstWhere(
         (e) => e.name == (personal['gender'] ?? 'male'),
@@ -225,22 +225,22 @@ class Vendor {
       ),
 
       // KYC
-      nin: kyc['nin'] ?? '',
-      bvn: kyc['bvn'] ?? '',
+      nin: kyc['nin']?.toString() ?? '',
+      bvn: kyc['bvn']?.toString() ?? '',
       ninVerified: kyc['ninVerified'] ?? false,
       bvnVerified: kyc['bvnVerified'] ?? false,
 
-      // Socials (Mapped directly from the 'socials' object)
-      whatsappGroup: socials['whatsappGroup'],
-      instagram: socials['instagram'],
-      website: socials['website'],
-      tiktok: socials['tiktok'],
-      twitter: socials['twitter'],
-      facebook: socials['facebook'],
-      otherLink: socials['otherLink'],
+      // Socials (Nullable strings are fine, but let's cast safely)
+      whatsappGroup: socials['whatsappGroup']?.toString(),
+      instagram: socials['instagram']?.toString(),
+      website: socials['website']?.toString(),
+      tiktok: socials['tiktok']?.toString(),
+      twitter: socials['twitter']?.toString(),
+      facebook: socials['facebook']?.toString(),
+      otherLink: socials['otherLink']?.toString(),
 
       // Meta
-      status: map['status'] ?? 'pending',
+      status: map['status']?.toString() ?? 'pending',
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );

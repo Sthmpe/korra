@@ -30,10 +30,10 @@ Future<void> showKorraVendorTermsSheet(BuildContext context) {
         heading: '3. Payments & Settlement Agreement',
         items: [
           'Settlements are processed based on the Agreement Terms, not delivery verification.',
-          'For "Strict Lock" Plans: Funds are held for a mandatory 10-day cooling-off period. On Day 11, 50% of paid funds are automatically released to your wallet to formalize the reservation.',
+          'For "Strict Lock" Plans: Funds are held for a mandatory 24-hour cooling-off period. After 24 hours, 50% of paid funds are automatically released to your wallet to formalize the reservation.',
           'For "Flexi Direct" Plans: Funds are settled to your wallet immediately after payment.',
           'Price Lock Obligations: Under "Flexi Direct", you must strictly honor the price lock and terms agreed upon initiation. Under "Strict Lock", you are obligated to maintain the reservation as long as the customer is active, and you must respect the customer’s right to extend the duration up to the maximum allowable days.',
-          'Refunds: In the event of a customer default or cancellation under the "Strict Lock" agreement, refunds are processed automatically according to the pre-agreed terms (50% retention as liquidated damages) without requiring dispute adjudication.',
+          'Refunds: In the event of a customer default or cancellation under the "Strict Lock" agreement, refunds are processed automatically according to the pre-agreed terms (e.g., 50% retention as liquidated damages) without requiring dispute adjudication.',
         ],
       ),
       _Section(
@@ -103,8 +103,8 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         heading: '4. Handling Defaults & Discipline Layers',
         items: [
           'Under "Strict Lock", the system enforces financial discipline:',
-          '   - Day 1 to 10: Customer can cancel with only a minor processing fee deduction. You receive no funds during this cooling-off period.',
-          '   - Day 11 Onwards: Liquidated Damages activate. If the customer defaults or cancels, you retain 50% of the funds paid so far as compensation for holding inventory.',
+          '   - First 24 Hours: Customer can cancel with only a minor processing fee deduction. You receive no funds during this cooling-off period.',
+          '   - After 24 Hours: Liquidated Damages activate. If the customer defaults or cancels, you retain 50% of the funds paid so far as compensation for holding inventory.',
           'Under "Flexi Direct", you resolve financial breaches directly with the customer, but you must honor the price lock agreement until a breach is confirmed.',
         ],
       ),
@@ -213,26 +213,26 @@ Future<void> showKorraTermsSheet(BuildContext context) {
       _Section(
         heading: '2. Fees & Charges',
         items: [
-          'Korra charges a Processing Fee of 2% (Capped at ₦3,000) on your payments.',
+          'Korra charges a Platform Fee of 3.5% on plan initiation.',
           'This fee covers payment gateway charges and the cost of securing the "Price Lock" technology.',
           'This fee is non-refundable, even if you cancel the plan.',
         ],
       ),
       _Section(
-        heading: '3. "Strict Lock" Rules (10-Day Cooling Off)',
+        heading: '3. "Strict Lock" Rules (24-Hour Cooling Off)',
         items: [
-          'If you choose a "Strict Lock" plan:',
-          'Day 1 to 10: You have a grace period. You can cancel for a 100% Refund of your deposit (minus the 2% fee).',
-          'Day 11 Onwards: 50% of your funds are released to the Vendor to secure full ownership of the item.',
-          'Cancellation Penalty: If you cancel AFTER Day 10, you forfeit 50% of total funds paid as "Liquidated Damages" to compensate the Vendor for holding inventory.',
+          'If your plan is a "Strict Lock" plan:',
+          'You have a 24-hour grace period. You can cancel for a 100% Refund of your deposit (minus the breakage fee).',
+          '24 Hours Onwards: 50% of your funds are released to the Vendor to secure full ownership of the item.',
+          'Cancellation Penalty: If you cancel AFTER 24 hours, based on the plan terms, you may either forfeit 50% of total funds paid as "Liquidated Damages" or refunds are processed strictly as Store Credit.',
         ],
       ),
       _Section(
         heading: '4. "Flexi Direct" Rules',
         items: [
-          'If you choose a "Flexi Direct" plan:',
-          'The Vendor controls the down payment and refund policy. Funds are settled to the Vendor immediately.',
-          'Cancellation and Refunds are handled directly between you and the Vendor. Korra acts only as a record-keeper and cannot force a refund once funds are settled.',
+          'If your plan is a "Flexi Direct" plan:',
+          'The Vendor controls the down payment and funds are settled to the Vendor immediately.',
+          'Cash refunds are NOT guaranteed. If you cancel a Direct plan, refunds are processed strictly as Store Credit valid only with that specific Vendor.',
         ],
       ),
       _Section(
@@ -266,14 +266,14 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
     title: 'Privacy Policy',
     sections: [
       _Section(
-        heading: 'Information We Collect',
+        heading: '1. Information We Collect',
         items: [
           'To provide our services, we collect personal details (e.g., name, email, phone), verification data (e.g., NIN, BVN), and financial transaction history.',
           'We also collect device metadata and usage logs to detect fraud and secure your account.',
         ],
       ),
       _Section(
-        heading: 'How We Use Your Data',
+        heading: '2. How We Use Your Data',
         items: [
           'Identity Verification: To comply with KYC (Know Your Customer) and AML (Anti-Money Laundering) regulations.',
           'Service Delivery: To process payments, manage reservation plans, and coordinate with vendors.',
@@ -281,34 +281,34 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
         ],
       ),
       _Section(
-        heading: 'Information Sharing',
+        heading: '3. Information Sharing',
         items: [
           'We do not sell your personal data. Information is shared only with verified third parties essential to our service (e.g., Monnify for payments, vendors for order fulfillment).',
           'We may disclose data to regulatory authorities or law enforcement if legally compelled to do so.',
         ],
       ),
       _Section(
-        heading: 'Data Security',
+        heading: '4. Data Security',
         items: [
           'We employ industry-standard encryption (bank-grade security) to protect your data both in transit and at rest.',
           'While we implement robust security measures, no digital transmission is absolute. You are responsible for keeping your login credentials confidential.',
         ],
       ),
       _Section(
-        heading: 'Your Rights',
+        heading: '5. Your Rights',
         items: [
           'You have the right to access, correct, or request the deletion of your personal data.',
           'Note that financial transaction records must be retained for a statutory period to comply with financial regulations, even after account closure.',
         ],
       ),
       _Section(
-        heading: 'Updates to Policy',
+        heading: '6. Updates to Policy',
         items: [
           'We may update this policy to reflect changes in our practices or legal requirements. Significant changes will be communicated directly via the app.',
         ],
       ),
       _Section(
-        heading: 'Contact Us',
+        heading: '7. Contact Us',
         items: [
           'For privacy-related inquiries or to exercise your rights, please contact our Data Compliance team via the Help section.',
         ],
@@ -316,7 +316,6 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
     ],
   );
 }
-
 
 // --- PRIVATE HELPERS ---
 

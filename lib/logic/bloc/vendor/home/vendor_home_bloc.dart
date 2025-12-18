@@ -78,8 +78,8 @@ class VendorHomeBloc extends Bloc<VendorHomeEvent, VendorHomeState> {
         final now = DateTime.now();
 
         // --- REAL LOGIC ---
-        double totalEarnings = 1000;
-        double lockedFunds = 100;
+        double totalEarnings = 0;
+        double lockedFunds = 0;
         Map<String, double> groupedLocks = {}; 
 
         for (var tx in transactions) {

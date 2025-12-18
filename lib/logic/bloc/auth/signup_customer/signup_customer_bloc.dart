@@ -172,7 +172,7 @@ class SignupCustomerBloc
             email: email,
             emailChecking: false,
             emailUnused: email.isEmpty ? false : true,
-            emailError: null,
+            emailError: '',
           ),
         );
       }
@@ -205,27 +205,32 @@ class SignupCustomerBloc
           state.lastName.trim().isEmpty || 
           state.phone.trim().isEmpty || 
           state.email.trim().isEmpty) {
+        debugPrint("Debug: One or more required fields are empty.");
         return;
       }
 
       // 2. Check Date of Birth
       if (state.dob == null) {
+        debugPrint("Debug: Date of birth is not selected.");
         return;
       }
       
       // 3. Check Age (Optional but recommended)
       final age = DateTime.now().year - state.dob!.year;
       if (age < 18) {
+        debugPrint("Debug: User is under 18 years old.");
          return;
       }
 
       // 4. Check Gender
       if (state.gender == Gender.undisclosed) { 
+        debugPrint("Debug: Gender is not selected."); 
         return;
       }
 
       // 5. Check Email Validity (If typed but not verified via regex)
       if (state.emailError != null && state.emailError!.isNotEmpty) {
+          debugPrint("Debug: Email format is invalid.");
          // The UI already shows the error under the field, but we block here too
          return; 
       }
@@ -233,6 +238,7 @@ class SignupCustomerBloc
       // 6. Check Email Availability (If we haven't checked yet or it failed)
       // If user typed fast and clicked next before debounce finished
       if (!state.emailUnused) {
+          debugPrint("Debug: Email availability not confirmed.");
          // Trigger the check manually here to be safe
          add(EmailChangedCU(state.email)); 
          return;

@@ -1,17 +1,23 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../config/utils/korra_exception.dart';
-import '../../../../data/repository/customer/customer_repository.dart';
+
+// 1. Define the function signature
+typedef ChangePasswordCallback = Future<void> Function({
+  required String currentPassword,
+  required String newPassword,
+});
 
 // EVENTS
 abstract class ChangePasswordEvent extends Equatable {
-  @override List<Object?> get props => [];
+  @override
+  List<Object?> get props => [];
 }
 
 class ChangePasswordSubmitted extends ChangePasswordEvent {
   final String currentPass;
   final String newPass;
-  
+
   ChangePasswordSubmitted(this.currentPass, this.newPass);
 }
 
@@ -24,18 +30,21 @@ class ChangePasswordState extends Equatable {
 
   const ChangePasswordState({this.status = ChangePassStatus.initial, this.error});
 
-  @override List<Object?> get props => [status, error];
+  @override
+  List<Object?> get props => [status, error];
 }
 
 // BLOC
 class ChangePasswordBloc extends Bloc<ChangePasswordEvent, ChangePasswordState> {
-  final CustomerRepository repo;
+  // 2. Accept the function instead of a specific Repository class
+  final ChangePasswordCallback changePassword;
 
-  ChangePasswordBloc({required this.repo}) : super(const ChangePasswordState()) {
+  ChangePasswordBloc({required this.changePassword}) : super(const ChangePasswordState()) {
     on<ChangePasswordSubmitted>((event, emit) async {
       emit(const ChangePasswordState(status: ChangePassStatus.loading));
       try {
-        await repo.changePassword(
+        // 3. Call the injected function
+        await changePassword(
           currentPassword: event.currentPass,
           newPassword: event.newPass,
         );
