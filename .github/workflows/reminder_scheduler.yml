@@ -1,0 +1,18 @@
+name: Customer Reminders
+
+on:
+  schedule:
+    # Runs at 08:00 UTC daily (9:00 AM Nigeria Time)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Reminder Function
+        run: |
+          curl -X POST '${{ secrets.SUPABASE_URL }}/functions/v1/send-reminders' \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          -H "Content-Type: application/json" \
+          --fail

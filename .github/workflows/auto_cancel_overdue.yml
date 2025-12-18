@@ -1,0 +1,17 @@
+name: Auto-Cancel Overdue Plans
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Runs daily at 2:00 AM UTC
+  workflow_dispatch:
+
+jobs:
+  process-cancellations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase Function
+        run: |
+          curl -X POST '${{ secrets.SUPABASE_URL }}/functions/v1/process-overdue' \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          -H "Content-Type: application/json" \
+          --fail
