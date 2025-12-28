@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
@@ -44,12 +46,14 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // --- LOGIC STATE ---
   ProductModelType _selectedModel = ProductModelType.strict;
-  String _selectedStrictPolicy = "50% Refund"; // Default for Strict
 
   // For Direct, policy is fixed to Store Credit, but we track extension toggle
   bool _isDirectExtensionEnabled = true;
 
   bool _termsAccepted = false;
+
+  // ✅ ADD THIS LINE HERE:
+  int _calculatedDurationInt = 14;
 
   // DYNAMIC DISPLAY STRINGS
   String _baseDuration = "14 Days";
@@ -57,6 +61,9 @@ class _AddProductPageState extends State<AddProductPage> {
   String _extensionDuration = "0 Days"; // Visual only
   String _totalMaxTime = "17 Days";
   bool _priceAllowsExtension = false;
+
+  // We need to store the current limit to use it inside listener
+  double _currentMaxPlanLimit = 100000;
 
   final List<String> _categories = [
     "Mens Clothing",
@@ -76,10 +83,14 @@ class _AddProductPageState extends State<AddProductPage> {
     "Food & Drinks",
     "Automotive",
   ];
+  // 1. Define the stream variable here
+  late Stream<VendorStats> _statsStream;
 
   @override
   void initState() {
     super.initState();
+    // 2. Initialize the stream ONCE here
+    _statsStream = widget.vendors.streamVendorStats(widget.vendorUid);
     _priceCtrl.addListener(_updatePlanLogic);
   }
 
@@ -99,6 +110,9 @@ class _AddProductPageState extends State<AddProductPage> {
     final cleanPrice =
         double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
 
+    // ✅ FIX: Use the synced limit from Firestore, not hardcoded 100k
+    final double calculationCeiling = _currentMaxPlanLimit; 
+
     int baseDays = 14;
     int noticeDays = 3;
     int extDays = 0;
@@ -106,13 +120,12 @@ class _AddProductPageState extends State<AddProductPage> {
 
     bool isPriceTooHigh = false;
 
+    if (cleanPrice > calculationCeiling) {
+       isPriceTooHigh = true;
+    }
+
     // 1. Determine Base Duration & Max Extension from Price Table
-    if (cleanPrice > 100000) {
-      isPriceTooHigh = true;
-      _totalMaxTime = "--";
-      _baseDuration = "--";
-      return; // Stop calc
-    } else if (cleanPrice <= 7000) {
+    if (cleanPrice <= 7000) {
       baseDays = 14;
       allowExt = false;
       extDays = 0;
@@ -128,7 +141,7 @@ class _AddProductPageState extends State<AddProductPage> {
       baseDays = 25;
       allowExt = true;
       extDays = 7;
-    } else if (cleanPrice <= 35000) {
+    } else if (cleanPrice <= 40000) {
       baseDays = 30;
       allowExt = true;
       extDays = 7;
@@ -137,14 +150,34 @@ class _AddProductPageState extends State<AddProductPage> {
       allowExt = true;
       extDays = 14;
     } else if (cleanPrice <= 75000) {
+      baseDays = 40;
+      allowExt = true;
+      extDays = 14;
+    } else if (cleanPrice <= 85000) {
       baseDays = 45;
       allowExt = true;
       extDays = 14;
-    } else {
-      // 75k - 100k
+    } else if (cleanPrice <= 150000) {
       baseDays = 56;
       allowExt = true;
       extDays = 14;
+    } else if (cleanPrice <= 230000) {
+      baseDays = 60; 
+      allowExt = true; 
+      extDays = 14; // Total: 77 Days
+    } else if (cleanPrice <= 320000) {
+      baseDays = 65; 
+      allowExt = true; 
+      extDays = 15; // Total: 83 Days
+    } else if (cleanPrice <= 410000) {
+      baseDays = 70; 
+      allowExt = true; 
+      extDays = 20; // Total: 93 Days (3 Months)
+    } else {
+      // 410k - 500k (Hard Cap)
+      baseDays = 75; 
+      allowExt = true; 
+      extDays = 20; // Total: 98 Days
     }
 
     // 2. Apply Model Logic
@@ -173,11 +206,18 @@ class _AddProductPageState extends State<AddProductPage> {
 
     setState(() {
       _priceAllowsExtension = allowExt;
+      _calculatedDurationInt = baseDays;
 
-      _baseDuration = "$baseDays Days";
-      _noticePeriod = "$noticeDays Days";
-      _extensionDuration = allowExt ? "$extDays Days" : "None";
-      _totalMaxTime = "$totalDays Days";
+      if (isPriceTooHigh) {
+         _baseDuration = "Limit Exceeded";
+         _totalMaxTime = "N/A";
+         _extensionDuration = "N/A";
+      } else {
+        _baseDuration = "$baseDays Days";
+        _noticePeriod = "$noticeDays Days";
+        _extensionDuration = allowExt ? "$extDays Days" : "None";
+        _totalMaxTime = "$totalDays Days";
+      }
     });
   }
 
@@ -247,9 +287,10 @@ class _AddProductPageState extends State<AddProductPage> {
     // Prepare Policy
     // Strict: User Choice (50% / Store Credit)
     // Direct: Always "Store Credit"
-    final finalPolicy = _selectedModel == ProductModelType.strict
-        ? _selectedStrictPolicy
-        : "Store Credit"; // Forced for Direct
+    final finalPolicy = "Store Credit"; // Forced for Direct
+
+    // ✅ FIX 2: Convert List<File> to List<String> (Paths)
+    final imagePaths = imageBloc.state.images.map((file) => file.path).toList();
 
     productBloc.add(
       VendorProductsAdd(
@@ -258,19 +299,19 @@ class _AddProductPageState extends State<AddProductPage> {
         price: price,
         stock: stock,
         category: _categoryCtrl.text,
-        images: imageBloc.state.images,
+        images: imagePaths, // ✅ Passed paths instead of Files
         termsAccepted: _termsAccepted,
         modelType: _selectedModel,
         cancellationPolicy: finalPolicy,
-        // Extension Logic:
-        // Strict: Automatic if price allows
-        // Direct: User Toggle if price allows
         extensionsEnabled: _selectedModel == ProductModelType.strict
             ? _priceAllowsExtension
             : (_priceAllowsExtension && _isDirectExtensionEnabled),
         directDownPayment: _selectedModel == ProductModelType.direct
             ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
             : null,
+        
+        // ✅ FIX 1: Added the required duration argument
+        duration: _calculatedDurationInt, 
       ),
     );
   }
@@ -285,378 +326,418 @@ class _AddProductPageState extends State<AddProductPage> {
       appBar: const KorraHeader(title: "New Product", showLeadingIcon: true),
       body: BlocListener<VendorProductsBloc, VendorProductsState>(
         listener: (context, state) {
-          if (state.success == true && !state.isSubmitting!) {
-            showAppSnackbar("Product created!", SnackbarType.success);
-            context.read<VendorProductsBloc>().add(
-              const VendorProductsRefresh(),
-            );
-            Navigator.pop(context);
-          } else if (state.success == false && !state.isSubmitting!) {
-            showAppSnackbar(state.errorMessage ?? "Failed", SnackbarType.error);
+          if (state.success == true) {
+            // A. Clear form logic
+            _nameCtrl.clear();
+            _descCtrl.clear();
+            _priceCtrl.clear();
+            _stockCtrl.clear();
+            _categoryCtrl.clear();
+            _downPaymentCtrl.clear();
+            // Reset image bloc
+            context.read<ImageBloc>().add(ResetState()); 
+
+            // B. Show Success Message
+            showAppSnackbar("Product added successfully! 🚀", SnackbarType.success);
+
+            // C. Navigate Back (to Product List)
+           // ✅ FIX: Wait for frame to finish before Popping
+           WidgetsBinding.instance.addPostFrameCallback((_) {
+               Get.back(); 
+            });
+          }
+          
+          if (state.errorMessage != null) {
+            showAppSnackbar(state.errorMessage!, SnackbarType.error);
           }
         },
-        child: BlocBuilder<VendorProductsBloc, VendorProductsState>(
-          builder: (context, state) {
-            final isLoading = state.isSubmitting ?? false;
-
-            return Form(
-              key: _formKey,
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-                children: [
-                  _buildLimitHeader(state.availableLimit),
-
-                  // 1. IMAGES
-                  Text("Product Photos", style: _labelStyle()),
-                  SizedBox(height: 8.h),
-                  BlocBuilder<ImageBloc, ImageState>(
-                    builder: (context, imgState) {
-                      return ImageUploadBox(
-                        editable: true,
-                        imagesUrl: const [],
-                      );
-                    },
-                  ),
-                  SizedBox(height: 24.h),
-
-                  // 2. DETAILS
-                  Text("Details", style: _labelStyle()),
-                  SizedBox(height: 8.h),
-                  _buildInput(controller: _nameCtrl, hint: "Product Name"),
-                  SizedBox(height: 12.h),
-                  _buildInput(
-                    controller: _descCtrl,
-                    hint: "Description",
-                    maxLines: 3,
-                  ),
-                  SizedBox(height: 24.h),
-
-                  // 3. PRICE & DURATION GRID
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Price", style: _labelStyle()),
-                            SizedBox(height: 8.h),
-                            _buildInput(
-                              controller: _priceCtrl,
-                              hint: "0.00",
-                              prefixIcon: Padding(
-                                padding: EdgeInsets.only(
-                                  left: 14.w,
-                                  right: 4.w,
-                                ),
-                                child: Text(
-                                  "₦",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 15.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ),
-                              prefixIconConstraints: const BoxConstraints(
-                                minWidth: 0,
-                                minHeight: 0,
-                              ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                CurrencyInputFormatter(),
-                              ],
-                            ),
-                          ],
+        child: StreamBuilder<VendorStats>(
+          stream: _statsStream,
+          builder: (context, snapshot) {
+            // While loading, use empty stats or loading indicator
+            if (snapshot.connectionState == ConnectionState.waiting) {
+               return const Center(child: CircularProgressIndicator());
+            }
+            
+            final stats = snapshot.data ?? VendorStats.empty();
+            
+            // 🔄 SYNC LIMIT WITH LOGIC
+            // If the limit in the stream is different from our local cache, update it
+            if (_currentMaxPlanLimit != stats.maxPlanAmount) {
+               _currentMaxPlanLimit = stats.maxPlanAmount;
+               // Trigger UI update logic safely after build
+               WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _updatePlanLogic();
+               });
+            }
+              return BlocBuilder<VendorProductsBloc, VendorProductsState>(
+                builder: (context, state) {
+                  final isLoading = state.isSubmitting ?? false;
+            
+                  return Form(
+                    key: _formKey,
+                    child: ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+                      children: [
+                        _buildLimitHeader(state.availableLimit),
+            
+                        // 1. IMAGES
+                        Text("Product Photos", style: _labelStyle()),
+                        SizedBox(height: 8.h),
+                        BlocBuilder<ImageBloc, ImageState>(
+                          builder: (context, imgState) {
+                            return ImageUploadBox(
+                              editable: true,
+                              imagesUrl: const [],
+                            );
+                          },
                         ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Max Time", style: _labelStyle()),
-                            SizedBox(height: 8.h),
-                            Container(
-                              height: 48.h,
-                              padding: EdgeInsets.symmetric(horizontal: 12.w),
-                              alignment: Alignment.centerLeft,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF2F4F7),
-                                borderRadius: BorderRadius.circular(12.r),
-                                border: Border.all(
-                                  color: const Color(0xFFEAECF0),
-                                ),
-                              ),
-                              child: Text(
-                                _totalMaxTime,
-                                style: GoogleFonts.inter(
-                                  fontSize: 14.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
+                        SizedBox(height: 24.h),
+            
+                        // 2. DETAILS
+                        Text("Details", style: _labelStyle()),
+                        SizedBox(height: 8.h),
+                        _buildInput(controller: _nameCtrl, hint: "Product Name"),
+                        SizedBox(height: 12.h),
+                        _buildInput(
+                          controller: _descCtrl,
+                          hint: "Description",
+                          maxLines: 3,
                         ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 12.h),
-
-                  // STOCK & CATEGORY
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
+                        SizedBox(height: 24.h),
+            
+                        // 3. PRICE & DURATION GRID
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Stock", style: _labelStyle()),
-                            SizedBox(height: 8.h),
-                            _buildInput(
-                              controller: _stockCtrl,
-                              hint: "Qty",
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Category", style: _labelStyle()),
-                            SizedBox(height: 8.h),
-                            GestureDetector(
-                              onTap: () => _showCategorySheet(context),
-                              child: Container(
-                                height: 48.h,
-                                padding: EdgeInsets.symmetric(horizontal: 12.w),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(12.r),
-                                  border: Border.all(
-                                    color: const Color(0xFFEAECF0),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Price", style: _labelStyle()),
+                                  SizedBox(height: 8.h),
+                                  _buildInput(
+                                    controller: _priceCtrl,
+                                    hint: "0.00",
+                                    prefixIcon: Padding(
+                                      padding: EdgeInsets.only(
+                                        left: 14.w,
+                                        right: 4.w,
+                                      ),
                                       child: Text(
-                                        _categoryCtrl.text.isEmpty
-                                            ? "Select"
-                                            : _categoryCtrl.text,
+                                        "₦",
                                         style: GoogleFonts.inter(
-                                          fontSize: 14.sp,
-                                          fontWeight: _categoryCtrl.text.isEmpty
-                                              ? FontWeight.w400
-                                              : FontWeight.w600,
-                                          color: _categoryCtrl.text.isEmpty
-                                              ? Colors.grey.shade400
-                                              : const Color(0xFF101828),
+                                          fontSize: 15.sp,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade600,
                                         ),
-                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    Icon(
-                                      Iconsax.arrow_down_1,
-                                      size: 16.sp,
-                                      color: Colors.grey,
+                                    prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 0,
+                                      minHeight: 0,
                                     ),
-                                  ],
-                                ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      CurrencyInputFormatter(),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Base Duration", style: _labelStyle()),
+                                  SizedBox(height: 8.h),
+                                  Container(
+                                    height: 48.h,
+                                    padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                    alignment: Alignment.centerLeft,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF2F4F7),
+                                      borderRadius: BorderRadius.circular(12.r),
+                                      border: Border.all(
+                                        color: const Color(0xFFEAECF0),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _baseDuration,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-
-                  // ----------------------------------------------------
-                  // TIMELINE INFO
-                  // ----------------------------------------------------
-                  SizedBox(height: 20.h),
-                  Container(
-                    padding: EdgeInsets.all(16.r),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: const Color(0xFFEAECF0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Timeline Logic",
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
-                        ),
+            
                         SizedBox(height: 12.h),
-                        _buildTimelineRow("Base Duration", _baseDuration),
-                        _buildTimelineRow(
-                          "Notice Period",
-                          _noticePeriod,
-                          isAlert: true,
+            
+                        // STOCK & CATEGORY
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Stock", style: _labelStyle()),
+                                  SizedBox(height: 8.h),
+                                  _buildInput(
+                                    controller: _stockCtrl,
+                                    hint: "Qty",
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Category", style: _labelStyle()),
+                                  SizedBox(height: 8.h),
+                                  GestureDetector(
+                                    onTap: () => _showCategorySheet(context),
+                                    child: Container(
+                                      height: 48.h,
+                                      padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF9FAFB),
+                                        borderRadius: BorderRadius.circular(12.r),
+                                        border: Border.all(
+                                          color: const Color(0xFFEAECF0),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _categoryCtrl.text.isEmpty
+                                                  ? "Select"
+                                                  : _categoryCtrl.text,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 14.sp,
+                                                fontWeight: _categoryCtrl.text.isEmpty
+                                                    ? FontWeight.w400
+                                                    : FontWeight.w600,
+                                                color: _categoryCtrl.text.isEmpty
+                                                    ? Colors.grey.shade400
+                                                    : const Color(0xFF101828),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Iconsax.arrow_down_1,
+                                            size: 16.sp,
+                                            color: Colors.grey,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        _buildTimelineRow(
-                          "Potential Extension",
-                          _extensionDuration,
+            
+                        // ----------------------------------------------------
+                        // TIMELINE INFO
+                        // ----------------------------------------------------
+                        SizedBox(height: 20.h),
+                        Container(
+                          padding: EdgeInsets.all(16.r),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12.r),
+                            border: Border.all(color: const Color(0xFFEAECF0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Timeline Logic",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              SizedBox(height: 12.h),
+                              _buildTimelineRow("Base Duration", _baseDuration),
+                              _buildTimelineRow(
+                                "Notice Period",
+                                _noticePeriod,
+                                isAlert: true,
+                              ),
+                              _buildTimelineRow(
+                                "Potential Extension",
+                                _extensionDuration,
+                              ),
+                              _buildTimelineRow(
+                                "Total Max Time",
+                                _totalMaxTime,
+                              ),
+                              if (_priceAllowsExtension) ...[
+                                SizedBox(height: 4.h),
+                                Text(
+                                  "* Extension unlocks only if customer pays 80% of the product price.",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.sp,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                        if (_priceAllowsExtension) ...[
-                          SizedBox(height: 4.h),
-                          Text(
-                            "* Extension unlocks only if customer pays 80% of total.",
-                            style: GoogleFonts.inter(
-                              fontSize: 10.sp,
-                              color: Colors.grey.shade500,
-                              fontStyle: FontStyle.italic,
+            
+                        SizedBox(height: 32.h),
+                        const Divider(color: Color(0xFFEAECF0)),
+                        SizedBox(height: 24.h),
+            
+                        // 4. MODEL SELECTION
+                        Text("Sales Model", style: _labelStyle()),
+                        SizedBox(height: 12.h),
+                        Container(
+                          padding: EdgeInsets.all(4.r),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F4F7),
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          child: Row(
+                            children: [
+                              _buildModelTab("Strict Lock", ProductModelType.strict),
+                              _buildModelTab("Korra Direct", ProductModelType.direct),
+                            ],
+                          ),
+                        ),
+            
+                        SizedBox(height: 20.h),
+            
+                        // 5. DYNAMIC MODEL SETTINGS
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: _selectedModel == ProductModelType.strict
+                              ? _buildStrictSettings()
+                              : _buildDirectSettings(),
+                        ),
+            
+                        SizedBox(height: 32.h),
+            
+                        // 6. TERMS
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _termsAccepted = !_termsAccepted),
+                          child: Container(
+                            padding: EdgeInsets.all(12.r),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: _termsAccepted
+                                    ? KorraColors.brand
+                                    : const Color(0xFFEAECF0),
+                              ),
+                              borderRadius: BorderRadius.circular(12.r),
+                              color: _termsAccepted
+                                  ? const Color(0xFFFFF4ED)
+                                  : Colors.white,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  _termsAccepted
+                                      ? Iconsax.tick_square
+                                      : Iconsax.square,
+                                  size: 20.sp,
+                                  color: _termsAccepted
+                                      ? KorraColors.brand
+                                      : Colors.grey,
+                                ),
+                                SizedBox(width: 12.w),
+                                Expanded(
+                                  child: Text(
+                                    "I confirm this item is in stock and reserved for Korra customers.",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13.sp,
+                                      color: const Color(0xFF475467),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
+            
+                        SizedBox(height: 32.h),
+            
+                        // 7. SUBMIT
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52.h,
+                          child: ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () => _saveProduct(imageBloc, productBloc, state),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: KorraColors.brand,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14.r),
+                              ),
+                              disabledBackgroundColor: KorraColors.brand.withOpacity(
+                                0.6,
+                              ),
+                            ),
+                            child: isLoading
+                                ? SizedBox(
+                                    width: 24.w,
+                                    height: 24.w,
+                                    child: const CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    "Create Product",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        SizedBox(height: 40.h),
                       ],
                     ),
-                  ),
-
-                  SizedBox(height: 32.h),
-                  const Divider(color: Color(0xFFEAECF0)),
-                  SizedBox(height: 24.h),
-
-                  // 4. MODEL SELECTION
-                  Text("Sales Model", style: _labelStyle()),
-                  SizedBox(height: 12.h),
-                  Container(
-                    padding: EdgeInsets.all(4.r),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F4F7),
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Row(
-                      children: [
-                        _buildModelTab("Strict Lock", ProductModelType.strict),
-                        _buildModelTab("Korra Direct", ProductModelType.direct),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: 20.h),
-
-                  // 5. DYNAMIC MODEL SETTINGS
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _selectedModel == ProductModelType.strict
-                        ? _buildStrictSettings()
-                        : _buildDirectSettings(),
-                  ),
-
-                  SizedBox(height: 32.h),
-
-                  // 6. TERMS
-                  GestureDetector(
-                    onTap: () =>
-                        setState(() => _termsAccepted = !_termsAccepted),
-                    child: Container(
-                      padding: EdgeInsets.all(12.r),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: _termsAccepted
-                              ? KorraColors.brand
-                              : const Color(0xFFEAECF0),
-                        ),
-                        borderRadius: BorderRadius.circular(12.r),
-                        color: _termsAccepted
-                            ? const Color(0xFFFFF4ED)
-                            : Colors.white,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            _termsAccepted
-                                ? Iconsax.tick_square
-                                : Iconsax.square,
-                            size: 20.sp,
-                            color: _termsAccepted
-                                ? KorraColors.brand
-                                : Colors.grey,
-                          ),
-                          SizedBox(width: 12.w),
-                          Expanded(
-                            child: Text(
-                              "I confirm this item is in stock and reserved for Korra customers.",
-                              style: GoogleFonts.inter(
-                                fontSize: 13.sp,
-                                color: const Color(0xFF475467),
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 32.h),
-
-                  // 7. SUBMIT
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52.h,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () => _saveProduct(imageBloc, productBloc, state),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: KorraColors.brand,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14.r),
-                        ),
-                        disabledBackgroundColor: KorraColors.brand.withOpacity(
-                          0.6,
-                        ),
-                      ),
-                      child: isLoading
-                          ? SizedBox(
-                              width: 24.w,
-                              height: 24.w,
-                              child: const CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              "Create Product",
-                              style: GoogleFonts.inter(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-                  SizedBox(height: 40.h),
-                ],
-              ),
-            );
-          },
+                  );
+                },
+              );
+          }
         ),
       ),
     );
@@ -701,7 +782,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
               SizedBox(height: 4.h),
               Text(
-                "If the customer cancels after the grace period, they receive 50% refund. You keep the rest as compensation or convert to store credit.",
+                "If a customer ever cancels, they receive a refund as Store Credit. This protects your cash flow.",
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   color: const Color(0xFF667085),
@@ -859,10 +940,10 @@ class _AddProductPageState extends State<AddProductPage> {
       decoration: BoxDecoration(
         color: isExceeded
             ? const Color(0xFFFEF3F2)
-            : const Color(0xFFF0F9FF), // Red or Blue bg
+            : KorraColors.brandLight, // Red or Blue bg
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(
-          color: isExceeded ? const Color(0xFFFECDCA) : const Color(0xFFB2DDFF),
+          color: isExceeded ? const Color(0xFFFECDCA) : KorraColors.brandDark.withOpacity(0.3),
         ),
       ),
       child: Column(
@@ -878,7 +959,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   fontWeight: FontWeight.w600,
                   color: isExceeded
                       ? const Color(0xFFB42318)
-                      : const Color(0xFF004EEB),
+                      : KorraColors.brandDark,
                 ),
               ),
               Text(
@@ -888,7 +969,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   fontWeight: FontWeight.w700,
                   color: isExceeded
                       ? const Color(0xFFB42318)
-                      : const Color(0xFF004EEB),
+                      : KorraColors.brandDark,
                 ),
               ),
             ],
@@ -902,7 +983,7 @@ class _AddProductPageState extends State<AddProductPage> {
               value: progress,
               backgroundColor: Colors.white,
               valueColor: AlwaysStoppedAnimation(
-                isExceeded ? const Color(0xFFD92D20) : const Color(0xFF2E90FA),
+                isExceeded ? const Color(0xFFD92D20) : KorraColors.brandDark,
               ),
               minHeight: 6.h,
             ),

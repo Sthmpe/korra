@@ -172,14 +172,24 @@ class _VendorActivityTile extends StatelessWidget {
     switch (type) {
       case VendorActivityType.newReservation:
         return _ActivityStyle(Iconsax.receipt_item, const Color(0xFF16A34A), const Color(0xFFECFDF5)); // Green
+      
       case VendorActivityType.payout:
-        return _ActivityStyle(Iconsax.bank, const Color(0xFF175CD3), const Color(0xFFEFF6FF)); // Blue
+        // Also handles 'payment' from customer
+        return _ActivityStyle(Iconsax.wallet_money, const Color(0xFF175CD3), const Color(0xFFEFF6FF)); // Blue
+      
       case VendorActivityType.stockLow:
         return _ActivityStyle(Iconsax.box, const Color(0xFFF79009), const Color(0xFFFFFAEB)); // Orange
+      
+      case VendorActivityType.extended: // 🆕 NEW CASE
+        // Orange/Yellow to indicate "More Time" but not negative
+        return _ActivityStyle(Iconsax.timer_1, const Color(0xFFD97706), const Color(0xFFFFFBEB)); 
+
       case VendorActivityType.planCompleted:
         return _ActivityStyle(Iconsax.tick_circle, const Color(0xFF7A5AF8), const Color(0xFFF9F5FF)); // Purple
+      
       case VendorActivityType.cancelled:
         return _ActivityStyle(Iconsax.close_circle, const Color(0xFFB42318), const Color(0xFFFEF3F2)); // Red
+      
       default:
         return _ActivityStyle(Iconsax.notification, Colors.grey.shade700, Colors.grey.shade100);
     }

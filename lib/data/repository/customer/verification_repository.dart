@@ -15,7 +15,7 @@ extension VerificationRepository on CustomerRepository {
         final res = await fx.invoke('check_uniqueness', body: {
           'type': 'nin',
           'value': nin,
-          'collection': 'customer',
+          'collection': 'customers',
         });
         if (res.data['exists'] == true) return true;
       }
@@ -24,7 +24,7 @@ extension VerificationRepository on CustomerRepository {
         final res = await fx.invoke('check_uniqueness', body: {
           'type': 'bvn',
           'value': bvn,
-          'collection': 'customer',
+          'collection': 'customers',
         });
         if (res.data['exists'] == true) return true;
       }

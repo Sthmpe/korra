@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 import '../../../config/utils/korra_exception.dart';
+import '../../models/customer/payment_receipt_data.dart';
 import '../../models/customer/plans.dart';
 import 'customer_repository.dart';
 
@@ -14,6 +15,7 @@ extension CustomerPlans on CustomerRepository {
   Future<Map<String, dynamic>> fetchPlanPreview({
     required String customerUid,
     required double productPrice,
+    required String productId,
   }) async {
     try {
       final response = await fx.invoke(
@@ -21,7 +23,7 @@ extension CustomerPlans on CustomerRepository {
         body: {
           "action": "PREVIEW",
           "customerUid": customerUid,
-          "productPrice": productPrice,
+          "productId": productId,
         },
       );
 
@@ -71,9 +73,8 @@ extension CustomerPlans on CustomerRepository {
           "action": "CREATE",
           "secureToken": secureToken, // ✅ Send Token
           "customerUid": plan.customerId,
-          "downPaymentAmount": totalDebitAmount, // (User Principal + Fee)
+          "amount": totalDebitAmount, // (User Principal + Fee)
           "productId": plan.productId,
-          "productPrice": plan.totalAmount,
           "planData": safeMap, 
         },
       );
@@ -109,7 +110,7 @@ extension CustomerPlans on CustomerRepository {
   // ===========================================================================
   // 3. PAY INSTALLMENT
   // ===========================================================================
-  Future<void> payInstallment({
+  Future<PaymentReceiptData> payInstallment({
     required String planId,
     required String customerUid,
     required double amount,
@@ -125,26 +126,39 @@ extension CustomerPlans on CustomerRepository {
         },
       );
 
-      final data = response.data;
+      final data = Map<String, dynamic>.from(response.data);
 
-      if (data['status'] != 'SUCCESS') {
-         _handlePaymentErrors(data['error']);
+      // 1. Check Backend Logic Error
+      if (data['status'] == 'ERROR') {
+        throw KorraException(data['error'] ?? "Unknown payment error");
       }
 
-      debugPrint("✅ Installment Paid: $amount");
+      // 2. ✅ FAIL-SAFE PARSING
+      // If parsing 'receiptData' fails, we catch it locally so we don't 
+      // throw a "Payment Failed" error to the user when money was actually deducted.
+      try {
+        if (data['receiptData'] == null) throw "No receipt data returned";
+        return PaymentReceiptData.fromJson(Map<String, dynamic>.from(data['receiptData']));
+      } catch (parseError) {
+        debugPrint("⚠️ Receipt Parsing Error: $parseError");
+        debugPrint("Raw Data: $data");
+        
+        // 3. RETURN FALLBACK RECEIPT (Critical for Trust)
+        // Money is gone, so we MUST return success.
+        return PaymentReceiptData.fromPartial(
+          amount: amount,
+          date: DateTime.now(),
+          title: "Payment Successful",
+          reference: "REF-${DateTime.now().millisecondsSinceEpoch}",
+          status: "SUCCESSFUL",
+        );
+      }
+
+    } on FunctionException catch (e) {
+      throw KorraException(e.toString());
     } catch (e) {
-      debugPrint("❌ Payment Error: $e");
-
-      if (e is KorraException) rethrow;
-
-      if (e is FunctionException) {
-         final details = e.details;
-         if (details is Map && details['error'] != null) {
-            _handlePaymentErrors(details['error'].toString());
-         }
-      }
-
-      throw KorraException("Payment could not be processed.");
+      // If it's not a function error, rethrow
+      throw KorraException(e.toString());
     }
   }
 
@@ -187,6 +201,45 @@ extension CustomerPlans on CustomerRepository {
       }
 
       throw KorraException("Could not cancel plan.");
+    }
+  }
+
+  // ===========================================================================
+  // 5. EXTEND PLAN (New Method)
+  // ===========================================================================
+  Future<void> extendPlan(String planId) async {
+    try {
+      final user = auth.currentUser;
+      if (user == null) throw KorraException("You must be logged in.");
+
+      final response = await fx.invoke(
+        'plan-manager',
+        body: {
+          "action": "EXTEND",
+          "planId": planId,
+          "customerUid": user.uid,
+        },
+      );
+
+      final data = response.data;
+
+      if (data['status'] != 'SUCCESS') {
+        _handleBusinessErrors(data['error']);
+      }
+
+      debugPrint("✅ Plan Extended Successfully.");
+    } catch (e) {
+      debugPrint("❌ Extension Error: $e");
+      
+      if (e is KorraException) rethrow;
+
+      if (e is FunctionException) {
+         final details = e.details;
+         if (details is Map && details['error'] != null) {
+            _handleBusinessErrors(details['error'].toString());
+         }
+      }
+      throw KorraException("Could not extend plan.");
     }
   }
 
@@ -291,6 +344,18 @@ extension CustomerPlans on CustomerRepository {
           (snap) =>
               snap.docs.map((doc) => Plan.fromMap(doc.data(), doc.id)).toList(),
         );
+  }
+
+  Future<Plan?> getPlanById(String planId) async {
+    try {
+      final doc = await firestore.collection('plans').doc(planId).get();
+      if (doc.exists && doc.data() != null) {
+        return Plan.fromMap(doc.data()!, doc.id);
+      }
+      return null;
+    } catch (e) {
+      throw KorraException("Failed to fetch plan: $e");
+    }
   }
 
   Stream<Plan> streamSinglePlan(String planId) {

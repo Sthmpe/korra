@@ -10,6 +10,7 @@ import '../../../config/constants/colors.dart';
 import '../../../config/utils/currency_formatters.dart';
 import '../../../data/models/customer/activity_item.dart';
 import '../../../data/models/customer/customer_model.dart';
+import '../../../data/models/customer/payment_receipt_data.dart';
 import '../../../data/models/customer/plans.dart';
 import '../../../data/repository/customer/customer_activity_feed.dart';
 import '../../../data/repository/customer/customer_repository.dart';
@@ -19,7 +20,6 @@ import '../../../data/repository/customer/plans_repository.dart';
 // BLOC
 import '../../../logic/bloc/customer/home/home_bloc.dart';
 import '../../../logic/bloc/customer/home/home_event.dart';
-import '../../../logic/bloc/customer/home/home_state.dart';
 import '../../../logic/bloc/customer/link/link_bloc.dart';
 import '../../../logic/bloc/customer/link/link_event.dart';
 import '../../../logic/bloc/customer/link/link_state.dart';
@@ -29,18 +29,17 @@ import '../../../logic/services/notification_service.dart'; // Import Service
 // WIDGETS
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/section_header.dart';
-import '../customer_failure_sheet.dart';
+import '../../shared/widgets/show_app_snackbar.dart';
 import '../plans/create_plan_screen.dart';
 import '../plans/widgets/plan_details_screen.dart';
 import '../plans/widgets/transaction_receipt_screen.dart';
-import '../topup_screen.dart';
+import '../profile/bank_details_screen.dart';
 import 'notification_screen.dart';
 import 'widgets/activity_timeline.dart';
 import 'widgets/customer_wallet_card.dart';
 import 'widgets/link_input.dart';
 import 'widgets/plan_carousel_slider.dart';
 import 'widgets/shimmer_loading.dart';
-import 'widgets/vendor_chip.dart';
 
 class HomePage extends StatefulWidget {
   final CustomerRepository customerRepo;
@@ -100,10 +99,16 @@ class _HomePageState extends State<HomePage> {
                 listener: (context, state) {
                   if (state.status == LinkStatus.loaded) {
                     final product = state.productFetch ?? ProductFetchResult.empty();
+                    
+                    if (customer == null) {
+                      showAppSnackbar('Customer data not available', SnackbarType.error);
+                      return;
+                    }
+
                     Get.to(() => CreatePlanScreen(
                       product: product,
                       customerRepo: widget.customerRepo,
-                      customer: customer!, // Non-null due to stream state
+                      customer: customer, // Non-null due to stream state
                       customerUid: widget.customerUid,
                       walletBalance: currentBalance,
                       onJumpToHome: () => widget.onJumpTo(0),
@@ -178,7 +183,12 @@ class _HomePageState extends State<HomePage> {
                                 : '₦${formatToCurrency(currentBalance)}',
                             loading: snapshot.connectionState == ConnectionState.waiting,
                             onTopUp: () {
-                              Get.to(() => TopUpScreen(customer: customer));
+                              if (customer == null) {
+                                showAppSnackbar('Customer data not available', SnackbarType.error);
+                                return;
+                              }
+
+                              Get.to(() => BankDetailsScreen(customer: customer));
                             },
                           ),
 
@@ -310,11 +320,22 @@ class _HomePageState extends State<HomePage> {
                               return ActivityTimeline(
                                 items: finalItems,
                                 onViewReceipt: (item) {
-                                  Get.to(() => TransactionReceiptScreen(
-                                    amount: item.amount.abs(),
-                                    planName: item.planId ?? "Transaction",
-                                    date: item.date,
-                                  ));
+                                  PaymentReceiptData receiptData;
+
+                                  // Check if the item carries the full receipt suitcase
+                                  if (item.receiptData != null && item.receiptData!.isNotEmpty) {
+                                    receiptData = PaymentReceiptData.fromJson(item.receiptData!);
+                                  } else {
+                                    // Fallback: Construct a Lite Receipt on the fly
+                                    receiptData = PaymentReceiptData.fromPartial(
+                                      amount: item.amount.abs(),
+                                      date: item.date,
+                                      title: item.title, // e.g. "Installment Paid"
+                                      status: 'SUCCESSFUL'
+                                    );
+                                  }
+
+                                  Get.to(() => TransactionReceiptScreen(data: receiptData));
                                 },
                                 onViewPlan: (item) {
                                   if (item.planId == null || item.planId!.isEmpty) return;

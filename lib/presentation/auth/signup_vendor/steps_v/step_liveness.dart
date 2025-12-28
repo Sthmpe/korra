@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,13 +7,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
-import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
 class StepLiveness extends StatefulWidget {
   const StepLiveness({super.key});

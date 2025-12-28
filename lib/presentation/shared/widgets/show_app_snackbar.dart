@@ -7,7 +7,7 @@ import 'package:iconsax/iconsax.dart';
 
 enum SnackbarType { success, warning, error, info }
 
-void showAppSnackbar(String message, SnackbarType type) {
+void showAppSnackbar(String message, SnackbarType type, {VoidCallback? onTap}) {
   // 1. Haptic Feedback (Immediate physical response)
   if (type == SnackbarType.error) {
     HapticFeedback.mediumImpact();
@@ -46,6 +46,7 @@ void showAppSnackbar(String message, SnackbarType type) {
   Get.snackbar(
     '', // Title hidden
     '', // Message hidden (we use custom titleText)
+    onTap: onTap != null ? (_) => onTap() : null,
     snackPosition: SnackPosition.TOP,
     duration: const Duration(seconds: 4), // 4s is standard. 12s is too long.
     animationDuration: const Duration(milliseconds: 400),

@@ -68,7 +68,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
 
     try {
       if (state.role == KorraRole.vendor) {
-        final existsInCustomer = await _customerRepo.checkCollectionForEmail('customer', state.email.trim());
+        final existsInCustomer = await _customerRepo.checkCollectionForEmail('customers', state.email.trim());
         
         if (existsInCustomer) {
           throw Exception('customer');

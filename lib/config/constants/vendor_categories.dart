@@ -1,4 +1,4 @@
-// lib/config/constants/vendor_categories.dart
+// lib/config/constants/Vendor_categories.dart
 
 const List<String> korraVendorCategories = [
   // --- TECH & GADGETS ---

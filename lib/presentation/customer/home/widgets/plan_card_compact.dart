@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -66,23 +67,12 @@ class PlanCardCompact extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand, // Ensures image fills the Expanded area
                 children: [
-                  Image.network(
-                    imageUrls.isNotEmpty ? imageUrls.first : '',
+                  CachedNetworkImage(
+                    imageUrl: imageUrls.isNotEmpty ? imageUrls.first : '',
                     fit: BoxFit.cover,
-                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded) return child;
-                      return AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeOut,
-                        child: child,
-                      );
-                    },
-                    errorBuilder: (_, __, ___) => Container(
-                      color: const Color(0xFFF5F5F5),
-                      child: Center(
-                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey.shade400, size: 24.sp),
-                      ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[100],
+                      child: const Icon(Icons.image_not_supported, color: Colors.grey),
                     ),
                   ),
                   
@@ -116,8 +106,8 @@ class PlanCardCompact extends StatelessWidget {
                   
                   // Progress Bar
                   Positioned(
-                    left: 0,
-                    right: 0,
+                    left: 4.w,
+                    right: 4.w,
                     bottom: 0,
                     child: Container(
                       height: 4.h,

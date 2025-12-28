@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +21,8 @@ import '../../../logic/bloc/customer/plans/create_plan_state.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import '../topup_screen.dart';
+import '../currency_input_formatter.dart';
+import '../profile/bank_details_screen.dart';
 import '../customer_failure_sheet.dart';
 
 class CreatePlanScreen extends StatefulWidget {
@@ -59,6 +62,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   double processingFee = 0.0;
   double totalDueNow = 0.0;
 
+  double _roundUpAmount(double amount) {
+    if (amount == 0) return 0;
+    double val = amount * 100;
+    val = double.parse(val.toStringAsFixed(4)); 
+    return val.ceil() / 100;
+  }
+
   // Store Credit Logic
   double _storeCredit = 0.0; // Available credit
   bool _useStoreCredit = true; // Default to true if they have credit
@@ -66,7 +76,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   final currencyFormat = NumberFormat.currency(
     locale: 'en_NG',
     symbol: '₦',
-    decimalDigits: 0,
+    decimalDigits: 2,
   );
 
   ProductModelType get modelType {
@@ -84,7 +94,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
     // RULE B: If Strict, read the vendor's choice from DB.
     // Default to "50% Refund" if missing (Safety net for Strict)
-    return widget.product.data['cancellationPolicy'] as String? ?? "50% Refund";
+    return widget.product.data['cancellationPolicy'] as String? ?? "Store Credit";
   }
 
   @override
@@ -101,29 +111,21 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
   // Helper to fetch credit (You might want to move this to Bloc/Repo properly later)
   Future<void> _fetchStoreCredit() async {
-    try {
-      final vendorId = widget.product.data['vendorId'];
-      if (vendorId != null) {
-        // Assuming you expose a method like this or similar query
-        // For now, let's simulate or mock if method doesn't exist
-        // real impl: final credit = await widget.customerRepo.getStoreCredit(widget.customerUid, vendorId);
+    if (!mounted) return;
 
-        // Direct Firestore fetch for now to unblock UI logic
-        final doc = await widget.customerRepo.db
-            .collection('customers')
-            .doc(widget.customerUid)
-            .collection('my_vendors')
-            .doc(vendorId)
-            .get();
+    final vendorId = widget.product.data['vendorId'];
+    
+    if (vendorId != null) {
+      final credit = await widget.customerRepo.getStoreCredit(
+        widget.customerUid,
+        vendorId,
+      );
 
-        if (doc.exists && mounted) {
-          setState(() {
-            _storeCredit = (doc.data()?['storeCredit'] ?? 0.0).toDouble();
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _storeCredit = credit;
+        });
       }
-    } catch (e) {
-      debugPrint("Error fetching store credit: $e");
     }
   }
 
@@ -154,20 +156,29 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
     setState(() {
       if (val > price) val = price;
-      userEnteredDownPayment = val;
-      processingFee = price * 0.035;
+      userEnteredDownPayment = _roundUpAmount(val);
+      processingFee = _roundUpAmount(price * 0.035);
 
-      totalDueNow = userEnteredDownPayment + processingFee;
+      totalDueNow = _roundUpAmount(userEnteredDownPayment + processingFee);
     });
   }
 
+  debugPrintAmountCalculations() {
+    final price = widget.product.data['price']?.toDouble() ?? 0.0;
+    debugPrint("Price: $price");
+    debugPrint("User Down Payment: $userEnteredDownPayment");
+    debugPrint("Processing Fee: $processingFee");
+    debugPrint("Total Due Now: $totalDueNow");
+  }
+
   double getRemainingBalance(double price) {
-    return (price - userEnteredDownPayment).clamp(0.0, double.infinity);
+    return _roundUpAmount((price - userEnteredDownPayment).clamp(0.0, double.infinity));
   }
 
   @override
   Widget build(BuildContext context) {
     final double productPrice = widget.product.data['price']?.toDouble() ?? 0.0;
+    final String productId = widget.product.id ?? '';
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     final storeName = widget.product.data['storeName'] ?? 'Store';
 
@@ -181,27 +192,36 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
         return BlocProvider(
           create: (context) =>
               CreatePlanBloc(repo: widget.customerRepo)
-                ..add(LoadPlanPreview(productPrice, widget.customerUid)),
+                ..add(LoadPlanPreview(productPrice, widget.customerUid, productId)),
           child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
             listenWhen: (previous, current) =>
                 previous.status != current.status,
             listener: (context, state) {
               if (state.status == CreatePlanStatus.previewLoaded) {
                 setState(() {
-                  userEnteredDownPayment = state.riskEngineUpfront;
+                  userEnteredDownPayment = _roundUpAmount(state.riskEngineUpfront);
                   _amountCtrl.text = NumberFormat(
                     "#,###",
-                  ).format(userEnteredDownPayment.toInt());
+                  ).format(userEnteredDownPayment);
                   _selectedGoalDays = state.baseDurationDays;
                   _onAmountChanged(_amountCtrl.text); // Trigger calc
                 });
               }
               if (state.status == CreatePlanStatus.success) {
+                // 1. Hide Keyboard
+                FocusScope.of(context).unfocus();
+
+                // 2. Show Success Message
                 showAppSnackbar(
-                  "Plan created successfully",
+                  "Plan created successfully!",
                   SnackbarType.success,
                 );
-                widget.onJumpToHome();
+
+                // 3. Close the Create Screen (Go back)
+                Navigator.of(context).pop(); 
+                
+                // 4. Switch the Bottom Tab to "Plans" so they see it
+                widget.onJumpToPlan();
               }
               if (state.status == CreatePlanStatus.error) {
                 showKorraFailureSheetCustomer(
@@ -237,12 +257,27 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               double creditApplied = 0.0;
 
               if (_useStoreCredit && _storeCredit > 0) {
-                if (_storeCredit >= totalDueNow) {
-                  creditApplied = totalDueNow;
-                  amountToPayFromWallet = 0.0;
+                // RULE: Store Credit can ONLY pay for the Principal (Down Payment).
+                // The Processing Fee must ALWAYS come from the Wallet (Cash).
+                
+                // 1. Determine the maximum credit allowed (The Principal only)
+                double maxCreditUsage = userEnteredDownPayment; 
+
+                // 2. Calculate how much credit we actually use
+                if (_storeCredit >= maxCreditUsage) {
+                  // Credit covers the entire down payment
+                  creditApplied = maxCreditUsage;
                 } else {
+                  // Credit covers only part of the down payment
                   creditApplied = _storeCredit;
-                  amountToPayFromWallet = totalDueNow - _storeCredit;
+                }
+
+                // 3. The Wallet pays the difference (Fee is naturally left over)
+                amountToPayFromWallet = totalDueNow - creditApplied;
+                
+                // Sanity Check: Ensure wallet pays at least the fee (math guarantees this, but good for safety)
+                if (amountToPayFromWallet < processingFee) {
+                   amountToPayFromWallet = processingFee;
                 }
               }
 
@@ -525,7 +560,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                 MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(
-                                                "+ Processing Fee (3.5%)",
+                                                "+ One-time Processing Fee (3.5%)",
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12.sp,
                                                   color: Colors.grey.shade500,
@@ -658,12 +693,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          "Minimum: ${currencyFormat.format(minDownPayment)}",
+                                          "Minimum: ${currencyFormat.format(minDownPayment + processingFee)}",
                                           style: GoogleFonts.inter(
                                             fontSize: 12.sp,
                                             color:
                                                 userEnteredDownPayment <
-                                                    minDownPayment
+                                                    (minDownPayment + processingFee)
                                                 ? Colors.red
                                                 : Colors.grey.shade500,
                                             fontWeight: FontWeight.w500,
@@ -783,6 +818,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           isFullPayment,
                           minDownPayment,
                           isInsufficient,
+                          processingFee,
                           isSlotsFull,
                           totalDueNow, // Pass raw total for event
                           amountToPayFromWallet, // For UI check
@@ -1194,12 +1230,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     bool isFullPayment,
     double minDown,
     bool isInsufficient,
+    double processingFee,
     bool isSlotsFull,
     double totalRawAmount, // For Bloc
     double walletAmount, // For Insufficient Check
     double storeCreditUsed,
   ) {
-    final bool isAmountValid = userEnteredDownPayment >= minDown;
+    final bool isAmountValid = (userEnteredDownPayment + processingFee) >= (minDown + processingFee);
     final bool isSchedulePicked = isFullPayment || cadenceType != null;
     final bool isFormComplete = isAmountValid && isSchedulePicked;
 
@@ -1223,7 +1260,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       btnText = "Top Up Wallet & Start";
       btnColor = Colors.black;
       customAction = () {
-        Get.to(() => TopUpScreen(customer: null));
+        Get.to(() => BankDetailsScreen(customer: widget.customer));
       };
     } else if (isFullPayment && walletAmount > 0) {
       btnText = "Pay Full Amount";
@@ -1251,8 +1288,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               title: widget.product.data['name'] ?? 'Unknown',
               storeName: widget.product.data['storeName'] ?? 'Unknown',
               imageUrls: List<String>.from(widget.product.data['images'] ?? []),
-              totalProductPrice:
-                  widget.product.data['price']?.toDouble() ?? 0.0,
+              totalProductPrice: widget.product.data['price']?.toDouble() ?? 0.0,
               totalUpfrontPaid: userEnteredDownPayment,
               processingFee: processingFee,
               loanAmount: state.loanAmount,
@@ -1264,6 +1300,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               extensionDays: state.extensionDays,
               durationMonths: (state.baseDurationDays / 30).ceil(),
               cancellationPolicy: _policyString,
+              modelType: modelType == ProductModelType.strict ? 'strict' : 'direct',
             );
 
             // Pass the FULL required amount to Bloc.
@@ -1273,8 +1310,18 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             // Based on backend code: 'useStoreCredit' flag is accepted but logic prioritizes logic.
             // Let's assume sending total is fine and backend handles deduction as programmed.
 
+            if (kDebugMode) {
+              final price = widget.product.data['price']?.toDouble() ?? 0.0;
+              debugPrint("Price: $price");
+              debugPrint("User Down Payment: $userEnteredDownPayment");
+              debugPrint("Processing Fee: $processingFee");
+              debugPrint("Total Raw Amount: ${_roundUpAmount(totalRawAmount)}");
+              debugPrint("Wallet Amount: $walletAmount");
+              debugPrint("Store Credit Used: $storeCreditUsed");
+            }
+
             context.read<CreatePlanBloc>().add(
-              ConfirmPlanCreation(plan, totalRawAmount),
+              ConfirmPlanCreation(plan, _roundUpAmount(totalRawAmount)),
             );
           };
 
@@ -1338,12 +1385,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             onPageChanged: (index) =>
                 setState(() => _currentImageIndex = index),
             itemCount: images.length,
-            itemBuilder: (context, index) => Image.network(
-              images[index],
+            itemBuilder: (context, index) => CachedNetworkImage(
+              imageUrl: images[index],
               fit: BoxFit.cover,
-              errorBuilder: (c, o, s) => Container(
+              errorWidget: (context, url, error) => Container(
                 color: Colors.grey[100],
-                child: const Icon(Icons.image_not_supported),
+                child: const Icon(Icons.image_not_supported, color: Colors.grey),
               ),
             ),
           ),
@@ -1422,7 +1469,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               ],
             ),
             Text(
-              "Verified Merchant",
+              "Verified Vendor",
               style: GoogleFonts.inter(
                 fontSize: 11.sp,
                 color: KorraColors.textMuted,
@@ -1840,13 +1887,15 @@ class _PenaltyExplainerSheet extends StatelessWidget {
               title: "Time Compensation",
               desc:
                   "If you default, the 50% fee compensates the vendor for lost time and holding costs.",
-            )
-          else
+            ),
+
+            SizedBox(height: 16.h),
+
             _buildReasonRow(
               icon: Iconsax.bag_2,
               title: "Use Anywhere",
               desc:
-                  "Since cash refunds aren't available for this item, your funds will be returned as Korra Store Credit instantly.",
+                  "Since cash refunds aren't readily available for this item, your funds will be returned as Korra Store Credit instantly.",
             ),
 
           SizedBox(height: 16.h),
@@ -1855,16 +1904,16 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           if (is50Percent)
             _buildReasonRow(
               icon: Iconsax.wallet_check,
-              title: "Your Refund",
+              title: "Your Refund or Flexible Spending",
               desc:
-                  "The remaining 50% is refunded to your wallet instantly. We don't hold your balance.",
+                  "The remaining 50% is refunded to your wallet instantly. or you can choose to keep it as Store Credit for future purchases.",
             )
           else
             _buildReasonRow(
               icon: Iconsax.refresh_circle, // Or loop icon
               title: "Flexible Spending",
               desc:
-                  "You can use your credit to purchase any other item on Korra immediately.",
+                  "Your funds are converted to Store Credit valid only with this specific vendor. You can use it to purchase any other item from them immediately.",
             ),
 
           SizedBox(height: 32.h),

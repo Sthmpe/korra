@@ -38,17 +38,6 @@ serve(async (req) => {
     // 1. Calculate & Validate Value
     const price = Number(productData.price);
     const stock = Number(productData.availableStock);
-    
-    // 🛑 HARD SECURITY BLOCK: Price Cap
-    if (price > 100000) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: "Security Violation: Single product price cannot exceed ₦100,000." 
-      }), { 
-        status: 400,
-        headers: { "Content-Type": "application/json" } 
-      });
-    }
 
     const totalValue = price * stock;
 
@@ -65,14 +54,21 @@ serve(async (req) => {
       
       // Default stats if missing
       let maxLimit = 250000.0;
+      let maxPlanAmount = 100000.0;
       let currentLiability = 0.0;
       let currentActive = 0.0;
 
       if (statsDoc.exists) {
         const stats = statsDoc.data();
         maxLimit = Number(stats.maxReservationLimit) || 250000.0;
+        maxPlanAmount = Number(stats.maxPlanAmount) || 100000.0; // 👈 Read Dynamic Limit
         currentLiability = Number(stats.totalLiability) || 0.0;
         currentActive = Number(stats.currentActivePlanValue) || 0.0;
+      }
+
+      // 🛑 1. SECURITY BLOCK: Dynamic Price Cap
+      if (price > maxPlanAmount) {
+        throw `Security Violation: Single product price (₦${price.toLocaleString()}) exceeds your account limit (₦${maxPlanAmount.toLocaleString()}).`;
       }
 
       // 🛑 SERVER-SIDE LIMIT CHECK

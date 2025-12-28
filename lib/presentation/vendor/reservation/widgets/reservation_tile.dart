@@ -1,204 +1,256 @@
-import 'dart:ui' show FontFeature;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../data/models/vendor/vendor_reservation.dart';
+import 'package:iconsax/iconsax.dart';
+
+import '../../../../../../config/constants/colors.dart';
+import '../../../../data/models/vendor/reservation.dart';
 
 class ReservationTile extends StatelessWidget {
-  final VendorReservation data;
-  final VoidCallback onTap;                 // open details
-  final VoidCallback onArrangeDelivery;     // completed only
+  final Reservation reservation;
+  final VoidCallback onTap;
+
   const ReservationTile({
     super.key,
-    required this.data,
+    required this.reservation,
     required this.onTap,
-    required this.onArrangeDelivery,
   });
 
-  static const _brand = Color(0xFFA54600);
-
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16.r),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16.r),
-        child: Container(
-          padding: EdgeInsets.all(12.r),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(color: const Color(0xFFEAE6E2)),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _ProductImage(url: data.imageUrl),
-            SizedBox(width: 10.w),
-            Expanded(child: _Info(data: data, onArrangeDelivery: onArrangeDelivery)),
-          ]),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: EdgeInsets.only(bottom: 12.h, left: 16.w, right: 16.w),
+        padding: EdgeInsets.all(12.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF101828).withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: const Color(0xFFF2F4F7)),
         ),
-      ),
-    );
-  }
-}
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Premium Image Container
+                _buildImage(),
+                SizedBox(width: 12.w),
 
-class _ProductImage extends StatelessWidget {
-  final String url;
-  const _ProductImage({required this.url});
+                // 2. Info Column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header: ID and Status
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              reservation.id.substring(0, 8),
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w600,
+                                color: KorraColors.textMuted,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          _buildStatusBadge(),
+                        ],
+                      ),
+                      SizedBox(height: 4.h),
 
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12.r),
-      child: SizedBox(
-        width: 72.w, height: 72.w,
-        child: Image.network(
-          url, fit: BoxFit.cover,
-          loadingBuilder: (ctx, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              color: const Color(0xFFF3EFEA),
-              child: Center(
-                child: SizedBox(
-                  width: 16.w, height: 16.w,
-                  child: const CircularProgressIndicator(strokeWidth: 1.8),
+                      // Product Title
+                      Text(
+                        reservation.productTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w700,
+                          color: KorraColors.text,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+
+                      // Customer Name
+                      Row(
+                        children: [
+                          Icon(Iconsax.user, size: 12.sp, color: Colors.grey),
+                          SizedBox(width: 4.w),
+                          Text(
+                            reservation.customerName,
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              color: const Color(0xFF475467),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-          errorBuilder: (_, __, ___) => Container(
-            color: const Color(0xFFF3EFEA),
-            child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8B8B8B)),
-          ),
+              ],
+            ),
+            
+            SizedBox(height: 12.h),
+            const Divider(height: 1, color: Color(0xFFF2F4F7)),
+            SizedBox(height: 12.h),
+
+            // 3. Progress & Money Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Progress Bar
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${reservation.progress}% Paid",
+                            style: GoogleFonts.inter(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                              color: _getStatusColor(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 6.h),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4.r),
+                        child: LinearProgressIndicator(
+                          value: reservation.progress01,
+                          minHeight: 6.h,
+                          backgroundColor: const Color(0xFFF2F4F7),
+                          valueColor: AlwaysStoppedAnimation(_getStatusColor()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 16.w),
+
+                // Money Amount
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      reservation.paidText,
+                      style: GoogleFonts.inter(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w800,
+                        color: KorraColors.text,
+                      ),
+                    ),
+                    Text(
+                      "of ${reservation.totalText}",
+                      style: GoogleFonts.inter(
+                        fontSize: 11.sp,
+                        color: KorraColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
-}
 
-class _Info extends StatelessWidget {
-  final VendorReservation data;
-  final VoidCallback onArrangeDelivery;
-  const _Info({required this.data, required this.onArrangeDelivery});
-
-  static const _brand = Color(0xFFA54600);
-
-  @override
-  Widget build(BuildContext context) {
-    final isCancelled = data.status == ReservationStatus.cancelled;
-    final isCompleted = data.status == ReservationStatus.completed;
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Title + copy id
-      Row(children: [
-        Expanded(
-          child: Text(
-            data.productTitle,
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(fontSize: 14.5.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B)),
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            Clipboard.setData(ClipboardData(text: data.id));
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Copied ID ${data.id}', style: GoogleFonts.inter(fontSize: 13.sp))),
-            );
-          },
-          child: Icon(Icons.copy, size: 16.sp, color: const Color(0xFF8B8B8B)),
-        ),
-      ]),
-      SizedBox(height: 4.h),
-
-      // Meta: customer • created • productCode
-      Text(
-        '${data.customerName} • ${data.createdAtText} • ${data.productCode}',
-        maxLines: 1, overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E)),
-      ),
-      SizedBox(height: 6.h),
-
-      // Price row
-      Row(children: [
-        Expanded(
-          child: Text(
-            '${data.quantity} × ${data.unitPriceText}',
-            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()]),
-          ),
-        ),
-        Text(
-          data.totalText,
-          style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()]),
-        ),
-      ]),
-
-      if (!isCancelled) ...[
-        SizedBox(height: 8.h),
-        // Progress + status badge
-        Row(children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999.r),
-              child: LinearProgressIndicator(
-                minHeight: 6.h,
-                value: data.progress01,
-                backgroundColor: const Color(0xFFF0ECE8),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFFA54600)),
-              ),
-            ),
-          ),
-          SizedBox(width: 8.w),
-          if (data.overdue)
-            const _Badge(text: 'Overdue', c: Color(0xFFD92D20))
-          else
-            _Badge(text: data.autoPay ? 'AutoPay' : 'On schedule', c: _brand),
-        ]),
-        SizedBox(height: 6.h),
-        // Next due + remaining
-        Text(
-          isCompleted ? 'Paid off' : '${data.nextDueText} • ${data.remainingText}',
-          style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B)),
-        ),
-      ] else ...[
-        SizedBox(height: 8.h),
-        const _Badge(text: 'Cancelled', c: Color(0xFF8B8B8B)),
-      ],
-
-      // Tiny link for completed -> arrange delivery
-      if (isCompleted) ...[
-        SizedBox(height: 8.h),
-        GestureDetector(
-          onTap: onArrangeDelivery,
-          child: Text(
-            'Arrange delivery',
-            style: GoogleFonts.inter(
-              fontSize: 12.5.sp,
-              fontWeight: FontWeight.w800,
-              color: _brand,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-      ],
-    ]);
-  }
-}
-
-class _Badge extends StatelessWidget {
-  final String text; final Color c;
-  const _Badge({required this.text, required this.c});
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildImage() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+      width: 64.w,
+      height: 64.w,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999.r),
-        border: Border.all(color: c),
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFF2F4F7)),
       ),
-      child: Text(text, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: c)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11.r),
+        child: reservation.imageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: reservation.imageUrl,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => const Icon(Iconsax.image, color: Colors.grey),
+              )
+            : const Icon(Iconsax.box, color: Colors.grey),
+      ),
     );
+  }
+
+  Widget _buildStatusBadge() {
+    String text;
+    Color bg;
+    Color fg;
+
+    switch (reservation.status) {
+      case ReservationStatus.newRes:
+        text = "New";
+        bg = Colors.blue.shade50;
+        fg = Colors.blue.shade700;
+        break;
+      case ReservationStatus.ongoing:
+        text = "Active";
+        bg = const Color(0xFFECFDF3); // Success-50
+        fg = const Color(0xFF027A48); // Success-700
+        break;
+      case ReservationStatus.readyForPickup:
+        text = "Ready";
+        bg = const Color(0xFFFFF7ED); // Orange/Cream
+        fg = const Color(0xFFB95000);
+        break;
+      case ReservationStatus.completed:
+        text = "Completed";
+        bg = Colors.grey.shade100;
+        fg = Colors.grey.shade700;
+        break;
+      case ReservationStatus.cancelled:
+        text = "Cancelled";
+        bg = const Color(0xFFFEF3F2); // Error-50
+        fg = const Color(0xFFB42318); // Error-700
+        break;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: bg.withOpacity(0.5)), // Subtle border
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 10.sp,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor() {
+    if (reservation.status == ReservationStatus.cancelled) return Colors.red;
+    if (reservation.status == ReservationStatus.completed) return Colors.grey;
+    return KorraColors.brand;
   }
 }

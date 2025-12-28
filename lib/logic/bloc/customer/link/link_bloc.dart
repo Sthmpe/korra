@@ -21,9 +21,13 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
   Future<void> _onLinkSubmitted(LinkSubmitted e, Emitter<LinkState> emit) async {
     emit(state.copyWith(status: LinkStatus.validating, message: "Validating link"));
 
-    final korraRegex = RegExp(r'^K-[A-Z0-9]{4}-[a-f0-9]{7}$');
+    final cleanInput = e.value.trim().toUpperCase();
 
-    if (e.value.trim().isEmpty) {
+    debugPrint("Validating link: $cleanInput");
+
+    final korraRegex = RegExp(r'^K-[A-Z0-9]{4}-[A-Z0-9]{7}$');
+
+    if (cleanInput.isEmpty) {
       emit(state.copyWith(
         status: LinkStatus.empty,
         message: "Please enter a link",
@@ -32,10 +36,10 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
     }
 
 
-    if (!korraRegex.hasMatch(e.value.trim())) {
+    if (!korraRegex.hasMatch(cleanInput)) {
       emit(state.copyWith(
         status: LinkStatus.invalid,
-        message: "Invalid link format please check and try again",
+        message: "Invalid code format. It should look like K-ABCD-1234567",
       ));
       return;
     }
@@ -45,7 +49,7 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
       message: "Link valid",
     ));
 
-    add(LinkValidated(e.value));
+    add(LinkValidated(cleanInput));
   }
 
   /// STEP 2: Validate link → get product

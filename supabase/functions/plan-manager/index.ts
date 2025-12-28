@@ -1,54 +1,90 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts"; 
+import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
 // 1. SETUP
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
-const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY') || "your-production-secret-key-123"; 
+const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY') || "your-production-secret-key-123";
 
 if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+    });
 }
 
 const db = admin.firestore();
 
 // 2. HELPERS
+
+// 🟢 FOR CHARGES: Always rounds UP (Protects Business)
+// Logic: 5000.0000001 -> 5000.00 (Dust ignored)
+// Logic: 5000.001 -> 5000.01 (Real fraction charged)
 function to2DP(num: number): number {
-  return Math.round((num + Number.EPSILON) * 100) / 100;
+    if (num === 0) return 0;
+    // 1. Shift: 150.0000001 -> 15000.00001
+    // 2. Snap: .toFixed(4) removes the 0.00001 dust -> 15000.0000
+    // 3. Ceil: Rounds up to next integer
+    // 4. Unshift: Divide by 100
+    return Math.ceil(Number((num * 100).toFixed(4))) / 100;
+}
+
+// 🔴 FOR BALANCES: Always rounds DOWN (Protects Integrity)
+// Logic: 5000.9999999 -> 5000.99 (Dust ignored)
+function to2DP_Floor(num: number): number {
+    if (num === 0) return 0;
+    return Math.floor(Number((num * 100).toFixed(4))) / 100;
 }
 
 function generateRandomDp(price: number): number {
-  let minPct = 0.30; 
-  let maxPct = 0.40;
-  if (price <= 15000) { minPct = 0.35; maxPct = 0.45; } 
-  else if (price <= 35000) { minPct = 0.30; maxPct = 0.40; } 
-  else if (price <= 75000) { minPct = 0.35; maxPct = 0.45; } 
-  else { minPct = 0.40; maxPct = 0.50; }
-  const randomPct = minPct + Math.random() * (maxPct - minPct);
-  return to2DP(price * randomPct);
+    let minPct = 0.30;
+    let maxPct = 0.40;
+    if (price <= 15000) { minPct = 0.35; maxPct = 0.45; }
+    else if (price <= 35000) { minPct = 0.30; maxPct = 0.40; }
+    else if (price <= 75000) { minPct = 0.35; maxPct = 0.45; }
+    else { minPct = 0.40; maxPct = 0.45; }
+    const randomPct = minPct + Math.random() * (maxPct - minPct);
+    return to2DP(price * randomPct);
 }
 
-// Stats Helpers
-async function getCustomerStats(uid: string) {
-  const statsRef = db.collection('customers').doc(uid).collection('account_stats').doc('main');
-  const doc = await statsRef.get();
-  if (doc.exists) return { ref: statsRef, data: doc.data() };
-  return { ref: statsRef, data: { activePlansCount: 0, walletBalance: 0, tier: 'Starter' } };
+// ✅ HELPER: Safely convert any date format to ISO String (Prevents Crash)
+function safeIsoDate(val: any): string | null {
+    if (!val) return null;
+    try {
+        if (typeof val.toDate === 'function') return val.toDate().toISOString();
+        if (val instanceof Date) return val.toISOString();
+        return new Date(val).toISOString();
+    } catch (e) {
+        return null; 
+    }
+}
+
+async function getUserAndStats(uid: string) {
+    const userRef = db.collection('customers').doc(uid);
+    const statsRef = userRef.collection('account_stats').doc('main');
+    return { userRef, statsRef };
 }
 
 async function getVendorRelation(customerUid: string, vendorId: string) {
     const relRef = db.collection('customers').doc(customerUid).collection('my_vendors').doc(vendorId);
     const doc = await relRef.get();
     if (doc.exists) return { ref: relRef, data: doc.data() };
-    return { ref: relRef, data: { storeCredit: 0 } }; 
+    return { ref: relRef, data: { storeCredit: 0 } };
 }
 
-// Notification Helper
 async function sendFcm(uid: string, title: string, body: string, data: any, collection = 'customers') {
   try {
-    const userDoc = await db.collection(collection).doc(uid).get();
+    const userRef = db.collection(collection).doc(uid);
+    const userDoc = await userRef.get();
+    
+    await userRef.collection('notifications').add({
+        title: title,
+        body: body,
+        type: data.type || 'system',
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        metadata: data 
+    });
+
     const fcmToken = userDoc.data()?.fcmToken;
     if (fcmToken) {
       await admin.messaging().send({
@@ -62,539 +98,1012 @@ async function sendFcm(uid: string, title: string, body: string, data: any, coll
   }
 }
 
+// CONSTANTS
+const PLATFORM_FEE_PERCENTAGE = 0.035; // 3.5%
+
 // 3. MAIN HANDLER
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
 
-  try {
-    const { 
-      action, customerUid, productId, productPrice, 
-      downPaymentAmount, planData, secureToken, 
-      planId, amount, useStoreCredit // Boolean flag from UI
-    } = await req.json();
+    try {
+        const {
+            action, customerUid, productId, planData, secureToken,
+            planId, amount, pin, vendorUid
+        } = await req.json();
 
-    const secretKey = new TextEncoder().encode(HMAC_SECRET);
+        const secretKey = new TextEncoder().encode(HMAC_SECRET);
 
-    // =======================================================================
-    // 🔍 ACTION: PREVIEW
-    // =======================================================================
-    if (action === 'PREVIEW') {
-        const { data: stats } = await getCustomerStats(customerUid);
-        
-        const activeCount = stats.activePlansCount || 0;
-        const tier = stats.tier || 'Starter';
-        
-        let maxSlots = 3;
-        if (tier === 'Keeper') maxSlots = 5;
-        if (tier === 'Collector') maxSlots = 10;
-        if (tier === 'VIP') maxSlots = 9999;
+        // =======================================================================
+        // 🔍 ACTION: PREVIEW
+        // =======================================================================
+        if (action === 'PREVIEW') {
+            if (!productId || typeof productId !== 'string') throw "Product ID is missing or invalid.";
+            if (!customerUid) throw "Customer UID is missing.";
 
-        if (activeCount >= maxSlots) throw `Slot Limit Reached.`;
+            const { statsRef } = await getUserAndStats(customerUid);
+            const statsDoc = await statsRef.get();
+            const statsData = statsDoc.exists ? statsDoc.data() : {};
 
-        const price = Number(productPrice);
-        const minPrincipal = generateRandomDp(price);
-        
-        const jwt = await new jose.SignJWT({ 
-            min_principal: minPrincipal,
-            product_id: productId,
-            uid: customerUid
-        })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
-        .setExpirationTime('15m')
-        .sign(secretKey);
+            const activeCount = statsData.activePlansCount || 0;
+            const tier = statsData.tier || 'Starter';
 
-        return new Response(JSON.stringify({ 
-            status: "SUCCESS", 
-            minDownPayment: minPrincipal,
-            secureToken: jwt 
-        }), { headers: { "Content-Type": "application/json" } });
-    }
+            let maxSlots = 3;
+            if (tier === 'Keeper') maxSlots = 5;
+            if (tier === 'Collector') maxSlots = 10;
+            if (tier === 'VIP') maxSlots = 9999;
 
-    // =======================================================================
-    // 🚀 ACTION: CREATE
-    // =======================================================================
-    if (action === 'CREATE') {
-      if (!secureToken) throw "Security token missing.";
-      
-      let payload;
-      try {
-         const result = await jose.jwtVerify(secureToken, secretKey);
-         payload = result.payload;
-      } catch (_) {
-         throw "Session expired. Please refresh.";
-      }
+            if (activeCount >= maxSlots) throw `Slot Limit Reached.`;
 
-      if (payload.product_id !== productId || payload.uid !== customerUid) throw "Security mismatch.";
+            const productRef = db.collection('products').doc(productId);
+            const productDoc = await productRef.get();
+            if (!productDoc.exists) throw "Product not found";
 
-      const requiredPrincipal = Number(payload.min_principal);
+            const productData = productDoc.data();
+            const dbPrice = Number(productData.price);
+            if (!dbPrice || isNaN(dbPrice)) throw "System Error: Product price is missing in database.";
 
-      // TRANSACTION
-      const result = await db.runTransaction(async (t) => {
-        const productRef = db.collection('products').doc(productId);
-        const { ref: statsRef } = await getCustomerStats(customerUid); 
-        
-        const productDoc = await t.get(productRef);
-        const statsDoc = await t.get(statsRef);
+            let minPrincipal = 0;
+            const manualDp = Number(productData.directDownPayment || 0);
 
-        if (!productDoc.exists) throw "Product not found";
-        const product = productDoc.data();
-        if (product.availableStock < 1) throw "Out of Stock";
+            if (manualDp > 0) {
+                minPrincipal = to2DP(manualDp);
+            } else {
+                minPrincipal = generateRandomDp(dbPrice);
+            }
 
-        const stats = statsDoc.exists ? statsDoc.data() : { walletBalance: 0, activePlansCount: 0, tier: 'Starter' };
-        const walletBalance = to2DP(stats.walletBalance || 0);
-        const activeCount = stats.activePlansCount || 0;
+            const jwt = await new jose.SignJWT({
+                min_principal: minPrincipal,
+                product_id: productId,
+                uid: customerUid
+            })
+                .setProtectedHeader({ alg: 'HS256' })
+                .setIssuedAt()
+                .setExpirationTime('15m')
+                .sign(secretKey);
 
-        // Slot Check
-        let maxSlots = 3;
-        if (stats.tier === 'Keeper') maxSlots = 5;
-        if (stats.tier === 'Collector') maxSlots = 10;
-        if (stats.tier === 'VIP') maxSlots = 9999;
-        if (activeCount >= maxSlots) throw `Slot Limit Reached.`;
-
-        // --- FINANCIALS ---
-        const price = to2DP(product.price);
-        
-        // Fee 1: Customer Processing Fee (Added on top)
-        const processingFee = to2DP(price * 0.035); 
-        
-        // Fee 2: Vendor Service Fee (Deducted from Principal)
-        const vendorFeeRate = 0.035; 
-
-        // User Input (Total Debit) includes Processing Fee
-        const userTotalDebit = to2DP(downPaymentAmount);
-        const userPrincipal = to2DP(userTotalDebit - processingFee);
-
-        if (userPrincipal < (requiredPrincipal - 50)) throw `Payment too low.`;
-
-        // --- STORE CREDIT LOGIC ---
-        const vendorId = product.vendorId; 
-        const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
-        
-        // Only use credit if User explicitly allowed it
-        const availableStoreCredit = useStoreCredit ? to2DP(vendorRel.storeCredit || 0) : 0;
-
-        let creditUsed = 0;
-        let walletUsed = 0;
-
-        // Apply Credit to Principal first
-        if (availableStoreCredit >= userPrincipal) {
-            creditUsed = userPrincipal;
-            walletUsed = processingFee; // Wallet pays the fee
-        } else {
-            creditUsed = availableStoreCredit;
-            walletUsed = to2DP((userPrincipal - creditUsed) + processingFee);
+            return new Response(JSON.stringify({
+                status: "SUCCESS",
+                minDownPayment: minPrincipal,
+                secureToken: jwt
+            }), { headers: { "Content-Type": "application/json" } });
         }
 
-        if (walletBalance < walletUsed) throw "Insufficient wallet balance.";
+        // =======================================================================
+        // 🚀 ACTION: CREATE
+        // =======================================================================
+        if (action === 'CREATE') {
+            if (!secureToken) throw "Security token missing.";
 
-        const newPlanRef = db.collection('plans').doc();
-        const planId = newPlanRef.id;
+            let payload;
+            try {
+                const result = await jose.jwtVerify(secureToken, secretKey);
+                payload = result.payload;
+            } catch (_) {
+                throw "Session expired. Please refresh.";
+            }
 
-        // 1. Create Plan (With 24h Vault Timer)
-        t.set(newPlanRef, {
-          ...planData,
-          id: planId,
-          productId: productId,
-          vendorId: vendorId,
-          status: 'active',
-          
-          // Vault Logic: 24h Buffer
-          vaultExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (24 * 60 * 60 * 1000)),
-          isVaultSettled: false,
+            if (payload.product_id !== productId || payload.uid !== customerUid) throw "Security mismatch.";
 
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          totalAmount: price,
-          amountPaid: userPrincipal, 
-          processingFee: processingFee,        
-          initialDownPayment: userPrincipal,
-          loanAmount: to2DP(price - userPrincipal),
-          outstandingLoanAmount: to2DP(price - userPrincipal),
-        });
+            const requiredPrincipal = Number(payload.min_principal);
 
-        // 2. Customer Ledger
-        const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
-        t.set(ledgerRef, {
-          id: ledgerRef.id,
-          customerId: customerUid,
-          amount: -walletUsed, 
-          type: 'plan_creation',
-          description: `Down Payment for ${product.name}`,
-          planId: planId,
-          reference: ledgerRef.id,
-          status: 'success',
-          balanceBefore: walletBalance,
-          balanceAfter: to2DP(walletBalance - walletUsed),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          metadata: { paidWithWallet: walletUsed, paidWithCredit: creditUsed }
-        });
+            const result = await db.runTransaction(async (t) => {
+                const productRef = db.collection('products').doc(productId);
 
-        // 3. Update Customer Stats
-        t.set(statsRef, {
-           walletBalance: to2DP(walletBalance - walletUsed),
-           activePlansCount: admin.firestore.FieldValue.increment(1),
-           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+                // ✅ Get Refs
+                const { userRef, statsRef } = await getUserAndStats(customerUid);
+                const productDoc = await t.get(productRef);
+                
+                if (!productDoc.exists) throw "Product not found";
+                const product = productDoc.data();
+                if (product.availableStock < 1) throw "Out of Stock";
+                
+                const vendorId = product.vendorId;
 
-        // 4. Deduct Store Credit
-        if (creditUsed > 0) {
-            t.set(vendorRelRef, {
-                storeCredit: to2DP(availableStoreCredit - creditUsed),
-                storeName: planData.storeName || 'Store',
-                lastInteraction: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+                // Vendor Relations
+                const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
+                
+                const userDoc = await t.get(userRef);
+                if (!userDoc.exists) throw "User not found";
+                
+                const userData = userDoc.data();
+                const statsDoc = await t.get(statsRef);
+                const statsData = statsDoc.exists ? statsDoc.data() : {};
+
+                // ✅ 1. MONEY
+                const walletBalance = to2DP_Floor(userData.monnify?.availableBalance || 0);
+
+                const activeCount = statsData.activePlansCount || 0;
+                const tier = statsData.tier || 'Starter';
+
+                let maxSlots = 3;
+                if (tier === 'Keeper') maxSlots = 5;
+                if (tier === 'Collector') maxSlots = 10;
+                if (tier === 'VIP') maxSlots = 9999;
+                if (activeCount >= maxSlots) throw `Slot Limit Reached.`;
+
+                // --- FINANCIALS ---
+                const price = to2DP(product.price);
+                const processingFee = to2DP(price * PLATFORM_FEE_PERCENTAGE);
+                const userRequiredDownPayment = to2DP(requiredPrincipal);
+                const minRequiredPrincipal = to2DP(userRequiredDownPayment + processingFee);
+
+                if (amount < minRequiredPrincipal) throw `Payment too low. Min: ${minRequiredPrincipal}`;
+
+                const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
+                let creditUsed = 0;
+                let walletUsed = 0;
+                let userPrincipalPayment = to2DP(amount - processingFee);
+
+                if (userPrincipalPayment > price) userPrincipalPayment = price;
+
+                if (availableStoreCredit >= userPrincipalPayment) {
+                    creditUsed = userPrincipalPayment;
+                    walletUsed = processingFee;
+                } else {
+                    creditUsed = availableStoreCredit;
+                    walletUsed = to2DP((userPrincipalPayment - creditUsed) + processingFee);
+                }
+
+                // 3. The Smart Check
+                if (walletBalance < walletUsed) {
+                    if (creditUsed > 0) {
+                        const shortBy = to2DP(walletUsed - walletBalance);
+                        throw `Insufficient wallet balance. \nWe applied ₦${creditUsed.toLocaleString()} Store Credit. \nYou still need to pay the Processing Fee + Remaining Down Payment. \n\nTotal needed: ₦${walletUsed.toLocaleString()} \nPlease fund ₦${shortBy.toLocaleString()} more.`;
+                    } else {
+                        throw `Insufficient wallet balance. You need ₦${walletUsed.toLocaleString()} but have ₦${walletBalance.toLocaleString()}.`;
+                    }
+                }
+
+                const newPlanRef = db.collection('plans').doc();
+                const planId = newPlanRef.id;
+
+                // ✅ FIX: Dust Tolerance for Immediate Completion
+                let remainingOnCreate = to2DP(price - userPrincipalPayment);
+                let isFinished = false;
+                let pickupCode = null;
+
+                // If remaining is less than 1 Naira, treat as fully paid immediately
+                if (remainingOnCreate < 1.0) {
+                    isFinished = true;
+                    userPrincipalPayment = price; // Auto-fill the dust
+                    remainingOnCreate = 0;
+                    // Generate PIN immediately if paid in full at start
+                    pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
+                } else {
+                    isFinished = false;
+                }
+
+                // 1. Create Plan
+                t.set(newPlanRef, {
+                    ...planData,
+                    id: planId,
+                    productId: productId,
+                    vendorId: vendorId,
+                    status: isFinished ? 'completed' : 'active',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    modelType: planData.modelType || 'direct',
+                    totalAmount: price,
+                    amountPaid: userPrincipalPayment,
+                    processingFee: processingFee,
+                    initialDownPayment: userRequiredDownPayment,
+                    loanAmount: remainingOnCreate,
+                    outstandingLoanAmount: remainingOnCreate,
+                    pickupCode: pickupCode, // Saves null or code
+                    completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null
+                });
+
+                // 2. Ledger
+                const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+                
+                // ✅ CONSTRUCT RECEIPT DATA FOR CREATE
+                const receiptPayload = {
+                    reference: ledgerRef.id,
+                    date: new Date().toISOString(),
+                    vendorName: planData.storeName || 'Store',
+                    customerName: planData.customerName,
+                    productName: product.name,
+                    productCode: product.productCode || "",
+                    totalValue: price,
+                    amountPaidSoFar: userPrincipalPayment,
+                    amountPaidNow: userPrincipalPayment,
+                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Credit + Wallet)" : "Store Credit") : "Wallet Transfer",
+                    balanceRemaining: remainingOnCreate,
+                    status: isFinished ? "COMPLETED" : "IN PROGRESS",
+                    isFinished: isFinished,
+                    creditUsed: creditUsed,
+                    walletUsed: walletUsed,
+                    // ✅ SAFE DATE HELPER
+                    nextDueDate: (!isFinished && planData.nextDueDate) ? safeIsoDate(planData.nextDueDate) : null
+                };
+
+                t.set(ledgerRef, {
+                    id: ledgerRef.id,
+                    customerId: customerUid,
+                    amount: -walletUsed,
+                    type: 'plan_creation',
+                    description: `Down Payment for ${product.name}`,
+                    planId: planId,
+                    reference: ledgerRef.id,
+                    status: 'success',
+                    balanceBefore: walletBalance,
+                    balanceAfter: to2DP_Floor(walletBalance - walletUsed),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    metadata: { paidWithWallet: walletUsed, paidWithCredit: creditUsed },
+                    receiptData: receiptPayload 
+                });
+
+                // 3. Update Balance
+                t.update(userRef, {
+                    "monnify.availableBalance": admin.firestore.FieldValue.increment(-walletUsed)
+                });
+
+                // 4. Update Plan Count
+                t.set(statsRef, {
+                    activePlansCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // 5. UPDATE ANALYTICS
+                const now = new Date();
+                const currentMonth = now.toISOString().slice(0, 7);
+                const currentDay = now.toISOString().slice(8, 10);
+                
+                const custMonthlyRef = db.collection('customers').doc(customerUid)
+                                            .collection('monthly_stats').doc(currentMonth);
+
+                t.set(custMonthlyRef, {
+                    month: currentMonth,
+                    year: now.getFullYear().toString(),
+                    completedCount: isFinished ? admin.firestore.FieldValue.increment(1) : admin.firestore.FieldValue.increment(0),
+                    createdCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // 6. UPDATE MY VENDORS
+                const currentCredit = to2DP_Floor(vendorRel.storeCredit || 0);
+                const newCreditBalance = to2DP_Floor(currentCredit - creditUsed);
+
+                t.set(vendorRelRef, {
+                    vendorId: vendorId,
+                    storeName: planData.storeName || 'Store',
+                    lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
+                    storeCredit: newCreditBalance
+                }, { merge: true });
+
+                t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
+
+                // 7. CREATE ACTIVITY FEED
+                const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'reservation_new',
+                    title: 'New Reservation',
+                    body: `${planData.customerName} reserved ${product.name}`,
+                    ref_id: planId,
+                    amount_display: `+₦${userPrincipalPayment.toLocaleString()}`,
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
+
+                // --- VENDOR SIDE ---
+                const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
+                const cashPrincipal = to2DP_Floor(userPrincipalPayment - creditUsed);
+                let vendorNet = 0;
+                let feeDeducted = 0;
+
+                if (cashPrincipal > 0) {
+                    vendorNet = to2DP_Floor(cashPrincipal * (1 - PLATFORM_FEE_PERCENTAGE));
+                    feeDeducted = to2DP(cashPrincipal * PLATFORM_FEE_PERCENTAGE);
+                    const vLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
+
+                    t.set(vLedgerRef, {
+                        id: vLedgerRef.id,
+                        userId: vendorId,
+                        amount: vendorNet,
+                        type: 'sale',
+                        description: `Down payment for ${product.name} (minus 3.5% fee)`,
+                        reference: `SALE-${planId.substring(0, 6)}`,
+                        planId: planId,
+                        status: 'success',
+                        releaseDate: null,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        customerName: planData.customerName,
+                        grossAmount: cashPrincipal,
+                        feeAmount: feeDeducted
+                    });
+                }
+
+                if (creditUsed > 0) {
+                    const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
+                    t.set(vLiabRef, {
+                        id: vLiabRef.id,
+                        userId: vendorId,
+                        amount: -creditUsed,
+                        type: 'redemption',
+                        description: `Credit Used by ${planData.customerName}`,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        planId: planId
+                    });
+                }
+
+                // GLOBAL STATS
+                t.update(vendorStatsRef, {
+                    totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
+                    currentActivePlanValue: admin.firestore.FieldValue.increment(-(vendorNet + creditUsed)),
+                    totalSalesVolume: admin.firestore.FieldValue.increment(price),
+                    totalLiability: admin.firestore.FieldValue.increment(-creditUsed),
+                    activePlansCount: admin.firestore.FieldValue.increment(1)
+                });
+
+                // MONTHLY ANALYTICS
+                const monthlyRef = db.collection('vendors').doc(vendorId).collection('monthly_stats').doc(currentMonth);
+
+                t.set(monthlyRef, {
+                    month: currentMonth,
+                    year: now.getFullYear().toString(),
+                    earnings: admin.firestore.FieldValue.increment(vendorNet),
+                    salesVolume: admin.firestore.FieldValue.increment(price),
+                    newPlansCount: admin.firestore.FieldValue.increment(1),
+                    [`daily_breakdown.${currentDay}`]: admin.firestore.FieldValue.increment(vendorNet),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                return {
+                    planId: planId,
+                    productName: product.name,
+                    vendorId: vendorId,
+                    customerName: planData.customerName,
+                    downPayment: userPrincipalPayment,
+                    planIdStr: planId,
+                    feeDeducted: feeDeducted,
+                    pickupCode: pickupCode // Return code if exists
+                };
+            });
+
+            // NOTIFICATIONS
+            await sendFcm(customerUid, "Reservation Confirmed 🔒", `Plan for ${result.productName} is active!`, { type: "plan_detail", planId: result.planIdStr });
+
+            if (result.pickupCode) {
+                 await sendFcm(customerUid, "Plan Completed! 🎉", `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to the vendor.`, { type: "plan_detail", planId: result.planIdStr });
+            }
+
+            await sendFcm(
+                result.vendorId,
+                "New Order: Action Required 📦",
+                `Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} down payment. Please RESERVE ${result.productName} immediately.`,
+                { type: "vendor_order", planId: result.planIdStr },
+                'vendors' 
+            );
+
+            await sendFcm(
+                result.vendorId,
+                "Platform Fee 📉",
+                `A platform fee of -₦${result.feeDeducted.toLocaleString()} was deducted for the new order.`,
+                { type: "payment", planId: result.planIdStr },
+                'vendors'
+            );
+
+            return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planIdStr }), { headers: { "Content-Type": "application/json" } });
         }
 
-        t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
+        // =======================================================================
+        // 💸 ACTION: PAY INSTALLMENT (FINAL BUSINESS LOGIC)
+        // =======================================================================
+        if (action === 'PAY_INSTALLMENT') {
+            const paymentAmount = to2DP(Number(amount));
+            if (paymentAmount <= 0) throw "Invalid payment amount.";
 
-        // --- 🆕 VENDOR SIDE (VAULT LOGIC) ---
-        const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
+            if (!customerUid) throw "User not authenticated.";
 
-        // A. Cash Payment -> Goes to VAULT (Locked 24h)
-        // Vendor Net = (Principal Paid in Cash) - (Vendor Fee 3.5%)
-        const cashPrincipal = to2DP(userPrincipal - creditUsed);
-        
-        if (cashPrincipal > 0) {
-            const vendorNet = to2DP(cashPrincipal * (1 - vendorFeeRate));
+            const result = await db.runTransaction(async (t) => {
+                const planRef = db.collection("plans").doc(planId);
+
+                // ✅ Get Refs
+                const { userRef, statsRef } = await getUserAndStats(customerUid);
+                const planDoc = await t.get(planRef);
+                const userDoc = await t.get(userRef);
+                
+                if (!planDoc.exists) throw "Reservation not found";
+                const plan = planDoc.data();
+                
+                if (plan.status !== 'active') throw "This plan is not active.";
+                if (plan.customerId !== customerUid) throw "Plan does not belong to user.";
+
+                const userData = userDoc.exists ? userDoc.data() : {};
+                
+                // ✅ MONEY
+                const walletBalance = to2DP_Floor(userData.monnify?.availableBalance || 0);
+                const vendorId = plan.vendorId;
+
+                // ✅ VENDOR RELATION
+                const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
+                const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
+
+                // --- FINANCIAL MATH ---
+                let creditUsed = 0;
+                let walletUsed = 0;
+
+                if (availableStoreCredit >= paymentAmount) {
+                    creditUsed = paymentAmount;
+                    walletUsed = 0;
+                } else {
+                    creditUsed = availableStoreCredit;
+                    walletUsed = to2DP(paymentAmount - creditUsed);
+                }
+
+                if (walletBalance < walletUsed) {
+                    throw `Insufficient funds. Needed: ₦${walletUsed.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}`;
+                }
+
+                // ✅ 1. STRICT DUST CLEARING LOGIC (The Fix)
+                let newAmountPaid = to2DP(plan.amountPaid + paymentAmount);
+                let remainingBalance = to2DP(plan.totalAmount - newAmountPaid);
+                let isFinished = false;
+                let pickupCode = null;
+
+                // 🎯 CHANGED: Tolerance is now strictly less than 1 Naira (e.g. 0.99 clears, 1.00 does not)
+                if (remainingBalance < 1.0) {
+                    isFinished = true;
+                    newAmountPaid = plan.totalAmount; 
+                    remainingBalance = 0;
+                    
+                    // 🔐 GENERATE PICKUP PIN
+                    pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
+                } else {
+                    isFinished = false;
+                }
+
+                // ---------------------------------------------------------
+                // 📝 1. UPDATE PLAN
+                // ---------------------------------------------------------
+                t.update(planRef, {
+                    amountPaid: newAmountPaid,
+                    outstandingLoanAmount: remainingBalance,
+                    status: isFinished ? 'completed' : 'active',
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null,
+                    // ✅ SAVE PIN ONLY IF FINISHED
+                    ...(isFinished && { pickupCode: pickupCode }) 
+                });
+
+                // ---------------------------------------------------------
+                // 📝 2. USER LEDGER & WALLET
+                // ---------------------------------------------------------
+                const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+                const txRefId = `PAY-${planId.substring(0, 5)}-${Date.now().toString().slice(-4)}`;
+
+                // ✅ CONSTRUCT RECEIPT DATA
+                const receiptPayload = {
+                    reference: txRefId,
+                    date: new Date().toISOString(),
+                    vendorName: plan.storeName,
+                    vendorId: vendorId,
+                    customerName: plan.customerName || "Customer",
+                    customerPhone: plan.customerPhone || "",
+                    productName: plan.title, 
+                    productCode: plan.productCode,
+                    totalValue: plan.totalAmount,
+                    amountPaidSoFar: newAmountPaid,
+                    amountPaidNow: paymentAmount,
+                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Credit + Wallet)" : "Store Credit") : "Wallet Transfer",
+                    balanceRemaining: remainingBalance,
+                    status: isFinished ? "COMPLETED" : "IN PROGRESS",
+                    isFinished: isFinished,
+                    creditUsed: creditUsed,
+                    walletUsed: walletUsed,
+                    // ✅ SAFE DATE HELPER
+                    nextDueDate: (!isFinished && plan.nextDueDate) ? safeIsoDate(plan.nextDueDate) : null
+                };
+
+                t.set(ledgerRef, {
+                    id: ledgerRef.id,
+                    customerId: customerUid,
+                    amount: -paymentAmount,
+                    type: 'installment',
+                    description: `Payment for ${plan.title}`,
+                    reference: txRefId,
+                    planId: planId,
+                    status: 'success',
+                    balanceBefore: walletBalance,
+                    balanceAfter: to2DP_Floor(walletBalance - walletUsed),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    metadata: { paidWithWallet: walletUsed, paidWithCredit: creditUsed, vendorName: plan.storeName },
+                    receiptData: receiptPayload
+                });
+
+                if (walletUsed > 0) {
+                    t.update(userRef, {
+                        "monnify.availableBalance": admin.firestore.FieldValue.increment(-walletUsed)
+                    });
+                }
+
+                // ---------------------------------------------------------
+                // 📝 3. USER STATS (If Finished) & ANALYTICS
+                // ---------------------------------------------------------
+                if (isFinished) {
+                    t.set(statsRef, {
+                        activePlansCount: admin.firestore.FieldValue.increment(-1),
+                        completedPlansCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    const now = new Date();
+                    const currentMonth = now.toISOString().slice(0, 7);
+                    const custMonthlyRef = db.collection('customers').doc(customerUid)
+                                            .collection('monthly_stats').doc(currentMonth);
+                    
+                    t.set(custMonthlyRef, {
+                        month: currentMonth,
+                        year: now.getFullYear().toString(),
+                        completedCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
+                // ---------------------------------------------------------
+                // 📝 4. VENDOR RELATION (Store Credit)
+                // ---------------------------------------------------------
+                const newCreditBalance = to2DP_Floor(availableStoreCredit - creditUsed);
+                
+                t.set(vendorRelRef, {
+                    vendorId: vendorId,
+                    storeName: plan.storeName,
+                    lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
+                    storeCredit: newCreditBalance 
+                }, { merge: true });
+
+                // ---------------------------------------------------------
+                // 📝 5. ACTIVITY FEED & VENDOR FINANCIALS
+                // ---------------------------------------------------------
+                const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'payment',
+                    title: 'Payment Received',
+                    body: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title}`,
+                    ref_id: planId,
+                    amount_display: `+₦${paymentAmount.toLocaleString()}`,
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
+
+                // Vendor Stats & Ledger
+                const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
+                const vendorFeeRate = 0.035; 
+                let vendorNet = 0;
+                let feeDeducted = 0;
+
+                // A. Handle Wallet Portion
+                if (walletUsed > 0) {
+                    vendorNet = to2DP_Floor(walletUsed * (1 - vendorFeeRate));
+                    feeDeducted = to2DP(walletUsed * vendorFeeRate);
+                    
+                    const vLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
+                    t.set(vLedgerRef, {
+                        id: vLedgerRef.id,
+                        userId: vendorId,
+                        amount: vendorNet,
+                        type: 'sale',
+                        description: `Installment: ${plan.customerName}`,
+                        reference: txRefId,
+                        planId: planId,
+                        status: 'success',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        customerName: plan.customerName,
+                        grossAmount: walletUsed,
+                        feeAmount: feeDeducted
+                    });
+
+                    t.update(vendorStatsRef, {
+                        totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
+                        walletBalance: admin.firestore.FieldValue.increment(vendorNet),
+                        currentActivePlanValue: admin.firestore.FieldValue.increment(-walletUsed) 
+                    });
+                }
+
+                // B. Handle Credit Portion
+                if (creditUsed > 0) {
+                    const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
+                    t.set(vLiabRef, {
+                        id: vLiabRef.id,
+                        userId: vendorId,
+                        amount: -creditUsed,
+                        type: 'redemption',
+                        description: `Credit Used: ${plan.customerName}`,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        planId: planId
+                    });
+                    
+                    t.update(vendorStatsRef, {
+                        totalLiability: admin.firestore.FieldValue.increment(-creditUsed),
+                        currentActivePlanValue: admin.firestore.FieldValue.increment(-creditUsed)
+                    });
+                }
+
+                // C. Vendor Monthly Analytics
+                if (walletUsed > 0) {
+                    const now = new Date();
+                    const currentMonth = now.toISOString().slice(0, 7);
+                    const currentDay = now.toISOString().slice(8, 10);
+                    
+                    const monthlyRef = db.collection('vendors').doc(vendorId)
+                                            .collection('monthly_stats').doc(currentMonth);
+                    
+                    t.set(monthlyRef, {
+                        month: currentMonth,
+                        year: now.getFullYear().toString(),
+                        earnings: admin.firestore.FieldValue.increment(vendorNet),
+                        [`daily_breakdown.${currentDay}`]: admin.firestore.FieldValue.increment(vendorNet),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
+                return {
+                    success: true,
+                    receiptData: { ...receiptPayload, feeDeducted: feeDeducted },
+                    pickupCode: pickupCode // Pass back to display if needed immediately
+                };
+            });
+
+            // ---------------------------------------------------------
+            // 🔔 NOTIFICATIONS
+            // ---------------------------------------------------------
             
-            const vLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
-            t.set(vLedgerRef, {
-                id: vLedgerRef.id,
-                userId: vendorId,
-                amount: vendorNet,
-                grossAmount: cashPrincipal,
-                feeAmount: to2DP(cashPrincipal * vendorFeeRate),
-                type: 'locked', 
-                description: `Pending Order: ${planData.customerName}`,
-                reference: `LCK-${planId.substring(0,6)}`,
-                planId: planId,
-                status: 'pending_vault', // LOCKED
-                releaseDate: admin.firestore.Timestamp.fromMillis(Date.now() + (24 * 60 * 60 * 1000)),
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                customerName: planData.customerName
+            // 1. Notify Customer
+            await sendFcm(customerUid, "Payment Successful ✅", `You paid ₦${paymentAmount.toLocaleString()} for ${result.receiptData.productName}.`, { type: "plan_detail", planId: planId });
+
+            // 2. Notify Vendor (Money In)
+            await sendFcm(
+                result.receiptData.vendorId,
+                "Payment Received 💰",
+                `${result.receiptData.customerName} just paid ₦${paymentAmount.toLocaleString()}.`,
+                { type: "vendor_order", planId: planId },
+                'vendors'
+            );
+
+            // 3. Notify Vendor (Fee Deduction)
+            if (result.receiptData.feeDeducted > 0) {
+                await sendFcm(
+                    result.receiptData.vendorId,
+                    "Platform Fee 📉",
+                    `A fee of ₦${result.receiptData.feeDeducted.toLocaleString()} was deducted from the recent payment.`,
+                    { type: "payment", planId: planId },
+                    'vendors'
+                );
+            }
+
+            // 4. Notify Vendor (Completion)
+            if (result.receiptData.isFinished) {
+                await sendFcm(result.receiptData.vendorId, "Order Completed! 🎉", `${result.receiptData.customerName} has finished paying for ${result.receiptData.productName}.`, { type: "vendor_order", planId: planId }, 'vendors');
+                
+                // 5. ✅ Notify Customer with PIN
+                if (result.pickupCode) {
+                    await sendFcm(
+                        customerUid, 
+                        "Plan Completed! 🎉", 
+                        `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to the vendor.`, 
+                        { type: "plan_detail", planId: planId }
+                    );
+                }
+            }
+
+            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+        }
+
+        // =======================================================================
+        // ⏳ ACTION: EXTEND PLAN
+        // =======================================================================
+        if (action === 'EXTEND') {
+            // 1. Validate
+            if (!planId || !customerUid) throw "Missing planId or customerUid.";
+
+            const result = await db.runTransaction(async (t) => {
+                const planRef = db.collection("plans").doc(planId);
+                const planDoc = await t.get(planRef);
+
+                if (!planDoc.exists) throw "Plan not found.";
+                const plan = planDoc.data();
+
+                // 2. Security & State Checks
+                if (plan.customerId !== customerUid) throw "Unauthorized.";
+                if (plan.status !== 'active') throw "Plan is not active.";
+                
+                // 3. The 80% Rule Check
+                const total = Number(plan.totalAmount) || 1; // Prevent div by zero
+                const paid = Number(plan.amountPaid) || 0;
+                const percentPaid = paid / total;
+
+                if (percentPaid < 0.80) {
+                    throw `Eligibility Failed: You have paid ${(percentPaid * 100).toFixed(1)}%. You need 80% to extend.`;
+                }
+
+                // 4. Check if "Lifeline" is available
+                // We store the 'potential' days in extensionGraceDays. 
+                // If it is 0, it means they used it already.
+                const daysToAdd = Number(plan.extensionGraceDays || 0);
+                if (daysToAdd <= 0) {
+                    throw "Extension unavailable. You may have already used your one-time extension.";
+                }
+
+                // 5. Calculate New Dates
+                const oldExpiry = plan.planExpiryDate.toDate();
+                const newExpiry = new Date(oldExpiry);
+                newExpiry.setDate(oldExpiry.getDate() + daysToAdd);
+
+                const oldNextDue = plan.nextDueDate.toDate();
+                const newNextDue = new Date(oldNextDue);
+                newNextDue.setDate(oldNextDue.getDate() + daysToAdd);
+
+                // 6. UPDATE PLAN
+                t.update(planRef, {
+                    planExpiryDate: admin.firestore.Timestamp.fromDate(newExpiry),
+                    nextDueDate: admin.firestore.Timestamp.fromDate(newNextDue),
+                    extensionGraceDays: 0, // 🔥 Burn the lifeline (One-time use)
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    isExtended: true // Optional flag for UI badges
+                });
+
+                // 7. CUSTOMER LEDGER (Audit Trail)
+                const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+                t.set(ledgerRef, {
+                    id: ledgerRef.id,
+                    customerId: customerUid,
+                    amount: 0, // No money moved
+                    type: 'plan_extension',
+                    description: `Plan Extended by ${daysToAdd} Days`,
+                    planId: planId,
+                    reference: `EXT-${planId.substring(0,6)}`,
+                    status: 'success',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    metadata: { daysAdded: daysToAdd }
+                });
+
+                // 8. VENDOR ACTIVITY
+                createActivity(
+                    t,
+                    plan.vendorId,
+                    'reservation_extended',
+                    'Reservation Extended',
+                    `${plan.customerName} extended payment deadline by ${daysToAdd} days`,
+                    planId,
+                    null
+                );
+
+                return { 
+                    status: "SUCCESS", 
+                    daysAdded: daysToAdd,
+                    newDate: newExpiry.toISOString(),
+                    vendorId: plan.vendorId,
+                    productName: plan.title || "Product"
+                };
             });
+
+            // 9. NOTIFICATIONS
             
-            // Increase Vault Balance (Not Wallet Balance)
-            t.update(vendorStatsRef, {
-                vaultBalance: admin.firestore.FieldValue.increment(vendorNet),
-                currentActivePlanValue: admin.firestore.FieldValue.increment(price)
-            });
+            // To Customer
+            await sendFcm(
+                customerUid, 
+                "Plan Extended 🗓️", 
+                `Success! You added ${result.daysAdded} extra days to complete your payment.`, 
+                { type: "plan_detail", planId: planId }
+            );
+
+            // To Vendor
+            await sendFcm(
+                result.vendorId,
+                "Plan Update ⏳",
+                `Customer has extended the deadline for ${result.productName}. Inventory remains reserved.`,
+                { type: "vendor_order", planId: planId },
+                'vendors'
+            );
+
+            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
         }
 
-        // B. Store Credit -> Liability Reduction (Immediate)
-        if (creditUsed > 0) {
-            const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
-            t.set(vLiabRef, {
-                id: vLiabRef.id,
-                userId: vendorId,
-                amount: -creditUsed, 
-                type: 'redemption',
-                description: `Credit Used by ${planData.customerName}`,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                planId: planId
-            });
-            t.update(vendorStatsRef, {
-                totalLiability: admin.firestore.FieldValue.increment(-creditUsed),
-                // We do NOT deduct 3.5% from credit redemption usually
-                currentActivePlanValue: admin.firestore.FieldValue.increment(price) 
-            });
-        }
+        // =======================================================================
+        // 🛑 ACTION: CANCEL PLAN (Store Credit Conversion)
+        // =======================================================================
+        if (action === 'CANCEL') {
+            // 1. Validate
+            if (!planId || !customerUid) throw "Missing planId or customerUid.";
 
-        return { planId, productName: product.name, duration: planData.baseDurationDays, vendorId };
-      });
+            const result = await db.runTransaction(async (t) => {
+                const planRef = db.collection("plans").doc(planId);
+                const planDoc = await t.get(planRef);
 
-      // 🔔 NOTIFICATIONS
-      await sendFcm(customerUid, "Reservation Confirmed 🔒", `Plan for ${result.productName} active!`, { type: "plan_detail", planId: result.planId });
-      await sendFcm(result.vendorId, "New Order Received 📦", `Pending Settlement (24h Lock)`, { type: "vendor_order", planId: result.planId }, 'vendors');
+                if (!planDoc.exists) throw "Plan not found.";
+                const plan = planDoc.data();
 
-      return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planId }), { headers: { "Content-Type": "application/json" } });
-    }
+                // 2. Security Checks
+                if (plan.customerId !== customerUid) throw "Unauthorized.";
+                if (plan.status !== 'active') throw "Plan is not active.";
 
-    // =======================================================================
-    // 💸 ACTION: PAY INSTALLMENT (Direct to Wallet/Vault depending on policy)
-    // =======================================================================
-    if (action === 'PAY_INSTALLMENT') {
-      const paymentAmount = to2DP(Number(amount));
-      
-      const result = await db.runTransaction(async (t) => {
-        const planRef = db.collection("plans").doc(planId);
-        const planDoc = await t.get(planRef);
-        const plan = planDoc.data();
-        
-        if (!planDoc.exists) throw "Plan not found";
-        if (plan.status !== 'active') throw "Plan not active";
+                const vendorId = plan.vendorId;
+                const refundAmount = to2DP_Floor(plan.amountPaid); // Full amount
+                const penaltyAmount = 0; // No penalty
 
-        const { ref: statsRef, data: stats } = await getCustomerStats(customerUid);
-        const walletBalance = to2DP(stats.walletBalance || 0);
+                // 3. UPDATE PLAN: Mark Cancelled
+                t.update(planRef, {
+                    status: 'cancelled',
+                    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    refundAmount: refundAmount,
+                    penaltyAmount: 0,
+                    cancellationReason: 'Converted to Store Credit'
+                });
 
-        // Store Credit Logic
-        const vendorId = plan.vendorId;
-        const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
-        const availableStoreCredit = to2DP(vendorRel.storeCredit || 0);
+                // 4. CUSTOMER SIDE: Increase Store Credit
+                // We update the specific relationship doc for this vendor
+                const relRef = db.collection('customers').doc(customerUid).collection('my_vendors').doc(vendorId);
+                t.set(relRef, {
+                    vendorId: vendorId,
+                    storeName: plan.storeName || 'Store', // Ensure name exists
+                    storeCredit: admin.firestore.FieldValue.increment(refundAmount),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
 
-        let creditUsed = 0;
-        let walletUsed = 0;
+                // 5. CUSTOMER SIDE: Stats & Ledger
+                const { statsRef } = await getUserAndStats(customerUid);
+                
+                // Update Counts
+                t.set(statsRef, {
+                    activePlansCount: admin.firestore.FieldValue.increment(-1),
+                    cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
 
-        if (availableStoreCredit >= paymentAmount) {
-            creditUsed = paymentAmount;
-            walletUsed = 0;
-        } else {
-            creditUsed = availableStoreCredit;
-            walletUsed = to2DP(paymentAmount - creditUsed);
-        }
+                // Log Transaction
+                const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+                t.set(ledgerRef, {
+                    id: ledgerRef.id,
+                    customerId: customerUid,
+                    amount: 0, // No cash returned to wallet, so 0 flow
+                    type: 'plan_cancelled',
+                    description: `Converted ₦${refundAmount.toLocaleString()} to Store Credit`,
+                    planId: planId,
+                    status: 'success',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    metadata: { 
+                        convertedAmount: refundAmount, 
+                        vendorName: plan.storeName 
+                    }
+                });
 
-        if (walletBalance < walletUsed) throw "Insufficient funds.";
-
-        const newAmountPaid = to2DP(plan.amountPaid + paymentAmount);
-        const isFinished = newAmountPaid >= to2DP(plan.totalAmount - 0.1); 
-
-        t.update(planRef, {
-          amountPaid: newAmountPaid,
-          outstandingLoanAmount: to2DP(Math.max(0, plan.outstandingLoanAmount - paymentAmount)),
-          status: isFinished ? 'completed' : 'active',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null
-        });
-
-        // Customer Ledger
-        const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
-        t.set(ledgerRef, {
-          id: ledgerRef.id,
-          customerId: customerUid,
-          amount: -paymentAmount,
-          type: 'installment',
-          description: `Installment for ${plan.title}`,
-          status: 'success',
-          balanceBefore: walletBalance,
-          balanceAfter: to2DP(walletBalance - walletUsed),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          metadata: { paidWithWallet: walletUsed, paidWithCredit: creditUsed }
-        });
-
-        t.update(statsRef, { walletBalance: to2DP(walletBalance - walletUsed) });
-        if (isFinished) {
-           t.update(statsRef, {
-               activePlansCount: admin.firestore.FieldValue.increment(-1),
-               completedPlansCount: admin.firestore.FieldValue.increment(1)
-           });
-        }
-
-        if (creditUsed > 0) {
-            t.update(vendorRelRef, { storeCredit: to2DP(availableStoreCredit - creditUsed) });
-        }
-
-        // --- VENDOR SIDE ---
-        const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
-        const vendorFeeRate = 0.035; 
-
-        // Installments usually go straight to Wallet (Settled) 
-        // OR to Vault if within 24h of Plan Creation? 
-        // Assuming installments are settled immediately for simplicity unless specified.
-        if (walletUsed > 0) {
-            const vendorNet = to2DP(walletUsed * (1 - vendorFeeRate));
-            
-            const vLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
-            t.set(vLedgerRef, {
-                id: vLedgerRef.id,
-                userId: vendorId,
-                amount: vendorNet,
-                grossAmount: walletUsed,
-                type: 'sale',
-                description: `Installment: ${plan.customerName}`,
-                status: 'success',
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            t.update(vendorStatsRef, {
-                totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
-                walletBalance: admin.firestore.FieldValue.increment(vendorNet) // Direct to Wallet
-            });
-        }
-
-        if (creditUsed > 0) {
-            const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
-            t.set(vLiabRef, {
-                id: vLiabRef.id,
-                userId: vendorId,
-                amount: -creditUsed,
-                type: 'redemption',
-                description: `Credit Used: ${plan.customerName}`,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            t.update(vendorStatsRef, {
-                totalLiability: admin.firestore.FieldValue.increment(-creditUsed)
-            });
-        }
-
-        return { title: plan.title, isFinished, vendorId };
-      });
-
-      // Notifications
-      await sendFcm(customerUid, "Payment Successful", "Payment processed", {});
-      if (result.isFinished) {
-          await sendFcm(result.vendorId, "Order Completed!", "Full payment received.", {}, 'vendors');
-      }
-
-      return new Response(JSON.stringify({ status: "SUCCESS" }), { headers: { "Content-Type": "application/json" } });
-    }
-
-    // =======================================================================
-    // 🛑 ACTION: CANCEL PLAN (Updated Logic)
-    // =======================================================================
-    if (action === 'CANCEL') {
-      const result = await db.runTransaction(async (t) => {
-        const planRef = db.collection("plans").doc(planId);
-        const planDoc = await t.get(planRef);
-        if (!planDoc.exists) throw "Plan not found";
-        const plan = planDoc.data();
-        
-        // 1. CHECK 24H BUFFER (Grace Period)
-        const now = Date.now();
-        const createdAt = plan.createdAt.toMillis();
-        const hoursElapsed = (now - createdAt) / (1000 * 60 * 60);
-        const isWithin24Hours = hoursElapsed <= 24;
-
-        // 2. DETERMINE PENALTY
-        let penaltyRate = 0.0;
-        let isBreakingFee = false;
-
-        if (isWithin24Hours) {
-            penaltyRate = 0.10; // 10% Breaking Fee
-            isBreakingFee = true;
-        } else if (plan.cancellationPolicy.includes("50%")) {
-            penaltyRate = 0.50; // 50% Strict Penalty
-        } else {
-            penaltyRate = 0.0;  // 0% Direct
-        }
-
-        const totalPaid = to2DP(plan.amountPaid);
-        const penaltyAmount = to2DP(totalPaid * penaltyRate);
-        const refundAmount = to2DP(totalPaid - penaltyAmount);
-
-        // 3. REFUND DESTINATION
-        // Within 24h -> Wallet (because it was cash and vendor didn't get it yet)
-        // After 24h -> Policy Dependent (Strict=Wallet, Direct=Store Credit)
-        let refundToWallet = isBreakingFee ? true : (plan.cancellationPolicy.includes("50%") ? true : false);
-
-        t.update(planRef, {
-          status: 'cancelled',
-          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          refundAmount: refundAmount,
-          penaltyAmount: penaltyAmount
-        });
-
-        // 4. VENDOR IMPACT LOGIC
-        const vendorId = plan.vendorId;
-        const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
-        const vendorFeeRate = 0.035;
-
-        if (isBreakingFee) {
-            // 🛑 SCENARIO A: < 24 Hours (Breaking Fee)
-            // The money is currently LOCKED in 'vaultBalance'.
-            // Vendor receives NOTHING. We must reverse the pending transaction.
-            
-            // We calculate the Net Cash we originally added to vault
-            // (Assuming mostly cash was used for Down Payment)
-            // Approximation: We reverse whatever Net Value corresponded to the total paid.
-            const netCashInVault = to2DP(totalPaid * (1 - vendorFeeRate));
-            
-            t.update(vendorStatsRef, {
-                vaultBalance: admin.firestore.FieldValue.increment(-netCashInVault), // WIPE IT
-                currentActivePlanValue: admin.firestore.FieldValue.increment(-plan.totalAmount)
-            });
-            
-            // We do NOT add to Liability because the deal never settled.
-            
-        } else {
-            // 🛑 SCENARIO B: > 24 Hours (Standard Cancel)
-            // Money is already in Vendor's 'walletBalance'.
-            // Vendor KEEPS the Penalty as earnings.
-            
-            if (!refundToWallet) {
-                // Refund -> Store Credit (Vendor Liability Increases)
-                // Vendor keeps cash, but now owes debt.
+                // 6. VENDOR SIDE: Liability & Inventory
+                const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
+                
+                // Log Liability (Vendor owes goods worth this amount)
                 const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
                 t.set(vLiabRef, {
                     id: vLiabRef.id,
                     userId: vendorId,
-                    amount: refundAmount, // Positive = Debt Increase
-                    type: 'issuance',
-                    description: `Refund Issued: ${plan.customerName}`,
+                    amount: refundAmount,
+                    type: 'conversion', // New type for clarity
+                    description: `Plan Cancelled: ${plan.customerName}`,
+                    planId: planId,
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 });
+
+                // Update Vendor Stats
                 t.update(vendorStatsRef, {
                     totalLiability: admin.firestore.FieldValue.increment(refundAmount),
-                    activeLocks: admin.firestore.FieldValue.increment(-1)
+                    activePlansCount: admin.firestore.FieldValue.increment(-1),
+                    // Note: We do NOT touch 'currentActivePlanValue' here because that tracks potential revenue. 
+                    // Since the plan is dead, that potential revenue is gone, replaced by liability.
+                    // If you track 'projected_revenue', decrease it here.
                 });
-            } else {
-                // Refund -> Wallet (Strict 50%)
-                // We must DEDUCT the refund portion from Vendor's Wallet
-                // Because Vendor was paid fully, but now user gets 50% back.
-                const refundNetDeduction = refundAmount; // Vendor pays back the refund
-                
-                const vLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
-                t.set(vLedgerRef, {
-                    id: vLedgerRef.id,
-                    userId: vendorId,
-                    amount: -refundNetDeduction,
-                    type: 'refund_deduction',
-                    description: `Strict Refund to ${plan.customerName}`,
-                    status: 'success',
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+
+                // Release Stock
+                const productRef = db.collection("products").doc(plan.productId);
+                t.update(productRef, { 
+                    availableStock: admin.firestore.FieldValue.increment(1) 
                 });
-                t.update(vendorStatsRef, {
-                    walletBalance: admin.firestore.FieldValue.increment(-refundNetDeduction),
-                    activeLocks: admin.firestore.FieldValue.increment(-1)
-                });
-            }
+
+                // 7. Activity Feed
+                createActivity(
+                    t,
+                    vendorId,
+                    'reservation_cancel',
+                    'Plan Converted',
+                    `${plan.customerName} cancelled ${plan.title}. Funds converted to Store Credit.`,
+                    planId,
+                    `+₦${refundAmount.toLocaleString()} Credit`
+                );
+
+                return { 
+                    status: "SUCCESS", 
+                    refundAmount: refundAmount,
+                    storeName: plan.storeName
+                };
+            });
+
+            // 8. NOTIFICATIONS
+            await sendFcm(
+                customerUid, 
+                "Plan Converted 🔄", 
+                `Your ₦${result.refundAmount.toLocaleString()} has been moved to Store Credit for ${result.storeName}.`, 
+                { type: "plan_detail", planId: planId }
+            );
+
+            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
         }
 
-        // 5. CUSTOMER REFUND
-        if (refundToWallet) {
-             const { ref: statsRef } = await getCustomerStats(customerUid);
-             t.update(statsRef, { walletBalance: admin.firestore.FieldValue.increment(refundAmount) });
-             
-             // Log Refund
-             const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
-             t.set(ledgerRef, {
-                 // ... standard refund log ...
-                 customerId: customerUid,
-                 amount: refundAmount,
-                 type: 'refund',
-                 description: isBreakingFee ? "Refund (Breaking Fee Applied)" : "Refund (Cancellation)",
-                 createdAt: admin.firestore.FieldValue.serverTimestamp()
-             });
-
-        } else {
-             // To Store Credit
-             const { ref: vendorRelRef } = await getVendorRelation(customerUid, vendorId);
-             t.set(vendorRelRef, {
-                storeCredit: admin.firestore.FieldValue.increment(refundAmount),
-             }, { merge: true });
-        }
-
-        // Release Slot
-        const { ref: sRef } = await getCustomerStats(customerUid);
-        t.update(sRef, {
-           activePlansCount: admin.firestore.FieldValue.increment(-1),
-           cancelledPlansCount: admin.firestore.FieldValue.increment(1)
-        });
         
-        t.update(db.collection("products").doc(plan.productId), { availableStock: admin.firestore.FieldValue.increment(1) });
+        // =======================================================================
+        // 🤝 ACTION: VERIFY PICKUP
+        // =======================================================================
+        if (action === 'VERIFY_PICKUP') {
+            // 1. Validate Inputs
+            if (!planId || !pin || !vendorUid) {
+                throw "Missing required fields: planId, pin, or vendorUid.";
+            }
 
-        return { refundAmount, penaltyAmount, isBreakingFee };
-      });
+            const result = await db.runTransaction(async (t) => {
+                const planRef = db.collection("plans").doc(planId);
+                const planDoc = await t.get(planRef);
+                
+                if (!planDoc.exists) throw "Reservation not found.";
+                const plan = planDoc.data();
 
-      // 🔔 NOTIFICATIONS
-      await sendFcm(customerUid, "Plan Cancelled", `Refund: ₦${result.refundAmount}`, {});
-      
-      return new Response(JSON.stringify({ status: "SUCCESS", message: "Plan cancelled." }), { headers: { "Content-Type": "application/json" } });
+                // 2. Security Checks
+                if (plan.vendorId !== vendorUid) {
+                    throw "Unauthorized: You do not own this order.";
+                }
+                if (plan.status !== 'completed') {
+                    throw "Plan is not fully paid yet.";
+                }
+                if (plan.fulfilledAt != null) {
+                    throw "Item already collected.";
+                }
+
+                // 3. Verify PIN (String comparison)
+                // We use String() to ensure '1234' matches 1234
+                if (String(plan.pickupCode).trim() !== String(pin).trim()) {
+                    throw "Incorrect PIN.";
+                }
+
+                // 4. Update Plan
+                t.update(planRef, {
+                    fulfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                    // We keep the PIN for audit logs, but you could delete it here
+                });
+
+                // 5. Log to Vendor Activity
+                // Ensure 'createActivity' helper is defined as discussed previously
+                const activityRef = db.collection('vendors').doc(vendorUid).collection('activity_feed').doc();
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'reservation_fulfilled',
+                    title: 'Order Fulfilled',
+                    body: `Handed over ${plan.title} to ${plan.customerName}`,
+                    ref_id: planId,
+                    amount_display: null, 
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
+
+                return { 
+                    success: true,
+                    customerId: customerUid
+                };
+            });
+
+            // 6. Notify Customer
+            await sendFcm(
+                result.customerId, // Ensure result has this if you return it from transaction, or query it
+                "Order Collected ✅", 
+                "You have successfully picked up your item. Thanks for using Korra!", 
+                { type: "plan_detail", planId: planId }
+            );
+
+            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+        }
+
+        return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400 });
+
+    } catch (err) {
+        const msg = err.toString().replace("Error: ", "");
+        return new Response(JSON.stringify({ status: "ERROR", error: msg }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
-
-    return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400 });
-
-  } catch (err) {
-    const msg = err.toString().replace("Error: ", "");
-    return new Response(JSON.stringify({ status: "ERROR", error: msg }), { status: 400, headers: { "Content-Type": "application/json" } });
-  }
 });

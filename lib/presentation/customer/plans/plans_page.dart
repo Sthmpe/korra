@@ -288,16 +288,34 @@ class _PlansPageState extends State<PlansPage> {
   List<Plan> _processPlans(List<Plan> all) {
     // A. Filter by Tab
     var list = all.where((p) {
-      if (_currentTab == PlansTab.active)
+      if (_currentTab == PlansTab.active) {
+        // Active = Status Active AND Not Overdue
         return p.status == 'active' && !p.isOverdue;
+      }
+      
+      // ✅ NEW: Ready for Pickup
+      if (_currentTab == PlansTab.readyForPickup) {
+        // Status Completed AND Not yet fulfilled (Not picked up)
+        return p.status == 'completed' && p.fulfilledAt == null;
+      }
+
       if (_currentTab == PlansTab.pending) return p.status == 'pending';
-      if (_currentTab == PlansTab.completed) return p.status == 'completed';
+      
+      // Completed Tab Logic Change:
+      // Should "Completed" show EVERYTHING finished, or only Picked Up ones?
+      // Usually "History" implies fully done. 
+      // Let's make "Completed" show ONLY fulfilled items so it doesn't duplicate "Ready".
+      if (_currentTab == PlansTab.completed) {
+        return p.status == 'completed' && p.fulfilledAt != null;
+      }
+
       if (_currentTab == PlansTab.overdue) return p.isOverdue;
       if (_currentTab == PlansTab.cancelled) return p.status == 'cancelled';
+      
       return true;
     }).toList();
 
-    // B. Apply Filter Sheet Options
+    // B. Apply Filter Sheet Options (Keep existing)
     if (_autopayOnly) {
       list = list.where((p) => p.commitmentEnabled).toList();
     }
@@ -308,17 +326,15 @@ class _PlansPageState extends State<PlansPage> {
       list = list.where((p) => p.totalAmount > 50000).toList();
     }
 
-    // C. Apply Sorting
+    // C. Apply Sorting (Keep existing)
     list.sort((a, b) {
       switch (_sortBy) {
         case SortBy.nextDue:
           return a.nextDueDate.compareTo(b.nextDueDate);
         case SortBy.amount:
-          return b.totalAmount.compareTo(a.totalAmount); // Highest first
+          return b.totalAmount.compareTo(a.totalAmount);
         case SortBy.progress:
-          return b.progressPercent.compareTo(
-            a.progressPercent,
-          ); // Highest progress first
+          return b.progressPercent.compareTo(a.progressPercent);
       }
     });
 
@@ -329,8 +345,10 @@ class _PlansPageState extends State<PlansPage> {
     switch (t) {
       case PlansTab.active:
         return 'No active plans yet.\nPaste a link or scan to start.';
+      case PlansTab.readyForPickup: // ✅ NEW MESSAGE
+        return 'Nothing to collect.\nFinish a plan to see it here!';
       case PlansTab.completed:
-        return 'No completed plans yet.';
+        return 'No completed history yet.';
       case PlansTab.overdue:
         return 'No overdue payments.\nYou’re all caught up 🎉';
       case PlansTab.cancelled:

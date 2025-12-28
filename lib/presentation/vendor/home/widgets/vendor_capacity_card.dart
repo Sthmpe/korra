@@ -1,8 +1,8 @@
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
 
 class VendorCapacityCard extends StatelessWidget {
@@ -81,14 +81,14 @@ class VendorCapacityCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(6.r),
               child: SizedBox(
-                height: 12.h,
+                height: 8.h,
                 child: Row(
                   children: [
                     // A. Active Plans (Blue)
                     if (planPercent > 0)
                       Flexible(
                         flex: (planPercent * 100).toInt(),
-                        child: Container(color: const Color(0xFF007AFF)), // iOS Blue
+                        child: Container(color: KorraColors.brandDark) // iOS Blue
                       ),
                     
                     // B. Store Credit (Orange - Liability)
@@ -144,7 +144,7 @@ class VendorCapacityCard extends StatelessWidget {
                         padding: EdgeInsets.only(bottom: 4.h),
                         child: Row(
                           children: [
-                            Container(width: 6.w, height: 6.w, decoration: const BoxDecoration(color: Color(0xFF007AFF), shape: BoxShape.circle)),
+                            Container(width: 6.w, height: 6.w, decoration: const BoxDecoration(color: KorraColors.brandDark, shape: BoxShape.circle)),
                             SizedBox(width: 6.w),
                             Text(
                               "Active Plans: ₦${formatToCurrency(activePlanValue)}",

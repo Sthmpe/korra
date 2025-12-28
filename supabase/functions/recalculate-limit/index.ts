@@ -21,7 +21,7 @@ serve(async (req) => {
 
     await db.runTransaction(async (t) => {
         // 2. GET DATA
-        const userDoc = await t.get(db.collection('customer').doc(customerUid));
+        const userDoc = await t.get(db.collection('customers').doc(customerUid));
         const limitRef = db.collection('customer_limits').doc(customerUid);
         const limitDoc = await t.get(limitRef);
 
@@ -49,7 +49,7 @@ serve(async (req) => {
     });
 
     // B. Save Notification
-    const notifRef = db.collection('customer').doc(customerUid).collection('notifications').doc();
+    const notifRef = db.collection('customers').doc(customerUid).collection('notifications').doc();
     t.set(notifRef, {
       id: notifRef.id,
       title: "Limit Recalculated 🚀",

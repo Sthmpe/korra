@@ -7,7 +7,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconsax/iconsax.dart'; // Added icons
 
 // Ensure correct imports
-import '../../../../config/constants/colors.dart';
 import 'korra_button.dart';
 
 class PasswordVerificationSheet extends StatefulWidget {

@@ -152,10 +152,10 @@ class SignupCustomerBloc
         email,
       );
       final existsInCustomer = await _customerRepo.checkCollectionForEmail(
-        'customer',
+        'customers',
         email,
       );
-      debugPrint("Email exist in customer: $existsInCustomer");
+      debugPrint("Email exist in customers: $existsInCustomer");
       debugPrint("Email exist in vendors: $existsInVendors");
       if (existsInCustomer || existsInVendors) {
         emit(

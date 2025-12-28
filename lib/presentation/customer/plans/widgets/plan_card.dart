@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -33,6 +34,20 @@ class PlanCard extends StatelessWidget {
     // AutoPay logic
     final bool showAutoPay = plan.commitmentEnabled; 
 
+    // ✅ HELPER 1: Paid Amount (Standard 2DP Display)
+    // Prevents long decimals like 5000.333333
+    double _clipAmount(double amount) {
+      return double.parse(amount.toStringAsFixed(2));
+    }
+
+    // ✅ HELPER 2: Remaining Balance (Always Round UP)
+    // Ensures you don't lose 0.01 due to rounding down.
+    // 33.333 -> 33.34
+    double _roundUpAmount(double amount) {
+      if (amount == 0) return 0;
+      return (amount * 100).ceil() / 100;
+    }
+
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       decoration: BoxDecoration(
@@ -59,10 +74,13 @@ class PlanCard extends StatelessWidget {
                 height: 160.h,
                 width: double.infinity,
                 color: Colors.grey.shade100,
-                child: Image.network(
-                  plan.imageUrls.isNotEmpty ? plan.imageUrls.first : '',
+                child: CachedNetworkImage(
+                  imageUrl: plan.imageUrls.isNotEmpty ? plan.imageUrls.first : '',
                   fit: BoxFit.cover,
-                  errorBuilder: (c, o, s) => Icon(Icons.image_not_supported, color: Colors.grey.shade300),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[100],
+                    child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                  ),
                 ),
               ),
               
@@ -127,11 +145,11 @@ class PlanCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Paid: ${formatToCurrency(plan.amountPaid)}',
+                      'Paid: ${formatToCurrency(_clipAmount(plan.amountPaid))}',
                       style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      'Left: ${formatToCurrency(plan.amountRemaining)}',
+                      'Left: ${formatToCurrency(_roundUpAmount(plan.amountRemaining))}',
                       style: GoogleFonts.inter(fontSize: 12.sp, color: _brand, fontWeight: FontWeight.w700),
                     ),
                   ],

@@ -4,41 +4,41 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/data/repository/customer/notification_repository.dart';
 
+import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/korra_notification.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
-import '../../../../data/repository/customer/notification_repository.dart'; 
 import '../../shared/widgets/korra_header.dart';
-import '../profile/statements_screen.dart'; 
-import '../plans/widgets/empty_state_card.dart';
+import '../profile/statements_screen.dart';
 
 class NotificationScreen extends StatelessWidget {
   final CustomerRepository repo;
   final String uid;
-  final VoidCallback onJumpToPlans; // Function to switch to Plans tab
+  final VoidCallback onJumpToPlans;
 
   const NotificationScreen({
-    super.key, 
-    required this.repo, 
-    required this.uid, 
-    required this.onJumpToPlans
+    super.key,
+    required this.repo,
+    required this.uid,
+    required this.onJumpToPlans,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: Colors.white, // ✅ Matched Vendor: White Background
       appBar: KorraHeader(
-        title: "Notifications", 
+        title: "Notifications",
         showLeadingIcon: true,
         onBackpressed: () => Get.back(),
+        // Optional: Keep "Mark all read" if you want functionality, 
+        // but removed to match Vendor UI strictness. Uncomment if needed.
+        
         trailingActions: [
           TextButton(
             onPressed: () => repo.markAllRead(uid),
-            child: Text(
-              "Mark all read", 
-              style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFFA54600))
-            ),
+            child: Text("Mark all read", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: KorraColors.brand)),
           )
         ],
       ),
@@ -46,47 +46,166 @@ class NotificationScreen extends StatelessWidget {
         stream: repo.streamNotifications(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFA54600)));
+            return const Center(child: CircularProgressIndicator(color: KorraColors.brand));
           }
 
           final notifications = snapshot.data ?? [];
 
+          // ✅ Matched Vendor: Empty State UI
           if (notifications.isEmpty) {
-            return const Center(child: EmptyStateCard(text: "You have no notifications yet."));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(20.r),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Iconsax.notification, size: 40.sp, color: Colors.grey.shade300),
+                  ),
+                  SizedBox(height: 16.h),
+                  Text(
+                    "No notifications yet",
+                    style: GoogleFonts.inter(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade900,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    "Order updates and alerts will appear here.",
+                    style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            );
           }
 
           return ListView.separated(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.all(16.w),
+            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
             itemCount: notifications.length,
-            separatorBuilder: (_, __) => SizedBox(height: 12.h),
+            // ✅ Matched Vendor: Dividers instead of Spacing
+            separatorBuilder: (_, __) => Divider(height: 32.h, color: Colors.grey.shade100),
             itemBuilder: (context, index) {
               final notif = notifications[index];
-              return _NotificationTile(
-                notification: notif,
+              
+              // ✅ Logic to determine Icon Style (Matched Vendor Styling)
+              IconData icon;
+              Color iconColor;
+              Color iconBg;
+
+              switch (notif.type) {
+                case 'payment':
+                  icon = Iconsax.wallet_money;
+                  iconColor = Colors.green.shade700;
+                  iconBg = Colors.green.shade50;
+                  break;
+                case 'plan':
+                case 'reminder':
+                  icon = Iconsax.box; // Using box for plans like Vendor uses for orders
+                  iconColor = Colors.blue.shade700;
+                  iconBg = Colors.blue.shade50;
+                  break;
+                case 'security':
+                  icon = Iconsax.shield_tick;
+                  iconColor = Colors.red.shade700;
+                  iconBg = Colors.red.shade50;
+                  break;
+                default:
+                  icon = Iconsax.info_circle;
+                  iconColor = Colors.grey.shade700;
+                  iconBg = Colors.grey.shade100;
+              }
+
+              return InkWell(
                 onTap: () {
-                  // 1. Always Mark as Read on tap
+                  // 1. Mark Read
                   if (!notif.isRead) repo.markNotificationRead(uid, notif.id);
 
-                  // 2. Smart Navigation based on Type
+                  // 2. Navigation Logic (Kept from Customer App)
                   switch (notif.type) {
                     case 'payment':
                       Get.to(() => StatementsScreen(repo: repo, customerUid: uid));
                       break;
-                      
                     case 'reminder':
                     case 'plan':
-                      Get.back(); // Close notification screen
-                      onJumpToPlans(); // Switch bottom tab to Plans
-                      break;
-                      
-                    case 'security':
-                    case 'system':
-                      // Usually just informational (Limit update), stays on screen or goes to profile
-                      // For now, we just mark read (already done above)
+                      Get.back();
+                      onJumpToPlans();
                       break;
                   }
                 },
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ✅ Matched Vendor: Icon Box
+                    Container(
+                      width: 40.w,
+                      height: 40.w,
+                      decoration: BoxDecoration(
+                        color: iconBg,
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                      child: Icon(icon, size: 20.sp, color: iconColor),
+                    ),
+                    SizedBox(width: 14.w),
+
+                    // Content
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  notif.title,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.sp,
+                                    // ✅ Matched Vendor: Bolder font for Unread
+                                    fontWeight: !notif.isRead ? FontWeight.w800 : FontWeight.w600,
+                                    color: const Color(0xFF101828),
+                                  ),
+                                ),
+                              ),
+                              // ✅ Matched Vendor: Red Dot for Unread
+                              if (!notif.isRead)
+                                Container(
+                                  width: 8.w,
+                                  height: 8.w,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          SizedBox(height: 4.h),
+                          Text(
+                            notif.body,
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              height: 1.4,
+                              color: const Color(0xFF667085),
+                            ),
+                          ),
+                          SizedBox(height: 8.h),
+                          Text(
+                            _formatDate(notif.createdAt),
+                            style: GoogleFonts.inter(
+                              fontSize: 11.sp,
+                              color: Colors.grey.shade400,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -94,125 +213,18 @@ class NotificationScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-class _NotificationTile extends StatelessWidget {
-  final KorraNotification notification;
-  final VoidCallback onTap;
-
-  const _NotificationTile({required this.notification, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isUnread = !notification.isRead;
-    final iconSpec = _getIconSpec(notification.type);
-    
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque, 
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: EdgeInsets.all(16.r),
-        decoration: BoxDecoration(
-          color: isUnread ? Colors.white : const Color(0xFFF2F4F7), 
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: isUnread ? const Color(0xFFEAECF0) : Colors.transparent),
-          boxShadow: isUnread ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))] : [],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon Bubble
-            Container(
-              padding: EdgeInsets.all(10.r),
-              decoration: BoxDecoration(
-                color: iconSpec.bg,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(iconSpec.icon, size: 20.sp, color: iconSpec.color),
-            ),
-            
-            SizedBox(width: 14.w),
-            
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notification.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 14.sp, 
-                            fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
-                            color: isUnread ? const Color(0xFF101828) : const Color(0xFF667085),
-                          ),
-                        ),
-                      ),
-                      if (isUnread)
-                        Container(width: 8.w, height: 8.w, decoration: const BoxDecoration(color: Color(0xFFD92D20), shape: BoxShape.circle))
-                      else
-                         Icon(Icons.chevron_right_rounded, size: 16.sp, color: Colors.grey.shade400)
-                    ],
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    notification.body,
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: const Color(0xFF475467),
-                      height: 1.4,
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                  Text(
-                    _formatTime(notification.createdAt),
-                    style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF98A2B3), fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime dt) {
+  // ✅ Matched Vendor: Date Logic
+  String _formatDate(DateTime date) {
     final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return "Just now";
-    if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
-    if (diff.inHours < 24) return "${diff.inHours}h ago";
-    if (diff.inDays == 1) return "Yesterday";
-    return DateFormat('MMM d').format(dt);
-  }
+    final diff = now.difference(date);
 
-  // --- Visual Specs Helper ---
-  _IconSpec _getIconSpec(String type) {
-    switch (type) {
-      case 'payment': 
-        return _IconSpec(Iconsax.wallet_2, const Color(0xFF16A34A), const Color(0xFFDCFCE7)); // Green
-      case 'reminder': 
-        return _IconSpec(Iconsax.timer_1, const Color(0xFFF79009), const Color(0xFFFEF9C3)); // Orange
-      case 'security': 
-        return _IconSpec(Iconsax.shield_tick, const Color(0xFFD92D20), const Color(0xFFFEE2E2)); // Red
-      case 'system':
-        return _IconSpec(Iconsax.trend_up, const Color(0xFF2563EB), const Color(0xFFDBEAFE)); // Blue (For Limit Increase)
-      default: 
-        return _IconSpec(Iconsax.notification, const Color(0xFFA54600), const Color(0xFFFFEDD5)); // Brand
+    if (diff.inMinutes < 60) {
+      return "${diff.inMinutes}m ago";
+    } else if (diff.inHours < 24) {
+      return "${diff.inHours}h ago";
+    } else {
+      return DateFormat('MMM d, h:mm a').format(date);
     }
   }
-}
-
-class _IconSpec {
-  final IconData icon;
-  final Color color;
-  final Color bg;
-  _IconSpec(this.icon, this.color, this.bg);
 }

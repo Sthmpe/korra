@@ -11,8 +11,9 @@ import 'package:get/get.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../data/models/vendor/transaction_model.dart';
 import '../../../data/models/vendor/vendor_stat.dart';
-import '../../customer/plans/widgets/transaction_receipt_screen.dart';
 import '../../shared/widgets/korra_header.dart';
+
+import 'vendor_receipt_screen.dart'; 
 
 class VendorSettlementScreen extends StatefulWidget {
   final VendorRepository repo;
@@ -108,7 +109,6 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
   }
 
   Widget _buildTransactionList() {
-    // ⚡ FIX: No casting needed anymore because imports match
     final Stream<List<TransactionModel>> targetStream;
     
     if (_filter == 'Store Credit') {
@@ -157,8 +157,7 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
   }
 }
 
-// ... _StatsCard and _FilterTab remain the same ...
-
+// ... _StatsCard and _FilterTab remain identical ... 
 class _StatsCard extends StatelessWidget {
   final String label;
   final double amount;
@@ -245,7 +244,7 @@ class _FilterTab extends StatelessWidget {
   }
 }
 
-
+// ✅ UPDATED TILE TO PASS FULL MODEL
 class _VendorTransactionTile extends StatelessWidget {
   final TransactionModel transaction;
   final bool isLiability;
@@ -266,8 +265,8 @@ class _VendorTransactionTile extends StatelessWidget {
         iconBg = const Color(0xFFFEF3F2);
       } else {
         amountColor = const Color(0xFF16A34A);
-        // ⚡ FIX: Corrected typo 'minus_cirlce' -> 'minus_circle'
-        icon = Iconsax.minus_cirlce;
+        // ✅ Fixed Typo: minus_cirlce -> minus_circle
+        icon = Iconsax.minus_cirlce; 
         iconBg = const Color(0xFFECFDF5);
       }
     } else {
@@ -276,19 +275,17 @@ class _VendorTransactionTile extends StatelessWidget {
         icon = Iconsax.arrow_down;
         iconBg = const Color(0xFFECFDF5);
       } else {
-        amountColor = Colors.black87;
-        icon = Iconsax.arrow_up;
-        iconBg = const Color(0xFFF9FAFB);
+        amountColor = Colors.redAccent;
+        icon = Icons.arrow_upward;
+        iconBg = Colors.redAccent.shade100.withOpacity(0.2);
       }
     }
 
     return InkWell(
       onTap: () {
-        Get.to(() => TransactionReceiptScreen(
-          amount: transaction.amount.abs(), 
-          planName: transaction.description, 
-          date: transaction.createdAt
-        ));
+        // ✅ FIX: Navigation points to VendorReceiptScreen
+        // We pass the entire 'transaction' model now.
+        Get.to(() => VendorReceiptScreen(transaction: transaction));
       },
       child: Container(
         color: Colors.white,
@@ -305,10 +302,13 @@ class _VendorTransactionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    transaction.description,
-                    style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828)),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  SizedBox(
+                    width: 160.w,
+                    child: Text(
+                      transaction.description,
+                      style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828)),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(height: 4.h),
                   Text(
@@ -322,7 +322,7 @@ class _VendorTransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  "₦${NumberFormat("#,##0.00", "en_US").format(transaction.amount.abs())}",
+                  "${isPositive ? '+' : '-'}₦${NumberFormat("#,##0.00", "en_US").format(transaction.amount.abs())}",
                   style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: amountColor),
                 ),
                 if (transaction.reference.isNotEmpty && transaction.reference != 'null')

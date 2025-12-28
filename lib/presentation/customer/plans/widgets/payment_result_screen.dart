@@ -5,7 +5,8 @@ import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../config/constants/colors.dart'; // Adjust path
+import '../../../../../config/constants/colors.dart';
+import '../../../../data/models/customer/payment_receipt_data.dart';
 import 'transaction_receipt_screen.dart';
 
 class PaymentResultScreen extends StatefulWidget {
@@ -15,6 +16,9 @@ class PaymentResultScreen extends StatefulWidget {
   final String planName;
   final String? errorMessage;
 
+  // Optional: If we came from the Bloc with full data, pass it here
+  final PaymentReceiptData fullReceiptData; 
+
   const PaymentResultScreen({
     super.key,
     required this.isSuccess,
@@ -22,6 +26,7 @@ class PaymentResultScreen extends StatefulWidget {
     required this.amount,
     required this.planName,
     this.errorMessage,
+    required this.fullReceiptData,
   });
 
   @override
@@ -31,112 +36,139 @@ class PaymentResultScreen extends StatefulWidget {
 class _PaymentResultScreenState extends State<PaymentResultScreen> {
   @override
   Widget build(BuildContext context) {
-    // Logic setup remains same, styling updated
-    // Logic setup
     String lottieUrl;
     String title;
     String subtitle;
     Color btnColor;
+    Color bgPillColor;
+    Color textPillColor;
 
     if (!widget.isSuccess) {
       // ❌ FAILURE
-      lottieUrl = 'https://assets9.lottiefiles.com/packages/lf20_tl52xzvn.json'; 
+      lottieUrl = 'https://assets9.lottiefiles.com/packages/lf20_tl52xzvn.json';
       title = "Payment Failed";
-      subtitle = widget.errorMessage ?? "We couldn't process your payment at this time.";
+      subtitle = widget.errorMessage ?? "We couldn't process your payment. Please try again.";
       btnColor = Colors.red;
-      
+      bgPillColor = Colors.red.shade50;
+      textPillColor = Colors.red;
     } else if (widget.isPlanCompleted) {
-      // ✅ PLAN COMPLETED (The New Logic)
-      lottieUrl = 'https://assets10.lottiefiles.com/packages/lf20_u4yrau.json'; 
-      
-      title = "Payment Completed"; // Formal title
-      
-      // The specific instruction:
-      subtitle = "Your plan has been fully paid. Contact the vendor directly to arrange collection.";
-      
-      btnColor = const Color(0xFF027A48); // Deep Green (Official/Legal)
-      
+      // ✅ PLAN COMPLETED
+      lottieUrl = 'https://assets10.lottiefiles.com/packages/lf20_u4yrau.json';
+      title = "Plan Completed!";
+      subtitle = "You've fully paid for ${widget.planName}. Contact the vendor to arrange collection.";
+      btnColor = const Color(0xFF027A48); // Success Green
+      bgPillColor = const Color(0xFFECFDF3);
+      textPillColor = const Color(0xFF027A48);
     } else {
-      // ✅ NORMAL INSTALLMENT
-      lottieUrl = 'https://assets7.lottiefiles.com/packages/lf20_jbrw3hcz.json'; 
+      // ✅ INSTALLMENT SUCCESS
+      lottieUrl = 'https://assets7.lottiefiles.com/packages/lf20_jbrw3hcz.json';
       title = "Payment Successful";
-      subtitle = "We've received ₦${NumberFormat("#,##0").format(widget.amount)} towards ${widget.planName}.";
+      subtitle = "We've received ₦${NumberFormat("#,##0").format(widget.amount)} towards your goal.";
       btnColor = KorraColors.brand;
+      bgPillColor = const Color(0xFFFFF4ED); // Brand Orange Light
+      textPillColor = KorraColors.brand;
     }
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
-          child: Column(
-            children: [
-              const Spacer(),
-              
-              // ANIMATION
-              SizedBox(
-                height: 180.h,
-                width: 180.w,
-                child: Lottie.network(lottieUrl, repeat: widget.isPlanCompleted),
-              ),
-              SizedBox(height: 32.h),
+        child: Column(
+          children: [
+            const Spacer(flex: 2),
 
-              // TEXT
+            // 1. ANIMATION
+            SizedBox(
+              height: 200.h,
+              width: 200.w,
+              child: Lottie.network(lottieUrl, repeat: widget.isPlanCompleted),
+            ),
+            SizedBox(height: 24.h),
+
+            // 2. STATUS PILL
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+              decoration: BoxDecoration(
+                color: bgPillColor,
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+              child: Text(
+                widget.isSuccess ? (widget.isPlanCompleted ? "ALL DONE" : "CONFIRMED") : "FAILED",
+                style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: textPillColor, letterSpacing: 1.0),
+              ),
+            ),
+            SizedBox(height: 24.h),
+
+            // 3. TITLE & AMOUNT
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(fontSize: 24.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828)),
+            ),
+            SizedBox(height: 8.h),
+            if (widget.isSuccess)
               Text(
-                title,
+                "₦${NumberFormat("#,##0").format(widget.amount)}",
+                style: GoogleFonts.plusJakartaSans(fontSize: 36.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -1.0),
+              ),
+
+            SizedBox(height: 16.h),
+            
+            // 4. SUBTITLE
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40.w),
+              child: Text(
+                subtitle,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828)),
+                style: GoogleFonts.inter(fontSize: 15.sp, color: const Color(0xFF667085), height: 1.5),
               ),
-              SizedBox(height: 12.h),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                child: Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 15.sp, color: const Color(0xFF667085), height: 1.5),
-                ),
-              ),
+            ),
 
-              const Spacer(),
+            const Spacer(flex: 3),
 
-              // BUTTONS
-              if (widget.isSuccess) ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 54.h,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Get.to(() => TransactionReceiptScreen(
-                        amount: widget.amount, 
-                        planName: widget.planName,
-                        date: DateTime.now(),
-                      ));
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+            // 5. BUTTONS
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
+              child: Column(
+                children: [
+                  if (widget.isSuccess) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56.h,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          // ✅ FIX: Construct Receipt Data Here
+                          // If we have full data from Bloc, use it. If not, construct Partial.
+                          final data = widget.fullReceiptData;
+
+                          Get.to(() => TransactionReceiptScreen(data: data));
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                        ),
+                        child: Text("View Receipt", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054))),
+                      ),
                     ),
-                    child: Text("View Receipt", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054))),
-                  ),
-                ),
-                SizedBox(height: 12.h),
-              ],
+                    SizedBox(height: 16.h),
+                  ],
 
-              SizedBox(
-                width: double.infinity,
-                height: 54.h,
-                child: FilledButton(
-                  onPressed: () => Get.back(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: btnColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-                    elevation: 0,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.h,
+                    child: FilledButton(
+                      onPressed: () => Get.back(), // Or Navigate Home
+                      style: FilledButton.styleFrom(
+                        backgroundColor: btnColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                        elevation: 0,
+                      ),
+                      child: Text("Done", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700)),
+                    ),
                   ),
-                  child: Text("Done", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700)),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

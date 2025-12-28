@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import '../../../../config/constants/colors.dart';
 
 class LoginHeader extends StatelessWidget {
@@ -17,23 +16,28 @@ class LoginHeader extends StatelessWidget {
           children: [
             // --- LOGO WITH GLOW ---
             Container(
-              padding: EdgeInsets.all(14.r),
+              height: 100.h,
+              width: 100.h,
+              padding: EdgeInsets.all(2.r), // Optional padding
               decoration: BoxDecoration(
                 color: KorraColors.brand,
-                borderRadius: BorderRadius.circular(20.r), // Softer, modern radius
+                borderRadius: BorderRadius.circular(20.r),
                 boxShadow: [
                   BoxShadow(
-                    color: KorraColors.brand.withOpacity(0.3), // The "Glow"
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
+                    color: KorraColors.brand.withOpacity(0.3),
+                    blurRadius: 4.r,
+                    offset: const Offset(0, 5),
                     spreadRadius: -4,
                   ),
                 ],
               ),
-              child: Icon(
-                MdiIcons.crown,
-                color: Colors.white,
-                size: 36.sp,
+              // 👇 WRAP IMAGE IN ClipRRect
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18.r), // Slightly less than container (20 - padding)
+                child: Image.asset(
+                  'assets/images/korra_logo_icon.webp',
+                  fit: BoxFit.cover, // Ensures it fills the clipped area without distortion
+                ),
               ),
             ),
             

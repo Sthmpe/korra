@@ -29,6 +29,7 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
         final result = await repo.fetchPlanPreview(
           customerUid: event.customerUid,
           productPrice: event.productPrice,
+          productId: event.productId,
         );
 
         // 2. Calculate Tier Logic Locally (Based on Price Table)

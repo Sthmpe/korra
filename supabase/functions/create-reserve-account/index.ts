@@ -53,10 +53,10 @@ serve(async (req) => {
       customerName: `${firstName} ${lastName}`,
       bvn: bvn,             // CORRECTED: 'bvn' not 'customerBvn'
       nin: nin,             // ADDED: Matches your example
-      getAllAvailableBanks: false, // Gets Wema, Moniepoint, etc.
-      preferredBanks: [
-        "50515"
-      ]
+      getAllAvailableBanks: true, // Gets Wema, Moniepoint, etc.
+      // preferredBanks: [
+      //   "50515"
+      // ]
       // restrictPaymentSource: false // Optional: Defaults to false
     }
 
@@ -89,7 +89,7 @@ serve(async (req) => {
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
     // 2. Prepare Ledger Entry
-    const ledgerRef = db.collection('customer').doc(uid).collection('ledger_transactions').doc();
+    const ledgerRef = db.collection('customers').doc(uid).collection('ledger_transactions').doc();
     const initialTx = {
       id: ledgerRef.id,
       customerId: uid,

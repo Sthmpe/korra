@@ -42,7 +42,7 @@ const handler = async (request: Request): Promise<Response> => {
       <body style="background-color:#f6f7fb; margin:0; padding:0;">
 
         <!-- Hidden preview -->
-        <div class="preheader">Welcome to Korra, the smart way to layaway for vendors and customers.</div>
+        <div class="preheader">Welcome to Korra, the smart way to reserve for vendors and customers.</div>
 
         <table role="presentation" width="100%" bgcolor="#f6f7fb" cellpadding="0" cellspacing="0">
           <tr>
@@ -57,7 +57,7 @@ const handler = async (request: Request): Promise<Response> => {
                 <!-- Logo -->
                 <tr>
                   <td align="center" style="padding:24px 0;">
-                    <img src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/Untitled%20design.webp" alt="Korra Logo" width="120" height="100">
+                    <img src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/korra_logo_icon.webp" alt="Korra Logo" width="120" height="100">
                   </td>
                 </tr>
 
@@ -108,7 +108,7 @@ const handler = async (request: Request): Promise<Response> => {
                 <tr>
                   <td style="padding:0 24px 20px 24px; text-align:center;">
                     <p style="margin:0; color:#64748b; font-size:11px; line-height:16px;">
-                      Need help? <a href="mailto:support@korra.com" style="color:#A54600; text-decoration:underline;">Contact Support</a> or call us at <strong>09152540533</strong>.
+                      Need help? <a href="mailto:support@korra.com.ng" style="color:#A54600; text-decoration:underline;">Contact Support</a> or call us at <strong>09152540533</strong>.
                     </p>
                   </td>
                 </tr>

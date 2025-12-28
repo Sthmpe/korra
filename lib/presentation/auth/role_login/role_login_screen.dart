@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 
-import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../logic/bloc/auth/role_login/role_login_event.dart';
@@ -14,11 +10,9 @@ import '../../../logic/bloc/auth/role_login/role_login_state.dart';
 import '../../customer/customer_shell.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../vendor/vendor_shell.dart';
-import 'widgets/biometric_button.dart';
 import 'widgets/login_button.dart';
 import 'widgets/login_fields.dart';
 import 'widgets/login_header.dart';
-import 'widgets/role_divider.dart';
 import 'widgets/role_selector.dart';
 
 class RoleLoginScreen extends StatelessWidget {

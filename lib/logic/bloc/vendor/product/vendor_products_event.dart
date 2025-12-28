@@ -51,27 +51,29 @@ class VendorProductsAdd extends VendorProductsEvent {
   final double price;
   final int stock;
   final String category;
-  final List<File> images;
+  final List<String> images;
+  final bool termsAccepted;
+  final ProductModelType modelType;
+  final String cancellationPolicy;
+  final bool extensionsEnabled;
+  final double? directDownPayment;
   
-  // ✅ NEW FIELDS FOR POLICY LOGIC
-  final ProductModelType modelType;       // Strict vs Direct
-  final String cancellationPolicy;        // "50% Refund", "Store Credit", etc.
-  final bool extensionsEnabled;           // True/False
-  final bool termsAccepted;               // Must be true
-  final double? directDownPayment;        // Only for Direct model
+  // ✅ ADD THIS: We pass the calculated duration explicitly
+  final int duration; 
 
-  const VendorProductsAdd({
+  VendorProductsAdd({
     required this.name,
     required this.description,
     required this.price,
     required this.stock,
     required this.category,
     required this.images,
+    required this.termsAccepted,
     required this.modelType,
     required this.cancellationPolicy,
     required this.extensionsEnabled,
-    required this.termsAccepted,
     this.directDownPayment,
+    required this.duration, // ✅ Add here
   });
 
   @override
@@ -82,11 +84,12 @@ class VendorProductsAdd extends VendorProductsEvent {
         stock,
         category,
         images,
+        termsAccepted,
         modelType,
         cancellationPolicy,
         extensionsEnabled,
-        termsAccepted,
         directDownPayment,
+        duration, // ✅ Add here
       ];
 }
 

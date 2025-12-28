@@ -9,7 +9,8 @@ import '../../../../config/utils/currency_formatters.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../../data/repository/customer/customer_repository.dart'; // For wallet stream
 import '../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
-import '../../topup_screen.dart'; // Adjust path
+import '../../../shared/widgets/show_app_snackbar.dart';
+import '../../profile/bank_details_screen.dart';
 
 void showPaySheet(BuildContext context, Plan p, CustomerRepository customerRepo) {
     showModalBottomSheet(
@@ -130,7 +131,14 @@ class PayConfirmationSheet extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.pop(context);
-                            Get.to(() => TopUpScreen(customer: snapshot.data));
+                            final customerData = snapshot.data;
+  
+                            if (customerData != null) {
+                              Get.to(() => BankDetailsScreen(customer: customerData));
+                            } else {
+                              // Optional: Show a message if data isn't ready
+                              showAppSnackbar("Please wait, data is loading...", SnackbarType.info);
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black, // Dark for "Action needed"

@@ -3,14 +3,17 @@ import 'package:flutter/services.dart'; // For Haptics
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:get/get.dart';
+import 'package:korra/presentation/customer/profile/bank_details_screen.dart';
 
 import '../../../../../config/constants/colors.dart';
 import '../../../../../data/models/customer/plans.dart';
 import '../../../../../data/repository/customer/customer_repository.dart';
 import '../../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
-import '../../topup_screen.dart';
+import '../../../../data/models/customer/payment_receipt_data.dart';
+import '../../../shared/widgets/show_app_snackbar.dart';
 import 'payment_result_screen.dart';
 
 class PayPlanInputScreen extends StatefulWidget {
@@ -24,11 +27,22 @@ class PayPlanInputScreen extends StatefulWidget {
 }
 
 class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
-  // We manage the raw string manually (e.g. "1200.5")
   String _inputString = ""; 
-  
-  // Format for the INTEGER part only
-  final _intFormat = NumberFormat("#,##0", "en_US");
+  final _moneyFormat = NumberFormat("#,##0.##", "en_US");
+
+  // ✅ HELPER 1: Paid Amount (Standard 2DP Display)
+  // Prevents long decimals like 5000.333333
+  double _clipAmount(double amount) {
+    return double.parse(amount.toStringAsFixed(2));
+  }
+
+  // ✅ HELPER 2: Remaining Balance (Always Round UP)
+  // Ensures you don't lose 0.01 due to rounding down.
+  // 33.333 -> 33.34
+  double _roundUpAmount(double amount) {
+    if (amount == 0) return 0;
+    return (amount * 100).ceil() / 100;
+  }
 
   @override
   void initState() {
@@ -37,7 +51,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     double initial = widget.plan.nextAmount;
     if (initial > widget.plan.amountRemaining) initial = widget.plan.amountRemaining;
     
-    // Convert to string, removing trailing .0 if it's a whole number
+    // Format initial value
     if (initial % 1 == 0) {
       _inputString = initial.toInt().toString();
     } else {
@@ -45,53 +59,38 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     }
   }
 
-  // --- 2. DISPLAY FORMATTER (The Engineering Magic) ---
-  // This ensures "1000." shows as "1,000." and "1000.5" shows as "1,000.5"
   String get _displayValue {
     if (_inputString.isEmpty) return "0";
-    
     List<String> parts = _inputString.split('.');
     String integerPart = parts[0];
-    
-    // Format the integer part with commas
-    String formattedInt = integerPart.isEmpty ? "0" : _intFormat.format(int.parse(integerPart));
+    String formattedInt = integerPart.isEmpty ? "0" : _moneyFormat.format(int.parse(integerPart));
 
     if (parts.length > 1) {
-      return "$formattedInt.${parts[1]}"; // Add decimal part back exactly as typed
+      return "$formattedInt.${parts[1]}";
     } else if (_inputString.endsWith('.')) {
-      return "$formattedInt."; // Handle trailing dot
+      return "$formattedInt.";
     }
-    
     return formattedInt;
   }
 
-  // Helper: Get actual double value for logic
   double get _currentAmount => double.tryParse(_inputString) ?? 0.0;
 
-  // --- 3. KEYPAD LOGIC ---
+  // --- KEYPAD LOGIC (Unchanged) ---
   void _onKeyTap(String value) {
     HapticFeedback.lightImpact(); 
-
-    // Handle Decimal Point
     if (value == '.') {
-      if (_inputString.contains('.')) return; // Prevent double dots
+      if (_inputString.contains('.')) return;
       setState(() => _inputString += value);
       return;
     }
-
-    // Handle Numbers
-    // A. Check Max Length (to prevent UI overflow)
     if (!_inputString.contains('.') && _inputString.length >= 9) return; 
-
-    // B. Check Decimal Precision (Max 2 decimal places)
     if (_inputString.contains('.')) {
       String decimalPart = _inputString.split('.')[1];
-      if (decimalPart.length >= 2) return; // Block input if already 2dp
+      if (decimalPart.length >= 2) return;
     }
-
     setState(() {
       if (_inputString == "0" && value != '.') {
-        _inputString = value; // Replace initial 0
+        _inputString = value;
       } else {
         _inputString += value;
       }
@@ -108,6 +107,34 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     }
   }
 
+  double get _smartTargetAmount {
+    // 1. If backend has a valid specific target, use it.
+    if (widget.plan.nextAmount > 0) return widget.plan.nextAmount;
+
+    // 2. Otherwise, calculate based on cadence (Weekly/Monthly)
+    double total = widget.plan.outstandingLoanAmount;
+    if (total <= 0) return 0;
+
+    int daysRemaining = widget.plan.planExpiryDate.difference(DateTime.now()).inDays;
+    if (daysRemaining <= 0) return total; // Overdue? Pay all.
+
+    // Determine interval (e.g., 30 days for monthly, 7 for weekly)
+    int intervalDays = 30; 
+    if (widget.plan.cadenceType == 'weekly') intervalDays = 7;
+    if (widget.plan.cadenceType == 'bi-weekly') intervalDays = 14;
+    if (widget.plan.cadenceType == 'daily') intervalDays = 1;
+
+    // How many payments are left?
+    double intervalsLeft = daysRemaining / intervalDays;
+    if (intervalsLeft < 1) intervalsLeft = 1;
+
+    // Amount per interval
+    double calculated = total / intervalsLeft;
+
+    // Round to nearest 100 for a cleaner number (e.g., 4322 -> 4400)
+    return (calculated / 100).ceil() * 100.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -116,11 +143,14 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
         listener: (context, state) {
           if (state.status == PayPlanStatus.success) {
             final isFinished = (_currentAmount + widget.plan.amountPaid) >= widget.plan.totalAmount;
+            
+            // ✅ Success Logic
             Get.off(() => PaymentResultScreen(
               isSuccess: true, 
               isPlanCompleted: isFinished, 
               amount: _currentAmount,
               planName: widget.plan.title,
+              fullReceiptData: state.receiptData ?? PaymentReceiptData.fromPartial(amount: _currentAmount, date: DateTime.now(), title: widget.plan.title),
             ));
           } else if (state.status == PayPlanStatus.failure) {
             Get.off(() => PaymentResultScreen(
@@ -128,6 +158,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
               errorMessage: state.errorMessage,
               amount: _currentAmount,
               planName: widget.plan.title,
+              fullReceiptData: state.receiptData ?? PaymentReceiptData.fromPartial(amount: _currentAmount, date: DateTime.now(), title: widget.plan.title),
             ));
           }
         },
@@ -147,129 +178,176 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     );
   }
 
+  // =========================================================
+  // ✅ THE UPDATED MAIN CONTENT
+  // =========================================================
   Widget _buildMainContent(BuildContext context) {
+    // 1. Stream Wallet (Main Doc)
     return StreamBuilder(
       stream: widget.repo.streamCustomer(widget.plan.customerId),
-      builder: (context, snapshot) {
-        final walletBal = snapshot.data?.availableBalance ?? 0.0;
+      builder: (context, snapshotCust) {
+        final walletBal = snapshotCust.data?.availableBalance ?? 0.0;
         
-        final bool isOverBalance = _currentAmount > walletBal;
-        final bool isOverRemaining = _currentAmount > widget.plan.amountRemaining;
-        final bool isValid = _currentAmount > 0 && !isOverBalance && !isOverRemaining;
+        // 2. Stream Store Credit (Vendor Relation)
+        // Make sure your repo has this method, fetching from: 
+        // customers/{uid}/vendor_relations/{vendorId}/storeCredit
+        return StreamBuilder<double>(
+          stream: widget.repo.streamStoreCredit(widget.plan.customerId, widget.plan.vendorId),
+          initialData: 0.0,
+          builder: (context, snapshotCredit) {
+            final storeCredit = snapshotCredit.data ?? 0.0;
+            
+            // ✅ Logic: Combine Powers
+            final totalAvailable = walletBal + storeCredit;
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            leading: const BackButton(color: Colors.black),
-          ),
-          body: Column(
-            children: [
-              Text(
-                "Paying for ${widget.plan.title}",
-                style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 13.sp, fontWeight: FontWeight.w500),
+            final bool isOverBalance = _currentAmount > totalAvailable;
+            final bool isOverRemaining = _currentAmount > _roundUpAmount(widget.plan.amountRemaining);
+            // Allow 0.001 tolerance for floating point math
+            final bool isValid = _currentAmount > 0 && !isOverBalance && !isOverRemaining; 
+
+            return Scaffold(
+              backgroundColor: Colors.white,
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                leading: const BackButton(color: Colors.black),
               ),
-              
-              const Spacer(),
+              body: Column(
+                children: [
+                  Text(
+                    "Paying for ${widget.plan.title}",
+                    style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 13.sp, fontWeight: FontWeight.w500),
+                  ),
+                  
+                  const Spacer(),
 
-              // --- BIG DISPLAY (Uses _displayValue) ---
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 40.w),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        "₦", 
-                        style: GoogleFonts.inter(
-                          fontSize: 32.sp, 
-                          fontWeight: FontWeight.w500, 
-                          color: Colors.grey.shade400
-                        )
+                  // --- BIG DISPLAY ---
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 40.w),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text("₦", style: GoogleFonts.inter(fontSize: 32.sp, fontWeight: FontWeight.w500, color: Colors.grey.shade400)),
+                          SizedBox(width: 4.w),
+                          Text(
+                            _displayValue, 
+                            style: GoogleFonts.inter(
+                              fontSize: 56.sp,
+                              fontWeight: FontWeight.w700, 
+                              color: const Color(0xFF101828),
+                              letterSpacing: -1.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: 4.w),
-                      Text(
-                        _displayValue, // ✅ Using the smart formatted getter
-                        style: GoogleFonts.inter(
-                          fontSize: 56.sp,
-                          fontWeight: FontWeight.w700, 
-                          color: const Color(0xFF101828),
-                          letterSpacing: -1.5,
+                    ),
+                  ),
+
+                  SizedBox(height: 12.h),
+
+                  // --- ✅ SMART STATUS PILLS ---
+                  if (isOverBalance)
+                    // Logic: Even if they have credit, if total is low, show total shortfall
+                    _buildStatusPill(
+                      Icons.error_outline, 
+                      "Insufficient Funds (Total: ₦${_moneyFormat.format(_clipAmount(totalAvailable))})", 
+                      Colors.red.shade50, 
+                      Colors.red
+                    )
+                  else if (isOverRemaining)
+                    _buildStatusPill(Icons.warning_amber, "Exceeds remaining balance", Colors.orange.shade50, Colors.orange.shade800)
+                  else
+                    // ✅ Logic: Show split view if Store Credit exists
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildStatusPill(
+                          Icons.account_balance_wallet, 
+                          "Wallet: ₦${_moneyFormat.format(_clipAmount(walletBal))}", 
+                          const Color(0xFFF2F4F7), 
+                          const Color(0xFF344054)
+                        ),
+                        if (storeCredit > 0) ...[
+                          SizedBox(width: 8.w),
+                          _buildStatusPill(
+                            Iconsax.shop, // Shop icon for Store Credit
+                            "Credit: ₦${_moneyFormat.format(_clipAmount(storeCredit))}", 
+                            const Color(0xFFECFDF3), // Light Green
+                            const Color(0xFF027A48)  // Dark Green
+                          ),
+                        ]
+                      ],
+                    ),
+
+                  const Spacer(),
+
+                  // CHIPS (With Date Logic)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildChip(
+                          "Suggested Goal", 
+                          _roundUpAmount(_smartTargetAmount) 
+                        ),
+                        SizedBox(width: 12.w),
+                        _buildChip("Full Balance", _roundUpAmount(widget.plan.amountRemaining)),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 24.h),
+
+                  // KEYPAD
+                  _buildKeypad(),
+
+                  SizedBox(height: 16.h),
+
+                  // ACTION BUTTON
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 56.h,
+                      child: FilledButton(
+                        onPressed: () {
+                          if (isOverBalance) {
+                            final customerData = snapshotCust.data;
+                            if (customerData == null) {
+                              showAppSnackbar('Please wait, data is loading...', SnackbarType.info);
+                              return;
+                            }
+                            Get.to(() => BankDetailsScreen(customer: customerData));
+                          } else if (isValid) {
+                            context.read<PayPlanBloc>().add(PayInstallmentConfirmed(
+                              planId: widget.plan.id,
+                              customerUid: widget.plan.customerId,
+                              amount: _currentAmount,
+                            ));
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: isOverBalance ? Colors.black : KorraColors.brand,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          isOverBalance ? "Top Up Wallet" : "Confirm Pay",
+                          style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-
-              SizedBox(height: 12.h),
-
-              if (isOverBalance)
-                _buildStatusPill(Icons.error_outline, "Insufficient Wallet Balance", Colors.red.shade50, Colors.red)
-              else if (isOverRemaining)
-                _buildStatusPill(Icons.warning_amber, "Exceeds remaining balance", Colors.orange.shade50, Colors.orange.shade800)
-              else
-                _buildStatusPill(Icons.account_balance_wallet, "Balance: ₦${_intFormat.format(walletBal)}", const Color(0xFFF2F4F7), const Color(0xFF344054)),
-
-              const Spacer(),
-
-              // CHIPS
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.w),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildChip("Next Due", widget.plan.nextAmount),
-                    SizedBox(width: 12.w),
-                    _buildChip("Full Balance", widget.plan.amountRemaining),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 24.h),
-
-              // KEYPAD
-              _buildKeypad(),
-
-              SizedBox(height: 16.h),
-
-              // ACTION BUTTON
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.w),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56.h,
-                  child: FilledButton(
-                    onPressed: () {
-                      if (isOverBalance) {
-                        Get.to(() => TopUpScreen(customer: snapshot.data));
-                      } else if (isValid) {
-                        context.read<PayPlanBloc>().add(PayInstallmentConfirmed(
-                          planId: widget.plan.id,
-                          customerUid: widget.plan.customerId,
-                          amount: _currentAmount,
-                        ));
-                      }
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: isOverBalance ? Colors.black : KorraColors.brand,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      isOverBalance ? "Top Up Wallet" : "Confirm Pay",
-                      style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),
                     ),
                   ),
-                ),
+                  SizedBox(height: 20.h),
+                ],
               ),
-              SizedBox(height: 20.h),
-            ],
-          ),
+            );
+          }
         );
       }
     );
@@ -290,12 +368,13 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     );
   }
 
+  // Updated Chip to handle Dates
   Widget _buildChip(String label, double amount) {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
         setState(() {
-          // Reset string to exact amount (removing trailing .0 if integer)
+          // Smart Format: If it's 5000.0, use "5000", else "5000.50"
           if (amount % 1 == 0) {
             _inputString = amount.toInt().toString();
           } else {
@@ -309,18 +388,36 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0,2))]
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
+          ]
         ),
         child: Column(
           children: [
-            Text(label, style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-            Text("₦${_intFormat.format(amount)}", style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
+            Text(
+              label, 
+              style: GoogleFonts.inter(
+                fontSize: 11.sp, 
+                color: Colors.grey.shade500, 
+                fontWeight: FontWeight.w500
+              )
+            ),
+            SizedBox(height: 2.h),
+            Text(
+              "₦${_moneyFormat.format(amount)}", 
+              style: GoogleFonts.inter(
+                fontSize: 13.sp, 
+                fontWeight: FontWeight.w700, 
+                color: const Color(0xFF101828)
+              )
+            ),
           ],
         ),
       ),
     );
   }
-
+  
+  // ... (Keypad code remains unchanged)
   Widget _buildKeypad() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -367,3 +464,4 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     );
   }
 }
+

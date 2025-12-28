@@ -42,6 +42,20 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
     final metaH  = 136.h;
     final totalH = imageH + metaH + 24.h;
 
+    // ✅ HELPER 1: Paid Amount (Standard 2DP Display)
+    // Prevents long decimals like 5000.333333
+    double _clipAmount(double amount) {
+      return double.parse(amount.toStringAsFixed(2));
+    }
+
+    // ✅ HELPER 2: Remaining Balance (Always Round UP)
+    // Ensures you don't lose 0.01 due to rounding down.
+    // 33.333 -> 33.34
+    double _roundUpAmount(double amount) {
+      if (amount == 0) return 0;
+      return (amount * 100).ceil() / 100;
+    }
+
     return Column(
       children: [
         // 2. The Slider
@@ -69,7 +83,11 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
             itemBuilder: (context, i, realIndex) {
               final p = widget.plans[i];
               
-              final String dueText = "Due ${p.nextDueDate.day}/${p.nextDueDate.month}"; 
+              final String dueText = "Next milestone ${p.nextDueDate.day}/${p.nextDueDate.month}"; 
+
+              debugPrint("Rendering Plan Card: ${p.title}, Due: $dueText");
+              debugPrint("  Amount Paid: ${p.amountPaid}, Remaining: ${p.amountRemaining}");
+              
               
               return Padding(
                 padding: EdgeInsets.only(
@@ -84,8 +102,8 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
                   title: p.title,
                   storeName: p.storeName,
                   progressPercent: p.progressPercent.toInt(), 
-                  amountPaid: p.amountPaid,
-                  amountRemain: p.amountRemaining,
+                  amountPaid: _clipAmount(p.amountPaid),
+                  amountRemain: _roundUpAmount(p.amountRemaining),
                   cadenceText: p.cadenceType != null 
                       ? "${p.cadenceType![0].toUpperCase()}${p.cadenceType!.substring(1)} Plan"
                       : "Flexible Plan",

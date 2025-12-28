@@ -80,7 +80,18 @@ serve(async (req) => {
       lastUpdated: timestamp
     });
 
-    // 4. Create Empty Payout Details Doc
+    // 4. 🆕 Initialize COMPLIANCE DOC (New Collection)
+    const complianceRef = db.collection('vendor_compliance').doc(uid);
+    batch.set(complianceRef, {
+      uid: uid,
+      livenessCheckPassed: false,
+      livenessBypass: true, // ✅ Default to TRUE (Bypass ON)
+      livenessMatchPercentage: 0.0,
+      lastCheckDate: null,
+      updatedAt: timestamp
+    });
+
+    // 5. Create Empty Payout Details Doc
     const payoutRef = db.collection('vendors').doc(uid).collection('settings').doc('payout_details');
     batch.set(payoutRef, {
       bankName: null,
@@ -88,6 +99,17 @@ serve(async (req) => {
       accountName: null,
       bankCode: null,
       updatedAt: timestamp
+    });
+
+    // 6. 🆕 Send WELCOME Notification (In-App)
+    const notifRef = db.collection('vendors').doc(uid).collection('notifications').doc();
+    batch.set(notifRef, {
+      id: notifRef.id,
+      title: "Welcome to Korra Business! 🚀",
+      body: "Your vendor account is active. Complete your verification to start accepting payments.",
+      type: "system",
+      isRead: false,
+      createdAt: timestamp
     });
 
     await batch.commit();

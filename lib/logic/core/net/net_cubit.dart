@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// Traffic light for the app:
@@ -137,6 +138,8 @@ class NetCubit extends Cubit<NetState> {
 
   /// Very small, reliable 204 probes (no hosting needed).
   Future<bool> _probeInternet() async {
+    if (kIsWeb) return true;
+    
     const urls = <String>[
       'https://www.google.com/generate_204',
       'https://clients3.google.com/generate_204',

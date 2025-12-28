@@ -1,3 +1,5 @@
+// lib/data/models/customer/activity_item.dart
+
 import 'package:flutter/material.dart';
 
 enum ActivityType { payment, dueSoon, link, autopay, expired, milestone }
@@ -6,18 +8,19 @@ class ActivityItem {
   final String id;
   final String title;
   
-  // 1. The Rich Text Spans for the subtitle
+  // Rich Text for "You paid N5,000..."
   final List<TextSpan> richSubtitle; 
   
-  // 2. The Simple Amount string for the trailing side (e.g. "- ₦5,000")
+  // Simple string for "- ₦5,000"
   final String amountDisplay; 
   
-  // 3. For navigation logic (to open receipt/plan)
   final String? planId; 
-  final DateTime date; // Renamed from timestamp for clarity in UI code
-  final double amount; // Raw amount for math if needed
-
+  final DateTime date; 
+  final double amount; 
   final ActivityType type;
+
+  // ✅ NEW: Carry the full receipt snapshot if available
+  final Map<String, dynamic>? receiptData;
 
   const ActivityItem({
     required this.id,
@@ -28,5 +31,6 @@ class ActivityItem {
     required this.amount,
     required this.type,
     this.planId,
+    this.receiptData,
   });
 }

@@ -1,3 +1,4 @@
+//import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -10,9 +11,13 @@ import 'config/constants/prefs_keys.dart';
 import 'firebase_options.dart';
 import 'korra_app.dart';
 import 'logic/core/net/net_cubit.dart';
+import 'logic/core/update/update_cubit.dart';
 import 'presentation/auth/role_login/role_login_screen.dart';
 import 'presentation/customer/customer_shell.dart';
 import 'presentation/vendor/vendor_shell.dart';
+
+const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,18 +33,34 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // // Initialize App Check
+  // await FirebaseAppCheck.instance.activate(
+  //   // specific for Android debug builds
+  //   androidProvider: AndroidProvider.debug, 
+    
+  //   // specific for iOS/Web if needed
+  //   appleProvider: AppleProvider.debug, 
+  // );
+
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    throw Exception("Supabase Keys not found! Did you run with --dart-define?");
+  }
+
   await Supabase.initialize(
-    url: 'https://ltytmqjpektcgwajfzfm.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0eXRtcWpwZWt0Y2d3YWpmemZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NzAxNDgsImV4cCI6MjA3MjM0NjE0OH0.ABKFE8k0pPxgieXYd5sKUkeymtjLImS0pDbwN-6TQlc',
-    debug: true,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+    debug: false, // Turn off debug for release
   );
 
   // Determine the starting screen asynchronously before running the app.
   final startScreen = await _getStartScreen();
 
   runApp(
-    BlocProvider(
-      create: (_) => NetCubit()..start(),
+    MultiBlocProvider( 
+      providers: [
+        BlocProvider(create: (_) => NetCubit()..start()),
+        BlocProvider(create: (_) => UpdateCubit()), 
+      ],
       child: KorraApp(startScreen: startScreen),
     ),
   );

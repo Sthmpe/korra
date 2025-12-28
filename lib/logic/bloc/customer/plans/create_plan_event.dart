@@ -10,7 +10,8 @@ abstract class CreatePlanEvent extends Equatable {
 class LoadPlanPreview extends CreatePlanEvent {
   final double productPrice;
   final String customerUid;
-  LoadPlanPreview(this.productPrice, this.customerUid);
+  final String productId;
+  LoadPlanPreview(this.productPrice, this.customerUid, this.productId);
 }
 
 class ConfirmPlanCreation extends CreatePlanEvent {

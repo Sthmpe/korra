@@ -348,8 +348,8 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     try {
       final existsInVendors = await _vendorsRepo.checkCollectionForEmail('vendors', email);
-      final existsInCustomer = await _vendorsRepo.checkCollectionForEmail('customer', email);
-      debugPrint("Email exist in customer: $existsInCustomer");
+      final existsInCustomer = await _vendorsRepo.checkCollectionForEmail('customers', email);
+      debugPrint("Email exist in customers: $existsInCustomer");
       debugPrint("Email exist in vendors: $existsInVendors");
       if (existsInCustomer || existsInVendors) {
         emit(state.copyWith(

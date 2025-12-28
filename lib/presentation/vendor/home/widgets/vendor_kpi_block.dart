@@ -5,70 +5,77 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 class VendorKpiBlock extends StatelessWidget {
-  final String newCount, ongoingCount, completedCount, cancelledCount;
-  final VoidCallback? onTapNew, onTapOngoing, onTapCompleted, onTapCancelled;
+  final String newCount, ongoingCount, readyCount, completedCount;
+  final VoidCallback? onTapNew, onTapOngoing, onTapReady, onTapCompleted;
 
   const VendorKpiBlock({
     super.key,
     required this.newCount,
     required this.ongoingCount,
+    required this.readyCount,     // ✅ Swapped Cancelled for Ready
     required this.completedCount,
-    required this.cancelledCount,
     required this.onTapNew,
     required this.onTapOngoing,
+    required this.onTapReady,     // ✅
     required this.onTapCompleted,
-    required this.onTapCancelled,
   });
 
+  factory VendorKpiBlock.empty() {
+    return const VendorKpiBlock(
+      newCount: "0", ongoingCount: "0", readyCount: "0", completedCount: "0",
+      onTapNew: null, onTapOngoing: null, onTapReady: null, onTapCompleted: null,
+    );
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w), // Aligned with other cards
+      padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Column(
         children: [
-          // Row 1: New & Ongoing
+          // Row 1: Ready (High Priority) & New
           Row(
             children: [
               _buildBigTile(
-                label: 'New',
-                value: newCount,
-                color: const Color(0xFFA54600), // Brand
-                bg: const Color(0xFFFFF7ED),    // Warm Orange
-                icon: Iconsax.flash_1,
-                onTap: onTapNew,
+                label: 'Ready to Pickup',
+                value: readyCount,
+                color: const Color(0xFF027A48), // Success Green
+                bg: const Color(0xFFECFDF5),
+                icon: Iconsax.box_tick,
+                onTap: onTapReady,
               ),
               SizedBox(width: 12.w),
               _buildBigTile(
-                label: 'Ongoing',
-                value: ongoingCount,
-                color: const Color(0xFF0284C7), // Sky Blue
-                bg: const Color(0xFFF0F9FF),
-                icon: Iconsax.timer_1,
-                onTap: onTapOngoing,
+                label: 'New Orders',
+                value: newCount,
+                color: const Color(0xFFA54600), // Brand
+                bg: const Color(0xFFFFF7ED),    
+                icon: Iconsax.flash_1,
+                onTap: onTapNew,
               ),
             ],
           ),
           SizedBox(height: 12.h),
           
-          // Row 2: Completed & Cancelled
+          // Row 2: Ongoing & Completed (History)
           Row(
             children: [
               _buildBigTile(
-                label: 'Completed',
-                value: completedCount,
-                color: const Color(0xFF059669), // Emerald Green
-                bg: const Color(0xFFECFDF5),
-                icon: Iconsax.tick_circle,
-                onTap: onTapCompleted,
+                label: 'Ongoing',
+                value: ongoingCount,
+                color: const Color(0xFF0284C7), // Blue
+                bg: const Color(0xFFF0F9FF),
+                icon: Iconsax.timer_1,
+                onTap: onTapOngoing,
               ),
               SizedBox(width: 12.w),
               _buildBigTile(
-                label: 'Cancelled',
-                value: cancelledCount,
-                color: const Color(0xFFDC2626), // Red
-                bg: const Color(0xFFFEF2F2),
-                icon: Iconsax.close_circle,
-                onTap: onTapCancelled,
+                label: 'History',
+                value: completedCount,
+                color: const Color(0xFF475467), // Grey
+                bg: const Color(0xFFF2F4F7),
+                icon: Iconsax.clock,
+                onTap: onTapCompleted,
               ),
             ],
           ),
@@ -89,7 +96,7 @@ class VendorKpiBlock extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20.r),
+          borderRadius: BorderRadius.circular(16.r),
           onTap: () {
             HapticFeedback.lightImpact();
             onTap?.call();
@@ -98,12 +105,12 @@ class VendorKpiBlock extends StatelessWidget {
             padding: EdgeInsets.all(16.r),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20.r),
+              borderRadius: BorderRadius.circular(16.r),
               border: Border.all(color: Colors.grey.shade100),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03), 
-                  blurRadius: 10, 
+                  color: const Color(0xFF101828).withOpacity(0.04), 
+                  blurRadius: 12, 
                   offset: const Offset(0, 4)
                 ),
               ],
@@ -114,7 +121,6 @@ class VendorKpiBlock extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Icon Badge
                     Container(
                       padding: EdgeInsets.all(8.r),
                       decoration: BoxDecoration(
@@ -123,7 +129,11 @@ class VendorKpiBlock extends StatelessWidget {
                       ),
                       child: Icon(icon, size: 18.sp, color: color),
                     ),
-                    // Optional arrow or indicator could go here
+                    if (value != '0')
+                      Container(
+                        width: 6.w, height: 6.w,
+                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                      )
                   ],
                 ),
                 SizedBox(height: 16.h),
@@ -132,7 +142,7 @@ class VendorKpiBlock extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 24.sp,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1F2937),
+                    color: const Color(0xFF101828),
                     height: 1.0,
                   ),
                 ),

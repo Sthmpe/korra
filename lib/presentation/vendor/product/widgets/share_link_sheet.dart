@@ -1,27 +1,29 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart'; // Using Iconsax for consistency
+import 'package:iconsax/iconsax.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../../../config/constants/colors.dart'; // Ensure KorraColors is imported
+import '../../../../config/constants/colors.dart';
+import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
+import 'product_share_card.dart'; // Import the new card file
 
 class ShareLinkSheet extends StatefulWidget {
-  final String productName;
-  final String token; // in-app token, not a URL
+  final ProductItem product;
 
   const ShareLinkSheet({
     super.key,
-    required this.productName,
-    required this.token,
+    required this.product,
   });
 
-  static Future<void> show(
-    BuildContext context, {
-    required String productName,
-    required String token,
-  }) {
+  static Future<void> show(BuildContext context, ProductItem product) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -29,7 +31,7 @@ class ShareLinkSheet extends StatefulWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
-      builder: (_) => ShareLinkSheet(productName: productName, token: token),
+      builder: (_) => ShareLinkSheet(product: product),
     );
   }
 
@@ -38,207 +40,128 @@ class ShareLinkSheet extends StatefulWidget {
 }
 
 class _ShareLinkSheetState extends State<ShareLinkSheet> {
-  // Using consistent brand colors
-  static const _brand = KorraColors.brand; 
-  static const _hair = Color(0xFFEAE6E2);
+  final GlobalKey _repaintKey = GlobalKey();
+  bool _isSharing = false;
 
-  bool _copied = false;
+  // --- 📸 CAPTURE AND SHARE LOGIC ---
+  Future<void> _shareImage() async {
+    setState(() => _isSharing = true);
 
-  String get _code => 'KORRA: ${widget.token}';
-  String get _shareUrl => widget.token; // This acts as the deep link code
+    try {
+      // 1. Wait a tiny bit to ensure the widget is fully painted (images loaded)
+      await Future.delayed(const Duration(milliseconds: 100));
 
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: _code));
-    HapticFeedback.selectionClick();
-    if (!mounted) return;
-    setState(() => _copied = true);
-    await Future.delayed(const Duration(milliseconds: 1100));
-    if (mounted) setState(() => _copied = false);
-  }
+      // 2. Capture the RenderObject
+      RenderRepaintBoundary? boundary =
+          _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
 
-  Future<void> _share() async {
-    final message =
-        'Reserve this product now on Korra!\nProduct: ${widget.productName}\nCode: $_shareUrl\n\nOpen Korra and paste this code to view.';
+      if (boundary == null) return;
 
-    final param = ShareParams(
-      text: message,
-      title: 'Share Product Code', // More specific title
-    );
+      // 3. Convert to Image Data (3.0x pixel ratio for high quality)
+      ui.Image image = await boundary.toImage(pixelRatio: 5.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      Uint8List pngBytes = byteData!.buffer.asUint8List();
 
-    // Using the static method directly
-    await Share.share(param.text, subject: param.title); 
+      // 4. Save to Temporary File
+      final directory = await getTemporaryDirectory();
+      final imagePath = await File('${directory.path}/korra_${widget.product.code}.png').create();
+      await imagePath.writeAsBytes(pngBytes);
+
+      // 5. Share via System Sheet
+      final caption = "🔥 New Drop Alert!\n"
+          "${widget.product.name} — ${widget.product.priceText}\n"
+          "Don't wait. Lock this price now on Korra.\n\n"
+          "Code: *${widget.product.code}*";
+
+      await Share.shareXFiles(
+        [XFile(imagePath.path)],
+        text: caption,
+      );
+      
+      // Optional: Close sheet after successful share
+      // if (mounted) Navigator.pop(context); 
+
+    } catch (e) {
+      debugPrint("Share Error: $e");
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 24.h + bottom), // Adjusted padding
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 30.h),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Drag Handle
-          Center(
-            child: Container(
-              width: 40.w,
-              height: 4.h,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2.r),
-              ),
+          Container(
+            width: 40.w,
+            height: 4.h,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2.r),
+            ),
+          ),
+          SizedBox(height: 20.h),
+
+          Text(
+            "Share Product",
+            style: GoogleFonts.inter(
+              fontSize: 18.sp, 
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF101828),
             ),
           ),
           SizedBox(height: 24.h),
 
-          // 2. Title Row
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(10.r),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF4ED), // Light orange bg
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                child: Icon(Iconsax.link_2, color: _brand, size: 24.sp),
-              ),
-              SizedBox(width: 14.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Share Product',
-                      style: GoogleFonts.inter(
-                        fontSize: 18.sp,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF101828),
-                      ),
-                    ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      widget.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        color: const Color(0xFF667085),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Icon(Icons.close, size: 22.sp, color: Colors.grey),
-              ),
-            ],
-          ),
-
-          SizedBox(height: 32.h),
-
-          // 3. Code Display Area (Tap to Copy)
-          GestureDetector(
-            onTap: _copy,
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFEAECF0)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Iconsax.copy, size: 20.sp, color: Colors.grey.shade600),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Text(
-                      _code,
-                      style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF101828),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _copied
-                        ? Row(
-                            key: const ValueKey('copied'),
-                            children: [
-                              Icon(Iconsax.tick_circle, color: Colors.green, size: 18.sp),
-                              SizedBox(width: 4.w),
-                              Text(
-                                "Copied",
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            "Tap to copy",
-                            key: const ValueKey('tap'),
-                            style: GoogleFonts.inter(
-                              fontSize: 12.sp,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                  ),
-                ],
+          // 2. THE FLYER CARD (We render it here so user sees what they share)
+          // We wrap it in a scroll view just in case the screen is small
+          Flexible(
+            child: SingleChildScrollView(
+              child: ProductShareCard(
+                product: widget.product,
+                repaintKey: _repaintKey,
               ),
             ),
           ),
 
-          SizedBox(height: 24.h),
+          SizedBox(height: 30.h),
 
-          // 4. Primary Share Button
+          // 3. SHARE BUTTON
           SizedBox(
             width: double.infinity,
             height: 52.h,
             child: FilledButton.icon(
-              onPressed: _share,
+              onPressed: _isSharing ? null : _shareImage,
               style: FilledButton.styleFrom(
-                backgroundColor: _brand,
+                backgroundColor: KorraColors.brand,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
                 elevation: 0,
               ),
-              icon: Icon(Iconsax.share, size: 20.sp),
+              icon: _isSharing
+                  ? Container(
+                      width: 20, height: 20, 
+                      child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    )
+                  : Icon(Iconsax.share, size: 22.sp),
               label: Text(
-                "Share Code",
+                _isSharing ? "Generating..." : "Share Image",
                 style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),
               ),
             ),
           ),
-
-          SizedBox(height: 16.h),
-
-          // 5. Helper Text
-          Center(
-            child: Text(
-              'Customers enter this code in the Korra app to find your product.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 12.sp,
-                color: const Color(0xFF667085),
-                height: 1.4,
-              ),
-            ),
-          ),
+          
+          SizedBox(height: 12.h),
+          
+          // 4. Cancel
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel", style: GoogleFonts.inter(color: Colors.grey)),
+          )
         ],
       ),
     );
   }
-}
-
-class ShareParams {
-  final String text;
-  final String title;
-  ShareParams({required this.text, required this.title});
 }

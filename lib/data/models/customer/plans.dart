@@ -69,6 +69,12 @@ class Plan {
   final String cancellationPolicy;
   final String customerName;
   final String customerPhone; 
+  final String modelType;
+
+  final DateTime? extensionStartDate;
+  final String? pickupCode; // Null until completed
+  final DateTime? fulfilledAt; // Null until picked up
+  final DateTime? completedAt; // When payment finished
 
   const Plan({
     required this.id,
@@ -107,6 +113,11 @@ class Plan {
 
     this.customerName = '',
     this.customerPhone = '',
+    this.modelType = 'direct',
+    this.extensionStartDate,
+    this.pickupCode,
+    this.fulfilledAt,
+    this.completedAt,
   });
 
   // =========================================================
@@ -138,6 +149,7 @@ class Plan {
     required int baseDurationDays, 
     required int noticeDays, 
     required int extensionDays, 
+    required String modelType,
   }) {
     final now = DateTime.now();
 
@@ -194,6 +206,7 @@ class Plan {
 
       status: (totalUpfrontPaid >= totalProductPrice) ? 'completed' : 'active',
       cancellationPolicy: cancellationPolicy, // ✅ Saved
+      modelType: modelType,
     );
   }
 
@@ -202,18 +215,42 @@ class Plan {
   // =========================================================
 
   double get progressPercent =>
-      totalAmount == 0 ? 0 : ((amountPaid / totalAmount).clamp(0, 1) * 100);
+      totalAmount == 0 ? 0 : ((amountPaid / totalAmount).clamp(0.0, 1.0) * 100);
 
   double get amountRemaining =>
-      (totalAmount - amountPaid).clamp(0, totalAmount);
+      (totalAmount - amountPaid).clamp(0.0, totalAmount);
 
-  bool get isOverdue =>
-      DateTime.now().isAfter(nextDueDate) &&
-      status != 'completed' &&
-      status != 'cancelled';
+  // 1. Is Extension Active? (Only true if date exists in DB)
+  bool get isExtensionActive => extensionStartDate != null;
 
+  // 2. Effective Deadline Logic
+  DateTime get effectiveDeadline {
+    if (isExtensionActive) {
+      // If extended, deadline = Extension Start + Grace Days
+      return extensionStartDate!.add(Duration(days: extensionGraceDays));
+    }
+    // Otherwise, normal expiry
+    return planExpiryDate;
+  }
+
+  // 3. Overdue Logic (Uses Effective Deadline)
+  bool get isOverdue {
+    if (status != 'active') return false;
+    return DateTime.now().isAfter(effectiveDeadline);
+  }
+
+  // 4. UI Protection Logic
+  bool get isEffectivelyTerminated {
+    if (status == 'cancelled') return true;
+    // If active but past the absolute limit, treat as terminated
+    if (status == 'active' && DateTime.now().isAfter(effectiveDeadline)) {
+      return true;
+    }
+    return false;
+  }
+  
   bool get isCompleted => status == 'completed';
-  bool get isCancelled => status == 'cancelled'; 
+  bool get isCancelled => status == 'cancelled';
   bool get isActive => status == 'active';
 
   // =========================================================
@@ -250,6 +287,7 @@ class Plan {
       nextDueDate: now,
       status: 'active',
       cancellationPolicy: 'Store Credit', // ✅ Default Safety
+      modelType: 'direct',
       
       // Shell Defaults
       planExpiryDate: now.add(const Duration(days: 30)),
@@ -300,14 +338,25 @@ class Plan {
       "baseDurationDays": baseDurationDays,
       "noticePeriodDays": noticePeriodDays,
       "extensionGraceDays": extensionGraceDays,
+      "modelType": modelType,
+      "extensionStartDate": extensionStartDate,
     };
   }
 
   factory Plan.fromMap(Map<String, dynamic> map, String id) {
+    // Helper for MANDATORY dates (defaults to Now if missing to prevent null errors)
     DateTime parseDate(dynamic val) {
       if (val is Timestamp) return val.toDate();
       if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
       return DateTime.now();
+    }
+
+    // ✅ Helper for NULLABLE dates (Returns null if missing)
+    DateTime? parseNullableDate(dynamic val) {
+      if (val == null) return null;
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val);
+      return null;
     }
 
     return Plan(
@@ -327,9 +376,14 @@ class Plan {
       cadenceDays: map["cadenceDays"] ?? 30,
       cadenceType: map["cadenceType"] ?? "monthly",
       commitmentEnabled: map["commitmentEnabled"] ?? false,
+      
+      // Mandatory Dates
       createdAt: parseDate(map["createdAt"]),
       updatedAt: parseDate(map["updatedAt"]),
       nextDueDate: parseDate(map["nextDueDate"]),
+      planExpiryDate: parseDate(map["planExpiryDate"]),
+      noticeStartDate: parseDate(map["noticeStartDate"]),
+      
       durationMonths: map["durationMonths"] ?? 0,
       amountPerPeriod: (map["amountPerPeriod"] ?? 0.0).toDouble(),
       initialDownPayment: (map["initialDownPayment"] ?? 0.0).toDouble(),
@@ -338,14 +392,18 @@ class Plan {
       dpPercentage: (map["dpPercentage"] ?? 0.0).toDouble(),
       processingFee: (map["processingFee"] ?? 0.0).toDouble(),
       status: map["status"] ?? 'active',
-      cancellationPolicy: map["cancellationPolicy"] ?? 'Store Credit', // ✅
+      cancellationPolicy: map["cancellationPolicy"] ?? 'Store Credit',
       
-      // Map Automation Fields
-      planExpiryDate: parseDate(map["planExpiryDate"]),
-      noticeStartDate: parseDate(map["noticeStartDate"]),
       baseDurationDays: map["baseDurationDays"] ?? 30,
       noticePeriodDays: map["noticePeriodDays"] ?? 5,
       extensionGraceDays: map["extensionGraceDays"] ?? 0,
+      modelType: map["modelType"] ?? 'direct',
+      
+      // ✅ Correctly parsed Nullable Date
+      extensionStartDate: parseNullableDate(map["extensionStartDate"]),
+      pickupCode: map['pickupCode'],
+      fulfilledAt: parseNullableDate(map['fulfilledAt']),
+      completedAt: parseNullableDate(map['completedAt']),
     );
   }
 }

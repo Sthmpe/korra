@@ -139,7 +139,7 @@ class _VendorCard extends StatelessWidget {
                             children: [
                               Icon(Icons.verified, size: 14.sp, color: Colors.blue),
                               SizedBox(width: 4.w),
-                              Text("Verified Merchant", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
+                              Text("Verified Vendor", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
                             ],
                           )
                         ],

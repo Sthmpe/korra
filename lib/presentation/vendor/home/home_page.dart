@@ -65,9 +65,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
                 return IconButton(
                   onPressed: () {
                     Get.to(() => NotificationScreen(
-                      repo: widget.vendors,
-                      uid: widget.vendorUid,
-                      onJumpToPlans: () {}, // Optional/Null for vendor
+                      vendorUid: widget.vendorUid,
                     ));
                   },
                   icon: Stack(

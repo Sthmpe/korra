@@ -68,7 +68,7 @@ class VendorHeader extends StatelessWidget {
               ],
             ),
             Text(
-              "Verified Merchant",
+              "Verified Vendor",
               style: GoogleFonts.inter(
                 fontSize: 11.sp,
                 color: Colors.grey.shade500,

@@ -23,10 +23,6 @@ serve(async (req) => {
     const newPrice = Number(updateData.price);
     const newStock = Number(updateData.availableStock);
 
-    if (newPrice > 100000) {
-      return new Response(JSON.stringify({ success: false, error: "Price cannot exceed ₦100,000" }), { status: 400 });
-    }
-
     // 2. RUN TRANSACTION
     const result = await db.runTransaction(async (t) => {
       // References
@@ -42,14 +38,22 @@ serve(async (req) => {
       const productDoc = productSnap.docs[0];
       const oldData = productDoc.data();
       const statsDoc = await t.get(statsRef);
+      let maxPlanAmount = 100000.0;
 
       if (!statsDoc.exists) throw "Vendor stats not found";
       const stats = statsDoc.data();
+      maxPlanAmount = Number(stats.maxPlanAmount) || 100000.0; // 👈 Read Dynamic Limit
 
       // 3. Calculate Financial Delta
       const oldTotal = (Number(oldData.price) || 0) * (Number(oldData.availableStock) || 0);
       const newTotal = newPrice * newStock;
       const difference = newTotal - oldTotal; // Positive if value increased
+      
+      if (newPrice > maxPlanAmount) {
+        throw `Security Violation: Single product price (₦${newPrice.toLocaleString()}) exceeds your account limit (₦${maxPlanAmount.toLocaleString()}).`;
+      }
+
+
 
       // 4. Check Limit (Only if value increased)
       if (difference > 0) {

@@ -137,7 +137,7 @@ serve(async (req) => {
           type: 'payout',
           status: 'pending_monnify', 
           reference: payoutRef,
-          description: `Withdrawal to ${destination.accountNumber} (${destination.bankCode})`,
+          description: `Withdrawal to ${destination.accountName}`,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           balanceBefore: currentBalance,
           balanceAfter: currentBalance - amount,
@@ -192,7 +192,7 @@ serve(async (req) => {
           await sendNotification(
             uid,
             "Payout Successful 💸",
-            `Your withdrawal of ₦${amount.toLocaleString()} to ${destination.accountNumber} was successful.`,
+            `Your withdrawal of ₦${amount.toLocaleString()} to ${destination.accountName} was successful.`,
             "payout_success"
           );
         } 

@@ -1,115 +1,154 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../data/models/vendor/vendor_reservation.dart';
+import '../../../../../../config/constants/colors.dart';
+import '../../../../data/models/vendor/reservation.dart';
 
 class ReservationStatusTabs extends StatelessWidget {
   final ReservationStatus current;
   final String newCount;
   final String ongoingCount;
+  final String readyCount; // ✅ NEW
   final String completedCount;
   final String cancelledCount;
-  final ValueChanged<ReservationStatus> onChanged;
+  final Function(ReservationStatus) onChanged;
 
   const ReservationStatusTabs({
     super.key,
     required this.current,
     required this.newCount,
     required this.ongoingCount,
+    required this.readyCount,
     required this.completedCount,
     required this.cancelledCount,
     required this.onChanged,
   });
 
-  static const _brand = Color(0xFFA54600);
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          // 1. READY (High Priority - Green)
+          _Tab(
+            label: "Ready",
+            count: readyCount,
+            isActive: current == ReservationStatus.readyForPickup,
+            onTap: () => onChanged(ReservationStatus.readyForPickup),
+            activeColor: const Color(0xFF027A48), // Green
+            activeBg: const Color(0xFFECFDF5),
+          ),
+          
+          // 2. NEW
+          _Tab(
+            label: "New",
+            count: newCount,
+            isActive: current == ReservationStatus.newRes,
+            onTap: () => onChanged(ReservationStatus.newRes),
+          ),
+
+          // 3. ONGOING
+          _Tab(
+            label: "Ongoing",
+            count: ongoingCount,
+            isActive: current == ReservationStatus.ongoing,
+            onTap: () => onChanged(ReservationStatus.ongoing),
+          ),
+
+          // 4. COMPLETED
+          _Tab(
+            label: "Completed",
+            count: completedCount,
+            isActive: current == ReservationStatus.completed,
+            onTap: () => onChanged(ReservationStatus.completed),
+          ),
+
+          // 5. CANCELLED
+          _Tab(
+            label: "Cancelled",
+            count: cancelledCount,
+            isActive: current == ReservationStatus.cancelled,
+            onTap: () => onChanged(ReservationStatus.cancelled),
+          ),
+          
+          SizedBox(width: 16.w),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tab extends StatelessWidget {
+  final String label;
+  final String count;
+  final bool isActive;
+  final VoidCallback onTap;
+  final Color? activeColor;
+  final Color? activeBg;
+
+  const _Tab({
+    required this.label,
+    required this.count,
+    required this.isActive,
+    required this.onTap,
+    this.activeColor,
+    this.activeBg,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      _TabSpec('New',        ReservationStatus.newRes,     newCount),
-      _TabSpec('Ongoing',    ReservationStatus.ongoing,    ongoingCount),
-      _TabSpec('Completed',  ReservationStatus.completed,  completedCount),
-      _TabSpec('Cancelled',  ReservationStatus.cancelled,  cancelledCount),
-    ];
+    final mainColor = activeColor ?? KorraColors.brand;
+    // If specific BG not provided, use transparent (standard tab) or brand pill? 
+    // Let's stick to your pill style: Solid fill when active.
+    final bg = isActive ? mainColor : Colors.transparent;
+    final textCol = isActive ? Colors.white : Colors.grey.shade600;
+    final borderCol = isActive ? mainColor : Colors.grey.shade300;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(8.w, 4.h, 8.w, 10.h),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: EdgeInsets.only(right: 8.w),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20.r),
+          border: Border.all(color: borderCol),
+        ),
         child: Row(
-          children: items.map((t) {
-            final selected = current == t.status;
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4.w),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12.r),
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onChanged(t.status);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
-                    decoration: BoxDecoration(
-                      color: selected ? _brand.withOpacity(.08) : Colors.white,
-                      borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(
-                        color: selected ? _brand : const Color(0xFFEAE6E2),
-                        width: selected ? 1.4 : 1,
-                      ),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text(
-                        t.label,
-                        style: GoogleFonts.inter(
-                          fontSize: 13.5.sp,
-                          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                          color: selected ? _brand : const Color(0xFF4D4D4D),
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      _CountDot(text: t.count, selected: selected),
-                    ]),
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                color: textCol,
+                fontWeight: FontWeight.w600,
+                fontSize: 13.sp,
+              ),
+            ),
+            if (count != '0') ...[
+              SizedBox(width: 6.w),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.white.withOpacity(0.2) : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Text(
+                  count,
+                  style: GoogleFonts.inter(
+                    color: isActive ? Colors.white : Colors.grey.shade700,
+                    fontSize: 10.sp,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            );
-          }).toList(),
+            ]
+          ],
         ),
       ),
     );
   }
-}
-
-class _CountDot extends StatelessWidget {
-  final String text;
-  final bool selected;
-  const _CountDot({required this.text, required this.selected});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xFFA54600) : const Color(0xFFF0ECE8),
-        borderRadius: BorderRadius.circular(999.r),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w800,
-          color: selected ? Colors.white : const Color(0xFF4D4D4D),
-        ),
-      ),
-    );
-  }
-}
-
-class _TabSpec {
-  final String label; final ReservationStatus status; final String count;
-  _TabSpec(this.label, this.status, this.count);
 }

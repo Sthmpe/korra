@@ -1,3 +1,5 @@
+// lib/data/repository/customer/customer_activity_feed.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,37 +10,37 @@ import 'customer_repository.dart';
 
 extension CustomerActivityFeed on CustomerRepository {
   
-  // Formatter
   NumberFormat get _currencyFormat => NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
 
-  // Styles (Defined here as requested, though usually belongs in UI)
+  // Premium Typography
   TextStyle get _baseStyle => GoogleFonts.inter(fontSize: 12.5.sp, fontWeight: FontWeight.w500, color: const Color(0xFF5E5E5E));
-  TextStyle get _boldStyle => GoogleFonts.inter(fontSize: 12.5.sp, fontWeight: FontWeight.w700);
+  TextStyle get _boldStyle => GoogleFonts.inter(fontSize: 12.5.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828));
 
   Stream<List<ActivityItem>> streamActivityFeed(String uid) {
+    // We listen to the Ledger because it is the Source of Truth for money movement
     return streamLedger(uid).map((transactions) {
       
       List<ActivityItem> feed = [];
 
       for (var tx in transactions) {
-        final isCredit = tx.type == 'deposit';
+        final isCredit = tx.amount >= 0; // Money coming in (Refunds/Deposits)
         final amountValue = tx.amount.abs();
         final formattedAmount = _currencyFormat.format(amountValue);
         
-        // Prepare the trailing amount string (+ or -)
         String amountDisplay = isCredit ? "+ $formattedAmount" : "- $formattedAmount";
 
         ActivityType type;
         String title;
         List<TextSpan> richSubtitle;
 
-        // Colors
+        // Styles specific to transaction direction
         final highlightColor = isCredit ? const Color(0xFF16A34A) : const Color(0xFFA54600); 
         final highlightStyle = _boldStyle.copyWith(color: highlightColor);
 
+        // ✅ MATCH BACKEND TYPES
         switch (tx.type) {
-          case 'deposit':
-            type = ActivityType.autopay; // Using autopay icon for wallet
+          case 'deposit': // Wallet Funding
+            type = ActivityType.autopay; 
             title = "Wallet Top-up";
             richSubtitle = [
               TextSpan(text: "Successfully credited ", style: _baseStyle),
@@ -47,17 +49,19 @@ extension CustomerActivityFeed on CustomerRepository {
             ];
             break;
 
-          case 'down_payment':
+          case 'plan_creation': // Down Payment
             type = ActivityType.payment;
             title = "Reservation Secured";
             richSubtitle = [
               TextSpan(text: "You paid ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
-              TextSpan(text: " upfront to secure the plan.", style: _baseStyle),
+              TextSpan(text: " upfront to secure ", style: _baseStyle),
+              // Use metadata vendor/product name if available, else generic
+              TextSpan(text: "the plan.", style: _baseStyle),
             ];
             break;
 
-          case 'repayment':
+          case 'installment': // Regular Payment
             type = ActivityType.payment;
             title = "Installment Paid";
             richSubtitle = [
@@ -67,13 +71,13 @@ extension CustomerActivityFeed on CustomerRepository {
             ];
             break;
 
-          case 'cancellation':
+          case 'refund': // Cancellation
             type = ActivityType.expired;
-            title = "Plan Cancellation";
+            title = "Plan Refund";
             richSubtitle = [
-              TextSpan(text: "Plan cancelled. Refund of ", style: _baseStyle),
+              TextSpan(text: "Refund of ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
-              TextSpan(text: " is processing.", style: _baseStyle),
+              TextSpan(text: " credited to wallet.", style: _baseStyle),
             ];
             break;
 
@@ -92,6 +96,7 @@ extension CustomerActivityFeed on CustomerRepository {
           amount: tx.amount,
           type: type,
           planId: tx.planId,
+          receiptData: tx.receiptData, // ✅ Passing the suitcase
         ));
       }
       

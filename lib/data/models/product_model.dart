@@ -165,7 +165,7 @@ class Product {
     final input = vendorId + timestamp;
     final hash = sha256.convert(utf8.encode(input)).toString();
     final shortHash = hash.substring(0, 7);
-    return "korra-$vendorPrefix-$shortHash";
+    return "K-$vendorPrefix-$shortHash";
   }
 
   factory Product.fromMap(Map<String, dynamic> map, String docId) {

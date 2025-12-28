@@ -458,7 +458,7 @@ class PayoutScreen extends StatelessWidget {
                   Navigator.pop(context); // Close Dialog
                   _openPasswordVerification(context); // Open Password Check
                 },
-                child: Text("Forgot PIN? Reset it", style: GoogleFonts.inter(color: const Color(0xFF475467), fontWeight: FontWeight.w600, fontSize: 15.sp)),
+                child: Text("Forgot PIN?", style: GoogleFonts.inter(color: const Color(0xFF475467), fontWeight: FontWeight.w600, fontSize: 15.sp)),
               ),
             ),
             SizedBox(height: 10.h),

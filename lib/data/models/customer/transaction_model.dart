@@ -4,7 +4,7 @@ class TransactionModel {
   final String id;
   final String customerId;
   final double amount;
-  final String type; // 'deposit', 'fee', 'down_payment'
+  final String type; // 'deposit', 'fee', 'down_payment', 'installment'
   final String description;
   final String planId; // 'none' for deposits
   final String reference; // payment reference or plan ID
@@ -12,6 +12,9 @@ class TransactionModel {
   final double balanceBefore;
   final double balanceAfter;
   final DateTime createdAt;
+  
+  // ✅ NEW: Snapshot of the receipt at the moment of transaction
+  final Map<String, dynamic>? receiptData;
 
   const TransactionModel({
     required this.id,
@@ -25,6 +28,7 @@ class TransactionModel {
     required this.balanceBefore,
     required this.balanceAfter,
     required this.createdAt,
+    this.receiptData,
   });
 
   Map<String, dynamic> toMap() {
@@ -39,7 +43,8 @@ class TransactionModel {
       'status': status,
       'balanceBefore': balanceBefore,
       'balanceAfter': balanceAfter,
-      'createdAt': FieldValue.serverTimestamp(), // Server time is safer
+      'createdAt': FieldValue.serverTimestamp(),
+      'receiptData': receiptData, // ✅ Saved to DB
     };
   }
 
@@ -56,8 +61,11 @@ class TransactionModel {
       balanceBefore: (map['balanceBefore'] ?? 0).toDouble(),
       balanceAfter: (map['balanceAfter'] ?? 0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      
+      // ✅ Parse the Map safely
+      receiptData: map['receiptData'] != null 
+          ? Map<String, dynamic>.from(map['receiptData']) 
+          : null,
     );
   }
-
-  get amountDisplay => null;
 }

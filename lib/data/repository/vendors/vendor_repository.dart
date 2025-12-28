@@ -16,6 +16,7 @@ import '../../../logic/services/notification_service.dart';
 import '../../models/vendor/payout/payout_details.dart';
 import '../../models/vendor/transaction_model.dart';
 import '../../models/vendor/vendor_activity_type.dart';
+import '../../models/vendor/vendor_compliance.dart';
 import '../../models/vendor/vendor_setting.dart';
 import '../../models/vendor/vendor_stat.dart';
 import '../remote/monnify_functions.dart';
@@ -78,15 +79,15 @@ class VendorRepository implements INotificationRepository {
     return firestore
         .collection('vendors')
         .doc(uid)
-        .collection('activity_feed') 
-        .orderBy('date', descending: true)
+        .collection('activity_feed') // ✅ Matches backend
+        .orderBy('date', descending: true) // ✅ Matches backend field 'date'
         .limit(20)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => VendorActivityItem.fromMap(doc.data(), doc.id))
-              .toList();
-        });
+      return snapshot.docs.map((doc) {
+        return VendorActivityItem.fromMap(doc.data(), doc.id);
+      }).toList();
+    });
   }
 
   Future<void> changePassword({
@@ -156,6 +157,20 @@ class VendorRepository implements INotificationRepository {
           }).toList();
         });
   }
+
+  // In VendorRepository class:
+Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
+  return firestore
+      .collection('vendor_compliance')
+      .doc(vendorId)
+      .snapshots()
+      .map((doc) {
+        if (!doc.exists || doc.data() == null) {
+          return VendorCompliance.initial();
+        }
+        return VendorCompliance.fromMap(doc.data()!);
+      });
+}
 
   Stream<Vendor?> streamVendor(String uid) {
     return firestore

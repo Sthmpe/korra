@@ -7,6 +7,7 @@ enum VendorActivityType {
   payout,         // Blue - Money sent to bank
   stockLow,       // Orange - Action needed
   planCompleted,  // Purple - Ready for pickup
+  extended,       // Orange - Reuse stockLow color
   cancelled,      // Red - Revenue lost
   system          // Grey - General info
 }
@@ -38,10 +39,12 @@ class VendorActivityItem {
     VendorActivityType parseType(String? t) {
       switch (t) {
         case 'reservation_new': return VendorActivityType.newReservation;
+        case 'payment': return VendorActivityType.payout; // Reuse 'payout' (Blue) or make a new 'income' type (Green)
+        case 'reservation_extended': return VendorActivityType.extended; // Reuse 'stockLow' (Orange) or make 'extended' type
+        case 'reservation_cancel': return VendorActivityType.cancelled;
         case 'payout_success': return VendorActivityType.payout;
         case 'stock_low': return VendorActivityType.stockLow;
         case 'plan_complete': return VendorActivityType.planCompleted;
-        case 'reservation_cancel': return VendorActivityType.cancelled;
         default: return VendorActivityType.system;
       }
     }

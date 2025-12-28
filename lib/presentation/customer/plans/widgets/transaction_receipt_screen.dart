@@ -1,53 +1,59 @@
+// lib/presentation/customer/plans/widgets/transaction_receipt_screen.dart
+
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
-import 'package:screenshot/screenshot.dart'; // Capture widget as image
-import 'package:share_plus/share_plus.dart'; // Native share sheet
-import 'package:path_provider/path_provider.dart'; // To save temp image
+import 'package:path_provider/path_provider.dart'; // ✅ New
+import 'package:screenshot/screenshot.dart'; // ✅ New
+import 'package:share_plus/share_plus.dart'; // ✅ New
+
+import '../../../../config/constants/colors.dart';
+import '../../../../data/models/customer/payment_receipt_data.dart';
 
 class TransactionReceiptScreen extends StatefulWidget {
-  final double amount;
-  final String planName;
-  final DateTime date;
+  final PaymentReceiptData data;
 
-  const TransactionReceiptScreen({
-    super.key,
-    required this.amount,
-    required this.planName,
-    required this.date,
-  });
+  const TransactionReceiptScreen({super.key, required this.data});
 
   @override
   State<TransactionReceiptScreen> createState() => _TransactionReceiptScreenState();
 }
 
 class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
+  // ✅ Controller to capture the widget
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isSharing = false;
 
   Future<void> _shareReceipt() async {
-    setState(() => _isSharing = true); // Show loading state if needed
+    setState(() => _isSharing = true);
 
     try {
-      // 1. Capture the widget invisible to user (or the visible one)
-      // We capture the visible card context for WYSIWYG
+      // 1. Capture the widget
       final Uint8List? imageBytes = await _screenshotController.capture();
 
       if (imageBytes != null) {
-        // 2. Save to temp file
+        // 2. Save to temporary file
         final directory = await getTemporaryDirectory();
-        final imagePath = await File('${directory.path}/korra_receipt.png').create();
+        final imagePath = await File('${directory.path}/korra_receipt_${widget.data.reference}.png').create();
         await imagePath.writeAsBytes(imageBytes);
 
-        // 3. Share
-        await Share.shareXFiles([XFile(imagePath.path)], text: 'Transaction Receipt for ${widget.planName}');
+        // 3. Share the file
+        // Note: Using XFile for share_plus v7+
+        await Share.shareXFiles(
+          [XFile(imagePath.path)], 
+          text: 'Payment Receipt for ${widget.data.productName} - Reference: ${widget.data.reference}'
+        );
       }
     } catch (e) {
-      debugPrint("Share Error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not generate receipt image")));
+      debugPrint("Error sharing receipt: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not share receipt. Please try again.")),
+      );
     } finally {
       setState(() => _isSharing = false);
     }
@@ -55,157 +61,214 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currencyFormat = NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
+    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
+
+    final isCompleted = widget.data.isFinished || widget.data.status == 'COMPLETED';
+    final statusColor = isCompleted ? Colors.green : const Color(0xFFF79009);
+    final statusBg = isCompleted ? const Color(0xFFECFDF3) : const Color(0xFFFFFAEB);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F7), // Grey background sets the stage
+      backgroundColor: const Color(0xFFF2F4F7),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF2F4F7),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: CloseButton(color: Colors.black, onPressed: () => Navigator.pop(context)),
-        title: Text("Transaction Receipt", style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 16.sp)),
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         centerTitle: true,
+        title: Text(
+          "Transaction Receipt",
+          style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.black),
+        ),
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
-          child: Column(
-            children: [
-              // --- THE RECEIPT CARD (CAPTURED WIDGET) ---
-              Screenshot(
-                controller: _screenshotController,
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 24.h),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24.r), // Smooth modern corners
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8))
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 1. Korra Logo Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+        padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 40.h),
+        child: Column(
+          children: [
+            // ✅ WRAP ONLY THE TICKET CARD WITH SCREENSHOT WIDGET
+            // We do this so the "Share Button" itself isn't in the picture.
+            Screenshot(
+              controller: _screenshotController,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16.r),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min, // Important for capture
+                  children: [
+                    // --- 1. HEADER ---
+                    Padding(
+                      padding: EdgeInsets.all(24.w),
+                      child: Column(
                         children: [
-                          // Replace with Image.asset('assets/korra_logo.png')
-                          Icon(Icons.flash_on_rounded, color: const Color(0xFFA54600), size: 24.sp), 
-                          SizedBox(width: 6.w),
-                          Text("Korra", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: const Color(0xFFA54600), letterSpacing: -0.5)),
+                          Container(
+                            width: 48.w, height: 48.w,
+                            decoration: BoxDecoration(color: KorraColors.brand.withOpacity(0.1), shape: BoxShape.circle),
+                            child: const Icon(Iconsax.shield_tick, color: KorraColors.brand, size: 24),
+                          ),
+                          SizedBox(height: 16.h),
+                          Text(
+                            "PAYMENT SUCCESSFUL", 
+                            style: GoogleFonts.inter(fontSize: 11.sp, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: Colors.grey.shade500)
+                          ),
+                          SizedBox(height: 8.h),
+                          Text(
+                            currencyFormat.format(widget.data.amountPaidNow),
+                            style: GoogleFonts.plusJakartaSans(fontSize: 32.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828)),
+                          ),
+                          SizedBox(height: 16.h),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                            decoration: BoxDecoration(
+                              color: statusBg,
+                              borderRadius: BorderRadius.circular(8.r),
+                              border: Border.all(color: statusColor.withOpacity(0.2)),
+                            ),
+                            child: Text(
+                              isCompleted ? "PLAN COMPLETED" : "INSTALLMENT PAID",
+                              style: GoogleFonts.plusJakartaSans(fontSize: 11.sp, fontWeight: FontWeight.w700, color: statusColor),
+                            ),
+                          ),
                         ],
                       ),
-                      SizedBox(height: 32.h),
+                    ),
 
-                      // 2. Success Animation Placeholder
-                      Container(
-                        padding: EdgeInsets.all(12.r),
-                        decoration: BoxDecoration(color: const Color(0xFFECFDF5), shape: BoxShape.circle),
-                        child: Icon(Icons.check_rounded, color: const Color(0xFF059669), size: 40.sp),
+                    _buildDottedLine(),
+
+                    // --- 2. DETAILS ---
+                    Padding(
+                      padding: EdgeInsets.all(24.w),
+                      child: Column(
+                        children: [
+                          _detailRow("Reference ID", widget.data.reference), // Removed copy icon for screenshot cleanliness logic, or keep it but it's static image
+                          _detailRow("Date & Time", dateFormat.format(widget.data.date)),
+                          const Divider(height: 32),
+                          _detailRow("Vendor", widget.data.vendorName),
+                          _detailRow("Payment Method", widget.data.paymentMethod),
+                          
+                          if (widget.data.creditUsed > 0)
+                            _detailRow("Store Credit Applied", "- ${currencyFormat.format(widget.data.creditUsed)}", color: Colors.green),
+                          if (widget.data.walletUsed > 0 && widget.data.creditUsed > 0)
+                            _detailRow("Wallet Deducted", currencyFormat.format(widget.data.walletUsed)),
+
+                          const Divider(height: 32),
+                          _detailRow("Item Paid For", widget.data.productName, isBold: true),
+                          _detailRow("Total Paid So Far", currencyFormat.format(widget.data.amountPaidSoFar)),
+                          _detailRow("Balance Remaining", currencyFormat.format(widget.data.balanceRemaining), color: widget.data.balanceRemaining == 0 ? Colors.green : const Color(0xFFD92D20)),
+                          
+                          if (!isCompleted && widget.data.nextDueDate != null) ...[
+                            SizedBox(height: 12.h),
+                            Container(
+                              padding: EdgeInsets.all(12.r),
+                              decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(8.r)),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text("Next Payment Due", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                                  Text(DateFormat('dd MMM yyyy').format(widget.data.nextDueDate!), style: GoogleFonts.plusJakartaSans(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.black)),
+                                ],
+                              ),
+                            )
+                          ]
+                        ],
                       ),
-                      SizedBox(height: 16.h),
-                      Text("Payment Successful", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828))),
-                      SizedBox(height: 8.h),
-                      Text(
-                        "₦${NumberFormat("#,##0.00").format(widget.amount)}", 
-                        style: GoogleFonts.inter(fontSize: 32.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -1)
+                    ),
+
+                    // --- 3. FOOTER ---
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16.r)),
                       ),
-                      
-                      SizedBox(height: 32.h),
-                      const Divider(color: Color(0xFFEAECF0), thickness: 1),
-                      SizedBox(height: 32.h),
-                      
-                      // 3. Details Grid
-                      _infoRow("Beneficiary", widget.planName),
-                      SizedBox(height: 16.h),
-                      _infoRow("Date", DateFormat('MMM d, yyyy').format(widget.date)),
-                      SizedBox(height: 16.h),
-                      _infoRow("Time", DateFormat('h:mm a').format(widget.date)),
-                      SizedBox(height: 16.h),
-                      _infoRow("Reference", "TRX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}"),
-                      SizedBox(height: 16.h),
-                      _infoRow("Status", "Successful", color: const Color(0xFF059669)),
-
-                      SizedBox(height: 40.h),
-
-                      // 4. Security Footer (Inside Receipt)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: const Color(0xFFF2F4F7)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.lock_outline_rounded, size: 12.sp, color: Colors.grey),
-                            SizedBox(width: 6.w),
-                            Text("Secured by ", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade600)),
-                            // Monnify Text Logo
-                            Text("Monnify", style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w800, color: const Color(0xFF003366))),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Iconsax.verify, size: 16.sp, color: KorraColors.brand),
+                              SizedBox(width: 8.w),
+                              Text("Verified by Korra Systems", style: GoogleFonts.plusJakartaSans(fontSize: 12.sp, fontWeight: FontWeight.w700, color: KorraColors.brand)),
+                            ],
+                          ),
+                          SizedBox(height: 8.h),
+                          Text(
+                            "This receipt serves as proof of ownership transfer for the amount paid. Korra serves as the transaction ledger.",
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.grey.shade400, height: 1.4),
+                          )
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
-              SizedBox(height: 32.h),
-
-              // --- ACTION BUTTONS (Outside Screenshot) ---
-              SizedBox(
-                width: double.infinity,
-                height: 52.h,
-                child: FilledButton.icon(
-                  onPressed: _isSharing ? null : _shareReceipt,
-                  icon: _isSharing 
-                    ? SizedBox(width: 20.w, height: 20.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.share_rounded, color: Colors.white, size: 20),
-                  label: Text(_isSharing ? "Generating..." : "Share Receipt", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w700)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFA54600),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-                    elevation: 0,
-                  ),
+            ),
+            
+            SizedBox(height: 24.h),
+            
+            // 4. SHARE BUTTON (Outside Screenshot Widget)
+            SizedBox(
+              width: double.infinity,
+              height: 52.h,
+              child: FilledButton.icon(
+                onPressed: _isSharing ? null : _shareReceipt,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF101828),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+                icon: _isSharing 
+                  ? SizedBox(width: 20.w, height: 20.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Iconsax.share, size: 20),
+                label: Text(
+                  _isSharing ? "Preparing..." : "Share Receipt", 
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14.sp)
                 ),
               ),
-              
-              SizedBox(height: 16.h),
-              
-              TextButton(
-                onPressed: () {
-                  // Navigate to Report Issue
-                },
-                child: Text("Report an issue", style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-              )
-            ],
-          ),
+            )
+          ],
         ),
       ),
     );
   }
 
-  Widget _infoRow(String label, String value, {Color? color}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.inter(color: const Color(0xFF667085), fontSize: 14.sp)),
-        SizedBox(width: 24.w),
-        Expanded(
-          child: Text(
-            value, 
-            textAlign: TextAlign.right,
-            style: GoogleFonts.inter(
-              color: color ?? const Color(0xFF101828), 
-              fontSize: 14.sp, 
-              fontWeight: FontWeight.w600
+  Widget _detailRow(String label, String value, {bool isBold = false, Color? color}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 16.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w400)),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: isBold ? FontWeight.w700 : FontWeight.w600, color: color ?? const Color(0xFF101828)),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  Widget _buildDottedLine() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final boxWidth = constraints.constrainWidth();
+      const dashWidth = 6.0;
+      final dashCount = (boxWidth / (2 * dashWidth)).floor();
+      return Flex(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        direction: Axis.horizontal,
+        children: List.generate(dashCount, (_) => SizedBox(width: dashWidth, height: 1, child: DecoratedBox(decoration: BoxDecoration(color: Colors.grey.shade200)))),
+      );
+    });
   }
 }

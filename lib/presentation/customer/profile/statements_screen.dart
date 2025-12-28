@@ -4,9 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:get/get.dart';
 import 'package:collection/collection.dart'; // For grouping
+import 'package:iconsax/iconsax.dart'; // Premium Icons
 
+import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/transaction_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
+import '../../../data/models/customer/payment_receipt_data.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../plans/widgets/empty_state_card.dart';
 import '../plans/widgets/transaction_receipt_screen.dart';
@@ -37,26 +40,14 @@ class _StatementsScreenState extends State<StatementsScreen> {
         children: [
           // 1. FILTER CHIPS
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 20.w),
+            padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 20.w),
             child: Row(
               children: [
-                _FilterChip(
-                  label: "All", 
-                  selected: _filter == 'All', 
-                  onTap: () => setState(() => _filter = 'All')
-                ),
-                SizedBox(width: 8.w),
-                _FilterChip(
-                  label: "Money In", 
-                  selected: _filter == 'Money In', 
-                  onTap: () => setState(() => _filter = 'Money In')
-                ),
-                SizedBox(width: 8.w),
-                _FilterChip(
-                  label: "Money Out", 
-                  selected: _filter == 'Money Out', 
-                  onTap: () => setState(() => _filter = 'Money Out')
-                ),
+                _FilterChip(label: "All", selected: _filter == 'All', onTap: () => setState(() => _filter = 'All')),
+                SizedBox(width: 10.w),
+                _FilterChip(label: "Money In", selected: _filter == 'Money In', onTap: () => setState(() => _filter = 'Money In')),
+                SizedBox(width: 10.w),
+                _FilterChip(label: "Money Out", selected: _filter == 'Money Out', onTap: () => setState(() => _filter = 'Money Out')),
               ],
             ),
           ),
@@ -64,10 +55,10 @@ class _StatementsScreenState extends State<StatementsScreen> {
           // 2. TRANSACTION LIST
           Expanded(
             child: StreamBuilder<List<TransactionModel>>(
-              stream: widget.repo.streamLedger(widget.customerUid),
+              stream: widget.repo.streamLedger(widget.customerUid), // Ensure you have this stream
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFFA54600)));
+                  return const Center(child: CircularProgressIndicator(color: KorraColors.brand));
                 }
 
                 final rawList = snapshot.data ?? [];
@@ -83,13 +74,13 @@ class _StatementsScreenState extends State<StatementsScreen> {
                   return const Center(child: EmptyStateCard(text: "No transactions found"));
                 }
 
-                // B. Group By Date (Engineering Magic 🪄)
-                // Creates a Map: {"2023-10-25": [Tx1, Tx2], "2023-10-24": [Tx3]}
+                // B. Group By Date (Premium List Style)
                 final grouped = groupBy(filteredList, (TransactionModel tx) {
                   return DateFormat('yyyy-MM-dd').format(tx.createdAt);
                 });
 
                 return ListView.builder(
+                  physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.only(bottom: 40.h),
                   itemCount: grouped.keys.length,
                   itemBuilder: (context, index) {
@@ -101,6 +92,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
                       children: [
                         _DateHeader(dateStr: dateKey),
                         ...transactions.map((tx) => _TransactionTile(transaction: tx)),
+                        SizedBox(height: 12.h), // Spacing between groups
                       ],
                     );
                   },
@@ -124,38 +116,49 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = transaction.amount >= 0;
-    final color = isCredit ? const Color(0xFF16A34A) : const Color(0xFF1B1B1B);
-    final sign = isCredit ? "+" : ""; // Negative numbers already have - in the model usually, but formatting handles it
     
-    // Format amount strictly
+    // Premium Styling Logic
+    final color = isCredit ? const Color(0xFF027A48) : const Color(0xFF101828); // Green vs Dark Blue
+    final sign = isCredit ? "+" : ""; 
+    final icon = isCredit ? Iconsax.arrow_circle_down : Iconsax.arrow_circle_up; // In vs Out
+    final iconBg = isCredit ? const Color(0xFFECFDF3) : const Color(0xFFF2F4F7);
+    final iconColor = isCredit ? const Color(0xFF027A48) : const Color(0xFF344054);
+
     final amountStr = NumberFormat("#,##0.00", "en_US").format(transaction.amount.abs());
 
     return InkWell(
       onTap: () {
-        // NAVIGATE TO RECEIPT
-        // We reuse the nice receipt screen we built earlier
-        Get.to(() => TransactionReceiptScreen(
-          amount: transaction.amount.abs(),
-          planName: transaction.description, // Mapping description to plan name area
-          date: transaction.createdAt,
-        ));
+        // ✅ SMART NAVIGATION LOGIC
+        PaymentReceiptData receiptData;
+
+        if (transaction.receiptData != null && transaction.receiptData!.isNotEmpty) {
+          // 1. New System: Use the saved receipt snapshot (Perfect Data)
+          receiptData = PaymentReceiptData.fromJson(transaction.receiptData!);
+        } else {
+          // 2. Legacy System: Construct a partial receipt (Safe Fallback)
+          receiptData = PaymentReceiptData.fromPartial(
+            amount: transaction.amount.abs(),
+            date: transaction.createdAt,
+            title: transaction.description,
+            reference: transaction.reference,
+            status: transaction.status.toUpperCase(),
+          );
+        }
+
+        Get.to(() => TransactionReceiptScreen(data: receiptData));
       },
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
         child: Row(
           children: [
             // Icon
             Container(
               padding: EdgeInsets.all(10.r),
               decoration: BoxDecoration(
-                color: isCredit ? const Color(0xFFECFDF5) : const Color(0xFFF3F4F6),
+                color: iconBg,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                size: 20.sp,
-                color: isCredit ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
-              ),
+              child: Icon(icon, size: 22.sp, color: iconColor),
             ),
             SizedBox(width: 16.w),
             
@@ -165,24 +168,32 @@ class _TransactionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    transaction.description ?? "System Transaction",
-                    style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828)),
+                    transaction.description.isNotEmpty ? transaction.description : "System Transaction",
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp, 
+                      fontWeight: FontWeight.w600, 
+                      color: const Color(0xFF101828)
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(height: 4.h),
                   Text(
                     DateFormat('h:mm a').format(transaction.createdAt),
-                    style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500),
+                    style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085)),
                   ),
                 ],
               ),
             ),
 
-            // Amount
+            // Amount (Using Plus Jakarta Sans for premium numbers)
             Text(
               "$sign₦$amountStr",
-              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: color),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14.sp, 
+                fontWeight: FontWeight.w700, 
+                color: color
+              ),
             ),
           ],
         ),
@@ -212,13 +223,17 @@ class _DateHeader extends StatelessWidget {
       label = DateFormat('MMMM d, yyyy').format(date);
     }
 
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
-      color: const Color(0xFFF9FAFB), // Section divider color
+    // Cleaner Header: No background, just crisp text
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 8.h),
       child: Text(
         label.toUpperCase(),
-        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: const Color(0xFF98A2B3)),
+        style: GoogleFonts.inter(
+          fontSize: 11.sp, 
+          fontWeight: FontWeight.w700, 
+          color: const Color(0xFF98A2B3),
+          letterSpacing: 1.0
+        ),
       ),
     );
   }
@@ -237,16 +252,19 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFA54600) : Colors.white,
-          borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: selected ? const Color(0xFFA54600) : const Color(0xFFE5E7EB)),
+          color: selected ? KorraColors.brand : Colors.transparent,
+          borderRadius: BorderRadius.circular(30.r),
+          border: Border.all(
+            color: selected ? KorraColors.brand : const Color(0xFFE4E7EC),
+            width: 1.5
+          ),
         ),
         child: Text(
           label,
           style: GoogleFonts.inter(
-            fontSize: 12.sp,
+            fontSize: 13.sp,
             fontWeight: FontWeight.w600,
             color: selected ? Colors.white : const Color(0xFF344054),
           ),

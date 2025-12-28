@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:get/get.dart';
 
-import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/customer_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../shared/widgets/korra_header.dart';

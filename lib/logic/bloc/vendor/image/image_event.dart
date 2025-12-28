@@ -22,3 +22,5 @@ class RemoveImage extends ImageEvent {
 }
 
 class ResetState extends ImageEvent {}
+
+

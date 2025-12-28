@@ -14,30 +14,18 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-// 2. CRYPTO HELPER (HMAC-SHA512)
+// 2. CRYPTO HELPER
 async function verifyMonnifyHash(bodyText: string, signature: string, secret: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-512" },
-    false,
-    ["verify"]
+    "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-512" }, false, ["verify"]
   );
   
-  const signatureBytes = new Uint8Array(
-    signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-  );
+  const signatureBytes = new Uint8Array(signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
 
-  return await crypto.subtle.verify(
-    "HMAC",
-    key,
-    signatureBytes,
-    encoder.encode(bodyText)
-  );
+  return await crypto.subtle.verify("HMAC", key, signatureBytes, encoder.encode(bodyText));
 }
 
-// 3. MAIN HANDLER
 serve(async (req) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
@@ -46,16 +34,10 @@ serve(async (req) => {
     const signature = req.headers.get("monnify-signature");
 
     // A. Security Check
-    if (!signature || !MONNIFY_SECRET_KEY) {
-      console.error("Missing Signature or Secret");
-      return new Response("Unauthorized", { status: 401 });
-    }
+    if (!signature || !MONNIFY_SECRET_KEY) return new Response("Unauthorized", { status: 401 });
 
     const isValid = await verifyMonnifyHash(bodyText, signature, MONNIFY_SECRET_KEY);
-    if (!isValid) {
-      console.error("Invalid Signature");
-      return new Response("Unauthorized", { status: 401 }); 
-    }
+    if (!isValid) return new Response("Unauthorized", { status: 401 }); 
 
     const payload = JSON.parse(bodyText);
     const { eventType, eventData } = payload;
@@ -66,199 +48,108 @@ serve(async (req) => {
     }
 
     const transactionId = eventData.paymentReference;
-    const uid = eventData.product.reference; // Customer UID
+    const uid = eventData.product.reference; 
     const amountPaid = Number(eventData.amountPaid);
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountPaid);
-    
+
     console.log(`Processing ${transactionId} for ${uid}`);
 
-    // C. Run Atomic Transaction
+    // --- PREPARE DATA FOR PUSH (To be used AFTER transaction) ---
+    let fcmToken = "";
+    let shouldSendPush = false;
+
+    // C. RUN ATOMIC TRANSACTION
+    // ⚠️ CRITICAL: All Reads MUST come before Writes
     await db.runTransaction(async (t) => {
       
-      // 1. Idempotency Check (Read)
-      const creditRef = db.collection('customer').doc(uid)
-                          .collection('ledger_transactions').doc(`${transactionId}_credit`);
+      // 1. SETUP REFS
+      const userRef = db.collection('customers').doc(uid);
+      const ledgerRef = db.collection('customers').doc(uid).collection('ledger_transactions').doc(`${transactionId}`);
       
-      const existingDoc = await t.get(creditRef);
-      if (existingDoc.exists) {
-        console.log("Duplicate transaction detected.");
+      // 2. READS (Do these FIRST)
+      const userDoc = await t.get(userRef);
+      const ledgerDoc = await t.get(ledgerRef); // Check for duplicates
+
+      // 3. LOGIC CHECKS
+      if (ledgerDoc.exists) {
+        console.log("Duplicate transaction detected. Skipping.");
         return; 
       }
-
-      // 2. Get User Balance (Read)
-      const userRef = db.collection('customer').doc(uid);
-      const userDoc = await t.get(userRef);
       
       if (!userDoc.exists) throw "User not found";
 
       const userData = userDoc.data();
       const currentBalance = userData?.monnify?.availableBalance || 0.00;
-      const fcmToken = userData?.fcmToken; // Get token for push
+      fcmToken = userData?.fcmToken; 
 
-      // 3. Calculations
-      const fee = Math.min(amountPaid * 0.03, 4000); 
-      const netCredit = amountPaid - fee;
-      
-      const balAfterDeposit = currentBalance + amountPaid;
-      const balAfterFee = balAfterDeposit - fee;
-
-      // 4. Writes
+      // 4. CALCULATIONS (Full Amount - No Fee Deduction)
+      const newBalance = currentBalance + amountPaid;
       const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
-      // Write A: The Credit
-      t.set(creditRef, {
-        id: `${transactionId}_credit`,
+      // 5. WRITES (Do these LAST)
+      
+      // Write A: Ledger Entry (Matches TransactionModel)
+      t.set(ledgerRef, {
+        id: `${transactionId}`,
         customerId: uid,
         amount: amountPaid,
-        type: 'deposit',
-        description: 'Topup via Monnify',
+        type: 'deposit', // Matches your model
+        description: 'Wallet Top-up',
         planId: 'none',
         reference: transactionId,
         status: 'success',
         balanceBefore: currentBalance,
-        balanceAfter: balAfterDeposit,
+        balanceAfter: newBalance,
         createdAt: timestamp
       });
 
-      // Write B: The Fee
-      const feeRef = db.collection('customer').doc(uid)
-                        .collection('ledger_transactions').doc(`${transactionId}_fee`);
-      
-      t.set(feeRef, {
-        id: `${transactionId}_fee`,
-        customerId: uid,
-        amount: -fee,
-        type: 'fee',
-        description: 'Service Fee (3%)',
-        planId: 'none',
-        reference: `${transactionId}_fee`,
-        status: 'success',
-        balanceBefore: balAfterDeposit,
-        balanceAfter: balAfterFee,
-        createdAt: timestamp
-      });
-
-      // Write C: Update User Balance
+      // Write B: Update Balance
       t.update(userRef, {
-        "monnify.availableBalance": admin.firestore.FieldValue.increment(netCredit)
+        "monnify.availableBalance": admin.firestore.FieldValue.increment(amountPaid)
       });
 
-      // Write D: SAVE IN-APP NOTIFICATION
-      const notifRef = db.collection('customer').doc(uid).collection('notifications').doc();
+      // Write C: In-App Notification
+      const notifRef = db.collection('customers').doc(uid).collection('notifications').doc();
       t.set(notifRef, {
         id: notifRef.id,
         title: "Wallet Funded 💰",
-        body: `You received ${formattedAmount}. Fee: ₦${fee}`,
+        body: `You received ${formattedAmount} in your wallet.`,
         type: "payment", 
         isRead: false,
         createdAt: timestamp
       });
 
-      // 5. SEND PUSH NOTIFICATION (Async Side Effect)
-      if (fcmToken) {
-        // We deliberately catch errors here so the Transaction doesn't fail just because Push failed
-        messaging.send({
-          token: fcmToken,
-          notification: {
-            title: "Wallet Funded 💰",
-            body: `You received ${formattedAmount} in your Korra wallet.`,
-          },
-          android: {
-            priority: "high",
-            notification: {
-              channelId: "korra_high_importance_channel",
-              priority: "max",
-              defaultSound: true,
-              defaultVibrateTimings: true,
-              color: "#A54600", // ✅ FIXED: 6-digit Hex (Removed FF alpha)
-              icon: "ic_launcher"
-            }
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: "default",
-                contentAvailable: true,
-              }
-            }
-          }
-        }).catch((e: any) => console.error("FCM Error (Transaction still succeeded):", e));
-      }
-      
-      // 1. CHECK FOR ACTIVE PLANS (The Gatekeeper)
-      // We check if there are any plans that are NOT 'completed' or 'cancelled'.
-      // We use a query inside the transaction or right before it.
-      const activePlansQuery = await t.get(
-        db.collection('plans')
-          .where('customerId', '==', uid)
-          .where('status', 'in', ['active', 'overdue', 'pending_approval'])
-          .limit(1)
-      );
-
-      // 2. EXECUTE LIMIT LOGIC ONLY IF CLEAN
-      if (activePlansQuery.empty) {
-         // 1. Get Old Limit Values
-         const totalLimit = limitDoc.exists ? (limitDoc.data().totalCreditLimit || 15000) : 15000;
-         const activeDebt = limitDoc.exists ? (limitDoc.data().activeDebt || 0) : 0;
-         
-         // 2. Calculate "Old Reservation Limit" (Purchasing Power)
-         const oldReservationLimit = Math.max(0, totalLimit - activeDebt);
-
-         // 3. Formula: (New Wallet Balance * 1.25) + (0.25 * Old Res Limit)
-         // Use balAfterFee because that's the actual cash they have now
-         const partA = balAfterFee * 1.25;
-         const partB = oldReservationLimit * 0.25;
-         const newReservationLimit = partA + partB;
-
-         // 4. Calculate New Total Limit (Add Debt back)
-         let newTotalLimit = newReservationLimit + activeDebt;
-
-         // Cap at 100k (as requested)
-         if (newTotalLimit > 100000) newTotalLimit = 100000;
-
-         // 5. Update if Increased
-         if (newTotalLimit > totalLimit) {
-            t.update(limitRef, {
-                totalCreditLimit: newTotalLimit,
-                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-                limitReason: 'wallet_fund_boost_v5'
-            });
-
-            // 6. Limit Notification
-            const boostAmount = newReservationLimit - oldReservationLimit;
-            const formattedBoost = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(boostAmount);
-            const formattedTotal = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(newReservationLimit);
-
-            const limitNotifRef = db.collection('customer').doc(uid).collection('notifications').doc();
-            t.set(limitNotifRef, {
-                id: limitNotifRef.id,
-                title: "Purchasing Power Increased! 🚀",
-                body: `Your reservation limit increased by +${formattedBoost}. You can now reserve items up to ${formattedTotal}.`,
-                type: "system", // Shows standard/brand color
-                isRead: false,
-                createdAt: timestamp
-            });
-
-            // 7. Limit Push
-            if (fcmToken) {
-               messaging.send({
-                  token: fcmToken,
-                  data: {
-                    type: "system",
-                    title: "Limit Increased! 🚀",
-                    body: `Your purchasing power is now ${formattedTotal}.`,
-                    uid: uid,
-                    notifId: limitNotifRef.id
-                  },
-                  android: { priority: "high" },
-                  apns: { payload: { aps: { contentAvailable: true } } }
-               }).catch((e: any) => console.error("Limit Push Error:", e));
-            }
-         }
-      } else {
-         console.log("User has active plans. Limit increase skipped.");
-      }
+      // Flag to send push after transaction commits
+      shouldSendPush = true;
     });
+
+    // --- D. SEND PUSH NOTIFICATION (Outside Transaction) ---
+    if (shouldSendPush && fcmToken) {
+       if (fcmToken) {
+          console.log(`Attempting to send Push to token: ${fcmToken.substring(0, 10)}...`);
+          await messaging.send({
+              token: fcmToken,
+              notification: {
+                title: "Wallet Funded 💰",
+                body: `You received ${formattedAmount} in your Korra wallet.`,
+              },
+              android: {
+                priority: "high",
+                notification: {
+                  channelId: "korra_high_importance_channel",
+                  priority: "max",
+                  color: "#A54600",
+                  icon: "ic_launcher"
+                }
+              },
+              apns: { payload: { aps: { sound: "default", contentAvailable: true } } }
+          })
+          .then(() => console.log("✅ FCM Push Sent Successfully"))
+          .catch((e: any) => console.error("❌ FCM Failed:", e));
+       } else {
+          console.error("⚠️ Push Skipped: No FCM Token found for user.");
+       }
+    }
 
     return new Response(JSON.stringify({ status: "success" }), { 
       status: 200, 

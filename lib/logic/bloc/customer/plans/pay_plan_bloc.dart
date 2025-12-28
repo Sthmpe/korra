@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../config/utils/korra_exception.dart';
+import '../../../../data/models/customer/payment_receipt_data.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 // --- EVENTS ---
@@ -25,7 +26,9 @@ class PayPlanState {
   final PayPlanStatus status;
   final String? errorMessage;
 
-  const PayPlanState({this.status = PayPlanStatus.initial, this.errorMessage});
+  final PaymentReceiptData? receiptData;
+
+  const PayPlanState({this.status = PayPlanStatus.initial, this.errorMessage, this.receiptData});
 }
 
 // --- BLOC ---
@@ -40,14 +43,18 @@ class PayPlanBloc extends Bloc<PayPlanEvent, PayPlanState> {
     emit(const PayPlanState(status: PayPlanStatus.loading));
     
     try {
-      // Call the Repo (which calls the Edge Function)
-      await repo.payInstallment(
+      // ✅ 1. Capture the returned Receipt Data
+      final receipt = await repo.payInstallment(
         planId: event.planId,
         customerUid: event.customerUid,
         amount: event.amount,
       );
       
-      emit(const PayPlanState(status: PayPlanStatus.success));
+      // ✅ 2. Emit Success WITH the data
+      emit(PayPlanState(
+        status: PayPlanStatus.success, 
+        receiptData: receipt
+      ));
     } catch (e) {
       String msg = "Payment failed. Please try again.";
       if (e is KorraException) {

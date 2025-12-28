@@ -43,7 +43,7 @@ class CustomerRepository implements INotificationRepository {
   Future<void> updateFcmToken(String uid, String token) async {
     try {
       // We merge it so we don't overwrite other data
-      await db.collection('customer').doc(uid).set({
+      await db.collection('customers').doc(uid).set({
         'fcmToken': token,
         'lastSeen': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -104,26 +104,37 @@ class CustomerRepository implements INotificationRepository {
 
     // 2. THE ORPHAN CHECK (Safety Net)
     try {
-      final doc = await firestore.collection('customer').doc(uid).get();
+      // We look for the document.
+      // NOTE: Ensure your collection name is correct! 
+      // Your bloc says 'customers' (plural), but here you used 'customer' (singular).
+      // I have updated it to 'customers' based on your previous code context.
+      final doc = await firestore.collection('customers').doc(uid).get();
 
       if (!doc.exists) {
+        // If the doc really doesn't exist, we throw a specific error
         throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
       }
     } catch (e) {
-      // If we get Permission Denied or Not Found, it means the DB doc is missing.
-      // (Because the rule says "allow read if owner". If doc is missing, rule might fail or return empty)
+      // 🛑 STOP! Do NOT delete the account here. 
+      // It might just be a network error or an App Check failure.
+      
+      debugPrint('Login Verification Failed: $e');
 
-      debugPrint('CRITICAL: Zombie account detected (Technical): $e');
+      // Just sign them out so they can't use the app without a profile
+      await auth.signOut();
 
-      // Delete the Auth user so they can sign up again properly
-      try {
-        await credential.user!.delete();
-      } catch (delError) {
-        debugPrint("Could not delete zombie user: $delError");
+      // Check if it was actually a "Not Found" error we threw above
+      if (e is FirebaseException && e.code == 'not-found') {
+         throw KorraException(
+          'Account setup incomplete. Please contact support or sign up again.',
+          technicalDetails: 'Profile document missing',
+        );
       }
 
+      // Otherwise, it's likely a network/permission/AppCheck error.
+      // Re-throw it so the UI shows "Network Error" instead of "Account Deleted".
       throw KorraException(
-        'Your account setup was incomplete. Please sign up again.',
+        'Unable to verify account profile. Please check your connection.',
         technicalDetails: e.toString(),
       );
     }
@@ -245,7 +256,7 @@ class CustomerRepository implements INotificationRepository {
       if (uid != null) {
         try {
           // Attempt to clean up Firestore documents
-          await db.collection('customer').doc(uid).delete();
+          await db.collection('customers').doc(uid).delete();
           await db.collection('customer_limits').doc(uid).delete();
         } catch (_) {}
       }
@@ -326,7 +337,7 @@ class CustomerRepository implements INotificationRepository {
     }
 
     await db
-        .collection('customer')
+        .collection('customers')
         .doc(customer.uid)
         .set(map, SetOptions(merge: true));
   }
@@ -365,7 +376,7 @@ class CustomerRepository implements INotificationRepository {
 
   /// Stream Balance & Profile
   Stream<Customer?> streamCustomer(String uid) {
-    return db.collection('customer').doc(uid).snapshots().map((doc) {
+    return db.collection('customers').doc(uid).snapshots().map((doc) {
       if (!doc.exists) return null;
       return Customer.fromMap(doc.data()!);
     });
@@ -374,7 +385,7 @@ class CustomerRepository implements INotificationRepository {
   // STREAM: Listens to the Ledger (Transactions)
   Stream<List<TransactionModel>> streamLedger(String uid) {
     return db
-        .collection('customer')
+        .collection('customers')
         .doc(uid)
         .collection('ledger_transactions')
         .orderBy('createdAt', descending: true) // Newest first
@@ -391,7 +402,7 @@ class CustomerRepository implements INotificationRepository {
   /// STREAM: Listens to My Vendors
   Stream<List<VendorProfile>> streamMyVendors(String uid) {
     return db
-        .collection('customer')
+        .collection('customers')
         .doc(uid)
         .collection('my_vendors')
         .orderBy('lastInteractionAt', descending: true)
@@ -411,7 +422,7 @@ class CustomerRepository implements INotificationRepository {
     required String state,
   }) async {
     try {
-      await db.collection('customer').doc(uid).update({
+      await db.collection('customers').doc(uid).update({
         'address.address': address.trim(),
         'address.city': city.trim(),
         'address.state': state.trim(),
@@ -526,6 +537,44 @@ class CustomerRepository implements INotificationRepository {
          }
       }
       throw KorraException("Could not update limit.", technicalDetails: e.toString());
+    }
+  }
+
+  // ✅ 1. REAL-TIME STREAM (For PayPlanInputScreen)
+  // Listens to changes. If vendor updates credit, UI updates instantly.
+  Stream<double> streamStoreCredit(String customerUid, String vendorId) {
+    return firestore
+        .collection('customers')
+        .doc(customerUid)
+        .collection('my_vendors') // Ensure this matches your DB collection name exactly
+        .doc(vendorId)
+        .snapshots()
+        .map((doc) {
+          if (!doc.exists || doc.data() == null) return 0.0;
+          final data = doc.data() as Map<String, dynamic>;
+          // Safety: Handle int/double mismatch from Firestore
+          return (data['storeCredit'] ?? 0).toDouble();
+        });
+  }
+
+  // ✅ 2. ONE-TIME FETCH (For your Helper Function)
+  // Just gets the value once without listening.
+  Future<double> getStoreCredit(String customerUid, String vendorId) async {
+    try {
+      final doc = await firestore
+          .collection('customers')
+          .doc(customerUid)
+          .collection('my_vendors')
+          .doc(vendorId)
+          .get();
+
+      if (!doc.exists || doc.data() == null) return 0.0;
+      
+      final data = doc.data() as Map<String, dynamic>;
+      return (data['storeCredit'] ?? 0).toDouble();
+    } catch (e) {
+      debugPrint("Repo Error fetching store credit: $e");
+      return 0.0; // Fail safe to 0
     }
   }
 }
