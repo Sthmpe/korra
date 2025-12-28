@@ -53,11 +53,21 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
         } else if (price <= 50000) {
           duration = 35; notice = 3; extension = 14; allowExtension = true;
         } else if (price <= 75000) {
-          duration = 45; notice = 3; extension = 14; allowExtension = true;
+          duration = 45; notice= 3; extension = 14; allowExtension = true;
+        } else if (price <= 150000) {
+          duration = 56; notice= 3; extension = 14; allowExtension = true;
+        } else if (price <= 230000) {
+          duration = 60; notice= 3; extension = 14; allowExtension = true;
+        } else if (price <= 320000) {
+          duration = 65; notice= 3; extension = 15; allowExtension = true;
+        } else if (price <= 410000) {
+          duration = 70; notice= 3; extension = 20; allowExtension = true;
         } else {
-          // 75k - 100k+
-          duration = 56; notice = 3; extension = 14; allowExtension = true;
+          // 410k+ (Hard Cap)
+          duration = 75; notice= 3; extension = 20; allowExtension = true;
         }
+
+
 
         emit(
           state.copyWith(

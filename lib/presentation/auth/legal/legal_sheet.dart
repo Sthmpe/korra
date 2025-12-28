@@ -3,44 +3,45 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/constants/colors.dart'; // Ensure you have this import for KorraColors
+
 // --- PUBLIC FUNCTIONS ---
 
 Future<void> showKorraVendorTermsSheet(BuildContext context) {
   return _showSheet(
     context,
-    title: 'Vendor Terms of Service',
+    title: 'Merchant Terms of Service',
     sections: [
       _Section(
-        heading: '1. The Vendor Program',
+        heading: '1. The Merchant Program',
         items: [
           'Korra operates as a financial infrastructure tool designed to facilitate reservation-based transactions. We act as a payment processor and agreement recorder, not a marketplace or an escrow agent.',
-          'You retain full autonomy over your customer sourcing and sales agreements. Korra provides the digital rails to structure payments and secure price locks.',
-          'You may choose between two transaction models: "Strict Lock" (for binding reservations) or "Flexi Direct" (for open arrangements).',
+          'You (The Merchant) retain full autonomy over your customer sourcing and sales agreements. Korra provides the digital rails to structure payments and secure price locks.',
+          'We connect you with customers who want to "Reserve Now, Pay Later", securing your sales volume in advance.',
         ],
       ),
       _Section(
         heading: '2. Fees & Commission (3.5%)',
         items: [
-          'Korra charges a flat Platform Fee of 3.5% on every credit settled to your Vendor Wallet.',
+          'Korra charges a flat Platform Fee of 3.5% on funds settled to your Merchant Wallet.',
           'This fee serves as consideration for the use of our automated bookkeeping, payment gateway infrastructure, and reservation technology.',
-          'The 3.5% fee is automatically deducted "on-entry" when funds are credited to your wallet. The balance reflected in your wallet is fully withdrawable.',
+          'The 3.5% fee is automatically deducted "on-entry" when funds are credited to your wallet. The remaining balance reflected in your wallet is fully withdrawable.',
         ],
       ),
       _Section(
-        heading: '3. Payments & Settlement Agreement',
+        heading: '3. Payments & Store Credit Policy',
         items: [
-          'Settlements are processed based on the Agreement Terms, not delivery verification.',
-          'For "Strict Lock" Plans: Funds are held for a mandatory 24-hour cooling-off period. After 24 hours, 50% of paid funds are automatically released to your wallet to formalize the reservation.',
-          'For "Flexi Direct" Plans: Funds are settled to your wallet immediately after payment.',
-          'Price Lock Obligations: Under "Flexi Direct", you must strictly honor the price lock and terms agreed upon initiation. Under "Strict Lock", you are obligated to maintain the reservation as long as the customer is active, and you must respect the customer’s right to extend the duration up to the maximum allowable days.',
-          'Refunds: In the event of a customer default or cancellation under the "Strict Lock" agreement, refunds are processed automatically according to the pre-agreed terms (e.g., 50% retention as liquidated damages) without requiring dispute adjudication.',
+          'Settlements are processed directly to your Merchant Wallet.',
+          'No Cash Refunds: Under the Korra agreement, cash refunds are NOT processed for cancellations. If a customer cancels a plan, the funds are converted into Store Credit valid specifically with your store.',
+          'By using Korra, you agree to honor this Store Credit for future purchases by that customer.',
+          'Price Lock Obligations: You are obligated to maintain the reservation and the agreed price as long as the customer is active on the plan.',
         ],
       ),
       _Section(
         heading: '4. Delivery & Logistics Responsibility',
         items: [
           'Korra does not oversee logistics, enforce shipping timelines, or require proof of delivery (Waybills). Delivery is a private contractual obligation between you and the Customer.',
-          'Funds are released based on the payment schedule and agreement milestones, not on physical handover of goods.',
+          'Funds are released based on the payment schedule, not on the physical handover of goods.',
           'You bear full liability for fulfilling orders. Any failure to deliver after funds are settled constitutes a breach of contract with the Customer, for which you are solely responsible.',
         ],
       ),
@@ -49,21 +50,20 @@ Future<void> showKorraVendorTermsSheet(BuildContext context) {
         items: [
           'The listing or sale of illegal, counterfeit, stolen, or prohibited items is strictly forbidden. Korra maintains a zero-tolerance policy for illicit trade.',
           'We reserve the right to suspend accounts and freeze funds if activity violates Nigerian law or CBN financial regulations.',
-          'Bypassing the platform to complete a Korra-initiated transaction offline to avoid fees is a violation of these terms.',
         ],
       ),
       _Section(
         heading: '6. Liability, Reputation & Transparency',
         items: [
           'You are solely liable for maintaining your business reputation. Korra does not mediate product quality disputes.',
-          'You agree to maintain transparency with your customers regarding stock availability and delivery timelines.',
+          'You guarantee that the product delivered matches the description provided. Issues regarding authenticity, quality, or warranty are your sole responsibility.',
           'In the event of a breach of contract (e.g., failure to deliver after collecting funds), you acknowledge that you are personally liable to the Customer, and Korra may provide your verified identity details to relevant parties for resolution.',
         ],
       ),
       _Section(
         heading: '7. Amendments',
         items: [
-          'Korra reserves the right to update these terms. Continued use of the Vendor App constitutes acceptance of the updated terms.',
+          'Korra reserves the right to update these terms. Continued use of the Merchant App constitutes acceptance of the updated terms.',
         ],
       ),
     ],
@@ -79,16 +79,15 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         heading: '1. The Core Relationship',
         items: [
           'Korra Finance acts solely as the payment infrastructure and agreement recording tool. We are not a retailer, distributor, or warehouse.',
-          'You (The Vendor) retain full legal title and liability for the quality, authenticity, and physical custody of the products you list.',
-          'By accepting ANY deposit (Strict or Direct), you enter a binding legal contract with the Customer to lock the price and reserve the inventory immediately.',
+          'You (The Merchant) retain full legal title and liability for the quality, authenticity, and physical custody of the products you list.',
+          'By accepting a deposit, you enter a binding legal contract with the Customer to lock the price and reserve the inventory immediately.',
         ],
       ),
       _Section(
         heading: '2. Inventory Integrity (Immediate Price Lock)',
         items: [
-          'The "Price Lock" is active from Day 1 (the moment the customer makes the first down payment), regardless of when funds settle to your wallet.',
+          'The "Price Lock" is active from Day 1 (the moment the customer makes the first down payment).',
           'You MUST remove the item from your public shelf immediately upon the first deposit. Selling a reserved item to a walk-in customer or another online buyer constitutes a Breach of Contract.',
-          'This obligation applies to both "Strict Lock" and "Flexi Direct" models. The customer is entitled to the locked price as long as they are active on the plan.',
         ],
       ),
       _Section(
@@ -96,16 +95,15 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         items: [
           'You are responsible for arranging delivery or pickup directly with the Customer.',
           'Korra does not employ riders or manage logistics. Any delay, loss, or damage during transit is a matter between you, the Customer, and the Logistics Provider.',
-          'You must not mark an item as "Shipped" or "Delivered" in the app until physical handover has occurred or a valid Waybill has been generated.',
+          'You must not mark an item as "Fulfilled" in the app until physical handover has occurred.',
         ],
       ),
       _Section(
-        heading: '4. Handling Defaults & Discipline Layers',
+        heading: '4. Handling Cancellations (Store Credit)',
         items: [
-          'Under "Strict Lock", the system enforces financial discipline:',
-          '   - First 24 Hours: Customer can cancel with only a minor processing fee deduction. You receive no funds during this cooling-off period.',
-          '   - After 24 Hours: Liquidated Damages activate. If the customer defaults or cancels, you retain 50% of the funds paid so far as compensation for holding inventory.',
-          'Under "Flexi Direct", you resolve financial breaches directly with the customer, but you must honor the price lock agreement until a breach is confirmed.',
+          'We enforce a strict "No Cash Refund" policy to protect your cash flow.',
+          'If a customer cancels a plan, the funds you have already received remain with you. However, you now have a "Liability" to the customer in the form of Store Credit.',
+          'You must allow the customer to use this credit to purchase other items from your store in the future.',
         ],
       ),
       _Section(
@@ -113,7 +111,7 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         items: [
           'You guarantee that "What You See Is What You Get". The product must match the exact description and images shared via the link.',
           'The sale of counterfeit (fake), stolen, or refurbished items sold as "New" is strictly prohibited.',
-          'If a customer reports a verified defect or fake specification, you are contractually obligated to resolve the matter immediately (whether through replacement, refund, or warranty service). Korra is not liable for your inventory quality.',
+          'If a customer reports a verified defect or fake specification, you are contractually obligated to resolve the matter immediately (whether through replacement or warranty service). Korra is not liable for your inventory quality.',
         ],
       ),
       _Section(
@@ -137,22 +135,22 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
 Future<void> showKorraVendorPrivacySheet(BuildContext context) {
   return _showSheet(
     context,
-    title: 'Vendor Privacy Policy',
+    title: 'Merchant Privacy Policy',
     sections: [
       _Section(
         heading: '1. Information We Collect',
         items: [
           'Identity Data: NIN, BVN, and Government-issued ID details for KYC compliance.',
           'Business Data: CAC Certificate (if applicable), Store Address, and Bank Account details.',
-          'Social Reputation Data: We collect and monitor your provided social media handles (Instagram, TikTok, etc.) to verify business legitimacy and activity.',
-          'Transaction Data: History of sales, payouts, refunds, and dispute records.',
+          'Social Reputation Data: We collect and monitor your provided social media handles to verify business legitimacy.',
+          'Transaction Data: History of sales, payouts, and Store Credit records.',
         ],
       ),
       _Section(
         heading: '2. How We Use Your Data',
         items: [
           'To verify that your business is real and not a "ghost" shop.',
-          'To process wallet settlements and manage the 10-day cooling-off period.',
+          'To process wallet settlements and manage Store Credit ledgers.',
           'To conduct background checks and fraud risk assessments.',
           'To comply with CBN (Central Bank of Nigeria) and anti-money laundering (AML) regulations.',
         ],
@@ -205,49 +203,49 @@ Future<void> showKorraTermsSheet(BuildContext context) {
       _Section(
         heading: '1. About Korra Reservation',
         items: [
-          'Korra is a financial reservation tool. We allow you to structure "Reserve & Pay" agreements with Vendors.',
-          'We are NOT a marketplace or a retailer. We do not own the goods. We facilitate the payment agreement between you and the Vendor.',
-          'You are responsible for verifying the Vendor\'s reputation before transacting. Korra verifies Identity (KYC), not product quality.',
+          'Korra is a financial reservation tool. We allow you to structure "Reserve & Pay" agreements with Merchants.',
+          'We are NOT a marketplace or a retailer. We do not own the goods. We facilitate the payment agreement between you and the Merchant.',
+          'You are responsible for verifying the Merchant\'s reputation before transacting. Korra verifies Identity (KYC), not product quality.',
         ],
       ),
       _Section(
         heading: '2. Fees & Charges',
         items: [
-          'Korra charges a Platform Fee of 3.5% on plan initiation.',
+          'Korra charges a Service Fee of 3.5% on plan initiation.',
           'This fee covers payment gateway charges and the cost of securing the "Price Lock" technology.',
-          'This fee is non-refundable, even if you cancel the plan.',
+          'This fee is non-refundable.',
         ],
       ),
       _Section(
-        heading: '3. "Strict Lock" Rules (24-Hour Cooling Off)',
+        heading: '3. Store Credit Refund Policy',
         items: [
-          'If your plan is a "Strict Lock" plan:',
-          'You have a 24-hour grace period. You can cancel for a 100% Refund of your deposit (minus the breakage fee).',
-          '24 Hours Onwards: 50% of your funds are released to the Vendor to secure full ownership of the item.',
-          'Cancellation Penalty: If you cancel AFTER 24 hours, based on the plan terms, you may either forfeit 50% of total funds paid as "Liquidated Damages" or refunds are processed strictly as Store Credit.',
+          'By creating a plan, you are reserving an item and removing it from the market. Therefore, Cash Refunds are NOT available.',
+          'If you cancel your plan for any reason, 100% of the principal amount you paid will be converted into Store Credit.',
+          'This Store Credit is valid specifically with the Merchant you reserved from and can be used for future purchases.',
+          'There are no cancellation penalties or breakage fees. You keep the full value of what you paid, stored as credit.',
         ],
       ),
       _Section(
-        heading: '4. "Flexi Direct" Rules',
+        heading: '4. Merchant Responsibility',
         items: [
-          'If your plan is a "Flexi Direct" plan:',
-          'The Vendor controls the down payment and funds are settled to the Vendor immediately.',
-          'Cash refunds are NOT guaranteed. If you cancel a Direct plan, refunds are processed strictly as Store Credit valid only with that specific Vendor.',
+          'The Merchant is solely responsible for the authenticity, quality, and warranty of the product.',
+          'Korra does not inspect goods. "What You See Is What You Get" depends on the Merchant\'s integrity.',
+          'If a Merchant fails to deliver or sells a fake product, you must resolve this directly with them. Korra will assist by providing the Merchant\'s Verified Identity Details to help you seek legal redress.',
         ],
       ),
       _Section(
         heading: '5. Delivery & Logistics',
         items: [
-          'Korra does not manage delivery. Delivery is arranged between you and the Vendor.',
+          'Korra does not manage delivery. Delivery is arranged between you and the Merchant.',
           'We strongly recommend using insured courier services (GIG, Kwik, DHL).',
-          'If a Vendor fails to deliver after you complete payment, Korra will assist by providing the Vendor\'s Verified Identity Details to help you seek redress.',
+          'Ensure you inspect the item immediately upon collection.',
         ],
       ),
       _Section(
         heading: '6. Acceptable Use',
         items: [
           'You agree to provide accurate identity details for KYC verification.',
-          'You agree to complete payments within the agreed duration. Failure to pay may result in plan termination and loss of deposit.',
+          'You agree to complete payments within the agreed duration.',
         ],
       ),
       _Section(
@@ -276,14 +274,14 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
         heading: '2. How We Use Your Data',
         items: [
           'Identity Verification: To comply with KYC (Know Your Customer) and AML (Anti-Money Laundering) regulations.',
-          'Service Delivery: To process payments, manage reservation plans, and coordinate with vendors.',
+          'Service Delivery: To process payments, manage reservation plans, and coordinate with Merchants.',
           'Security: To monitor for suspicious activity and unauthorized access.',
         ],
       ),
       _Section(
         heading: '3. Information Sharing',
         items: [
-          'We do not sell your personal data. Information is shared only with verified third parties essential to our service (e.g., Monnify for payments, vendors for order fulfillment).',
+          'We do not sell your personal data. Information is shared only with verified third parties essential to our service (e.g., Monnify for payments, Merchants for order fulfillment).',
           'We may disclose data to regulatory authorities or law enforcement if legally compelled to do so.',
         ],
       ),

@@ -33,6 +33,11 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   // // Initialize App Check
   // await FirebaseAppCheck.instance.activate(
   //   // specific for Android debug builds

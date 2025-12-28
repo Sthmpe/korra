@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-// import 'package:url_launcher/url_launcher.dart'; 
+import 'package:url_launcher/url_launcher.dart'; 
 
 import '../../shared/widgets/korra_header.dart';
+import '../../../config/constants/colors.dart'; // Ensure you have your colors
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -17,50 +18,51 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = "";
 
-  // --- KNOWLEDGE BASE ---
+  // --- KNOWLEDGE BASE (Updated for Store Credit & Merchant Terms) ---
   final List<FaqItem> _allFaqs = [
     FaqItem(
       question: "How does Korra work?",
-      answer: "Korra helps you lock down items you love and pay small-small.\n\n"
-              "1. Find a vendor or use their Link.\n"
-              "2. Pay the down payment to reserve immediately.\n"
-              "3. Pay the rest at your own pace.\n"
+      answer: "Korra allows you to 'Reserve Now, Pay Later' directly with Merchants.\n\n"
+              "1. Find a Merchant or use their private link.\n"
+              "2. Pay the down payment to lock the price and reserve stock immediately.\n"
+              "3. Pay the balance at your own pace.\n"
               "4. Pick up your item once fully paid."
     ),
     FaqItem(
-      question: "Can I get a refund if I cancel?",
-      answer: "• Within 24 Hours: Yes, full refund (minus 3.5% fee).\n"
-              "• After 24 Hours: 50% penalty applies for 'Strict Lock' plans. 'Flexi Direct' refunds are Store Credit only."
+      question: "What happens if I cancel a plan?",
+      answer: "We have a strict 'No Cash Refund' policy to protect Merchant inventory. \n\n"
+              "If you cancel, 100% of the principal amount you have paid is instantly converted into Store Credit. You can use this credit to buy other items from the same Merchant in the future."
     ),
     FaqItem(
-      question: "What happens if I miss a payment?",
-      answer: "Your plan becomes 'Overdue'. You have a grace period to pay. Consistent defaults may freeze your Active Slots."
+      question: "Is there a cancellation penalty?",
+      answer: "No. There are no breakage fees or penalties. You retain the full value of your payments, but they are stored as Store Credit rather than returned as cash."
     ),
     FaqItem(
       question: "Do I pay extra to use Korra?",
-      answer: "We charge a small 3.5% Platform Fee. This covers the payment gateway and Price Lock technology."
+      answer: "We charge a one-time Platform Fee of 3.5% when you start a plan. This fee covers the payment gateway and the technology used to secure your Price Lock. This fee is non-refundable."
+    ),
+    FaqItem(
+      question: "What if the Merchant sells me a fake product?",
+      answer: "The Merchant is solely liable for product quality and authenticity. Korra acts as the payment processor.\n\n"
+              "If a Merchant fails to deliver or sells a counterfeit item, please report them. We will provide their verified Identity Details (KYC) to assist you in seeking legal redress."
     ),
     FaqItem(
       question: "Why is my plan 'Pending Approval'?",
-      answer: "The vendor has 24 hours to confirm stock. If they decline or expire, your money returns to your wallet instantly."
+      answer: "The Merchant has 24 hours to confirm they have the stock available. If they decline or fail to accept within this window, your money is returned to your wallet instantly."
     ),
     FaqItem(
       question: "Who delivers my item?",
-      answer: "Delivery is arranged between you and the vendor directly. Korra is a payment tool, not a logistics company."
+      answer: "Korra does not handle logistics. Delivery or pickup is arranged privately between you and the Merchant. Do not release the 'Collection Code' until you have physically received your item."
     ),
     FaqItem(
-      question: "What is the 'Slot System'?",
-      answer: "Slots control how many plans you can run at once. Prove you are reliable to unlock more slots!"
-    ),
-    FaqItem(
-      question: "What if the vendor refuses to deliver?",
-      answer: "Report them immediately. If your status is 'Collection Approved', they are legally obligated to release the item."
+      question: "What is 'Store Credit'?",
+      answer: "Store Credit is a digital balance held with a specific Merchant. It cannot be withdrawn to your bank, but it can be used as cash to start new plans or buy items from that specific Merchant shop."
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    // Filter Logic (Search Only)
+    // Filter Logic
     final filtered = _allFaqs.where((faq) {
       return faq.question.toLowerCase().contains(_query.toLowerCase()) ||
              faq.answer.toLowerCase().contains(_query.toLowerCase());
@@ -90,7 +92,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   borderSide: BorderSide.none,
                 ),
                 contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                isDense: true, // Makes it smaller/compact
+                isDense: true, 
               ),
             ),
           ),
@@ -154,8 +156,15 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {
-                // Email Launch Logic
+              onTap: () async {
+                final Uri emailLaunchUri = Uri(
+                  scheme: 'mailto',
+                  path: 'support@korra.com.ng',
+                  query: 'subject=Korra Support Request',
+                );
+                if (await canLaunchUrl(emailLaunchUri)) {
+                  await launchUrl(emailLaunchUri);
+                }
               },
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
@@ -203,12 +212,11 @@ class _FaqTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(bottom: 8.h), // Tighter spacing
+      margin: EdgeInsets.only(bottom: 8.h), 
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8.r), // Smaller radius
-        border: Border.all(color: const Color(0xFFF2F4F7)), // Subtle border
-        // Very subtle shadow for "premium" feel
+        borderRadius: BorderRadius.circular(8.r), 
+        border: Border.all(color: const Color(0xFFF2F4F7)), 
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -218,7 +226,6 @@ class _FaqTile extends StatelessWidget {
         ],
       ),
       child: Theme(
-        // Remove default dividers
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0),
@@ -228,7 +235,7 @@ class _FaqTile extends StatelessWidget {
           title: Text(
             item.question,
             style: GoogleFonts.inter(
-              fontSize: 13.sp, // Premium small font
+              fontSize: 13.sp,
               fontWeight: FontWeight.w600,
               color: const Color(0xFF101828),
             ),
@@ -243,9 +250,9 @@ class _FaqTile extends StatelessWidget {
             Text(
               item.answer,
               style: GoogleFonts.inter(
-                fontSize: 12.sp, // Smaller body text
+                fontSize: 12.sp, 
                 height: 1.5,
-                color: const Color(0xFF667085), // Soft grey
+                color: const Color(0xFF667085), 
               ),
             ),
           ],

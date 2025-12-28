@@ -10,8 +10,10 @@ class KorraApp extends StatelessWidget {
   const KorraApp({super.key, required this.startScreen});
   final Widget startScreen;
 
-  static const double kMaxAppWidth = 500; // fintech-safe
-
+  static const double kMaxAppWidth = 450; // fintech-safe
+  static const double kMinAppHeight = 900;
+  static const double kMaxAppHeight = 950; 
+ 
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
@@ -42,6 +44,8 @@ class KorraApp extends StatelessWidget {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       maxWidth: kMaxAppWidth,
+                      minHeight: kMinAppHeight,
+                      maxHeight: kMaxAppHeight,
                     ),
                     child: Container(
                       color: Colors.white,
