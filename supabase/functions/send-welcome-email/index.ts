@@ -1,137 +1,136 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const RESEND_API_KEY = 're_LA73tLsT_6btk6w4uhXQsZsksraJxLuMU'; // Replace with your Resend API key
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-const handler = async (request: Request): Promise<Response> => {
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+
+// --- EMAIL TEMPLATES ---
+
+// 🛡️ UPDATED CUSTOMER TEMPLATE
+const getCustomerTemplate = (name: string) => `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: sans-serif; background-color: #f6f7fb; padding: 20px; }
+    .container { background: #ffffff; max-width: 600px; margin: 0 auto; border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .header { background-color: #A54600; padding: 20px; text-align: center; }
+    .content { padding: 30px; color: #333; }
+    h1 { color: #A54600; font-size: 20px; }
+    .warning-box { background-color: #fff4e5; border-left: 5px solid #ff9800; padding: 15px; margin: 20px 0; font-size: 13px; color: #663c00; }
+    .btn { display: inline-block; background: #A54600; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }
+    .footer { text-align: center; font-size: 11px; color: #aaa; padding: 20px; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+       <img src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/korra_logo_white.png" alt="Korra" height="30">
+    </div>
+    <div class="content">
+      <h1>Welcome to Korra, ${name}! 👋</h1>
+      <p>You are now part of the smartest way to shop. With Korra, you can reserve items, pay small-small, and pick up when you're ready.</p>
+      
+      <div class="warning-box">
+        <strong>🛡️ SAFETY FIRST: AVOID SCAMS</strong>
+        <p>Your safety is our priority. Please follow these rules:</p>
+        <ul>
+          <li><strong>Verify Your Vendor:</strong> Ensure you are transacting with a reliable vendor, not just a random person. If a deal looks too good to be true, be careful.</li>
+          <li><strong>Protect Your PIN:</strong> Do NOT share your Pickup Code until your order is physically confirmed and inspected. This code confirms order fulfilment.</li>
+          <li><strong>Report Suspicious Activity:</strong> If a vendor asks for payment outside the app, report them immediately.</li>
+        </ul>
+      </div>
+
+      <p>Ready to start your first plan?</p>
+      <a href="#" class="btn">Start Shopping</a>
+    </div>
+    <div class="footer">
+      © 2025 Korra. Need help? Contact support@korra.com.ng
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+// 🚀 VENDOR TEMPLATE (Kept same as before)
+const getVendorTemplate = (name: string) => `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: sans-serif; background-color: #f6f7fb; padding: 20px; }
+    .container { background: #ffffff; max-width: 600px; margin: 0 auto; border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .header { background-color: #004d40; padding: 20px; text-align: center; } 
+    .content { padding: 30px; color: #333; }
+    h1 { color: #004d40; font-size: 20px; }
+    .tips-box { background-color: #e0f2f1; border-left: 5px solid #009688; padding: 15px; margin: 20px 0; font-size: 13px; color: #004d40; }
+    .btn { display: inline-block; background: #004d40; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }
+    .footer { text-align: center; font-size: 11px; color: #aaa; padding: 20px; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+       <img src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/korra_logo_white.png" alt="Korra Business" height="30">
+    </div>
+    <div class="content">
+      <h1>Welcome to Korra Business, ${name}! 🚀</h1>
+      <p>Your store is now live. Korra helps you secure sales faster by allowing customers to pay in installments while you keep the stock.</p>
+      
+      <div class="tips-box">
+        <strong>📈 HOW TO SUCCEED & BUILD TRUST</strong>
+        <ul>
+          <li><strong>Real Photos Only:</strong> Customers trust vendors who upload clear, original photos of products.</li>
+          <li><strong>Be Responsive:</strong> Answer customer questions quickly to build your reputation.</li>
+          <li><strong>No Scams:</strong> We have a zero-tolerance policy. If you are reported for fake products, your wallet will be locked immediately.</li>
+        </ul>
+      </div>
+
+      <p>Upload your first product now and start selling!</p>
+      <a href="#" class="btn">Go to Dashboard</a>
+    </div>
+    <div class="footer">
+      © 2025 Korra. Need help? Contact support@korra.com.ng
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+
+serve(async (req) => {
+  // A. CORS Pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
-    const { name, email } = await request.json();
+    const { name, email, userType } = await req.json(); // userType: 'customer' | 'vendor'
+
+    if (!RESEND_API_KEY) {
+      throw new Error("Missing RESEND_API_KEY environment variable");
+    }
 
     if (!name || !email) {
       return new Response(JSON.stringify({ error: "Missing name or email" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Inject name into HTML properly
-    const htmlContent = `
-      <!doctype html>
-      <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
-      <head>
-        <meta charset="utf-8">
-        <meta name="x-apple-disable-message-reformatting">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Welcome to Korra</title>
-        <style>
-          body, table, td, a { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif !important; 
-            margin:0; 
-            padding:0; 
-          }
-          img { border:0; outline:none; text-decoration:none; display:block; }
-          table { border-collapse: collapse !important; }
-          .preheader { display:none; max-height:0; overflow:hidden; mso-hide:all; opacity:0; }
-          @media (max-width: 600px){
-            .container { width:100% !important; margin:0 !important; }
-            .hero-text { font-size:12px !important; line-height:18px !important; }
-            h1 { font-size:14px !important; line-height:20px !important; }
-            .feature-text { font-size:11px !important; line-height:16px !important; }
-          }
-        </style>
-      </head>
-      <body style="background-color:#f6f7fb; margin:0; padding:0;">
+    // 1. Select Template based on User Type
+    const isVendor = userType === 'vendor';
+    const subject = isVendor ? 'Welcome to Korra Business! 🚀' : 'Welcome to Korra! + Safety Tips 🛡️';
+    const htmlContent = isVendor ? getVendorTemplate(name) : getCustomerTemplate(name);
+    const fromName = isVendor ? 'Korra Business Team' : 'Korra Team';
 
-        <!-- Hidden preview -->
-        <div class="preheader">Welcome to Korra, the smart way to reserve for vendors and customers.</div>
-
-        <table role="presentation" width="100%" bgcolor="#f6f7fb" cellpadding="0" cellspacing="0">
-          <tr>
-            <td align="center" style="padding:40px 12px;">
-
-              <!-- Card -->
-              <table role="presentation" class="container" width="600" style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,0.08);">
-
-                <!-- Top bar -->
-                <tr><td style="background:#A54600; height:6px;"></td></tr>
-
-                <!-- Logo -->
-                <tr>
-                  <td align="center" style="padding:24px 0;">
-                    <img src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/korra_logo_icon.webp" alt="Korra Logo" width="120" height="100">
-                  </td>
-                </tr>
-
-                <!-- Hero / Greeting -->
-                <tr>
-                  <td style="padding:0 24px 24px 24px; text-align:center;">
-                    <h1 style="margin:0; font-size:16px; line-height:22px; color:#0f172a;">
-                      Hi ${name}, Welcome to Korra! 👋
-                    </h1>
-                    <p class="hero-text" style="margin:12px 0 0 0; color:#334155; font-size:12px; line-height:18px;">
-                      You’re officially part of the Korra community! Manage flexible reserve plans, track orders, and grow your business or savings effortlessly — whether you're a vendor or a customer.
-                    </p>
-                  </td>
-                </tr>
-
-                <!-- Features -->
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <table role="presentation" width="100%">
-                      <tr>
-                        <td width="24" valign="top" style="font-size:16px; line-height:22px;">💡</td>
-                        <td class="feature-text" style="color:#334155; font-size:11px; line-height:16px;">Flexible reserve plans for all users.</td>
-                      </tr>
-                      <tr><td height="8"></td><td></td></tr>
-                      <tr>
-                        <td width="24" valign="top" style="font-size:16px; line-height:22px;">🔒</td>
-                        <td class="feature-text" style="color:#334155; font-size:11px; line-height:16px;">Secure wallets and seamless payment management.</td>
-                      </tr>
-                      <tr><td height="8"></td><td></td></tr>
-                      <tr>
-                        <td width="24" valign="top" style="font-size:16px; line-height:22px;">⚡</td>
-                        <td class="feature-text" style="color:#334155; font-size:11px; line-height:16px;">Track payments and orders quickly with ease.</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- CTA -->
-                <tr>
-                  <td align="center" style="padding:20px;">
-                    <a href="#" style="background:#A54600; color:#ffffff; font-weight:bold; font-size:13px; padding:10px 20px; border-radius:10px; text-decoration:none; display:inline-block; box-shadow:0 4px 12px rgba(165,70,0,0.25);">
-                      Continue in the app
-                    </a>
-                  </td>
-                </tr>
-
-                <!-- Support -->
-                <tr>
-                  <td style="padding:0 24px 20px 24px; text-align:center;">
-                    <p style="margin:0; color:#64748b; font-size:11px; line-height:16px;">
-                      Need help? <a href="mailto:support@korra.com.ng" style="color:#A54600; text-decoration:underline;">Contact Support</a> or call us at <strong>09152540533</strong>.
-                    </p>
-                  </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr>
-                  <td style="padding:12px 24px 20px 24px; background:#f9f9f9; border-top:1px solid #e0e0e0; text-align:center;">
-                    <p style="margin:0; color:#94a3b8; font-size:10px; line-height:14px;">
-                      © 2025 Korra. All rights reserved.<br>
-                      You’re receiving this email because an account was created with this address.
-                    </p>
-                  </td>
-                </tr>
-
-              </table>
-              <!-- /Card -->
-            </td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `;
-
+    // 2. Send Email via Resend
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -139,41 +138,35 @@ const handler = async (request: Request): Promise<Response> => {
         'Authorization': `Bearer ${RESEND_API_KEY}`
       },
       body: JSON.stringify({
-        // 👇 UPDATE THIS LINE
-        from: 'Korra Team <hello@mail.korra.com.ng>', 
+        from: `${fromName} <hello@mail.korra.com.ng>`, 
         to: [email],
-        subject: 'Welcome to Korra!',
+        subject: subject,
         html: htmlContent,
-        tags: [
-          {
-            name: 'category',
-            value: 'welcome',
-          },
-        ],
+        tags: [{ name: 'category', value: 'welcome' }],
       })
     });
+    
     const data = await res.json();
 
     if (!res.ok) {
       console.error("Resend API error:", data);
       return new Response(JSON.stringify({ error: data }), {
         status: res.status,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify({ success: true, data }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
-    console.error("Function error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Function error:", msg);
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-};
-
-serve(handler);
+});

@@ -1,23 +1,24 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// 1. DEFINE CORS HEADERS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // 2. CORS Pre-flight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     console.log("🚀 [START] Incoming Verification Request");
 
     // Parse Body
-    const { type, payload } = await req.json()
+    const { type, payload } = await req.json();
     console.log(`📝 Request Type: ${type}`);
-    console.log(`📦 Payload Data:`, JSON.stringify(payload)); // Be careful logging sensitive data in prod
+    // console.log(`📦 Payload Data:`, JSON.stringify(payload)); // Keep masked if sensitive
 
     // 1. GET QOREID ACCESS TOKEN
     console.log("🔐 Requesting QoreID Access Token...");
@@ -33,41 +34,41 @@ serve(async (req) => {
         clientId: clientId,
         secret: Deno.env.get('QOREID_SECRET'),
       }),
-    })
+    });
 
-    const tokenData = await tokenResponse.json()
+    const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok || !tokenData.accessToken) {
       console.error("❌ [AUTH FAIL] Token Response:", JSON.stringify(tokenData));
-      throw new Error(`Identity Service Auth Failed: ${tokenData.message || tokenResponse.statusText}`)
+      throw new Error(`Identity Service Auth Failed: ${tokenData.message || tokenResponse.statusText}`);
     }
 
     console.log("✅ [AUTH SUCCESS] Access Token Received");
-    const accessToken = tokenData.accessToken
+    const accessToken = tokenData.accessToken;
 
     // 2. ROUTE REQUEST & DETERMINE VALIDATION LOGIC
-    let apiUrl = ''
-    let validationStrategy = 'data_only' 
+    let apiUrl = '';
+    let validationStrategy = 'data_only';
 
     switch (type) {
       case 'cac':
-        apiUrl = 'https://api.qoreid.com/v1/ng/identities/cac-basic'
-        validationStrategy = 'cac_check'
-        break
+        apiUrl = 'https://api.qoreid.com/v1/ng/identities/cac-basic';
+        validationStrategy = 'cac_check';
+        break;
 
       case 'bvn_face':
-        apiUrl = 'https://api.qoreid.com/v1/ng/identities/face-verification/bvn'
-        validationStrategy = 'face_match'
-        break
+        apiUrl = 'https://api.qoreid.com/v1/ng/identities/face-verification/bvn';
+        validationStrategy = 'face_match';
+        break;
 
       case 'nin_face':
-        apiUrl = 'https://api.qoreid.com/v1/ng/identities/face-verification/nin'
-        validationStrategy = 'face_match'
-        break
+        apiUrl = 'https://api.qoreid.com/v1/ng/identities/face-verification/nin';
+        validationStrategy = 'face_match';
+        break;
 
       default:
         console.error(`❌ [INVALID TYPE] Unknown type received: ${type}`);
-        throw new Error(`Verification type '${type}' is not supported`)
+        throw new Error(`Verification type '${type}' is not supported`);
     }
 
     console.log(`📡 Calling QoreID Endpoint: ${apiUrl}`);
@@ -80,14 +81,14 @@ serve(async (req) => {
         'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify(payload)
-    })
+    });
 
-    const data = await apiResponse.json()
+    const data = await apiResponse.json();
 
     // 4. HANDLE API ERRORS
     if (!apiResponse.ok) {
         console.error("❌ [API ERROR] QoreID returned error:", JSON.stringify(data));
-        throw new Error(data.message || `${type.toUpperCase()} verification failed`)
+        throw new Error(data.message || `${type.toUpperCase()} verification failed`);
     }
 
     console.log("📥 [API SUCCESS] QoreID Response received. Validating status...");
@@ -133,18 +134,19 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
-    })
+    });
 
   } catch (error) {
     // CATCH-ALL LOGGING
-    console.error("🔥 [CRITICAL ERROR]:", error.message);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("🔥 [CRITICAL ERROR]:", msg);
     
     return new Response(JSON.stringify({ 
-        error: error.message,
+        error: msg,
         success: false
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
-    })
+    });
   }
-})
+});

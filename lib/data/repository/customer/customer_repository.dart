@@ -349,6 +349,7 @@ class CustomerRepository implements INotificationRepository {
         body: {
           'name': '${customer.firstName} ${customer.lastName}'.trim(),
           'email': customer.email,
+          'userType': 'customer',
         },
       );
     } catch (e) {

@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 // --- CONFIGURATION ---
 const MONNIFY_BASE_URL = "https://sandbox.monnify.com"; // Switch to Live for Prod
 const MONNIFY_API_KEY = Deno.env.get("MONNIFY_API_KEY") ?? "";
@@ -13,11 +19,6 @@ if (admin.apps.length === 0) {
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 }
 const db = admin.firestore();
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 // --- HELPER: MONNIFY AUTH ---
 async function getMonnifyToken() {
@@ -53,32 +54,21 @@ async function verifyPin(inputPin: string, storedHash: string): Promise<boolean>
 
 // --- HELPER: SEND PREMIUM NOTIFICATION ---
 async function sendNotification(uid: string, title: string, body: string, type: string) {
-  // 1. Write to In-App Notification Collection
   await db.collection('vendors').doc(uid).collection('notifications').add({
     title: title,
     body: body,
     type: type,
     isRead: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    // 'priority': 'high' // Flag for your UI to show gold border or special icon
   });
-
-  // 2. (Optional) Trigger Push Notification / Email via FCM or Extension
-  // If you have the "Trigger Email" extension installed on the 'mail' collection:
-  /*
-  await db.collection('mail').add({
-    to: [userEmail],
-    message: {
-      subject: title,
-      html: `<h1>${title}</h1><p>${body}</p>`,
-    }
-  });
-  */
 }
 
 // --- MAIN HANDLER ---
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // A. CORS Pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
     const { type, uid, pin, amount, destination } = await req.json();
@@ -94,7 +84,9 @@ serve(async (req) => {
         hash: secureHash,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
     }
 
     // ====================================================
@@ -118,8 +110,7 @@ serve(async (req) => {
         const statsRef = db.collection('vendor_stats').doc(uid);
         const statsDoc = await t.get(statsRef);
         
-        // Calculate Liquid Cash: (Total Earnings) - (Locked in Vault) - (Already Paid Out)
-        // This ensures they cannot withdraw locked funds or overdraw.
+        // Calculate Liquid Cash
         const earnings = statsDoc.data()?.totalEarnings || 0;
         const locked = statsDoc.data()?.activeLocks || 0;
         const paidOut = statsDoc.data()?.totalPayouts || 0;
@@ -251,16 +242,17 @@ serve(async (req) => {
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       } catch (monnifyError) {
-        // If Monnify network fails, we keep it as 'pending_monnify' so a cron job can check it later.
-        // We do NOT refund automatically here to avoid double-crediting if the money actually moved.
-        throw new Error(`Gateway Error: ${monnifyError.message}`);
+        // If Monnify network fails, keep it as 'pending_monnify'
+        const errMsg = monnifyError instanceof Error ? monnifyError.message : String(monnifyError);
+        throw new Error(`Gateway Error: ${errMsg}`);
       }
     }
 
     throw new Error("Invalid operation");
 
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, error: e.message }), { 
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ success: false, error: msg }), { 
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" } 
     });

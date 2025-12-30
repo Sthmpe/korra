@@ -1,7 +1,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
-// --- 1. FIREBASE INIT ---
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// --- 2. FIREBASE INIT ---
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -10,13 +16,22 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
-// --- 2. MAIN LOGIC ---
+// --- 3. MAIN LOGIC ---
 serve(async (req) => {
+  // A. CORS Pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
+    // 🔓 NO AUTH CHECK
     const { vendorId, productCode, updateData } = await req.json();
 
     if (!vendorId || !productCode || !updateData) {
-      return new Response(JSON.stringify({ error: "Missing data" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "Missing data" }), { 
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // 1. Validate Inputs
@@ -42,18 +57,16 @@ serve(async (req) => {
 
       if (!statsDoc.exists) throw "Vendor stats not found";
       const stats = statsDoc.data();
-      maxPlanAmount = Number(stats.maxPlanAmount) || 100000.0; // 👈 Read Dynamic Limit
+      maxPlanAmount = Number(stats.maxPlanAmount) || 100000.0; 
 
       // 3. Calculate Financial Delta
       const oldTotal = (Number(oldData.price) || 0) * (Number(oldData.availableStock) || 0);
       const newTotal = newPrice * newStock;
-      const difference = newTotal - oldTotal; // Positive if value increased
+      const difference = newTotal - oldTotal; 
       
       if (newPrice > maxPlanAmount) {
         throw `Security Violation: Single product price (₦${newPrice.toLocaleString()}) exceeds your account limit (₦${maxPlanAmount.toLocaleString()}).`;
       }
-
-
 
       // 4. Check Limit (Only if value increased)
       if (difference > 0) {
@@ -67,26 +80,23 @@ serve(async (req) => {
       }
 
       // 5. Determine New Status
-      // If rejected, reset to pending. If approved, keep approved.
       let newStatus = oldData.status;
       if (oldData.status === 'rejected') {
         newStatus = 'pending';
       } else if (oldData.status === 'outOfStock' && newStock > 0) {
-        // If it was OOS but now has stock, check if it was previously approved
-        // For simplicity, we assume OOS products were once approved.
         newStatus = 'approved';
       }
 
       // 6. Update Stats
       const currentActive = Number(stats.currentActivePlanValue) || 0;
       t.update(statsRef, {
-        currentActivePlanValue: currentActive + difference, // Add delta (works for negative too)
+        currentActivePlanValue: currentActive + difference, 
         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // 7. Update Product
       t.update(productDoc.ref, {
-        ...updateData, // Apply all new fields (Timeline, Policy, etc.)
+        ...updateData,
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
@@ -95,14 +105,14 @@ serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ success: true, data: result }), { 
-      headers: { "Content-Type": "application/json" } 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
     });
 
   } catch (error) {
     const msg = error.toString().replace("Error: ", "");
     return new Response(JSON.stringify({ success: false, error: msg }), { 
       status: 400, 
-      headers: { "Content-Type": "application/json" } 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
     });
   }
 });

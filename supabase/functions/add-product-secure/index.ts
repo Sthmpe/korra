@@ -1,6 +1,13 @@
+//add-product-secure/index.ts
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
+
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 // --- 1. FIREBASE INIT ---
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
@@ -25,6 +32,10 @@ async function generateProductCode(vendorId: string) {
 
 // --- 3. MAIN LOGIC ---
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  
   try {
     const { 
       vendorId, 
@@ -134,13 +145,13 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true, 
       data: result 
-    }), { headers: { "Content-Type": "application/json" } });
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
     const msg = error.toString().replace("Error: ", "");
     return new Response(JSON.stringify({ success: false, error: msg }), { 
       status: 400,
-      headers: { "Content-Type": "application/json" } 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
     });
   }
 });

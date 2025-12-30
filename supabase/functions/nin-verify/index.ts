@@ -1,5 +1,11 @@
 // supabase/functions/nin-verify/index.ts
-import { serve } from "https://deno.land/std/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const BASE_URL = Deno.env.get("MONNIFY_BASE_URL")!;
 const API_KEY = Deno.env.get("MONNIFY_API_KEY")!;
@@ -65,26 +71,43 @@ async function verifyNIN(nin: string) {
 }
 
 serve(async (req) => {
+  // A. CORS Pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     if (req.method !== "POST") {
-      return new Response("Only POST allowed", { status: 405 });
+      return new Response("Only POST allowed", { 
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
+
     const { nin } = await req.json();
     if (!nin) {
       return new Response(
         JSON.stringify({ ok: false, message: "nin is required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        },
       );
     }
 
     const result = await verifyNIN(nin);
+    
     return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e) {
     return new Response(
       JSON.stringify({ ok: false, message: (e as Error).message }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      },
     );
   }
 });

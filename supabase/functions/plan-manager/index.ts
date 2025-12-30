@@ -3,6 +3,11 @@ import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
 // 1. SETUP
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
 const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY') || "your-production-secret-key-123";
 
@@ -103,7 +108,9 @@ const PLATFORM_FEE_PERCENTAGE = 0.035; // 3.5%
 
 // 3. MAIN HANDLER
 serve(async (req) => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+    }
 
     try {
         const {
@@ -165,7 +172,7 @@ serve(async (req) => {
                 status: "SUCCESS",
                 minDownPayment: minPrincipal,
                 secureToken: jwt
-            }), { headers: { "Content-Type": "application/json" } });
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // =======================================================================
@@ -484,7 +491,7 @@ serve(async (req) => {
                 'vendors'
             );
 
-            return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planIdStr }), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planIdStr }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // =======================================================================
@@ -788,7 +795,7 @@ serve(async (req) => {
                 }
             }
 
-            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // =======================================================================
@@ -898,7 +905,7 @@ serve(async (req) => {
                 'vendors'
             );
 
-            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // =======================================================================
@@ -1025,7 +1032,7 @@ serve(async (req) => {
                 { type: "plan_detail", planId: planId }
             );
 
-            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         
@@ -1097,13 +1104,13 @@ serve(async (req) => {
                 { type: "plan_detail", planId: planId }
             );
 
-            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400 });
 
     } catch (err) {
         const msg = err.toString().replace("Error: ", "");
-        return new Response(JSON.stringify({ status: "ERROR", error: msg }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ status: "ERROR", error: msg }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 });

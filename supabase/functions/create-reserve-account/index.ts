@@ -1,13 +1,13 @@
-// supabase/functions/create-reserve-account/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
 
+// 1. DEFINE CORS HEADERS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-// 1. INITIALIZE FIREBASE ADMIN (Outside the handler for performance)
+// 2. INITIALIZE FIREBASE ADMIN
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -17,48 +17,48 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
+// 3. MAIN WORKER
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  // A. CORS Pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
-    const { uid, email, firstName, lastName, bvn, nin } = await req.json()
+    // 🔓 NO AUTH CHECK (Trusted Client)
+    const { uid, email, firstName, lastName, bvn, nin } = await req.json();
 
-    // 1. AUTHENTICATE (Basic Auth -> Access Token)
-    const BASE_URL = Deno.env.get("MONNIFY_BASE_URL")
-    const apiKey = Deno.env.get("MONNIFY_API_KEY")
-    const secretKey = Deno.env.get("MONNIFY_SECRET_KEY")
-    const contractCode = Deno.env.get("MONNIFY_CONTRACT_CODE")
+    // 1. MONNIFY AUTH
+    const BASE_URL = Deno.env.get("MONNIFY_BASE_URL");
+    const apiKey = Deno.env.get("MONNIFY_API_KEY");
+    const secretKey = Deno.env.get("MONNIFY_SECRET_KEY");
+    const contractCode = Deno.env.get("MONNIFY_CONTRACT_CODE");
 
-    // Encode "API_KEY:SECRET_KEY" to Base64
-    const base64Auth = btoa(`${apiKey}:${secretKey}`)
+    const base64Auth = btoa(`${apiKey}:${secretKey}`);
 
     const authResponse = await fetch(`${BASE_URL}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Authorization": `Basic ${base64Auth}` }
-    })
+    });
 
-    const authData = await authResponse.json()
+    const authData = await authResponse.json();
     if (!authData.requestSuccessful) {
-      throw new Error("Monnify Auth Failed")
+      throw new Error("Monnify Auth Failed");
     }
-    const accessToken = authData.responseBody.accessToken
+    const accessToken = authData.responseBody.accessToken;
 
-    // 2. CREATE RESERVED ACCOUNT (Using verified V2 Body)
+    // 2. CREATE RESERVED ACCOUNT
     const requestBody = {
-      accountReference: uid, // Links to your user
+      accountReference: uid,
       accountName: `Korra - ${firstName} ${lastName}`,
       currencyCode: "NGN",
       contractCode: contractCode,
       customerEmail: email,
       customerName: `${firstName} ${lastName}`,
-      bvn: bvn,             // CORRECTED: 'bvn' not 'customerBvn'
-      nin: nin,             // ADDED: Matches your example
-      getAllAvailableBanks: true, // Gets Wema, Moniepoint, etc.
-      // preferredBanks: [
-      //   "50515"
-      // ]
-      // restrictPaymentSource: false // Optional: Defaults to false
-    }
+      bvn: bvn,
+      nin: nin,
+      getAllAvailableBanks: true, 
+    };
 
     const createResponse = await fetch(`${BASE_URL}/api/v2/bank-transfer/reserved-accounts`, {
       method: "POST",
@@ -67,28 +67,21 @@ serve(async (req) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(requestBody)
-    })
+    });
 
-    const responseJson = await createResponse.json()
+    const responseJson = await createResponse.json();
 
     if (!responseJson.requestSuccessful) {
-      console.error("Monnify Error:", responseJson)
-      throw new Error(responseJson.responseMessage || "Failed to create account")
+      console.error("Monnify Error:", responseJson);
+      throw new Error(responseJson.responseMessage || "Failed to create account");
     }
 
-    // 3. PARSE RESPONSE
-    // Monnify returns an array of accounts. We usually pick index 0.
-    const mainAccount = responseJson.responseBody.accounts[0]
-
-    // ============================================================
-    // 🆕 NEW STEP: INITIALIZE LEDGER IN FIRESTORE (SERVER SIDE)
-    // ============================================================
-    
-    // 1. Start a Batch
+    // 3. PARSE & SAVE TO FIRESTORE
+    const mainAccount = responseJson.responseBody.accounts[0];
     const batch = db.batch();
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
-    // 2. Prepare Ledger Entry
+    // Ledger Entry
     const ledgerRef = db.collection('customers').doc(uid).collection('ledger_transactions').doc();
     const initialTx = {
       id: ledgerRef.id,
@@ -103,10 +96,9 @@ serve(async (req) => {
       balanceAfter: 0.00,
       createdAt: timestamp
     };
-    batch.set(ledgerRef, initialTx); // Add to batch
+    batch.set(ledgerRef, initialTx);
 
-    // 3. Prepare Customer Stats Entry
-    // Kept separate from stats and profile for security/cleanliness
+    // Banking Details
     const bankingRef = db.collection('customers').doc(uid).collection('banking_details').doc('monnify');
     batch.set(bankingRef, {
       accountReference: responseJson.responseBody.accountReference,
@@ -117,24 +109,21 @@ serve(async (req) => {
       createdAt: timestamp
     });
 
+    // Stats
     const statsRef = db.collection('customers').doc(uid).collection('account_stats').doc('main');
     batch.set(statsRef, {
       uid: uid,
-      activePlansCount: 0,        // Slot Usage
-      completedPlansCount: 0,     // Level Progression
-      defaultsCount: 0,           // Risk Score
-      cancelledPlansCount: 0,     // Cancellation tracking
-      tier: "Starter",            // ✅ Added Tier (Starter, Keeper, Collector, VIP)
+      activePlansCount: 0,
+      completedPlansCount: 0,
+      defaultsCount: 0,
+      cancelledPlansCount: 0,
+      tier: "Starter",
       lastUpdated: timestamp
     });
 
-    // 4. Commit both at once
     await batch.commit();
 
-    // ============================================================
-    // END NEW STEP
-    // ============================================================
-
+    // 4. SUCCESS RESPONSE
     return new Response(JSON.stringify({
       success: true,
       data: {
@@ -147,12 +136,13 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
-    })
+    });
 
   } catch (error) {
+    // 5. ERROR RESPONSE
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
-    })
+    });
   }
-})
+});

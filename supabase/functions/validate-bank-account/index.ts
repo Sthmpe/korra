@@ -1,5 +1,10 @@
-// supabase/functions/validate-bank-account/index.ts
-import { serve } from "https://deno.land/std/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+
+// 1. DEFINE CORS HEADERS
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const BASE_URL = Deno.env.get("MONNIFY_BASE_URL")!;
 const API_KEY = Deno.env.get("MONNIFY_API_KEY")!;
@@ -26,6 +31,7 @@ async function getAccessToken(): Promise<string> {
     return cachedToken.value;
 }
 
+// Helper: Returns Data Object or Throws Error
 async function validateBankAccount(accountNumber: string, bankCode: string) {
     const token = await getAccessToken();
 
@@ -38,41 +44,57 @@ async function validateBankAccount(accountNumber: string, bankCode: string) {
     );
 
     const data = await res.json();
+    
     if (!res.ok || !data.requestSuccessful) {
-        return new Response(JSON.stringify({ ok: false, message: data.responseMessage || "Validation failed" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-        });
+        throw new Error(data.responseMessage || "Validation failed");
     }
 
     const r = data.responseBody;
-    return new Response(
-        JSON.stringify({
-            ok: true,
-            accountNumber: r.accountNumber,
-            accountName: r.accountName,
-            bankCode: r.bankCode,
-        }),
-        { headers: { "Content-Type": "application/json" } },
-    );
+    return {
+        ok: true,
+        accountNumber: r.accountNumber,
+        accountName: r.accountName,
+        bankCode: r.bankCode,
+    };
 }
 
 // --- Entry Point ---
 serve(async (req) => {
-    if (req.method !== "POST") {
-        return new Response(JSON.stringify({ ok: false, message: "Only POST allowed" }), {
-            status: 405,
-            headers: { "Content-Type": "application/json" },
-        });
+    // A. CORS Pre-flight
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
     }
 
-    const body = await req.json();
-    const { accountNumber, bankCode } = body;
-    if (!accountNumber || !bankCode) {
-        return new Response(JSON.stringify({ ok: false, message: "accountNumber and bankCode required" }), {
+    try {
+        if (req.method !== "POST") {
+            throw new Error("Only POST allowed");
+        }
+
+        const body = await req.json();
+        const { accountNumber, bankCode } = body;
+
+        if (!accountNumber || !bankCode) {
+            return new Response(JSON.stringify({ ok: false, message: "Missing accountNumber or bankCode" }), {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
+        // B. Execute Logic
+        const result = await validateBankAccount(accountNumber, bankCode);
+
+        // C. Success Response
+        return new Response(JSON.stringify(result), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+
+    } catch (error) {
+        // D. Error Handling
+        const msg = error instanceof Error ? error.message : String(error);
+        
+        return new Response(JSON.stringify({ ok: false, message: msg }), {
             status: 400,
-            headers: { "Content-Type": "application/json" },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }
-    return await validateBankAccount(accountNumber, bankCode);
 });

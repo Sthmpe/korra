@@ -10,72 +10,228 @@ class KorraApp extends StatelessWidget {
   const KorraApp({super.key, required this.startScreen});
   final Widget startScreen;
 
-  static const double kMaxAppWidth = 450; // fintech-safe
-  static const double kMinAppHeight = 900;
-  static const double kMaxAppHeight = 950; 
- 
+  // 🔒 Threshold: Any screen wider than this gets the "Blocker"
+  static const double kMaxMobileWidth = 600.0;
+
   @override
   Widget build(BuildContext context) {
-    return ScreenUtilInit(
-      designSize: const Size(430, 932),
-      minTextAdapt: true,
-      splitScreenMode: true,
-      builder: (context, child) {
-        return GetMaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Korra',
-          theme: AppTheme.light(),
+    return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Korra',
+      theme: AppTheme.light(),
+      
+      // 🏗️ THE LAYOUT MANAGER
+      builder: (context, navigatorChild) {
+        final size = MediaQuery.of(context).size;
 
-          builder: (context, navigatorChild) {
+        // 🛑 1. CHECK: IS IT A DESKTOP/TABLET?
+        if (size.width > kMaxMobileWidth) {
+          return const _PremiumDesktopBlocker();
+        }
+
+        // ✅ 2. IS IT MOBILE?
+        return ScreenUtilInit(
+          designSize: const Size(430, 932),
+          minTextAdapt: true,
+          splitScreenMode: true,
+          builder: (context, child) {
+            
+            // Text Scaling Safety
             final mediaQuery = MediaQuery.of(context);
-
             return MediaQuery(
               data: mediaQuery.copyWith(
                 textScaler: mediaQuery.textScaler.clamp(
-                  minScaleFactor: 0.9,
-                  maxScaleFactor: 1.15,
+                  minScaleFactor: 0.85,
+                  maxScaleFactor: 1.16,
                 ),
               ),
               child: Scaffold(
-                backgroundColor: Colors.grey.shade100,
                 resizeToAvoidBottomInset: false,
-
-                body: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: kMaxAppWidth,
-                      minHeight: kMinAppHeight,
-                      maxHeight: kMaxAppHeight,
+                body: Column(
+                  children: [
+                    const GlobalOfflineBanner(),
+                    Expanded(
+                      child: KorraOfflineGate(
+                        child: KorraUpdateGate(
+                          child: GestureDetector(
+                            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                            behavior: HitTestBehavior.translucent,
+                            child: navigatorChild,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Container(
-                      color: Colors.white,
-                      child: Column(
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+      home: startScreen,
+    );
+  }
+}
+
+// 💎 THE NEW PREMIUM DESKTOP LANDING SCREEN
+class _PremiumDesktopBlocker extends StatelessWidget {
+  const _PremiumDesktopBlocker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA), // Soft luxurious grey-white
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 1. Main Card with "Glass" Feel
+              Container(
+                constraints: const BoxConstraints(maxWidth: 480),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 40,
+                      offset: const Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // LOGO / ICON
+                    Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      // Using a safe fallback if image loads slowly
+                      child: Image.asset(
+                        'assets/images/korra_logo_icon.webp',
+                        fit: BoxFit.contain,
+                        errorBuilder: (c, o, s) => const Icon(
+                          Icons.wallet_rounded, 
+                          size: 40, 
+                          color: Color(0xFFA54600)
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // HEADLINE
+                    Text(
+                      "Korra is Mobile First",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans', // Or your app font
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey.shade900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // SUBTITLE
+                    Text(
+                      "To ensure the highest security for your wallet and transactions, Korra is currently available exclusively on mobile devices.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade500,
+                        height: 1.6,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+
+                    // VISUAL CUE: Phone Mockup / QR Placeholder
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
                         children: [
-                          const GlobalOfflineBanner(),
+                          Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Center(
+                              child: Icon(Icons.qr_code_rounded, color: Colors.grey.shade800),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
                           Expanded(
-                            child: KorraOfflineGate(
-                              child: KorraUpdateGate(
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      FocusManager.instance.primaryFocus?.unfocus(),
-                                  behavior: HitTestBehavior.translucent,
-                                  child: navigatorChild,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Switch to your phone",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey.shade900,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Open this link on iOS or Android",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            );
-          },
-
-          home: startScreen,
-        );
-      },
+              
+              const SizedBox(height: 32),
+              
+              // 2. Footer Brand
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_user_outlined, size: 16, color: Colors.grey.shade400),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Secured by Korra Financial",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade400,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
