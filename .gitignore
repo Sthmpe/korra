@@ -49,3 +49,4 @@ app.*.map.json
 /.vscode
 /firebase_rule.txt
 /.env
+.vercel
