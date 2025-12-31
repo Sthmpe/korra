@@ -7,6 +7,7 @@ import 'package:iconsax/iconsax.dart';
 
 // REPO & MODELS
 import '../../../config/constants/colors.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../config/utils/currency_formatters.dart';
 import '../../../data/models/customer/activity_item.dart';
 import '../../../data/models/customer/customer_model.dart';
@@ -30,11 +31,6 @@ import '../../../logic/services/notification_service.dart'; // Import Service
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import '../plans/create_plan_screen.dart';
-import '../plans/widgets/plan_details_screen.dart';
-import '../plans/widgets/transaction_receipt_screen.dart';
-import '../profile/bank_details_screen.dart';
-import 'notification_screen.dart';
 import 'widgets/activity_timeline.dart';
 import 'widgets/customer_wallet_card.dart';
 import 'widgets/link_input.dart';
@@ -96,7 +92,7 @@ class _HomePageState extends State<HomePage> {
             listeners: [
               BlocListener<LinkBloc, LinkState>(
                 listenWhen: (p, c) => p.status != c.status,
-                listener: (context, state) {
+                listener: (context, state) async {
                   if (state.status == LinkStatus.loaded) {
                     final product = state.productFetch ?? ProductFetchResult.empty();
                     
@@ -105,15 +101,24 @@ class _HomePageState extends State<HomePage> {
                       return;
                     }
 
-                    Get.to(() => CreatePlanScreen(
-                      product: product,
-                      customerRepo: widget.customerRepo,
-                      customer: customer, // Non-null due to stream state
-                      customerUid: widget.customerUid,
-                      walletBalance: currentBalance,
-                      onJumpToHome: () => widget.onJumpTo(0),
-                      onJumpToPlan: () => widget.onJumpToPlan,
-                    ));
+                    // 🔄 CHANGE: Named Route + Wait for Result
+                    final result = await Get.toNamed(
+                      Routes.customerCreatePlan,
+                      arguments: {
+                        'product': product,
+                        'customerRepo': widget.customerRepo,
+                        'customer': customer,
+                        'customerUid': widget.customerUid,
+                        'walletBalance': currentBalance,
+                      }
+                    );
+
+                    // 🦘 JUMP LOGIC: Check what the screen sent back
+                    if (result == 'jump_to_plans') {
+                      widget.onJumpToPlan(); 
+                    } else if (result == 'jump_to_home') {
+                      widget.onJumpTo(0);
+                    }
                   }
                 },
               ),
@@ -132,12 +137,20 @@ class _HomePageState extends State<HomePage> {
                       final hasUnread = count > 0;
 
                       return IconButton(
-                        onPressed: () {
-                          Get.to(() => NotificationScreen(
-                            repo: widget.customerRepo, 
-                            uid: widget.customerUid,
-                            onJumpToPlans: () => widget.onJumpTo(1),
-                          ));
+                        onPressed: () async {
+                          // 🔄 CHANGE: Named Route
+                          final result = await Get.toNamed(
+                            Routes.customerNotifications,
+                            arguments: {
+                              'repo': widget.customerRepo, 
+                              'uid': widget.customerUid,
+                            }
+                          );
+
+                          // 🦘 JUMP LOGIC
+                          if (result == 'jump_to_plans') {
+                            widget.onJumpTo(1); 
+                          }
                         },
                         icon: Stack(
                           clipBehavior: Clip.none, // Allow badge to overflow slightly
@@ -188,7 +201,10 @@ class _HomePageState extends State<HomePage> {
                                 return;
                               }
 
-                              Get.to(() => BankDetailsScreen(customer: customer));
+                              Get.toNamed(
+                                Routes.customerBankDetails, 
+                                arguments: customer 
+                              );
                             },
                           ),
 
@@ -335,16 +351,20 @@ class _HomePageState extends State<HomePage> {
                                     );
                                   }
 
-                                  Get.to(() => TransactionReceiptScreen(data: receiptData));
+                                  // 🔄 CHANGE: Named Route (Pass Object)
+                                  Get.toNamed(Routes.customerTransactionReceipt, arguments: receiptData);
                                 },
                                 onViewPlan: (item) {
                                   if (item.planId == null || item.planId!.isEmpty) return;
                                   // Use shell plan for instant nav
                                   final shellPlan = Plan.empty(id: item.planId!);
-                                  Get.to(() => PlanDetailsScreen(
-                                    plan: shellPlan, 
-                                    customerRepo: widget.customerRepo
-                                  ));
+                                  Get.toNamed(
+                                    Routes.customerPlanDetails,
+                                    arguments: {
+                                      'plan': shellPlan, 
+                                      'customerRepo': widget.customerRepo
+                                    }
+                                  );
                                 },
                               );
                             },

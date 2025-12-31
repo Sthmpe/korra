@@ -11,12 +11,12 @@ import 'package:korra/data/repository/customer/plans_repository.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../logic/bloc/customer/plans/plan_action_cubit.dart';
 import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
-import 'pay_plan_input_screen.dart';
 import 'vendor_header.dart';
 
 class PlanDetailsScreen extends StatelessWidget {
@@ -759,7 +759,13 @@ class PlanDetailsScreen extends StatelessWidget {
                 if (isOverdue) {
                   _showResolveSheet(context, p);
                 } else {
-                  Get.to(() => PayPlanInputScreen(plan: p, repo: customerRepo));
+                  Get.toNamed(
+                  Routes.customerPayPlan, 
+                  arguments: {
+                    'plan': p, 
+                    'repo': customerRepo
+                  }
+                );
                 }
               },
               style: FilledButton.styleFrom(
@@ -818,7 +824,13 @@ class PlanDetailsScreen extends StatelessWidget {
                 color: Colors.blue,
                 onTap: () {
                   Navigator.pop(ctx);
-                  Get.to(() => PayPlanInputScreen(plan: p, repo: customerRepo));
+                  Get.toNamed(
+                    Routes.customerPayPlan, 
+                    arguments: {
+                      'plan': p, 
+                      'repo': customerRepo
+                    }
+                  );
                 },
               ),
 

@@ -483,6 +483,29 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
         );
   }
 
+  Future<Map<String, String>> getComplianceStatus(String uid) async {
+    try {
+      final doc = await firestore.collection('vendor_compliance').doc(uid).get();
+      
+      // Default to 'verification_pending' if doc doesn't exist (Safety First)
+      if (!doc.exists) {
+        return {
+          'status': 'verification_pending', 
+          'message': 'Account verification required.'
+        };
+      }
+      
+      final data = doc.data()!;
+      return {
+        'status': data['status']?.toString() ?? 'verification_pending',
+        'message': data['publicMessage']?.toString() ?? 'Account restricted.'
+      };
+    } catch (e) {
+      // If error, fail safe (block)
+      return {'status': 'error', 'message': 'Could not verify account status.'};
+    }
+  }
+
   /// Calls a Supabase Edge Function to send a welcome email.
   Future<void> _sendWelcomeEmail(Vendor vendor) async {
     try {

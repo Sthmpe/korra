@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/colors.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_account_stats.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../data/models/customer/plans.dart';
@@ -22,7 +23,6 @@ import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../currency_input_formatter.dart';
-import '../profile/bank_details_screen.dart';
 import '../customer_failure_sheet.dart';
 
 class CreatePlanScreen extends StatefulWidget {
@@ -1260,7 +1260,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       btnText = "Top Up Wallet & Start";
       btnColor = Colors.black;
       customAction = () {
-        Get.to(() => BankDetailsScreen(customer: widget.customer));
+        Get.toNamed(Routes.customerBankDetails, arguments: widget.customer);
       };
     } else if (isFullPayment && walletAmount > 0) {
       btnText = "Pay Full Amount";

@@ -7,14 +7,13 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import '../../vendor/vendor_shell.dart';
-import '../role_login/role_login_screen.dart';
 import 'steps_v/step_business_type.dart';
 import 'steps_v/step_identity.dart';
 import 'steps_v/step_personal.dart';
@@ -72,7 +71,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
               Padding(
                 padding: EdgeInsets.only(right: 12.w),
                 child: IconButton(
-                  onPressed: () => Get.offAll(() => const RoleLoginScreen()),
+                  onPressed: () => Get.offAllNamed(Routes.roleLoginScreen),
                   icon: Icon(
                     Iconsax.arrow_left,
                     size: 24.sp,
@@ -156,13 +155,9 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                               s.signUpError ??
                               'An unknown error occurred during signup.',
                           onRetry: () {
-                            Get.offAll(
-                              () => BlocProvider(
-                                create: (_) => SignupVendorBloc(),
-                                child: SignupVendorScreen(
-                                  showLeadingIcon: true,
-                                ),
-                              ),
+                            Get.offAllNamed(
+                              Routes.vendorSignup,
+                              arguments: {'showLeadingIcon': true},
                             );
                           },
                         );
@@ -173,7 +168,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                           'Your vendor account has been created successfully.',
                           SnackbarType.success,
                         );
-                        Get.offAll(() => VendorShell(uid: s.uid));
+                        Get.offAllNamed(Routes.vendorShell);
                       }
                     },
                   ),

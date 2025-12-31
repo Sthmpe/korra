@@ -11,15 +11,15 @@ import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 
-class ChangePasswordScreen extends StatefulWidget {
+class VendorChangePasswordScreen extends StatefulWidget {
   final VendorRepository repo;
-  const ChangePasswordScreen({super.key, required this.repo});
+  const VendorChangePasswordScreen({super.key, required this.repo});
 
   @override
-  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
+  State<VendorChangePasswordScreen> createState() => _VendorChangePasswordScreenState();
 }
 
-class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+class _VendorChangePasswordScreenState extends State<VendorChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   
   final _currentCtrl = TextEditingController();

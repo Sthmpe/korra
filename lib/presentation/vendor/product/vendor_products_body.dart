@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart'; // Premium Icons
 
 import '../../../config/constants/colors.dart';
-import '../../../logic/bloc/vendor/image/image_bloc.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
@@ -15,8 +15,6 @@ import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import 'widgets/product_list_item_premium.dart';
 import 'widgets/product_search_bar.dart';
 import 'widgets/product_filter_pills.dart';
-import 'widgets/product_details_screen.dart';
-import 'widgets/product_edit_screen.dart';
 
 class VendorProductsBody extends StatelessWidget {
   const VendorProductsBody({super.key});
@@ -79,10 +77,18 @@ class VendorProductsBody extends StatelessWidget {
                           padding: EdgeInsets.only(bottom: 12.h),
                           child: ProductListItemPremium(
                             product: product,
-                            onTap: () => Get.to(() => BlocProvider.value(
-                              value: context.read<VendorProductsBloc>(),
-                              child: ProductDetailsScreen(product: product),
-                            )),
+                            onTap: () {
+                              // Capture the current bloc
+                              final currentBloc = context.read<VendorProductsBloc>();
+                              
+                              Get.toNamed(
+                                Routes.vendorProductDetails,
+                                arguments: {
+                                  'product': product,
+                                  'listBloc': currentBloc, // 👈 Passing the Bloc
+                                },
+                              );
+                            },
                             onEdit: () => _navigateToEdit(context, product),
                             onShare: product.shareable
                                 ? () => context.read<VendorProductsBloc>().add(VendorProductsSharePressed(product))
@@ -105,13 +111,16 @@ class VendorProductsBody extends StatelessWidget {
   }
 
   void _navigateToEdit(BuildContext context, dynamic product) {
-    Get.to(() => MultiBlocProvider(
-      providers: [
-        BlocProvider.value(value: context.read<VendorProductsBloc>()),
-        BlocProvider(create: (_) => ImageBloc()),
-      ],
-      child: ProductEditScreen(product: product),
-    ));
+    // Capture the current bloc
+    final currentBloc = context.read<VendorProductsBloc>();
+
+    Get.toNamed(
+      Routes.vendorEditProduct,
+      arguments: {
+        'product': product,
+        'listBloc': currentBloc, // 👈 Passing the Bloc
+      },
+    );
   }
 
   Widget _buildEmptyState(BuildContext context, VendorProductsState state) {

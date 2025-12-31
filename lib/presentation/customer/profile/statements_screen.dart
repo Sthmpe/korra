@@ -9,10 +9,10 @@ import 'package:iconsax/iconsax.dart'; // Premium Icons
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/transaction_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/payment_receipt_data.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../plans/widgets/empty_state_card.dart';
-import '../plans/widgets/transaction_receipt_screen.dart';
 
 class StatementsScreen extends StatefulWidget {
   final CustomerRepository repo;
@@ -145,7 +145,10 @@ class _TransactionTile extends StatelessWidget {
           );
         }
 
-        Get.to(() => TransactionReceiptScreen(data: receiptData));
+        Get.toNamed(
+          Routes.customerTransactionReceipt, 
+          arguments: receiptData
+        );
       },
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),

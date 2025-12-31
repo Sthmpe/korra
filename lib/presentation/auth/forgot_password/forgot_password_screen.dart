@@ -6,10 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/sizes.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_bloc.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_event.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_state.dart';
-import 'reset_link_sent_screen.dart';
 
 class ForgotPasswordScreen extends StatelessWidget {
   const ForgotPasswordScreen({super.key});
@@ -142,7 +142,10 @@ class _PrimaryCTA extends StatelessWidget {
       listenWhen: (previous, current) => previous.status != current.status,
       listener: (context, state) {
         if (state.status == FPStatus.sent) {
-          Get.to(() => ResetLinkSentScreen(email: state.email));
+          Get.toNamed(
+            Routes.resetLinkSent,
+            arguments: {'email': state.email},
+          );
         }
       },
       builder: (context, state) {

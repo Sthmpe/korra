@@ -45,54 +45,6 @@ class VendorProductsRestockPressed extends VendorProductsEvent {
   List<Object?> get props => [productId];
 }
 
-class VendorProductsAdd extends VendorProductsEvent {
-  final String name;
-  final String description;
-  final double price;
-  final int stock;
-  final String category;
-  final List<String> images;
-  final bool termsAccepted;
-  final ProductModelType modelType;
-  final String cancellationPolicy;
-  final bool extensionsEnabled;
-  final double? directDownPayment;
-  
-  // ✅ ADD THIS: We pass the calculated duration explicitly
-  final int duration; 
-
-  VendorProductsAdd({
-    required this.name,
-    required this.description,
-    required this.price,
-    required this.stock,
-    required this.category,
-    required this.images,
-    required this.termsAccepted,
-    required this.modelType,
-    required this.cancellationPolicy,
-    required this.extensionsEnabled,
-    this.directDownPayment,
-    required this.duration, // ✅ Add here
-  });
-
-  @override
-  List<Object?> get props => [
-        name,
-        description,
-        price,
-        stock,
-        category,
-        images,
-        termsAccepted,
-        modelType,
-        cancellationPolicy,
-        extensionsEnabled,
-        directDownPayment,
-        duration, // ✅ Add here
-      ];
-}
-
 class VendorProductsRequested extends VendorProductsEvent {}
 
 class VendorProductsLoadMore extends VendorProductsEvent {}
@@ -106,6 +58,47 @@ class VendorProductsUpdated extends VendorProductsEvent {
   List<Object?> get props => [items, statusCounts];
 }
 
+class VendorProductsAdd extends VendorProductsEvent {
+  final String name;
+  final String description;
+  final double price;
+  final int stock;
+  final String category;
+  
+  // 🔄 CHANGED: From List<String> to List<dynamic>
+  // This allows us to pass File (Mobile) or XFile (Web) objects directly
+  final List<dynamic> images; 
+  
+  final bool termsAccepted;
+  final ProductModelType modelType;
+  final String cancellationPolicy;
+  final bool extensionsEnabled;
+  final double? directDownPayment;
+  final int duration;
+
+  VendorProductsAdd({
+    required this.name,
+    required this.description,
+    required this.price,
+    required this.stock,
+    required this.category,
+    required this.images, // ✅ Now accepts dynamic list
+    required this.termsAccepted,
+    required this.modelType,
+    required this.cancellationPolicy,
+    required this.extensionsEnabled,
+    this.directDownPayment,
+    required this.duration,
+  });
+
+  @override
+  List<Object?> get props => [
+        name, description, price, stock, category, images,
+        termsAccepted, modelType, cancellationPolicy, extensionsEnabled,
+        directDownPayment, duration,
+      ];
+}
+
 class VendorProductsEdit extends VendorProductsEvent {
   final String productCode;
   final String name;
@@ -113,8 +106,11 @@ class VendorProductsEdit extends VendorProductsEvent {
   final String category;
   final double price;
   final int stock;
-  final List<String> existingImageUrls; // old images
-  final List<File> newImages; // new ones if any 
+  final List<String> existingImageUrls;
+  
+  // 🔄 CHANGED: From List<File> to List<dynamic>
+  final List<dynamic> newImages; 
+
   final ProductStatus status;
 
   const VendorProductsEdit({
@@ -125,7 +121,10 @@ class VendorProductsEdit extends VendorProductsEvent {
     required this.price,
     required this.stock,
     required this.existingImageUrls,
-    required this.newImages,
+    required this.newImages, // ✅ Now accepts dynamic list
     required this.status,
   });
+  
+  @override
+  List<Object?> get props => [productCode, name, newImages, existingImageUrls];
 }

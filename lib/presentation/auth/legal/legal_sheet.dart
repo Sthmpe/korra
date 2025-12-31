@@ -3,8 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../config/constants/colors.dart'; // Ensure you have this import for KorraColors
-
 // --- PUBLIC FUNCTIONS ---
 
 Future<void> showKorraVendorTermsSheet(BuildContext context) {

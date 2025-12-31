@@ -9,8 +9,8 @@ import 'package:korra/data/repository/customer/notification_repository.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/korra_notification.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../shared/widgets/korra_header.dart';
-import '../profile/statements_screen.dart';
 
 class NotificationScreen extends StatelessWidget {
   final CustomerRepository repo;
@@ -128,11 +128,13 @@ class NotificationScreen extends StatelessWidget {
                   // 2. Navigation Logic (Kept from Customer App)
                   switch (notif.type) {
                     case 'payment':
-                      Get.to(() => StatementsScreen(repo: repo, customerUid: uid));
+                      Get.toNamed(
+                        Routes.customerStatements, 
+                        arguments: {'repo': repo, 'uid': uid}
+                      );
                       break;
                     case 'reminder':
                     case 'plan':
-                      Get.back();
                       onJumpToPlans();
                       break;
                   }

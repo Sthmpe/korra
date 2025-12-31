@@ -6,7 +6,7 @@ abstract class ImageEvent extends Equatable {
 }
 
 class AddImages extends ImageEvent {
-  final List<File> newImages;
+  final List<dynamic> newImages;
   AddImages(this.newImages);
 
   @override

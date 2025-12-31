@@ -9,12 +9,11 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
-import '../../../../logic/bloc/vendor/image/image_bloc.dart';
+import '../../../../config/routes/app_routes.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../../../presentation/vendor/product/widgets/share_link_sheet.dart';
 import '../../../shared/widgets/korra_header.dart';
-import 'product_edit_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final ProductItem product;
@@ -408,13 +407,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   void _navigateToEdit(BuildContext context) {
-    Get.to(() => MultiBlocProvider(
-      providers: [
-        BlocProvider.value(value: context.read<VendorProductsBloc>()),
-        BlocProvider(create: (_) => ImageBloc()),
-      ],
-      child: ProductEditScreen(product: widget.product),
-    ));
+    // 1. Capture the current Bloc instance
+    final vendorBloc = context.read<VendorProductsBloc>();
+
+    // 2. Navigate using Named Route (passing the bloc)
+    Get.toNamed(
+      Routes.vendorEditProduct,
+      arguments: {
+        'product': widget.product, // Pass the product data
+        'listBloc': vendorBloc,    // 👈 Pass the LIVE bloc instance
+      },
+    );
   }
 }
 

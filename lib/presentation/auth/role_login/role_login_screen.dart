@@ -4,12 +4,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
 import '../../../config/constants/sizes.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../logic/bloc/auth/role_login/role_login_state.dart';
-import '../../customer/customer_shell.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
-import '../../vendor/vendor_shell.dart';
 import 'widgets/login_button.dart';
 import 'widgets/login_fields.dart';
 import 'widgets/login_header.dart';
@@ -27,11 +26,13 @@ class RoleLoginScreen extends StatelessWidget {
       child: BlocListener<RoleLoginBloc, RoleLoginState>(
         listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
+          // ✅ SUCCESS LOGIC: Use Named Routes
           if (state.status == LoginStatus.success) {
-            final Widget destination =
-                state.role == KorraRole.vendor ? VendorShell(uid: state.uid) : CustomerShell(uid: state.uid);
-            // Using Get.offAll to prevent returning to the login screen.
-            Get.offAll(() => destination);
+            if (state.role == KorraRole.vendor) {
+              Get.offAllNamed(Routes.vendorShell);
+            } else {
+              Get.offAllNamed(Routes.customerShell);
+            }
           }
 
           if (state.status == LoginStatus.failure && state.failure != null) {

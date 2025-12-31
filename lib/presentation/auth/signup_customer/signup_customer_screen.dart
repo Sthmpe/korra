@@ -7,14 +7,13 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 
-import '../../customer/customer_shell.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import '../role_login/role_login_screen.dart';
 import 'steps/step_personal.dart';
 import 'steps/step_identity.dart';
 import 'steps/step_security.dart';
@@ -67,7 +66,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
               Padding(
                 padding: EdgeInsets.only(right: 12.w),
                 child: IconButton(
-                  onPressed: () => Get.offAll(() => const RoleLoginScreen()),
+                  onPressed: () => Get.offAllNamed(Routes.roleLoginScreen),
                   icon: Icon(
                     Iconsax.arrow_left,
                     size: 24.sp,
@@ -152,13 +151,9 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                               s.signUpError ??
                               'An unknown error occurred during signup.',
                           onRetry: () {
-                            Get.offAll(
-                              () => BlocProvider(
-                                create: (_) => SignupCustomerBloc(),
-                                child: SignupCustomerScreen(
-                                  showLeadingIcon: true,
-                                ),
-                              ),
+                            Get.offAllNamed(
+                              Routes.customerSignup,
+                              arguments: {'showLeadingIcon': true},
                             );
                           },
                         );
@@ -168,7 +163,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                           'Account created successfully!',
                           SnackbarType.success,
                         );
-                        Get.offAll(() => CustomerShell(uid: s.uid));
+                        Get.offAllNamed(Routes.customerShell);
                       }
                     },
                   ),

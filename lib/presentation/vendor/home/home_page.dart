@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/routes/app_routes.dart';
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
@@ -11,7 +12,6 @@ import '../../../logic/core/net/net_cubit.dart';
 import '../../../logic/services/notification_service.dart'; // Reuse service
 import '../../shared/widgets/korra_header.dart';
 import 'vendor_home_body.dart';
-import 'widgets/notification_screen.dart';
 
 class VendorHomePage extends StatefulWidget {
   final VendorRepository vendors;
@@ -64,9 +64,10 @@ class _VendorHomePageState extends State<VendorHomePage> {
 
                 return IconButton(
                   onPressed: () {
-                    Get.to(() => NotificationScreen(
-                      vendorUid: widget.vendorUid,
-                    ));
+                    Get.toNamed(
+                      Routes.vendorNotifications,
+                      arguments: {'uid': widget.vendorUid},
+                    );
                   },
                   icon: Stack(
                     clipBehavior: Clip.none,

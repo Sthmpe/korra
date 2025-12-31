@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/routes/app_routes.dart';
 import '../../../data/repository/vendors/vendor_repository.dart';
-import '../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'vendor_products_body.dart';
-import 'widgets/add_product_page.dart';
 
 class VendorProductsPage extends StatelessWidget {
   final VendorRepository vendors;
@@ -42,29 +40,22 @@ class VendorProductsPage extends StatelessWidget {
                 // Minimalist "Add" Button
                 IconButton(
                   onPressed: () async {
-                    // 1. ✅ Await the Navigation (Wait for it to come back)
-                    await Get.to(() => MultiBlocProvider(
-                      providers: [
-                        // Pass existing Product Bloc
-                        BlocProvider.value(
-                          value: context.read<VendorProductsBloc>()
-                        ),
-                        // Create NEW Image Bloc for the form
-                        BlocProvider(
-                          create: (_) => ImageBloc(),
-                        ),
-                      ],
-                      child: AddProductPage(
-                        vendors: vendors, 
-                        vendorUid: vendorUid
-                      ),
-                    ));
+                    // 1. Capture the current bloc
+                    final currentBloc = context.read<VendorProductsBloc>();
 
-                    // 2. ✅ Trigger Refresh when back
+                    // 2. Navigate (Passing the bloc instance)
+                    await Get.toNamed(
+                      Routes.vendorAddProduct,
+                      arguments: {
+                        'repo': vendors,
+                        'uid': vendorUid,
+                        'listBloc': currentBloc, // 👈 PASSING THE BLOC HERE
+                      },
+                    );
+
+                    // 3. Trigger Refresh when back (Optional, if your bloc didn't already handle it)
                     if (context.mounted) {
-                      context.read<VendorProductsBloc>().add(
-                        const VendorProductsRefresh()
-                      );
+                      currentBloc.add(const VendorProductsRefresh());
                     }
                   },
                   icon: Container(

@@ -4,9 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
 
+import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/plans.dart';
-import '../../plans/widgets/pay_plan_input_screen.dart';
-import '../../plans/widgets/plan_details_screen.dart';
 import 'plan_card_compact.dart';
 
 class PlanCarouselSlider extends StatefulWidget {
@@ -112,10 +111,16 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
                   aspectRatio: _aspect,
                   
                   onPay: () {
-                    Get.to(() => PayPlanInputScreen(plan: p, repo: widget.customerRepo));
+                    Get.toNamed(
+                      Routes.customerPayPlan, 
+                      arguments: {'plan': p, 'repo': widget.customerRepo}
+                    );
                   },
                   onDetails: () {
-                    Get.to(() => PlanDetailsScreen(plan: p, customerRepo: widget.customerRepo));
+                    Get.toNamed(
+                      Routes.customerPlanDetails, 
+                      arguments: {'plan': p, 'customerRepo': widget.customerRepo}
+                    );
                   },
                 ),
               );

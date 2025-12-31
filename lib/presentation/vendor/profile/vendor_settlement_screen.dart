@@ -9,11 +9,10 @@ import 'package:get/get.dart';
 
 // REPO & MODELS
 import '../../../../data/repository/vendors/vendor_repository.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/vendor/transaction_model.dart';
 import '../../../data/models/vendor/vendor_stat.dart';
 import '../../shared/widgets/korra_header.dart';
-
-import 'vendor_receipt_screen.dart'; 
 
 class VendorSettlementScreen extends StatefulWidget {
   final VendorRepository repo;
@@ -285,7 +284,10 @@ class _VendorTransactionTile extends StatelessWidget {
       onTap: () {
         // ✅ FIX: Navigation points to VendorReceiptScreen
         // We pass the entire 'transaction' model now.
-        Get.to(() => VendorReceiptScreen(transaction: transaction));
+        Get.toNamed(
+          Routes.vendorReceipt,
+          arguments: {'transaction': transaction},
+        );
       },
       child: Container(
         color: Colors.white,

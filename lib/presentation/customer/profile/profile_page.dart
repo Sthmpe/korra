@@ -11,6 +11,7 @@ import '../../../../data/models/customer/customer_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 // BLOC
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_account_stats.dart';
 import '../../../logic/services/share_service.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
@@ -19,21 +20,10 @@ import '../../../logic/bloc/customer/profile/profile_state.dart';
 import '../../../logic/core/net/net_cubit.dart';
 
 // WIDGETS
-import '../../auth/role_login/role_login_screen.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import 'bank_details_screen.dart';
-import 'change_password_screen.dart';
-import 'edit_profile_screen.dart';
-import 'help_center_screen.dart';
-import 'legal_screen.dart';
-import 'limit_upgrade_screen.dart';
 // import 'liveness.dart';
-import 'my_store_credit_screen.dart';
-import 'my_vendors_screen.dart';
-import 'statements_screen.dart';
 import 'widgets/identity_header_card.dart';
-import 'my_qr_screen.dart';
 import 'widgets/rows.dart';
 import 'widgets/section_card.dart';
 
@@ -60,7 +50,7 @@ class ProfilePage extends StatelessWidget {
         listener: (context, state) {
           if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
           if (state.status == ProfileStatus.logout) {
-            Get.offAll(() => const RoleLoginScreen());
+            Get.offAllNamed(Routes.roleLoginScreen);
           }
         },
         // REAL-TIME DATA STREAM
@@ -109,7 +99,7 @@ class ProfilePage extends StatelessWidget {
                                   customer.isFullyVerified, // 👈 Extension
                               basicTier: true,
                               onMyQr: () {
-                                Get.to(() => MyQrScreen(customer: customer));
+                                Get.toNamed(Routes.customerQr, arguments: customer);
                               },
                               onShare: () {
                                 ShareService.shareAppReferral(
@@ -117,12 +107,12 @@ class ProfilePage extends StatelessWidget {
                                 );
                               },
                               onEdit: () {
-                                Get.to(
-                                  () => EditProfileScreen(
-                                    customer:
-                                        customer, // Pass the current customer data
-                                    repo: customerRepo, // Pass the repo
-                                  ),
+                                Get.toNamed(
+                                  Routes.customerEditProfile,
+                                  arguments: {
+                                    'customer': customer,
+                                    'repo': customerRepo,
+                                  }
                                 );
                               },
                             ),
@@ -144,11 +134,7 @@ class ProfilePage extends StatelessWidget {
                                     subtitle:
                                         customer.bankDisplay, // 👈 Extension
                                     onTap: () {
-                                      Get.to(
-                                        () => BankDetailsScreen(
-                                          customer: customer,
-                                        ),
-                                      );
+                                      Get.toNamed(Routes.customerBankDetails, arguments: customer);
                                     },
                                   ),
                                   _divider(),
@@ -158,8 +144,9 @@ class ProfilePage extends StatelessWidget {
                                     title: 'My Store Credits',
                                     subtitle: 'View your credits',
                                     onTap: () {
-                                      Get.to(
-                                        () => MyStoreCreditsScreen(customerUid: customerUid)
+                                      Get.toNamed(
+                                        Routes.customerStoreCredits, 
+                                        arguments: {'uid': customerUid}
                                       );
                                     },
                                   ),
@@ -169,17 +156,15 @@ class ProfilePage extends StatelessWidget {
                                   //   icon: Icons.receipt_long_outlined,
                                   //   title: 'Liveness',
                                   //   onTap: () {
-                                  //     Get.to(
-                                  //       () => LivenessScreen(
-                                  //         onVerificationSuccess: (base64Image) {
-                                  //           print(
-                                  //             "Success! Image data length: ${base64Image.length}",
-                                  //           );
-                                  //           // Send to Firebase/Backend here
-                                  //           Navigator.pop(context);
-                                  //         },
-                                  //       ),
-                                  //     );
+                                  //     // Get.toNamed(
+                                  //   Routes.customerLiveness,
+                                  //   arguments: {
+                                  //     'onSuccess': (base64Image) {
+                                  //        print("Success! $base64Image");
+                                  //        Navigator.pop(context);
+                                  //     }
+                                  //   }
+                                  // );
                                   //   },
                                   // ),
 
@@ -203,15 +188,14 @@ class ProfilePage extends StatelessWidget {
                                         subtitle:
                                             'Unlock more reservation slots', // Updated subtitle
                                         onTap: () {
-                                          Get.to(
-                                            () => LimitUpgradeScreen(
-                                              repo: customerRepo,
-                                              customer: customer,
-                                              // ✅ Pass the new "Game Stats"
-                                              currentMaxSlots: stats.maxSlots,
-                                              completedPlansCount:
-                                                  stats.completedPlansCount,
-                                            ),
+                                          Get.toNamed(
+                                            Routes.customerLimitUpgrade,
+                                            arguments: {
+                                              'repo': customerRepo,
+                                              'customer': customer,
+                                              'currentMaxSlots': stats.maxSlots,
+                                              'completedPlansCount': stats.completedPlansCount,
+                                            }
                                           );
                                         },
                                       );
@@ -223,10 +207,9 @@ class ProfilePage extends StatelessWidget {
                                     icon: Iconsax.shop,
                                     title: 'My Vendors',
                                     subtitle: 'Vendors you interact with',
-                                    onTap: () => Get.to(
-                                      () => MyVendorsScreen(
-                                        customerUid: customer.uid,
-                                      ),
+                                    onTap: () => Get.toNamed(
+                                      Routes.customerMyVendors, 
+                                      arguments: {'uid': customer.uid}
                                     ),
                                   ),
                                   _divider(),
@@ -245,11 +228,12 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.receipt_long_outlined,
                                     title: 'Statements & receipts',
                                     onTap: () {
-                                      Get.to(
-                                        () => StatementsScreen(
-                                          repo: customerRepo,
-                                          customerUid: customerUid,
-                                        ),
+                                      Get.toNamed(
+                                        Routes.customerStatements,
+                                        arguments: {
+                                          'repo': customerRepo,
+                                          'uid': customerUid,
+                                        }
                                       );
                                     },
                                   ),
@@ -304,10 +288,9 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.lock_outline,
                                     title: 'Change password',
                                     onTap: () {
-                                      Get.to(
-                                        () => ChangePasswordScreen(
-                                          repo: customerRepo,
-                                        ),
+                                      Get.toNamed(
+                                        Routes.customerChangePassword,
+                                        arguments: {'repo': customerRepo}
                                       );
                                     },
                                   ),
@@ -317,7 +300,7 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.description_outlined,
                                     title: 'Legal & Privacy',
                                     onTap: () {
-                                      Get.to(() => const LegalMenuScreen());
+                                      Get.toNamed(Routes.customerLegal);
                                     },
                                   ),
                                 ],
@@ -336,7 +319,7 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.question_mark_outlined,
                                     title: 'Help Center',
                                     onTap: () {
-                                      Get.to(() => const HelpCenterScreen());
+                                      Get.toNamed(Routes.customerHelp);
                                     },
                                   ),
                                 ],

@@ -1,32 +1,32 @@
 part of 'image_bloc.dart';
 
 class ImageState extends Equatable {
-  final List<File> images;
+  final String errorMessage;
+  final List<dynamic> images; // 👈 CHANGED from List<File> to List<dynamic>
   final List<String> cloudUrls;
   final bool isUploading;
-  final String? errorMessage;
 
   const ImageState({
+    this.errorMessage = '',
     this.images = const [],
     this.cloudUrls = const [],
     this.isUploading = false,
-    this.errorMessage = '',
   });
 
   ImageState copyWith({
-    List<File>? images,
+    String? errorMessage,
+    List<dynamic>? images,
     List<String>? cloudUrls,
     bool? isUploading,
-    String? errorMessage,
   }) {
     return ImageState(
+      errorMessage: errorMessage ?? this.errorMessage,
       images: images ?? this.images,
       cloudUrls: cloudUrls ?? this.cloudUrls,
       isUploading: isUploading ?? this.isUploading,
-      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 
   @override
-  List<Object?> get props => [images, cloudUrls, isUploading, errorMessage];
+  List<Object> get props => [errorMessage, images, cloudUrls, isUploading];
 }

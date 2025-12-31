@@ -4,8 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
+import '../../../config/constants/contacts.dart';
 import '../../shared/widgets/korra_header.dart';
-import '../../../config/constants/colors.dart'; // Ensure you have your colors
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -157,13 +157,11 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
             ),
             GestureDetector(
               onTap: () async {
-                final Uri emailLaunchUri = Uri(
-                  scheme: 'mailto',
-                  path: 'support@korra.com.ng',
-                  query: 'subject=Korra Support Request',
+                 final url = Uri.parse(
+                    "mailto:${ContactConstants.supportEmail}?subject=${Uri.encodeComponent(ContactConstants.emailSubject)}"
                 );
-                if (await canLaunchUrl(emailLaunchUri)) {
-                  await launchUrl(emailLaunchUri);
+                if (!await launchUrl(url)) {
+                  debugPrint("Could not launch email");
                 }
               },
               child: Container(

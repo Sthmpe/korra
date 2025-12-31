@@ -84,6 +84,11 @@ serve(async (req) => {
     const complianceRef = db.collection('vendor_compliance').doc(uid);
     batch.set(complianceRef, {
       uid: uid,
+      // ✅ TRAFFIC LIGHT STATUS (Starts Red)
+      status: 'verification_pending', 
+      reason: 'New Account',
+      publicMessage: 'Withdrawals Locked. Please schedule your Verification Video Call.',
+      ///
       livenessCheckPassed: false,
       livenessBypass: true, // ✅ Default to TRUE (Bypass ON)
       livenessMatchPercentage: 0.0,

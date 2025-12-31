@@ -9,6 +9,8 @@ class PayoutState extends Equatable {
   final PayoutStatus status;
   final PayoutStep step;
   final String? errorMessage;
+  final String complianceStatus; // e.g., 'active', 'verification_pending'
+  final String blockMessage;     // e.g., 'Video Verification Required'
 
   // 1. Money
   final double withdrawableBalance; // Passed in from Home
@@ -43,6 +45,8 @@ class PayoutState extends Equatable {
     this.transactionRef,
     this.transactionDate,
     required this.bankList,
+    this.complianceStatus = 'verification_pending', // Default to safe/blocked
+    this.blockMessage = '',
   });
 
   factory PayoutState.initial() => const PayoutState(
@@ -72,6 +76,8 @@ class PayoutState extends Equatable {
     String? transactionRef,
     DateTime? transactionDate,
     List<Bank>? bankList,
+    String? complianceStatus,
+    String? blockMessage,
   }) {
     return PayoutState(
       status: status ?? this.status,
@@ -87,6 +93,8 @@ class PayoutState extends Equatable {
       transactionRef: transactionRef ?? this.transactionRef,
       transactionDate: transactionDate ?? this.transactionDate,
       bankList: bankList ?? this.bankList,
+      complianceStatus: complianceStatus ?? this.complianceStatus,
+      blockMessage: blockMessage ?? this.blockMessage,
     );
   }
 

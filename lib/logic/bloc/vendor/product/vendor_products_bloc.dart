@@ -84,7 +84,7 @@ class VendorProductsBloc
   ) {
     emit(state.copyWith(filter: event.filter));
   }
-
+  
   Future<void> _onAddPressed(
     VendorProductsAdd event,
     Emitter<VendorProductsState> emit,
@@ -104,43 +104,31 @@ class VendorProductsBloc
 
       debugPrint('📤 Uploading images...');
       
-      // ✅ FIX: Convert String paths to File objects
-      final imageFiles = event.images.map((path) => File(path)).toList();
-
+      // 🔄 FIX: Remove the 'map(path => File(path))' logic.
+      // The event.images already contains the File/XFile objects we need.
+      // We pass the list directly to the repo.
+      
       final List<String> uploadedUrls = await vendors.uploadProductImagesToCloud(
-        imageFiles, // Pass the File list here
+        event.images, // ✅ Pass List<dynamic> directly
       );
 
       if (uploadedUrls.isEmpty) {
         throw "Failed to upload images. Please check your internet connection.";
       }
 
-      // ---------------------------------------------------------
-      // ✅ FIX: Use UI Duration directly + Calculate Total
-      // ---------------------------------------------------------
-      final baseDays = event.duration; // From UI (e.g. 35)
-      final noticeDays = 3; // Fixed Standard
-      
-      // Calculate Extension Days (Same logic as UI to get Total)
+      // ... (Rest of the duration calculation remains the same) ...
+      final baseDays = event.duration;
+      final noticeDays = 3;
       int extDays = 0;
       if (event.extensionsEnabled) {
          final p = event.price;
-         if (p <= 20000) {
-           extDays = 7;
-         } else if (p <= 40000) {
-          extDays = 7;
-         } else if (p <= 150000) {
-          extDays = 14;
-         } else if (p <= 320000) {
-          extDays = 15;
-         } else {
-          extDays = 20;
-         }
+         if (p <= 20000) extDays = 7;
+         else if (p <= 40000) extDays = 7;
+         else if (p <= 150000) extDays = 14;
+         else if (p <= 320000) extDays = 15;
+         else extDays = 20;
       }
-
       final totalDays = baseDays + noticeDays + extDays;
-
-      // ---------------------------------------------------------
 
       final newProductMap = {
         'vendorId': vendorUid,
@@ -152,15 +140,11 @@ class VendorProductsBloc
         'initialStock': event.stock,
         'category': event.category,
         'images': uploadedUrls,
-        
-        // Smart Contract Fields
         'modelType': event.modelType.name, 
         'cancellationPolicy': event.cancellationPolicy,
         'extensionsEnabled': event.extensionsEnabled,
         'directDownPayment': event.directDownPayment,
-        
-        // ✅ TIMELINE FIELDS (Synced with UI)
-        'duration': baseDays, // Raw Int for calculations
+        'duration': baseDays, 
         'baseDuration': "$baseDays Days",
         'noticePeriod': "$noticeDays Days",
         'totalMaxTime': "$totalDays Days",
@@ -168,10 +152,7 @@ class VendorProductsBloc
 
       await vendors.addProductSecure(newProductMap);
 
-      emit(state.copyWith(
-        isSubmitting: false, 
-        success: true
-      ));
+      emit(state.copyWith(isSubmitting: false, success: true));
 
     } catch (e) {
       debugPrint("❌ Add Product Error: $e");
@@ -193,18 +174,15 @@ class VendorProductsBloc
       if (currentProduct == null) throw "Product not found.";
 
       List<String> finalImages = [...event.existingImageUrls];
+      
       if (event.newImages.isNotEmpty) {
+        // ✅ Pass List<dynamic> directly here too
         final newUrls = await vendors.uploadProductImagesToCloud(event.newImages);
         if (newUrls.isEmpty) throw "Failed to upload new images.";
         finalImages.addAll(newUrls);
       }
 
       if (finalImages.isEmpty) throw "Product must have at least one image.";
-
-      // ---------------------------------------------------------
-      // ✅ FIX: DO NOT UPDATE TIMELINE/DURATION ON EDIT
-      // We only update mutable fields (Name, Desc, Price, Stock)
-      // ---------------------------------------------------------
 
       final updateData = {
         'name': event.name,
@@ -213,7 +191,6 @@ class VendorProductsBloc
         'availableStock': event.stock, 
         'category': event.category,
         'images': finalImages,
-        // Removed: baseDuration, noticePeriod, totalMaxTime
       };
 
       await vendors.updateProductSecure(

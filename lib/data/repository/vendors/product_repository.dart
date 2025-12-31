@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../config/utils/korra_exception.dart';
@@ -200,41 +201,84 @@ extension ProductRepository on VendorRepository {
 
   // --- IMAGE UPLOAD LOGIC ---
 
-  Future<String?> uploadToSupabase(File file) async {
+  // 🔄 UPDATED: Accepts List<dynamic> to support File (Mobile) and XFile (Web)
+  Future<List<String>> uploadProductImagesToCloud(List<dynamic> images) async {
+    List<String> uploadedUrls = [];
+
+    for (var image in images) {
+      // We pass the dynamic image object directly
+      final url = await uploadToSupabase(image);
+      if (url != null) uploadedUrls.add(url);
+    }
+
+    return uploadedUrls;
+  }
+
+  Future<String?> uploadToSupabase(dynamic fileInput) async {
     try {
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-
-      // Upload image to your "product-images" bucket
-      final response = await supabase.storage
-          .from('product-images')
-          .upload(fileName, file);
-
-      // If upload succeeded, get public URL
-      if (response.isEmpty) {
-        return null;
+      final String fileName;
+      
+      // 1. DETERMINE FILENAME
+      if (kIsWeb) {
+        // On web, fileInput is XFile
+        if (fileInput is XFile) {
+           fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileInput.name}';
+        } else {
+           throw "Expected XFile on Web";
+        }
+      } else {
+        // On mobile, fileInput is File
+        if (fileInput is File) {
+           fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileInput.path.split('/').last}';
+        } else if (fileInput is XFile) {
+           // Fallback if XFile is passed on mobile
+           fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileInput.name}';
+        } else {
+           throw "Invalid File Type";
+        }
       }
 
+      // 2. PERFORM UPLOAD
+      if (kIsWeb) {
+        // 🌐 WEB: Upload Raw Bytes using uploadBinary
+        // We must read as bytes because File() doesn't exist on web
+        final bytes = await (fileInput as XFile).readAsBytes();
+        
+        await supabase.storage
+            .from('product-images')
+            .uploadBinary(
+              fileName, 
+              bytes,
+              fileOptions: const FileOptions(upsert: true), // Optional: Overwrite if exists
+            );
+
+      } else {
+        // 📱 MOBILE: Upload using File object
+        // If it's an XFile on mobile, convert to File first
+        File fileToUpload = (fileInput is File) 
+            ? fileInput 
+            : File((fileInput as XFile).path);
+
+        await supabase.storage
+            .from('product-images')
+            .upload(
+              fileName, 
+              fileToUpload,
+              fileOptions: const FileOptions(upsert: true),
+            );
+      }
+
+      // 3. GET PUBLIC URL
       final publicUrl = supabase.storage
           .from('product-images')
           .getPublicUrl(fileName);
 
       return publicUrl;
+
     } catch (e) {
-      debugPrint('Supabase upload error: $e');
+      debugPrint('❌ Supabase upload error: $e');
       return null;
     }
-  }
-
-  Future<List<String>> uploadProductImagesToCloud(List<File> images) async {
-    List<String> uploadedUrls = [];
-
-    for (var file in images) {
-      final url = await uploadToSupabase(file);
-      if (url != null) uploadedUrls.add(url);
-    }
-
-    return uploadedUrls;
   }
 
   Future<void> deleteProductImages(List<String> imageUrls) async {

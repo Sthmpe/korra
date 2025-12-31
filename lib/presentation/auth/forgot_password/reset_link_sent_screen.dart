@@ -3,9 +3,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 
 import '../../../config/constants/sizes.dart';
+import '../../../config/routes/app_routes.dart';
 
 class ResetLinkSentScreen extends StatelessWidget {
   const ResetLinkSentScreen({super.key, required this.email});
@@ -79,7 +79,7 @@ class ResetLinkSentScreen extends StatelessWidget {
               ),
             ),
             TextButton(
-              onPressed: () => Get.offAll(() => RoleLoginScreen()),
+              onPressed: () => Get.offAllNamed(Routes.roleLoginScreen),
               child: Text(
                 'Back to sign in',
                 style: GoogleFonts.inter(

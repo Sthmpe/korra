@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // 👈 NEEDED
 import 'package:get/get.dart'; 
 
+import '../../config/routes/app_routes.dart';
 import '../../presentation/customer/plans/widgets/plan_details_loader_screen.dart';
 
 // ✅ 1. THE INTERFACE
@@ -135,7 +136,10 @@ class NotificationService {
     if (id != null) {
       if (type == 'plan_detail') {
         // ✅ Customer: Go to Customer Loader
-        Get.to(() => PlanDetailsLoaderScreen(planId: id));
+        Get.toNamed(
+          Routes.customerPlanDetailsLoader,
+          arguments: {'planId': id},
+        );
       } 
     }
   }

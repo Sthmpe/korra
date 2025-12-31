@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
-import 'package:korra/presentation/auth/role_login/role_login_screen.dart';
 import 'package:korra/presentation/shared/widgets/show_app_snackbar.dart';
 import '../../../../config/constants/colors.dart';
-import '../../customer_shell.dart';
-import 'plan_details_screen.dart';
+import '../../../../config/routes/app_routes.dart';
 
 class PlanDetailsLoaderScreen extends StatefulWidget {
   final String planId;
@@ -44,10 +42,13 @@ class _PlanDetailsLoaderScreenState extends State<PlanDetailsLoaderScreen> {
       }
 
       // 2. Success: Replace this loader with the Real Screen
-      Get.off(() => PlanDetailsScreen(
-        plan: plan, 
-        customerRepo: _repo
-      ));
+      Get.offNamed(
+        Routes.customerPlanDetails,
+        arguments: {
+          'plan': plan,
+          'customerRepo': _repo,
+        }
+      );
 
     } catch (e) {
       debugPrint("Error loading plan from notification: $e");
@@ -67,9 +68,9 @@ class _PlanDetailsLoaderScreenState extends State<PlanDetailsLoaderScreen> {
       final user = FirebaseAuth.instance.currentUser;
       
       if (user != null) {
-        Get.offAll(() => CustomerShell(uid: user.uid));
+        Get.offAllNamed(Routes.customerShell);
       } else {
-        Get.offAll(() => const RoleLoginScreen());
+        Get.offAllNamed(Routes.roleLoginScreen);
       }
     }
   }

@@ -289,8 +289,7 @@ class _AddProductPageState extends State<AddProductPage> {
     // Direct: Always "Store Credit"
     final finalPolicy = "Store Credit"; // Forced for Direct
 
-    // ✅ FIX 2: Convert List<File> to List<String> (Paths)
-    final imagePaths = imageBloc.state.images.map((file) => file.path).toList();
+    final imageObjects = imageBloc.state.images; 
 
     productBloc.add(
       VendorProductsAdd(
@@ -299,7 +298,9 @@ class _AddProductPageState extends State<AddProductPage> {
         price: price,
         stock: stock,
         category: _categoryCtrl.text,
-        images: imagePaths, // ✅ Passed paths instead of Files
+        
+        images: imageObjects, // ✅ Pass List<dynamic> directly
+        
         termsAccepted: _termsAccepted,
         modelType: _selectedModel,
         cancellationPolicy: finalPolicy,
@@ -309,8 +310,6 @@ class _AddProductPageState extends State<AddProductPage> {
         directDownPayment: _selectedModel == ProductModelType.direct
             ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
             : null,
-        
-        // ✅ FIX 1: Added the required duration argument
         duration: _calculatedDurationInt, 
       ),
     );

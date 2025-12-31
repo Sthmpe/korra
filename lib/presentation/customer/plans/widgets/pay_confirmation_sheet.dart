@@ -5,12 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
 
 import '../../../../config/constants/colors.dart'; // Adjust path
+import '../../../../config/routes/app_routes.dart';
 import '../../../../config/utils/currency_formatters.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../../data/repository/customer/customer_repository.dart'; // For wallet stream
 import '../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
-import '../../profile/bank_details_screen.dart';
 
 void showPaySheet(BuildContext context, Plan p, CustomerRepository customerRepo) {
     showModalBottomSheet(
@@ -134,7 +134,10 @@ class PayConfirmationSheet extends StatelessWidget {
                             final customerData = snapshot.data;
   
                             if (customerData != null) {
-                              Get.to(() => BankDetailsScreen(customer: customerData));
+                              Get.toNamed(
+                                Routes.customerBankDetails, 
+                                arguments: customerData 
+                              );
                             } else {
                               // Optional: Show a message if data isn't ready
                               showAppSnackbar("Please wait, data is loading...", SnackbarType.info);

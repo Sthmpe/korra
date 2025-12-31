@@ -6,8 +6,8 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../config/constants/colors.dart';
+import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/payment_receipt_data.dart';
-import 'transaction_receipt_screen.dart';
 
 class PaymentResultScreen extends StatefulWidget {
   final bool isSuccess;
@@ -140,7 +140,10 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                           // If we have full data from Bloc, use it. If not, construct Partial.
                           final data = widget.fullReceiptData;
 
-                          Get.to(() => TransactionReceiptScreen(data: data));
+                          Get.toNamed(
+                            Routes.customerTransactionReceipt, 
+                            arguments: data
+                          );
                         },
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: Colors.grey.shade300),

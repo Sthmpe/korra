@@ -4,8 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
-import 'package:korra/presentation/customer/plans/create_plan_screen.dart';
 
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../data/models/customer/plans.dart';
 import '../../../data/repository/customer/customer_repository.dart';
@@ -15,9 +15,7 @@ import '../../../logic/bloc/customer/link/link_state.dart';
 import '../../../logic/bloc/customer/plans/plan_action_bloc.dart';
 import '../../shared/widgets/korra_header.dart';
 import 'widgets/new_plan_sheet.dart';
-import 'widgets/pay_plan_input_screen.dart';
 import 'widgets/plan_card.dart';
-import 'widgets/plan_details_screen.dart';
 import 'widgets/plan_search_delegate.dart';
 import 'widgets/plans_filter_sheet.dart';
 import 'widgets/segmented_tabs.dart';
@@ -71,7 +69,7 @@ class _PlansPageState extends State<PlansPage> {
 
           return BlocListener<LinkBloc, LinkState>(
             listenWhen: (p, c) => p.status != c.status,
-            listener: (context, state) {
+            listener: (context, state) async {
               if (state.status == LinkStatus.loaded) {
                 // 1. Get the product from the LinkBloc state
                 final product =
@@ -79,17 +77,23 @@ class _PlansPageState extends State<PlansPage> {
 
                 // 2. Navigate directly (No BlocProvider needed here)
                 // CreatePlanScreen will instantiate its own 'CreatePlanBloc' automatically.
-                Get.to(
-                  () => CreatePlanScreen(
-                    product: product,
-                    customer: customer!, //null check on non-null stream data
-                    customerRepo: widget.customerRepo,
-                    customerUid: widget.customerUid,
-                    walletBalance: currentBalance,
-                    onJumpToHome: widget.onJumpToHome,
-                    onJumpToPlan: () => widget.onJumpToPlan,
-                  ),
+                final result = await Get.toNamed(
+                  Routes.customerCreatePlan,
+                  arguments: {
+                    'product': product,
+                    'customer': customer!, // Ensure customer is not null
+                    'customerRepo': widget.customerRepo,
+                    'customerUid': widget.customerUid,
+                    'walletBalance': currentBalance,
+                  }
                 );
+
+                // 🦘 JUMP LOGIC: Check the result sent back from Create Screen
+                if (result == 'jump_to_home') {
+                  widget.onJumpToHome();
+                } else if (result == 'jump_to_plans') {
+                  widget.onJumpToPlan(); // (Even though we are already on Plans, this might refresh or reset tab)
+                }
               }
             },
             child: Scaffold(
@@ -260,11 +264,20 @@ class _PlansPageState extends State<PlansPage> {
                             final plan = visiblePlans[index];
                             return PlanCard(
                               plan: plan,
+                              // 🔄 CHANGE: Named Route
                               onPayNow: () {
-                                Get.to(() => PayPlanInputScreen(plan: plan, repo: widget.customerRepo));  
+                                Get.toNamed(
+                                  Routes.customerPayPlan,
+                                  arguments: {'plan': plan, 'repo': widget.customerRepo}
+                                );  
                               },
+                              
+                              // 🔄 CHANGE: Named Route
                               onView: () {
-                                Get.to(() => PlanDetailsScreen(plan: plan, customerRepo: widget.customerRepo));
+                                Get.toNamed(
+                                  Routes.customerPlanDetails,
+                                  arguments: {'plan': plan, 'customerRepo': widget.customerRepo}
+                                );
                               },
                               onMenu: () {},
                             );

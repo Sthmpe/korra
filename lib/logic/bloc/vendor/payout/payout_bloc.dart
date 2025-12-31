@@ -31,28 +31,34 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     emit(state.copyWith(
       status: PayoutStatus.loading,
       withdrawableBalance: event.currentBalance,
-      amountInput: '', // ✅ FORCE CLEAR AMOUNT ON START
+      amountInput: '',
     ));
 
     try {
-      // The Repo will now use Cache, making this part instant on 2nd try!
+      // 🚀 LOAD EVERYTHING IN PARALLEL (Fast!)
       final results = await Future.wait([
-        repo.getVendorSettings(vendorUid),
-        repo.getBankList(),
+        repo.getVendorSettings(vendorUid), // Index 0
+        repo.getBankList(),                // Index 1
+        repo.getComplianceStatus(vendorUid),// Index 2 👈 NEW
       ]);
 
       final settings = results[0] as VendorSettings;
       final banks = results[1] as List<Bank>;
+      final compliance = results[2] as Map<String, String>; // 👈 NEW
+      
       final details = settings.payoutDetails;
 
       emit(state.copyWith(
-        status: PayoutStatus.success, // Use 'success' or 'loaded' enum
+        status: PayoutStatus.success,
         hasPinSet: settings.isPinSet,
         bankName: details.bankName,
         accountNumber: details.bankAccountNumber,
         accountName: details.bankAccountName,
         bankCode: details.bankCode,
         bankList: banks,
+        // ✅ SAVE STATUS TO STATE
+        complianceStatus: compliance['status'],
+        blockMessage: compliance['message'],
       ));
     } catch (e) {
       emit(state.copyWith(status: PayoutStatus.failure, errorMessage: "Failed to load details"));
@@ -90,6 +96,16 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
 
   void _onWithdrawClicked(WithdrawClicked event, Emitter<PayoutState> emit) {
     if (!state.canWithdraw) return;
+
+    // 🛑 1. THE INSTANT BLOCKER
+    // We check the local variable we loaded earlier. Zero network delay.
+    if (state.complianceStatus != 'active') {
+      emit(state.copyWith(
+        status: PayoutStatus.failure,
+        errorMessage: state.blockMessage, // Show the exact reason (e.g., "Video Call Required")
+      ));
+      return; 
+    }
 
     if (state.hasPinSet) {
       emit(state.copyWith(step: PayoutStep.verifyPin));

@@ -1,20 +1,19 @@
 //import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'config/constants/prefs_keys.dart';
+import 'config/routes/app_routes.dart'; // ✅ Import Routes
 import 'firebase_options.dart';
 import 'korra_app.dart';
 import 'logic/core/net/net_cubit.dart';
 import 'logic/core/update/update_cubit.dart';
-import 'presentation/auth/role_login/role_login_screen.dart';
-import 'presentation/customer/customer_shell.dart';
-import 'presentation/vendor/vendor_shell.dart';
+import 'logic/services/auth_service.dart';
+
+// We removed screen imports because we only need Routes now
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -24,8 +23,8 @@ Future<void> main() async {
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent, // 🔹 Make status bar transparent
-      statusBarIconBrightness: Brightness.dark, // or Brightness.light for white icons
+      statusBarColor: Colors.transparent, 
+      statusBarIconBrightness: Brightness.dark, 
     ),
   );
 
@@ -38,15 +37,6 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // // Initialize App Check
-  // await FirebaseAppCheck.instance.activate(
-  //   // specific for Android debug builds
-  //   androidProvider: AndroidProvider.debug, 
-    
-  //   // specific for iOS/Web if needed
-  //   appleProvider: AppleProvider.debug, 
-  // );
-
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     throw Exception("Supabase Keys not found! Did you run with --dart-define?");
   }
@@ -54,11 +44,25 @@ Future<void> main() async {
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
-    debug: false, // Turn off debug for release
+    debug: false, 
   );
 
-  // Determine the starting screen asynchronously before running the app.
-  final startScreen = await _getStartScreen();
+  // 🚀 LOAD AUTH SERVICE FIRST
+  // This loads SharedPreferences and User Role into memory
+  await Get.putAsync(() => AuthService().init());
+
+  // 🔄 DETERMINE ROUTE INSTANTLY
+  // Now we can just ask the Service directly (No await needed!)
+  final auth = AuthService.to;
+  String initialRoute = Routes.roleLoginScreen;
+
+  if (auth.isLoggedIn && auth.role != null) {
+    if (auth.role == 'vendor') {
+      initialRoute = Routes.vendorShell;
+    } else {
+      initialRoute = Routes.customerShell;
+    }
+  }
 
   runApp(
     MultiBlocProvider( 
@@ -66,32 +70,8 @@ Future<void> main() async {
         BlocProvider(create: (_) => NetCubit()..start()),
         BlocProvider(create: (_) => UpdateCubit()), 
       ],
-      child: KorraApp(startScreen: startScreen),
+      // 🔄 CHANGED: Passing String
+      child: KorraApp(initialRoute: initialRoute), 
     ),
   );
-}
-
-Future<Widget> _getStartScreen() async {
-  final user = FirebaseAuth.instance.currentUser;
-  // If no Firebase user is logged in, show the login screen.
-  if (user == null) {
-    return const RoleLoginScreen();
-  }
-
-  final prefs = await SharedPreferences.getInstance();
-  final uid = prefs.getString(PrefsKeys.userUid);
-  final role = prefs.getString(PrefsKeys.userRole);
-
-
-  // Check for a mismatch between the current Firebase user and the saved local data.
-  if (uid == null || role == null || uid != user.uid) {
-    return const RoleLoginScreen();
-  }
-
-  // A match is found, route to the correct role-based shell.
-  if (role == 'vendor') {
-    return VendorShell(uid: uid);
-  } else {
-    return CustomerShell(uid: uid);
-  }
 }

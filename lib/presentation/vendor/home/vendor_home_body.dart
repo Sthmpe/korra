@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 // REPO & LOGIC
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/vendor/reservation.dart';
 import '../../../data/models/vendor/vendor_activity_type.dart';
 import '../../../data/models/vendor/vendor_compliance.dart';
@@ -15,18 +16,14 @@ import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_event.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_state.dart';
-import '../../../logic/bloc/vendor/payout/payout_bloc.dart';
-import '../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
 
 // UI HELPERS
 import '../../../config/utils/currency_formatters.dart';
 import '../../shared/korra_error_bannar.dart';
 import '../../shared/widgets/section_header.dart';
-import '../payout/payout_screen_ui.dart';
 
 // WIDGETS
-import '../reservation/reservations_page.dart';
 import 'widgets/vendor_capacity_card.dart';
 import 'widgets/vendor_withdrawable_card.dart';
 import 'widgets/vendor_kpi_block.dart';
@@ -97,12 +94,14 @@ class VendorHomeBody extends StatelessWidget {
                                 return;
                               }
 
-                              Get.to(() => BlocProvider(
-                                create: (_) => PayoutBloc(
-                                  vendorUid: vendorUid, repo: vendors,
-                                )..add(PayoutStarted(s.withdrawable)),
-                                child: PayoutScreen(),
-                              ));
+                              Get.toNamed(
+                                Routes.vendorPayout,
+                                arguments: {
+                                  'uid': vendorUid,
+                                  'repo': vendors,
+                                  'withdrawableAmount': s.withdrawable, // Pass the amount for the event
+                                }
+                              );
                             } : null,
                           );
                         },
@@ -146,13 +145,45 @@ class VendorHomeBody extends StatelessWidget {
                           completedCount: (counts[ReservationStatus.completed] ?? 0).toString(),
                           
                           // 3. Navigation Actions
-                          onTapNew: () => Get.to(() => ReservationsPage(vendorId: vendorUid, initialFilter: ReservationStatus.newRes, vendors: vendors, showLeadingIcon: true)),
-                          onTapOngoing: () => Get.to(() => ReservationsPage(vendorId: vendorUid, initialFilter: ReservationStatus.ongoing, vendors: vendors, showLeadingIcon: true)),
-                          
-                          // Navigate to Ready Tab
-                          onTapReady: () => Get.to(() => ReservationsPage(vendorId: vendorUid, initialFilter: ReservationStatus.readyForPickup, vendors: vendors, showLeadingIcon: true)),
-                          
-                          onTapCompleted: () => Get.to(() => ReservationsPage(vendorId: vendorUid, initialFilter: ReservationStatus.completed, vendors: vendors, showLeadingIcon: true)),
+                          onTapNew: () => Get.toNamed(
+                            Routes.vendorReservations,
+                            arguments: {
+                              'uid': vendorUid,
+                              'repo': vendors,
+                              'filter': ReservationStatus.newRes,
+                              'showLeadingIcon': true,
+                            }
+                          ),
+                          // Ongoing
+                          onTapOngoing: () => Get.toNamed(
+                            Routes.vendorReservations,
+                            arguments: {
+                              'uid': vendorUid,
+                              'repo': vendors,
+                              'filter': ReservationStatus.ongoing,
+                              'showLeadingIcon': true,
+                            }
+                          ),    
+                          // Ready
+                          onTapReady: () => Get.toNamed(
+                            Routes.vendorReservations,
+                            arguments: {
+                              'uid': vendorUid,
+                              'repo': vendors,
+                              'filter': ReservationStatus.readyForPickup,
+                              'showLeadingIcon': true,
+                            }
+                          ),
+                          // Completed
+                          onTapCompleted: () => Get.toNamed(
+                            Routes.vendorReservations,
+                            arguments: {
+                              'uid': vendorUid,
+                              'repo': vendors,
+                              'filter': ReservationStatus.completed,
+                              'showLeadingIcon': true,
+                            }
+                          ),
                         );
                       },
                     ),

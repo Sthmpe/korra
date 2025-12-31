@@ -1,25 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart'; // ✅ Import GetX
+import 'package:google_fonts/google_fonts.dart';
+import 'config/routes/app_pages.dart'; // ✅ Import AppPages
+// import 'config/routes/app_routes.dart'; // Optional, if needed for unknownRoute
+
 import 'config/theme/app_theme.dart';
 import 'logic/core/net/global_offline_banner.dart';
 import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
+import 'presentation/shared/not_found_screen.dart';
 
 class KorraApp extends StatelessWidget {
-  const KorraApp({super.key, required this.startScreen});
-  final Widget startScreen;
+  // 🔄 CHANGED: Now accepts a String Route Name
+  const KorraApp({super.key, required this.initialRoute});
+  final String initialRoute;
 
   // 🔒 Threshold: Any screen wider than this gets the "Blocker"
   static const double kMaxMobileWidth = 600.0;
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
+    return GetMaterialApp( // ✅ Use GetMaterialApp
       debugShowCheckedModeBanner: false,
       title: 'Korra',
       theme: AppTheme.light(),
       
+      // 🚀 NAVIGATION SETUP
+      initialRoute: initialRoute, // 1. Set the start route
+      getPages: AppPages.routes,  // 2. Load the route map
+      
+      // Fallback for bad URLs
+      unknownRoute: GetPage(
+        name: '/not-found', 
+        page: () => const NotFoundScreen(),
+      ),
+
       // 🏗️ THE LAYOUT MANAGER
       builder: (context, navigatorChild) {
         final size = MediaQuery.of(context).size;
@@ -56,7 +72,8 @@ class KorraApp extends StatelessWidget {
                           child: GestureDetector(
                             onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
                             behavior: HitTestBehavior.translucent,
-                            child: navigatorChild,
+                            // navigatorChild is the page GetX is showing
+                            child: navigatorChild, 
                           ),
                         ),
                       ),
@@ -68,12 +85,12 @@ class KorraApp extends StatelessWidget {
           },
         );
       },
-      home: startScreen,
+      // ❌ REMOVED: home: startScreen (conflicts with initialRoute)
     );
   }
 }
 
-// 💎 THE NEW PREMIUM DESKTOP LANDING SCREEN
+// 💎 THE NEW PREMIUM DESKTOP LANDING SCREEN (Unchanged)
 class _PremiumDesktopBlocker extends StatelessWidget {
   const _PremiumDesktopBlocker();
 
@@ -117,7 +134,6 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       padding: const EdgeInsets.all(16),
-                      // Using a safe fallback if image loads slowly
                       child: Image.asset(
                         'assets/images/korra_logo_icon.webp',
                         fit: BoxFit.contain,
@@ -134,8 +150,7 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                     Text(
                       "Korra is Mobile First",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'PlusJakartaSans', // Or your app font
+                      style: GoogleFonts.inter(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
                         color: Colors.grey.shade900,
@@ -148,7 +163,7 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                     Text(
                       "To ensure the highest security for your wallet and transactions, Korra is currently available exclusively on mobile devices.",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 16,
                         color: Colors.grey.shade500,
                         height: 1.6,
@@ -194,7 +209,7 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Text(
                                   "Open this link on iOS or Android",
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     fontSize: 13,
                                     color: Colors.grey.shade500,
                                   ),
@@ -219,7 +234,7 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     "Secured by Korra Financial",
-                    style: TextStyle(
+                    style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.grey.shade400,

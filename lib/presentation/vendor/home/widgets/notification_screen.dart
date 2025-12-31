@@ -8,10 +8,10 @@ import 'package:intl/intl.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../shared/widgets/korra_header.dart'; 
 
-class NotificationScreen extends StatelessWidget {
+class VendorNotificationScreen extends StatelessWidget {
   final String vendorUid;
 
-  const NotificationScreen({
+  const VendorNotificationScreen({
     super.key,
     required this.vendorUid,
   });

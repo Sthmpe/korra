@@ -9,18 +9,16 @@ import 'package:korra/logic/bloc/vendor/profile/profile_state.dart';
 import 'package:korra/presentation/shared/widgets/korra_header.dart';
 
 // --- WIDGET IMPORTS (From your snippets) ---
+import '../../../config/routes/app_routes.dart';
 import '../../../data/models/vendor/vendor_model.dart';
 import '../../../logic/bloc/vendor/profile/profile_bloc.dart';
 import '../../../logic/bloc/vendor/profile/profile_event.dart';
 import '../../../logic/core/net/net_cubit.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import 'change_password_screen.dart';
-import 'vendor_settlement_screen.dart';
 import 'widgets/identity_header_card.dart';
-import 'widgets/legal_screen.dart';
 import 'widgets/section_card.dart';
 import 'widgets/rows.dart';
-import '../../auth/role_login/role_login_screen.dart'; // For logout navigation
+// For logout navigation
 
 // --- MODEL ---
 // import 'path/to/vendor_model.dart'; 
@@ -51,7 +49,7 @@ class VendorProfilePage extends StatelessWidget {
           listener: (context, state) {
             if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
             if (state.status == ProfileStatus.logout) {
-              Get.offAll(() => const RoleLoginScreen());
+              Get.offAllNamed(Routes.roleLoginScreen);
             }
           },
           child: StreamBuilder<Vendor?>(
@@ -212,11 +210,14 @@ class VendorProfilePage extends StatelessWidget {
                             subtitle: 'Earnings, vault & history',
                             onTap: () {
                               // 🚀 NAVIGATE TO SETTLEMENT SCREEN
-                              Get.to(() => VendorSettlementScreen(
-                                repo: vendors,       // Pass the existing repo
-                                vendorUid: vendorUid // Pass the existing uid
-                              ));
-                            },
+                              Get.toNamed(
+                                Routes.vendorSettlement,
+                                arguments: {
+                                  'repo': vendors,
+                                  'uid': vendorUid,
+                                },
+                              );
+                            }
                           ),
                           
                           _divider(),
@@ -255,19 +256,18 @@ class VendorProfilePage extends StatelessWidget {
                             icon: Icons.lock_outline,
                             title: 'Change password',
                             onTap: () {
-                                          Get.to(
-                                            () => ChangePasswordScreen(
-                                              repo: vendors,
-                                            ),
-                                          );
-                                        },
+                                       Get.toNamed(
+                                        Routes.vendorChangePassword,
+                                        arguments: {'repo': vendors},
+                                      );
+                                    },
                           ),
                           _divider(),
                           RowWithChevron(
                             icon: Icons.description_outlined,
                             title: 'Legal & Privacy',
                             onTap: () {
-                                      Get.to(() => const LegalMenuScreen());
+                                      Get.toNamed(Routes.vendorLegal);
                                     },
                           ),
                         ],

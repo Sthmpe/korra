@@ -6,15 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:get/get.dart';
-import 'package:korra/presentation/customer/profile/bank_details_screen.dart';
 
 import '../../../../../config/constants/colors.dart';
 import '../../../../../data/models/customer/plans.dart';
 import '../../../../../data/repository/customer/customer_repository.dart';
 import '../../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
+import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/payment_receipt_data.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
-import 'payment_result_screen.dart';
 
 class PayPlanInputScreen extends StatefulWidget {
   final Plan plan;
@@ -145,21 +144,36 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
             final isFinished = (_currentAmount + widget.plan.amountPaid) >= widget.plan.totalAmount;
             
             // ✅ Success Logic
-            Get.off(() => PaymentResultScreen(
-              isSuccess: true, 
-              isPlanCompleted: isFinished, 
-              amount: _currentAmount,
-              planName: widget.plan.title,
-              fullReceiptData: state.receiptData ?? PaymentReceiptData.fromPartial(amount: _currentAmount, date: DateTime.now(), title: widget.plan.title),
-            ));
+            Get.offNamed(
+              Routes.customerPaymentResult,
+              arguments: {
+                'isSuccess': true,
+                'isPlanCompleted': isFinished,
+                'amount': _currentAmount,
+                'planName': widget.plan.title,
+                'fullReceiptData': state.receiptData ?? PaymentReceiptData.fromPartial(
+                  amount: _currentAmount, 
+                  date: DateTime.now(), 
+                  title: widget.plan.title
+                ),
+              }
+            );
           } else if (state.status == PayPlanStatus.failure) {
-            Get.off(() => PaymentResultScreen(
-              isSuccess: false, 
-              errorMessage: state.errorMessage,
-              amount: _currentAmount,
-              planName: widget.plan.title,
-              fullReceiptData: state.receiptData ?? PaymentReceiptData.fromPartial(amount: _currentAmount, date: DateTime.now(), title: widget.plan.title),
-            ));
+            // ❌ Failure Logic
+            Get.offNamed(
+              Routes.customerPaymentResult,
+              arguments: {
+                'isSuccess': false,
+                'errorMessage': state.errorMessage,
+                'amount': _currentAmount,
+                'planName': widget.plan.title,
+                'fullReceiptData': state.receiptData ?? PaymentReceiptData.fromPartial(
+                  amount: _currentAmount, 
+                  date: DateTime.now(), 
+                  title: widget.plan.title
+                ),
+              }
+            );
           }
         },
         builder: (context, state) {
@@ -322,7 +336,10 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                               showAppSnackbar('Please wait, data is loading...', SnackbarType.info);
                               return;
                             }
-                            Get.to(() => BankDetailsScreen(customer: customerData));
+                            Get.toNamed(
+                                Routes.customerBankDetails, 
+                                arguments: customerData 
+                              );
                           } else if (isValid) {
                             context.read<PayPlanBloc>().add(PayInstallmentConfirmed(
                               planId: widget.plan.id,

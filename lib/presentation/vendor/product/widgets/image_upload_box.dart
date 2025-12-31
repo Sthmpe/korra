@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart'; // 👈 IMPORT FOR kIsWeb
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
@@ -26,7 +27,6 @@ class ImageUploadBox extends StatefulWidget {
 }
 
 class _ImageUploadBoxState extends State<ImageUploadBox> {
-  // ✅ Local state to track conversion progress
   bool _isProcessing = false;
 
   Future<void> _pickImages(BuildContext context) async {
@@ -37,33 +37,38 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
       final picked = await picker.pickMultiImage();
 
       if (picked.isNotEmpty) {
-        // Enforce max of 5
         if (picked.length > 5) {
           showAppSnackbar("You can only select up to 5 images.", SnackbarType.warning);
           return;
         }
 
-        // Enforce min of 3
         if (picked.length < 3) {
           showAppSnackbar("Please select at least 3 images.", SnackbarType.warning);
           return;
         }
 
-        // 1. TRIGGER LOADING STATE
         setState(() => _isProcessing = true);
 
-        // 2. CONVERT IMAGES (Heavy Task)
-        final convertedFiles = await Future.wait(
-          picked.map((e) => ImageConverter.toWebP(File(e.path))),
-        );
+        // ======================================================
+        // 🚀 PLATFORM CHECK (WEB FIX)
+        // ======================================================
+        if (kIsWeb) {
+          // ON WEB: We cannot use File() or ImageConverter (dart:io).
+          // We pass the XFile directly to the bloc.
+          bloc.add(AddImages(picked)); 
+        } else {
+          // ON MOBILE: We perform conversion to reduce size/change format
+          final convertedFiles = await Future.wait(
+            picked.map((e) => ImageConverter.toWebP(File(e.path))),
+          );
+          bloc.add(AddImages(convertedFiles));
+        }
+        // ======================================================
 
-        // 3. SEND TO BLOC
-        bloc.add(AddImages(convertedFiles));
       }
     } catch (e) {
       showAppSnackbar("Error processing images", SnackbarType.error);
     } finally {
-      // 4. STOP LOADING STATE
       if (mounted) {
         setState(() => _isProcessing = false);
       }
@@ -78,16 +83,12 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
         final bool showLocal = state.images.isNotEmpty;
         final int dataCount = showLocal ? state.images.length : widget.imagesUrl.length;
 
-        // Calculate total items: Images + (Add Button OR Loader)
-        // If processing, the loader replaces the Add Button slot
         int itemCount = dataCount + (widget.editable ? 1 : 0);
 
-        // CASE 1: Empty State (Show Big Placeholder if not processing)
         if (itemCount == 1 && !_isProcessing && dataCount == 0) {
           return widget.editable ? _buildBigPlaceholder() : const SizedBox();
         }
 
-        // CASE 2: Carousel List
         return CarouselSlider.builder(
           itemCount: itemCount,
           options: CarouselOptions(
@@ -97,19 +98,17 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
             padEnds: false,
           ),
           itemBuilder: (context, index, _) {
-            // A. LAST SLOT LOGIC (Either Loader or Add Button)
             if (index == itemCount - 1) {
               if (_isProcessing) {
-                return _buildLoadingBox(); // ✅ Show Loader
+                return _buildLoadingBox(); 
               } else if (widget.editable) {
-                return _buildAddButton();  // ✅ Show Add Button
+                return _buildAddButton();  
               }
             }
 
-            // B. IMAGE SLOT LOGIC
             if (showLocal) {
-              // Safety check to prevent range error during rapid state changes
               if (index >= state.images.length) return const SizedBox();
+              // Pass the dynamic image (File or XFile)
               return _buildLocalImage(state.images[index], index);
             } else {
               if (index >= widget.imagesUrl.length) return const SizedBox();
@@ -121,7 +120,7 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
     );
   }
 
-  // --- WIDGET HELPER: Loading Box (Spinner) ---
+  // ... (LoadingBox, BigPlaceholder, AddButton - NO CHANGES NEEDED) ...
   Widget _buildLoadingBox() {
     return Container(
       margin: EdgeInsets.only(right: 12.w),
@@ -134,15 +133,13 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
       ),
       child: Center(
         child: SizedBox(
-          width: 24.w, 
-          height: 24.w, 
+          width: 24.w, height: 24.w, 
           child: const CircularProgressIndicator(strokeWidth: 2.5, color: Colors.grey)
         ),
       ),
     );
   }
 
-  // --- WIDGET HELPER: Big Placeholder (Initial State) ---
   Widget _buildBigPlaceholder() {
     return GestureDetector(
       onTap: () => _pickImages(context),
@@ -159,17 +156,13 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
           children: [
             Icon(Iconsax.gallery_add, size: 32.sp, color: Colors.grey.shade600),
             SizedBox(height: 8.h),
-            Text(
-              "Add Photos",
-              style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
-            )
+            Text("Add Photos", style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600))
           ],
         ),
       ),
     );
   }
 
-  // --- WIDGET HELPER: Small Add Button (End of list) ---
   Widget _buildAddButton() {
     return GestureDetector(
       onTap: () => _pickImages(context),
@@ -181,30 +174,35 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
           borderRadius: BorderRadius.circular(24.r),
           color: Colors.grey.shade100,
         ),
-        child: Center(
-          child: Icon(Iconsax.add, size: 32.sp, color: Colors.black),
-        ),
+        child: Center(child: Icon(Iconsax.add, size: 32.sp, color: Colors.black)),
       ),
     );
   }
 
-  // --- WIDGET HELPER: Local Image (With Remove) ---
-  Widget _buildLocalImage(File file, int index) {
+  // --- WIDGET HELPER: Local Image (UPDATED FOR WEB) ---
+  Widget _buildLocalImage(dynamic imageFile, int index) {
     return Stack(
       children: [
         Container(
           margin: EdgeInsets.only(right: 12.w),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24.r),
-            child: Image.file(
-              file,
-              width: 120.w,
-              height: 120.h,
-              fit: BoxFit.cover,
-            ),
+            // ✅ CONDITIONAL RENDERING FOR WEB vs MOBILE
+            child: kIsWeb 
+              ? Image.network(
+                  imageFile.path, // On Web, XFile.path is a blob URL
+                  width: 120.w,
+                  height: 120.h,
+                  fit: BoxFit.cover,
+                )
+              : Image.file(
+                  imageFile as File, // On Mobile, it is a File
+                  width: 120.w,
+                  height: 120.h,
+                  fit: BoxFit.cover,
+                ),
           ),
         ),
-        // Remove Button
         Positioned(
           top: 6.h,
           right: 18.w, 
@@ -224,7 +222,7 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
     );
   }
 
-  // --- WIDGET HELPER: Network Image (Read Only display) ---
+  // ... (Network Image - NO CHANGES NEEDED) ...
   Widget _buildNetworkImage(String url) {
     return Container(
       margin: EdgeInsets.only(right: 12.w),

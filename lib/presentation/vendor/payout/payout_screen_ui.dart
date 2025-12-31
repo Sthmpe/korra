@@ -11,17 +11,18 @@ import '../../../../logic/bloc/vendor/payout/payout_bloc.dart';
 import '../../../../logic/bloc/vendor/payout/payout_event.dart';
 import '../../../../logic/bloc/vendor/payout/payout_state.dart';
 import '../../../config/constants/colors.dart';
+import '../../../config/routes/app_routes.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/korra_header.dart';
 
 // Your Widgets
 import 'widgets/bank_selector_sheet.dart';
+import 'widgets/contact_support_sheet.dart';
 import 'widgets/decimal_input_formatter.dart';
 import 'widgets/korra_button.dart';
 import 'widgets/korra_loading_overlay.dart';
 import 'widgets/password_verification_sheet.dart';
 import 'widgets/payout_balance_card.dart';
-import 'widgets/payout_success_screen.dart';
 import 'widgets/transaction_pin_sheet.dart';
 
 
@@ -104,14 +105,16 @@ class PayoutScreen extends StatelessWidget {
           final amountVal = double.tryParse(state.amountInput.replaceAll(',', '')) ?? 0.0;
           
           // 3. Navigate
-          Get.to(() => PayoutSuccessScreen(
-            amount: amountVal,
-            // Use the Ref from backend, or generate a temporary one if null
-            reference: state.transactionRef ?? "REF-${DateTime.now().millisecondsSinceEpoch}",
-            bankName: state.bankName,
-            accountNumber: state.accountNumber,
-            accountName: state.accountName, 
-          ));
+          Get.offNamed(
+            Routes.vendorPayoutSuccess,
+            arguments: {
+              'amount': amountVal,
+              'reference': state.transactionRef ?? "REF-${DateTime.now().millisecondsSinceEpoch}",
+              'bankName': state.bankName,
+              'accountNumber': state.accountNumber,
+              'accountName': state.accountName,
+            }
+          );
         } else if (state.status == PayoutStatus.failure) {
           FocusManager.instance.primaryFocus?.unfocus();
           closeAllOverlays();
@@ -130,6 +133,8 @@ class PayoutScreen extends StatelessWidget {
         }
       },
       builder: (context, state) {
+        final isBlocked = state.complianceStatus != 'active';
+
         bool showLoader = state.status == PayoutStatus.loading &&
                         state.step == PayoutStep.processing;
 
@@ -180,16 +185,7 @@ class PayoutScreen extends StatelessWidget {
                   SizedBox(height: 40.h),
                       
                   // 4. Action Button
-                  KorraButton(
-                    text: "Withdraw",
-                    isLoading: state.step == PayoutStep.processing,
-                    onPressed: state.canWithdraw
-                        ? () {
-                            FocusManager.instance.primaryFocus?.unfocus();
-                            context.read<PayoutBloc>().add(WithdrawClicked());
-                          }
-                        : null,
-                  ),
+                  _buildActionArea(context, state),
                 ],
               ),
             ),
@@ -200,6 +196,173 @@ class PayoutScreen extends StatelessWidget {
   }
 
   // --- Widget Components ---
+
+  // Inside your build method, listening to PayoutState
+
+Widget _buildActionArea(BuildContext context, PayoutState state) {
+  // Case 1: Active (Clean Button)
+  if (state.complianceStatus == 'active') {
+    return Padding(
+      padding: EdgeInsets.only(top: 12.h),
+      child: KorraButton(
+        text: "Withdraw Funds",
+        isLoading: state.step == PayoutStep.processing,
+        onPressed: state.canWithdraw
+            ? () {
+                FocusManager.instance.primaryFocus?.unfocus();
+                context.read<PayoutBloc>().add(WithdrawClicked());
+              }
+            : null,
+      ),
+    );
+  }
+
+  // Case 2: Verification Pending (Premium Action Card)
+  if (state.complianceStatus == 'verification_pending') {
+    return _buildStatusCard(
+      context,
+      title: "Identity Verification",
+      message: state.blockMessage.isNotEmpty
+          ? state.blockMessage
+          : "To ensure the security of your funds, we need a quick video verification.",
+      icon: Icons.shield_outlined, // Or Iconsax.shield_tick
+      accentColor: const Color(0xFFF79009), // Premium Warning Orange
+      buttonText: "Start Verification",
+      onPressed: () => _showContactSheet(context),
+    );
+  }
+
+  // Case 3: Suspended (Premium Alert Card)
+  return _buildStatusCard(
+    context,
+    title: "Account Restricted",
+    message: state.blockMessage.isNotEmpty
+        ? state.blockMessage
+        : "Your account access is currently paused. Please contact our team to resolve this.",
+    icon: Icons.lock_outline, // Or Iconsax.lock
+    accentColor: const Color(0xFFD92D20), // Premium Error Red
+    buttonText: "Resolve Issue",
+    onPressed: () => _showContactSheet(context),
+  );
+}
+
+// 💎 THE PREMIUM CARD WIDGET
+Widget _buildStatusCard(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required IconData icon,
+  required Color accentColor,
+  required String buttonText,
+  required VoidCallback onPressed,
+}) {
+  return Container(
+    margin: EdgeInsets.only(top: 0.h),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20.r), // Softer corners
+      border: Border.all(color: Colors.grey.shade100),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF101828).withOpacity(0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 4), // Soft elevation
+        ),
+      ],
+    ),
+    child: Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(20.w),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Icon with Soft Background
+              Container(
+                padding: EdgeInsets.all(12.r),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: accentColor, size: 24.sp),
+              ),
+              SizedBox(width: 16.w),
+              
+              // 2. Text Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF101828), // Slate 900
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    SizedBox(height: 6.h),
+                    Text(
+                      message,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.sp,
+                        height: 1.5, // Better readability
+                        color: const Color(0xFF667085), // Slate 500
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // 3. Integrated Action Button (Bottom Strip)
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: Colors.grey.shade100)),
+          ),
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(20.r),
+              bottomRight: Radius.circular(20.r),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.h),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    buttonText,
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: accentColor,
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  Icon(Icons.arrow_forward_rounded, size: 16.sp, color: accentColor),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showContactSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true, // Allows it to be taller if needed
+    builder: (context) => const ContactSupportSheet(),
+  );
+}
 
   Widget _buildBankSelector(BuildContext context, PayoutState state) {
     final hasBank = state.accountNumber.isNotEmpty;

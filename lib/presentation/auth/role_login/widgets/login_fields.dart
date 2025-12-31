@@ -5,18 +5,12 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:korra/presentation/auth/forgot_password/forgot_password_screen.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../config/routes/app_routes.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
-import '../../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
-import '../../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
-import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_bloc.dart';
-import '../../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
-import '../../signup_customer/signup_customer_screen.dart';
-import '../../signup_vendor/signup_vendor_screen.dart';
 
 class LoginFields extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -71,13 +65,9 @@ class _LoginFieldsState extends State<LoginFields> {
     FocusScope.of(context).unfocus();
     final role = context.read<RoleLoginBloc>().state.role;
     if (role == KorraRole.customer) {
-      Get.to(() => BlocProvider(
-          create: (_) => SignupCustomerBloc()..add(SignupCustomerInit()),
-          child: const SignupCustomerScreen()));
+      Get.toNamed(Routes.customerSignup);
     } else {
-      Get.to(() => BlocProvider(
-          create: (_) => SignupVendorBloc()..add(SignupVendorInit()),
-          child: const SignupVendorScreen(showLeadingIcon: false)));
+      Get.toNamed(Routes.vendorSignup);
     }
   }
 
@@ -135,7 +125,7 @@ class _LoginFieldsState extends State<LoginFields> {
               GestureDetector(
                 onTap: () {
                   FocusScope.of(context).unfocus();
-                  Get.to(() => const ForgotPasswordScreen());
+                  Get.toNamed(Routes.forgotPassword);
                 },
                 child: Text(
                   'Forgot password?',
