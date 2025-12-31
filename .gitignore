@@ -47,3 +47,5 @@ app.*.map.json
 # App Secrets
 /lib/app_secrets.dart
 /.vscode
+/firebase_rule.txt
+/.env

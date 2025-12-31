@@ -112,6 +112,8 @@ serve(async (req) => {
         status: 'approved', 
         rejectionReason: null,
 
+        isPremium: productData.isPremium || false,
+
         // Smart Contract Fields
         modelType: productData.modelType,
         cancellationPolicy: productData.cancellationPolicy,

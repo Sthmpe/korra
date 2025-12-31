@@ -1,5 +1,6 @@
 //import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,10 +14,6 @@ import 'logic/core/net/net_cubit.dart';
 import 'logic/core/update/update_cubit.dart';
 import 'logic/services/auth_service.dart';
 
-// We removed screen imports because we only need Routes now
-
-const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,8 +34,14 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
-    throw Exception("Supabase Keys not found! Did you run with --dart-define?");
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+
+  if (supabaseUrl == null || supabaseAnonKey == null) {
+    throw Exception('Supabase keys not found in .env');
   }
 
   await Supabase.initialize(

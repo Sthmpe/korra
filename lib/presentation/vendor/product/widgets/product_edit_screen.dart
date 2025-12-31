@@ -147,6 +147,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       backgroundColor: Colors.white,
       appBar: const KorraHeader(title: "Edit Product", showLeadingIcon: true),
       body: BlocListener<VendorProductsBloc, VendorProductsState>(
+        listenWhen: (previous, current) => previous.success != current.success,
         listener: (context, state) {
           if (state.success == true && state.isSubmitting == false) {
             showAppSnackbar("Changes saved successfully", SnackbarType.success);

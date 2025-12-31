@@ -29,3 +29,11 @@
 
 # Prevent Obfuscation of Flutter's Entry Point
 -keep class com.example.korra.MainActivity { *; }
+
+# Play Core Library (Fixes the R8 Compilation Error)
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
+
+# Also ignore missing tasks/core references
+-dontwarn com.google.android.play.core.tasks.**
+-dontwarn com.google.android.play.core.splitinstall.**

@@ -324,6 +324,9 @@ class _AddProductPageState extends State<AddProductPage> {
       backgroundColor: Colors.white,
       appBar: const KorraHeader(title: "New Product", showLeadingIcon: true),
       body: BlocListener<VendorProductsBloc, VendorProductsState>(
+        listenWhen: (previous, current) => 
+            previous.success != current.success || 
+            previous.errorMessage != current.errorMessage,
         listener: (context, state) {
           if (state.success == true) {
             // A. Clear form logic
