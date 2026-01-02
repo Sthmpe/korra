@@ -145,13 +145,26 @@ serve(async (req) => {
       });
 
       // --- STEP C: CALL MONNIFY ---
+      const EMTL_THRESHOLD = 10000;  // ₦10,000 (Govt Rule)
+      const GOVT_LEVY = 50;          // ₦50 (Govt Rule)
+      
+      let amountToSend = amount;
+      let narrationText = "Korra Payout"; // Default Narration
+
+      if (amount >= EMTL_THRESHOLD) {
+        amountToSend = amount - GOVT_LEVY;
+        // ⚠️ UPDATED: Notify them in the bank alert why it's ₦50 short
+        narrationText = `Korra Payout (Less ₦${GOVT_LEVY} Govt Levy)`; 
+      }
+
+
       try {
         const token = await getMonnifyToken();
         
         const monnifyPayload = {
-          amount: amount,
+          amount: amountToSend,
           reference: payoutRef,
-          narration: "Korra Payout",
+          narration: narrationText,
           destinationBankCode: destination.bankCode,
           destinationAccountNumber: destination.accountNumber,
           currency: "NGN",
