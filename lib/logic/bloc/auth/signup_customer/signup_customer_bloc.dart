@@ -328,7 +328,7 @@ class SignupCustomerBloc
           state.copyWith(ninVerifying: true, ninError: null, kycError: null),
         );
 
-        //await _customerRepo.verifyNin(state.nin.trim());
+        await _customerRepo.verifyNin(state.nin.trim());
         emit(
           state.copyWith(
             ninVerifying: false,
@@ -342,21 +342,21 @@ class SignupCustomerBloc
         emit(
           state.copyWith(bvnVerifying: true, bvnError: null, kycError: null),
         );
-        //final fullName = '${state.firstName} ${state.lastName}'.trim();
+        final fullName = '${state.firstName} ${state.lastName}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
-        //final localPhone = _normalizeNigerianMsisdn(state.phone);
+        final localPhone = _normalizeNigerianMsisdn(state.phone);
 
         if (dobForBvn == null) {
           emit(state.copyWith(kycError: 'Date of birth is missing'));
           return;
         }
 
-        // await _customerRepo.verifyBvn(
-        //   bvn: state.bvn.trim(),
-        //   name: fullName,
-        //   dateOfBirthIso: dobForBvn,
-        //   mobileNo: localPhone,
-        // );
+        await _customerRepo.verifyBvn(
+          bvn: state.bvn.trim(),
+          name: fullName,
+          dateOfBirthIso: dobForBvn,
+          mobileNo: localPhone,
+        );
         emit(
           state.copyWith(
             bvnVerifying: false,
@@ -443,7 +443,7 @@ class SignupCustomerBloc
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      // await _customerRepo.verifyNin(state.nin.trim());
+      await _customerRepo.verifyNin(state.nin.trim());
       emit(
         state.copyWith(
           ninVerifying: false,
@@ -481,21 +481,21 @@ class SignupCustomerBloc
 
     emit(state.copyWith(bvnVerifying: true, kycError: null));
     try {
-      //final fullName = '${state.firstName} ${state.lastName}'.trim();
+      final fullName = '${state.firstName} ${state.lastName}'.trim();
       final dobIso = _formatDobForBvn(state.dob);
-      // final localPhone = _normalizeNigerianMsisdn(state.phone);
+      final localPhone = _normalizeNigerianMsisdn(state.phone);
 
       if (dobIso == null) {
         emit(state.copyWith(kycError: 'Date of birth is missing'));
         return;
       }
 
-      // await _customerRepo.verifyBvn(
-      //   bvn: state.bvn.trim(),
-      //   name: fullName,
-      //   dateOfBirthIso: dobIso,
-      //   mobileNo: localPhone,
-      // );
+      await _customerRepo.verifyBvn(
+        bvn: state.bvn.trim(),
+        name: fullName,
+        dateOfBirthIso: dobIso,
+        mobileNo: localPhone,
+      );
       emit(
         state.copyWith(
           bvnVerifying: false,

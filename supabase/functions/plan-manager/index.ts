@@ -867,15 +867,17 @@ serve(async (req) => {
                 });
 
                 // 8. VENDOR ACTIVITY
-                createActivity(
-                    t,
-                    plan.vendorId,
-                    'reservation_extended',
-                    'Reservation Extended',
-                    `${plan.customerName} extended payment deadline by ${daysToAdd} days`,
-                    planId,
-                    null
-                );
+                const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'reservation_extended',
+                    title: 'Reservation Extended',
+                    body: `${plan.customerName} extended payment deadline by ${daysToAdd} days.`,
+                    ref_id: planId,
+                    amount_display: null,
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
 
                 return { 
                     status: "SUCCESS", 
@@ -1007,20 +1009,24 @@ serve(async (req) => {
                 });
 
                 // 7. Activity Feed
-                createActivity(
-                    t,
-                    vendorId,
-                    'reservation_cancel',
-                    'Plan Converted',
-                    `${plan.customerName} cancelled ${plan.title}. Funds converted to Store Credit.`,
-                    planId,
-                    `+₦${refundAmount.toLocaleString()} Credit`
-                );
+                const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'reservation_cancel',
+                    title: 'Plan Converted',
+                    body: `${plan.customerName} cancelled ${plan.title}. Funds converted to Store Credit.`,
+                    ref_id: planId,
+                    amount_display: `+₦${refundAmount.toLocaleString()} Credit`,
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
 
                 return { 
                     status: "SUCCESS", 
                     refundAmount: refundAmount,
-                    storeName: plan.storeName
+                    storeName: plan.storeName,
+                    vendorId: vendorId,
+                    productName: plan.title || "Product"
                 };
             });
 
@@ -1030,6 +1036,15 @@ serve(async (req) => {
                 "Plan Converted 🔄", 
                 `Your ₦${result.refundAmount.toLocaleString()} has been moved to Store Credit for ${result.storeName}.`, 
                 { type: "plan_detail", planId: planId }
+            );
+
+            // To Vendor
+            await sendFcm(
+                result.vendorId,
+                "Plan Converted 🔄",
+                `Customer has converted the payment for ${result.productName} to Store Credit.`,
+                { type: "vendor_order", planId: planId },
+                'vendors'
             );
 
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -1077,7 +1092,6 @@ serve(async (req) => {
                 });
 
                 // 5. Log to Vendor Activity
-                // Ensure 'createActivity' helper is defined as discussed previously
                 const activityRef = db.collection('vendors').doc(vendorUid).collection('activity_feed').doc();
                 t.set(activityRef, {
                     id: activityRef.id,

@@ -50,7 +50,7 @@ class PlanDetailsScreen extends StatelessWidget {
     if (daysRemaining <= 0) return total; // Overdue? Pay all.
 
     // Determine interval (e.g., 30 days for monthly, 7 for weekly)
-    int intervalDays = 30; 
+    int intervalDays = 30;
     if (plan.cadenceType == 'weekly') intervalDays = 7;
     if (plan.cadenceType == 'bi-weekly') intervalDays = 14;
     if (plan.cadenceType == 'daily') intervalDays = 1;
@@ -159,10 +159,10 @@ class PlanDetailsScreen extends StatelessWidget {
                         _buildProductHeader(currentPlan),
 
                         // Only show if Completed
-                        if (isCompleted) 
+                        if (isCompleted)
                           _buildPickupSection(context, currentPlan),
 
-                       // --- D. FINANCIALS ---
+                        // --- D. FINANCIALS ---
                         if (!isCompleted)
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -268,7 +268,11 @@ class PlanDetailsScreen extends StatelessWidget {
                 color: Colors.green.shade50,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Iconsax.verify5, size: 32.sp, color: Colors.green.shade700),
+              child: Icon(
+                Iconsax.verify5,
+                size: 32.sp,
+                color: Colors.green.shade700,
+              ),
             ),
             SizedBox(height: 16.h),
             Text(
@@ -290,21 +294,25 @@ class PlanDetailsScreen extends StatelessWidget {
               ),
             ),
             SizedBox(height: 24.h),
-            
+
             // Share Button
             SizedBox(
               width: double.infinity,
               height: 48.h,
               child: OutlinedButton.icon(
                 onPressed: () {
-                  Share.share("I just bought a ${p.title} debt-free using Korra! 🚀");
+                  Share.share(
+                    "I just bought a ${p.title} debt-free using Korra! 🚀",
+                  );
                 },
                 icon: Icon(Iconsax.share, size: 18.sp),
                 label: const Text("Share Achievement"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF344054),
                   side: const BorderSide(color: Color(0xFFD0D5DD)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
                   textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -339,7 +347,9 @@ class PlanDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB), // Very light grey header
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-                border: const Border(bottom: BorderSide(color: Color(0xFFEAECF0))),
+                border: const Border(
+                  bottom: BorderSide(color: Color(0xFFEAECF0)),
+                ),
               ),
               child: Row(
                 children: [
@@ -350,7 +360,11 @@ class PlanDetailsScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: const Color(0xFFEAECF0)),
                     ),
-                    child: const Icon(Iconsax.box_tick, size: 18, color: KorraColors.brand),
+                    child: const Icon(
+                      Iconsax.box_tick,
+                      size: 18,
+                      color: KorraColors.brand,
+                    ),
                   ),
                   SizedBox(width: 12.w),
                   Column(
@@ -396,15 +410,20 @@ class PlanDetailsScreen extends StatelessWidget {
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(vertical: 20.h),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED), // Very light brand tint (Cream/Orange)
+                      color: const Color(
+                        0xFFFFF7ED,
+                      ), // Very light brand tint (Cream/Orange)
                       borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: KorraColors.brand.withOpacity(0.2)),
+                      border: Border.all(
+                        color: KorraColors.brand.withOpacity(0.2),
+                      ),
                     ),
                     child: Center(
                       child: Text(
                         // Format: "4 9 2 1"
-                        (p.pickupCode ?? "----").split('').join('  '), 
-                        style: GoogleFonts.spaceMono( // Or generic mono if spaceMono not added
+                        (p.pickupCode ?? "----").split('').join('  '),
+                        style: GoogleFonts.spaceMono(
+                          // Or generic mono if spaceMono not added
                           fontSize: 36.sp,
                           fontWeight: FontWeight.w700,
                           color: KorraColors.brand, // Brand Color
@@ -422,10 +441,12 @@ class PlanDetailsScreen extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: 20.w),
               child: Row(
                 children: List.generate(
-                  150 ~/ 5, 
+                  150 ~/ 5,
                   (index) => Expanded(
                     child: Container(
-                      color: index % 2 == 0 ? Colors.transparent : Colors.grey.shade300,
+                      color: index % 2 == 0
+                          ? Colors.transparent
+                          : Colors.grey.shade300,
                       height: 1,
                     ),
                   ),
@@ -439,7 +460,11 @@ class PlanDetailsScreen extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Iconsax.info_circle, size: 18.sp, color: const Color(0xFFB54708)),
+                  Icon(
+                    Iconsax.info_circle,
+                    size: 18.sp,
+                    color: const Color(0xFFB54708),
+                  ),
                   SizedBox(width: 10.w),
                   Expanded(
                     child: Text(
@@ -760,12 +785,9 @@ class PlanDetailsScreen extends StatelessWidget {
                   _showResolveSheet(context, p);
                 } else {
                   Get.toNamed(
-                  Routes.customerPayPlan, 
-                  arguments: {
-                    'plan': p, 
-                    'repo': customerRepo
-                  }
-                );
+                    Routes.customerPayPlan,
+                    arguments: {'plan': p, 'repo': customerRepo},
+                  );
                 }
               },
               style: FilledButton.styleFrom(
@@ -825,11 +847,8 @@ class PlanDetailsScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(ctx);
                   Get.toNamed(
-                    Routes.customerPayPlan, 
-                    arguments: {
-                      'plan': p, 
-                      'repo': customerRepo
-                    }
+                    Routes.customerPayPlan,
+                    arguments: {'plan': p, 'repo': customerRepo},
                   );
                 },
               ),
@@ -872,198 +891,231 @@ class PlanDetailsScreen extends StatelessWidget {
   // =========================================================
 
   void _showConversionSheet(BuildContext context, Plan p) {
+    final cubit = context.read<PlanActionCubit>();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent, // Important for the floating look
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-        ),
-        padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 40.h),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 1. Drag Handle
-            Center(
-              child: Container(
-                width: 40.w,
-                height: 4.h,
-                margin: EdgeInsets.only(bottom: 24.h),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2.r),
-                ),
-              ),
-            ),
+      builder: (ctx) => BlocProvider.value(
+        // ✅ Provide the EXISTING cubit to the sheet
+        value: cubit,
+        child: BlocBuilder<PlanActionCubit, PlanActionState>(
+          // ✅ Listen to state changes
+          builder: (context, state) {
+            final bool isLoading = state is PlanActionLoading;
 
-            // 2. Icon Hero
-            Container(
-              padding: EdgeInsets.all(16.r),
+            return Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED), // Brand Orange-50
-                shape: BoxShape.circle,
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
               ),
-              child: const Icon(
-                Iconsax.wallet_3,
-                color: KorraColors.brand,
-                size: 32,
-              ),
-            ),
-            SizedBox(height: 16.h),
-
-            // 3. Headline
-            Text(
-              "Convert to Store Credit",
-              style: GoogleFonts.inter(
-                fontSize: 20.sp,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF101828),
-              ),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              "This will end your current plan immediately.",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                color: const Color(0xFF667085),
-              ),
-            ),
-
-            SizedBox(height: 32.h),
-
-            // 4. The "Receipt" Box
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFEAECF0)),
-              ),
+              padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 40.h),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _receiptRow(
-                    "Total Paid Equity",
-                    currencyFormat.format(p.amountPaid),
-                    isBold: true,
+                  // 1. Drag Handle
+                  Center(
+                    child: Container(
+                      width: 40.w,
+                      height: 4.h,
+                      margin: EdgeInsets.only(bottom: 24.h),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2.r),
+                      ),
+                    ),
                   ),
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
-                    child: const Divider(height: 1),
+
+                  // 2. Icon Hero
+                  Container(
+                    padding: EdgeInsets.all(16.r),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED), // Brand Orange-50
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Iconsax.wallet_3,
+                      color: KorraColors.brand,
+                      size: 32,
+                    ),
                   ),
-                  _receiptRow("Cancellation Fee", "₦0.00", color: Colors.green),
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
-                    child: const Divider(height: 1),
+                  SizedBox(height: 16.h),
+
+                  // 3. Headline
+                  Text(
+                    "Convert to Store Credit",
+                    style: GoogleFonts.inter(
+                      fontSize: 20.sp,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF101828),
+                    ),
                   ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    "This will end your current plan immediately.",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp,
+                      color: const Color(0xFF667085),
+                    ),
+                  ),
+
+                  SizedBox(height: 32.h),
+
+                  // 4. The "Receipt" Box
+                  Container(
+                    padding: EdgeInsets.all(16.r),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(16.r),
+                      border: Border.all(color: const Color(0xFFEAECF0)),
+                    ),
+                    child: Column(
+                      children: [
+                        _receiptRow(
+                          "Total Paid Equity",
+                          currencyFormat.format(p.amountPaid),
+                          isBold: true,
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.h),
+                          child: const Divider(height: 1),
+                        ),
+                        _receiptRow(
+                          "Cancellation Fee",
+                          "₦0.00",
+                          color: Colors.green,
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.h),
+                          child: const Divider(height: 1),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Credit to Receive",
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                color: const Color(0xFF667085),
+                              ),
+                            ),
+                            Text(
+                              currencyFormat.format(p.amountPaid),
+                              style: GoogleFonts.inter(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.w800,
+                                color: KorraColors.brand,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 24.h),
+
+                  // 5. Warning Note
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        "Credit to Receive",
-                        style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          color: const Color(0xFF667085),
+                      Icon(
+                        Iconsax.info_circle,
+                        size: 18.sp,
+                        color: const Color(0xFFF79009),
+                      ),
+                      SizedBox(width: 8.w),
+                      Expanded(
+                        child: Text(
+                          "This credit can be used to purchase any item from ${p.storeName} in the future.",
+                          style: GoogleFonts.inter(
+                            fontSize: 12.sp,
+                            color: const Color(0xFFB54708),
+                            height: 1.4,
+                          ),
                         ),
                       ),
-                      Text(
-                        currencyFormat.format(p.amountPaid),
-                        style: GoogleFonts.inter(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.w800,
-                          color: KorraColors.brand,
+                    ],
+                  ),
+
+                  SizedBox(height: 32.h),
+
+                  // 6. Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                          child: Text(
+                            "Cancel",
+                            style: GoogleFonts.inter(
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF344054),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: isLoading
+                              ? null // Disable click while loading
+                              : () {
+                                  Navigator.pop(ctx);
+                                  // Trigger Cubit
+                                  context
+                                      .read<PlanActionCubit>()
+                                      .convertToStoreCredit(
+                                        planId: p.id,
+                                        customerUid: p.customerId,
+                                      );
+                                },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: KorraColors.brand,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: isLoading
+                              ? SizedBox(
+                                  // ✅ LOADING SPINNER
+                                  height: 20.h,
+                                  width: 20.h,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  "Confirm Conversion",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
-
-            SizedBox(height: 24.h),
-
-            // 5. Warning Note
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Iconsax.info_circle,
-                  size: 18.sp,
-                  color: const Color(0xFFF79009),
-                ),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: Text(
-                    "This credit can be used to purchase any item from ${p.storeName} in the future.",
-                    style: GoogleFonts.inter(
-                      fontSize: 12.sp,
-                      color: const Color(0xFFB54708),
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 32.h),
-
-            // 6. Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      side: const BorderSide(color: Color(0xFFD0D5DD)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                    ),
-                    child: Text(
-                      "Cancel",
-                      style: GoogleFonts.inter(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF344054),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      // Trigger Cubit
-                      context.read<PlanActionCubit>().convertToStoreCredit(
-                        planId: p.id,
-                        customerUid: p.customerId,
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: KorraColors.brand,
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      "Confirm Conversion",
-                      style: GoogleFonts.inter(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -1104,7 +1156,7 @@ class PlanDetailsScreen extends StatelessWidget {
 
     // 1. CALCULATE TARGET AMOUNT (Your existing logic)
     double targetAmount = p.amountPerPeriod ?? 0;
-    
+
     if (targetAmount <= 0) {
       targetAmount = _smartTargetAmount;
     }
@@ -1143,7 +1195,8 @@ class PlanDetailsScreen extends StatelessWidget {
     Color iconColor = _brand;
     Color iconBg = const Color(0xFFF9FAFB);
     String labelText = "Next Scheduled Payment";
-    String subText = "Suggested Date ${DateFormat('MMM dd').format(displayDate)}";
+    String subText =
+        "Suggested Date ${DateFormat('MMM dd').format(displayDate)}";
 
     if (isExtraTime) {
       // 🚨 EXTRA TIME UI

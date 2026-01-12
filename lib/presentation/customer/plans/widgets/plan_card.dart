@@ -28,6 +28,7 @@ class PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // 1. Logic
     final bool isCompleted = plan.status == 'completed';
+    final bool isCancelled = plan.status == 'cancelled';
     final bool isOverdue = plan.isOverdue;
     final bool isPending = plan.status == 'pending_approval'; // ✅ NEW LOGIC
     
@@ -173,7 +174,7 @@ class PlanCard extends StatelessWidget {
                 Row(
                   children: [
                     // ✅ HIDE PAY BUTTON IF PENDING OR COMPLETED
-                    if (!isCompleted && !isPending) ...[
+                    if (!isCompleted && !isPending && !isCancelled) ...[
                       Expanded(
                         flex: 3,
                         child: SizedBox(
@@ -208,6 +209,24 @@ class PlanCard extends StatelessWidget {
                           child: Text(
                             "Waiting for Vendor",
                             style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: Colors.orange.shade800),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                    ] else if (isCancelled) ...[
+                      // ✅ OPTIONAL: Show a "Cancelled" label
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          height: 44.h,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          child: Text(
+                            "Plan Cancelled",
+                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: Colors.grey),
                           ),
                         ),
                       ),

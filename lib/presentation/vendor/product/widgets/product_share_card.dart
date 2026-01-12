@@ -1,10 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
+import '../../../shared/widgets/show_app_snackbar.dart';
 
 class ProductShareCard extends StatelessWidget {
   final ProductItem product;
@@ -206,41 +208,57 @@ class ProductShareCard extends StatelessWidget {
                       Container(
                         width: double.infinity,
                         padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 20.h),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          decoration: BoxDecoration(
-                            color: KorraColors.brand, // Dark Premium background
-                            borderRadius: BorderRadius.circular(16.r),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                "USE THIS CODE",
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white54,
-                                  letterSpacing: 1.5,
+                        child: GestureDetector(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: product.code));
+                            showAppSnackbar("Code '${product.code}' Copied to clipboard!", SnackbarType.success);
+                          },
+                          child: Container(
+                            padding: EdgeInsets.symmetric(vertical: 14.h),
+                            decoration: BoxDecoration(
+                              color: KorraColors.brand, // Dark Premium background
+                              borderRadius: BorderRadius.circular(16.r),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  "USE THIS CODE",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.sp,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white54,
+                                    letterSpacing: 1.5,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: 4.h),
-                              // 🛡️ FittedBox keeps it safe
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    product.code,
-                                    style: GoogleFonts.spaceMono(
-                                      fontSize: 20.sp,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white, // White text on Dark
-                                      letterSpacing: 3.0,
+                                SizedBox(height: 4.h),
+                                // 🛡️ FittedBox keeps it safe
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16.w),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          product.code,
+                                          style: GoogleFonts.spaceMono(
+                                            fontSize: 20.sp,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white, // White text on Dark
+                                            letterSpacing: 3.0,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w), // Space between Code and Icon
+                                        Icon(
+                                          Icons.copy, 
+                                          color: Colors.white, 
+                                          size: 18.sp
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

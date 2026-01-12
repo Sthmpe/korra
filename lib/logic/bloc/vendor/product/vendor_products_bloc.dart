@@ -252,6 +252,11 @@ class VendorProductsBloc
     };
 
     for (final p in products) {
+      if (p.stock <= 0) {
+        counts[ProductFilter.outOfStock] = (counts[ProductFilter.outOfStock] ?? 0) + 1;
+        continue; // Skip the switch, we are done with this item
+      }
+      
       switch (p.status) {
         case ProductStatus.approved:
           counts[ProductFilter.approved] =

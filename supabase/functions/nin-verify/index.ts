@@ -13,6 +13,10 @@ const SECRET_KEY = Deno.env.get("MONNIFY_SECRET_KEY")!;
 
 let cachedToken: { value: string; exp: number } | null = null;
 
+// ==================================================================
+// 🛑 ORIGINAL HELPER (COMMENTED OUT FOR MOCK MODE)
+// ==================================================================
+/*
 async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.exp > Date.now()) return cachedToken.value;
 
@@ -35,8 +39,27 @@ async function getAccessToken(): Promise<string> {
   };
   return token;
 }
+*/
 
 async function verifyNIN(nin: string) {
+  // ==================================================================
+  // ✅ MOCK RESPONSE (Active)
+  // ==================================================================
+  return {
+    ok: true,
+    nin: nin,
+    firstName: "TEST",
+    middleName: "MOCK",
+    lastName: "USER",
+    dateOfBirth: "1990-01-01",
+    gender: "MALE",
+    mobileNumber: "08012345678",
+  };
+
+  // ==================================================================
+  // 🛑 ORIGINAL LOGIC (COMMENTED OUT)
+  // ==================================================================
+  /*
   const token = await getAccessToken();
 
   const res = await fetch(`${BASE_URL}/api/v1/vas/nin-details`, {
@@ -68,6 +91,7 @@ async function verifyNIN(nin: string) {
     gender: r.gender,
     mobileNumber: r.mobileNumber,
   };
+  */
 }
 
 serve(async (req) => {

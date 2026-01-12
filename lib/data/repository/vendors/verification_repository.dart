@@ -154,32 +154,42 @@ extension VerificationRepository on VendorRepository {
 
   /// Checks if a specific Identity Number (NIN or BVN) already exists.
   /// Returns true if it exists (Duplicate found), false if safe to use.
+  /// Checks if NIN or BVN exists securely on the server (linked to another account).
   Future<bool> checkIdentityExists({String? nin, String? bvn}) async {
     try {
       if (nin != null) {
-        final snapshot = await db
-            .collection('vendors') 
-            .where('kyc.nin', isEqualTo: nin)
-            .limit(1)
-            .get();
-        if (snapshot.docs.isNotEmpty) return true;
+        final res = await fx.invoke('check_uniqueness', body: {
+          'type': 'nin',
+          'value': nin,
+          'collection': 'vendors',
+        });
+        if (res.data['exists'] == true) return true;
       }
 
       if (bvn != null) {
-        final snapshot = await db
-            .collection('vendors')
-            .where('kyc.bvn', isEqualTo: bvn)
-            .limit(1)
-            .get();
-        if (snapshot.docs.isNotEmpty) return true;
+        final res = await fx.invoke('check_uniqueness', body: {
+          'type': 'bvn',
+          'value': bvn,
+          'collection': 'vendors',
+        });
+        if (res.data['exists'] == true) return true;
       }
 
       return false;
+    } on FunctionException catch (e) {
+      // Supabase Function failed (e.g., bad request or server crash)
+      debugPrint('❌ Check Identity Failed (Technical - Supabase): $e');
+      throw KorraException(
+        'Could not confirm identity uniqueness due to a server error.',
+        technicalDetails: e.toString(),
+      );
     } catch (e) {
-      debugPrint('Error checking identity uniqueness: $e');
-      // If DB fails, strictly block to be safe, or allow with warning depending on risk appetite.
-      // Blocking is safer for fraud prevention.
-      throw Exception('Could not verify identity uniqueness. Please try again.');
+      // Network or general Flutter exception
+      debugPrint('❌ Check Identity Failed (Technical - Generic): $e');
+      throw KorraException(
+        'Identity verification failed due to network issues. Please try again.',
+        technicalDetails: e.toString(),
+      );
     }
   }
 

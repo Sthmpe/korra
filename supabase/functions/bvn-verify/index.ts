@@ -1,4 +1,4 @@
-//bvn-verify/index.ts
+// bvn-verify/index.ts
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // 1. DEFINE CORS HEADERS
@@ -13,6 +13,10 @@ const SECRET_KEY = Deno.env.get("MONNIFY_SECRET_KEY")!;
 
 let cachedToken: { value: string; exp: number } | null = null;
 
+// ==================================================================
+// 🛑 ORIGINAL HELPERS (COMMENTED OUT FOR MOCK MODE)
+// ==================================================================
+/*
 async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.exp > Date.now()) return cachedToken.value;
 
@@ -41,14 +45,35 @@ function toMonnifyDate(date: string | Date): string {
   const year = d.getUTCFullYear();
   return `${day}-${month}-${year}`;
 }
+*/
 
 // --- BVN Verification ---
 async function handleVerifyBVN(body: any) {
   const { bvn, name, dateOfBirth, mobileNo } = body ?? {};
+  
+  // Keep basic validation to ensure app sends correct data structure
   if (!bvn || !name || !dateOfBirth || !mobileNo) {
     throw new Error("Missing fields");
   }
 
+  // ==================================================================
+  // ✅ MOCK RESPONSE (Active)
+  // ==================================================================
+  // We return "FULL_MATCH" so the app believes the user provided correct info.
+  return {
+    ok: true,
+    message: "BVN verification completed (MOCK)",
+    bvn: bvn,
+    nameMatch: "FULL_MATCH",      
+    nameMatchPercent: 100,
+    dobMatch: "FULL_MATCH",
+    mobileMatch: "FULL_MATCH",
+  };
+
+  // ==================================================================
+  // 🛑 ORIGINAL LOGIC (COMMENTED OUT)
+  // ==================================================================
+  /*
   const token = await getAccessToken();
 
   let dob: string;
@@ -81,6 +106,7 @@ async function handleVerifyBVN(body: any) {
     dobMatch: r.dateOfBirth ?? "NO_MATCH",
     mobileMatch: r.mobileNo ?? "NO_MATCH",
   };
+  */
 }
 
 // --- Entry Point ---
@@ -91,8 +117,6 @@ serve(async (req) => {
   }
 
   try {
-    // 🔓 NO BOUNCER HERE: Any POST request will process.
-
     if (req.method !== "POST") {
       throw new Error("Only POST allowed");
     }

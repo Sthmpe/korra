@@ -147,15 +147,38 @@ class VendorProductsState extends Equatable {
 
   List<ProductItem> get visibleItems {
     final q = query.trim().toLowerCase();
+    
     return items.where((p) {
+      // 1. Search Query Check
       final passQ = q.isEmpty || p.name.toLowerCase().contains(q);
-      final passF = switch (filter) {
-        ProductFilter.all => true,
-        ProductFilter.approved => p.status == ProductStatus.approved,
-        ProductFilter.pending => p.status == ProductStatus.pending,
-        ProductFilter.outOfStock => p.status == ProductStatus.outOfStock,
-        ProductFilter.rejected => p.status == ProductStatus.rejected,
-      };
+      
+      // 2. Filter Check
+      bool passF = false;
+
+      // 🛑 CRITICAL LOGIC FIX HERE
+      // We calculate the "Real Status" on the fly
+      final bool isReallyOutOfStock = p.stock <= 0;
+
+      switch (filter) {
+        case ProductFilter.all:
+          passF = true;
+          break;
+        case ProductFilter.approved:
+          // Must be approved AND have stock > 0
+          passF = p.status == ProductStatus.approved && !isReallyOutOfStock;
+          break;
+        case ProductFilter.pending:
+          passF = p.status == ProductStatus.pending;
+          break;
+        case ProductFilter.outOfStock:
+          // Show if status says so OR if stock is 0
+          passF = p.status == ProductStatus.outOfStock || isReallyOutOfStock;
+          break;
+        case ProductFilter.rejected:
+          passF = p.status == ProductStatus.rejected;
+          break;
+      }
+
       return passQ && passF;
     }).toList();
   }

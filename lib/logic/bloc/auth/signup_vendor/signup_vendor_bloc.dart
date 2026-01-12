@@ -203,7 +203,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       if (ninNeedsVerification) {
         emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
         
-        // await vendors.verifyNin(state.nin.trim());
+        await _vendorsRepo.verifyNin(state.nin.trim());
         emit(state.copyWith(
           ninVerifying: false,
           ninVerified: true,
@@ -213,21 +213,21 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
       if (bvnNeedsVerification) {
         emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
-        // final fullName = '${state.ownerFirst} ${state.ownerLast}'.trim();
+        final fullName = '${state.firstName} ${state.lastName}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
-        // final localPhone = _normalizeNigerianMsisdn(state.ownerPhone);
+        final localPhone = _normalizeNigerianMsisdn(state.phone);
 
         if (dobForBvn == null) {
           emit(state.copyWith(kycError: 'Date of birth is missing'));
           return;
         }
 
-        // await vendors.verifyBvn(
-        //   bvn: state.bvn.trim(),
-        //   name: fullName,
-        //   dateOfBirthIso: dobForBvn,
-        //   mobileNo: localPhone,
-        // );
+          await _vendorsRepo.verifyBvn(
+            bvn: state.bvn.trim(),
+            name: fullName,
+            dateOfBirthIso: dobForBvn,
+            mobileNo: localPhone,
+          );
         emit(state.copyWith(
           bvnVerifying: false,
           bvnVerified: true,
@@ -439,7 +439,8 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      // await _vendorsRepo.verifyNin(state.nin.trim());
+      await _vendorsRepo.verifyNin(state.nin.trim());
+
       emit(state.copyWith(
         ninVerifying: false,
         ninVerified: true,
@@ -476,12 +477,12 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         return;
       }
 
-      // await vendors.verifyBvn(
-      //   bvn: state.bvn.trim(),
-      //   name: fullName,
-      //   dateOfBirthIso: dobIso,
-      //   mobileNo: localPhone,
-      // );
+      await _vendorsRepo.verifyBvn(
+        bvn: state.bvn.trim(),
+        name: fullName,
+        dateOfBirthIso: dobIso,
+        mobileNo: localPhone,
+      );
       emit(state.copyWith(
         bvnVerifying: false,
         bvnVerified: true,
