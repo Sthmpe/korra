@@ -75,8 +75,10 @@ class VendorProductsAdd extends VendorProductsEvent {
   final bool extensionsEnabled;
   final double? directDownPayment;
   final int duration;
+  final int noticePeriod;
+  final int extensionPeriod;
 
-  VendorProductsAdd({
+  const VendorProductsAdd({
     required this.name,
     required this.description,
     required this.price,
@@ -89,13 +91,15 @@ class VendorProductsAdd extends VendorProductsEvent {
     required this.extensionsEnabled,
     this.directDownPayment,
     required this.duration,
+    required this.noticePeriod,
+    required this.extensionPeriod,
   });
 
   @override
   List<Object?> get props => [
         name, description, price, stock, category, images,
         termsAccepted, modelType, cancellationPolicy, extensionsEnabled,
-        directDownPayment, duration,
+        directDownPayment, duration, noticePeriod, extensionPeriod
       ];
 }
 

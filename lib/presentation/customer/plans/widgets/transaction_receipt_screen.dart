@@ -158,10 +158,10 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                               vertical: 6.h,
                             ),
                             decoration: BoxDecoration(
-                              color: statusBg,
+                              color: statusBg.withOpacity(0.0),
                               borderRadius: BorderRadius.circular(8.r),
                               border: Border.all(
-                                color: statusColor.withOpacity(0.2),
+                                color: statusColor.withOpacity(0.0),
                               ),
                             ),
                             child: Text(

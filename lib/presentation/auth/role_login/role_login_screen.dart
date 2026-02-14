@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../config/constants/sizes.dart';
 import '../../../config/routes/app_routes.dart';
+import '../../../flavors/app_config.dart';
 import '../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -12,7 +13,7 @@ import '../../shared/widgets/korra_failure_sheet.dart';
 import 'widgets/login_button.dart';
 import 'widgets/login_fields.dart';
 import 'widgets/login_header.dart';
-import 'widgets/role_selector.dart';
+//import 'widgets/role_selector.dart';
 
 class RoleLoginScreen extends StatelessWidget {
   const RoleLoginScreen({super.key});
@@ -21,14 +22,19 @@ class RoleLoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final formKey = GlobalKey<FormState>();
 
+    // 1. Get Role from Flavor
+    final isVendor = AppConfig.isVendor;
+    final flavorRole = isVendor ? KorraRole.vendor : KorraRole.customer;
+
     return BlocProvider(
-      create: (_) => RoleLoginBloc(),
+      // ✅ AUTO-SELECT ROLE: We set the role immediately so the logic works same as before
+      create: (_) => RoleLoginBloc()..add(RoleSelected(flavorRole)),
       child: BlocListener<RoleLoginBloc, RoleLoginState>(
         listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
-          // ✅ SUCCESS LOGIC: Use Named Routes
           if (state.status == LoginStatus.success) {
-            if (state.role == KorraRole.vendor) {
+            // ✅ NAVIGATION: Go to correct shell based on Flavor
+            if (isVendor) {
               Get.offAllNamed(Routes.vendorShell);
             } else {
               Get.offAllNamed(Routes.customerShell);
@@ -38,10 +44,9 @@ class RoleLoginScreen extends StatelessWidget {
           if (state.status == LoginStatus.failure && state.failure != null) {
             showKorraFailureSheet(
               context,
-              title: state.failure!.title,   // Map title from failure object
-              message: state.failure!.message, // Map message from failure object
+              title: state.failure!.title,
+              message: state.failure!.message,
               onCancel: () {
-                // Clear the error state when sheet closes
                 context.read<RoleLoginBloc>().add(FailureAcknowledged());
               },
             );
@@ -59,15 +64,13 @@ class RoleLoginScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const LoginHeader(),
+                  const LoginHeader(), // We can tweak the text inside this widget later if needed
                   SizedBox(height: 50.h),
-                  const RoleSelector(),
-                  SizedBox(height: 40.h),
+                  
+                  // 🗑️ RoleSelector() REMOVED
+                  
                   LoginFields(formKey: formKey),
-                  //SizedBox(height: 16.h),
-                  //const RoleDivider(),
-                  //SizedBox(height: 40.h),
-                  //const Center(child: BiometricButton()),
+                  
                   SizedBox(height: 14.h),
                 ],
               ),
@@ -81,7 +84,13 @@ class RoleLoginScreen extends StatelessWidget {
                 KorraSizes.gutter.w,
                 14.h,
               ),
-              child: LoginButton(formKey: formKey),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LoginButton(formKey: formKey),
+                  SizedBox(height: 20.h),
+                ],
+              ),
             ),
           ),
         ),

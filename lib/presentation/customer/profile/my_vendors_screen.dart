@@ -18,7 +18,7 @@ class MyVendorsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      appBar: const KorraHeader(title: "My Vendors", showLeadingIcon: true),
+      appBar: const KorraHeader(title: "My Merchants", showLeadingIcon: true),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('customers')
@@ -40,9 +40,9 @@ class MyVendorsScreen extends StatelessWidget {
                 children: [
                   Icon(Iconsax.shop, size: 48.sp, color: Colors.grey.shade300),
                   SizedBox(height: 16.h),
-                  Text("No vendors yet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+                  Text("No merchants yet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
                   SizedBox(height: 8.h),
-                  Text("Vendors you transact with will appear here.", style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500)),
+                  Text("Merchants you transact with will appear here.", style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500)),
                 ],
               ),
             );
@@ -92,7 +92,7 @@ class _VendorCard extends StatelessWidget {
         final socialsMap = vendorData['socials'] as Map<String, dynamic>? ?? {};
         final personalMap = vendorData['personal'] as Map<String, dynamic>? ?? {};
         
-        final String name = storeMap['storeName'] ?? 'Unknown Vendor';
+        final String name = storeMap['storeName'] ?? 'Unknown Merchant';
         final String initial = name.isNotEmpty ? name[0].toUpperCase() : 'S';
         final String phone = personalMap['phone'] ?? '';
 
@@ -139,7 +139,7 @@ class _VendorCard extends StatelessWidget {
                             children: [
                               Icon(Icons.verified, size: 14.sp, color: Colors.blue),
                               SizedBox(width: 4.w),
-                              Text("Verified Vendor", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
+                              Text("Verified Merchant", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
                             ],
                           )
                         ],
@@ -151,15 +151,15 @@ class _VendorCard extends StatelessWidget {
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
+                          color: Colors.transparent,
                           borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                          border: Border.all(color: Colors.transparent),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text("Credit", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
-                            Text(currencyFormat.format(storeCredit), style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF15803D))),
+                            Text("Store Credit", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
+                            Text(currencyFormat.format(storeCredit), style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w800, color: const Color(0xFF15803D))),
                           ],
                         ),
                       )

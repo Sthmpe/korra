@@ -30,6 +30,7 @@ dependencies:
   flutter_screenutil: ^5.9.3
   get: ^4.7.2
   google_fonts: ^6.3.0
+  http: ^1.6.0
   iconsax: ^0.0.8
   image_picker: ^1.2.0
   intl: ^0.20.2
@@ -78,16 +79,16 @@ flutter_launcher_icons:
 
 flutter_native_splash:
   # 1. LIGHT MODE (Brand Color Background)
-  color: "#A54600"
+  color: "#FFFFFF"
   image: "assets/images/korra_logo_icon.png" 
   # branding: "assets/images/korra_logo_icon.png" # Optional
 
   # 2. DARK MODE (Same Brand Color)
-  color_dark: "#A54600"
+  color_dark: "#FFFFFF"
   image_dark: "assets/images/korra_logo_icon.png"
 
   # 3. ANDROID 12+ (Adaptive Icon Background)
   android_12:
     image: "assets/images/korra_logo_icon.png"
-    color: "#A54600"
-    icon_background_color: "#A54600"
+    color: "#FFFFFF"
+    icon_background_color: "#FFFFFF"

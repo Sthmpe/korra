@@ -1,0 +1,40 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'bootstrap.dart';
+import 'config/routes/app_pages.dart';
+import 'config/routes/app_routes.dart';
+import 'flavors/app_config.dart';
+import 'korra_app.dart'; // ✅ Uses your existing KorraApp
+import 'logic/core/net/net_cubit.dart';
+import 'logic/core/update/update_cubit.dart';
+import 'logic/services/auth_service.dart';
+
+void main() async {
+  // 1. Run Shared Setup
+  await bootstrap();
+
+  // 2. Set Identity: VENDOR (MERCHANT)
+  AppConfig.init(AppFlavor.vendor);
+
+  // 3. Determine Route
+  final auth = AuthService.to;
+
+  // Logic: If logged in, go to Merchant Shell. If not, go to Login.
+  String initialRoute = auth.isLoggedIn 
+      ? Routes.vendorShell 
+      : Routes.roleLoginScreen;
+
+  runApp(
+    MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => NetCubit()..start()),
+        BlocProvider(create: (_) => UpdateCubit()),
+      ],
+      child: KorraApp(
+        initialRoute: initialRoute,
+        appPages: AppPages.vendorRoutes, // 👈 Only Vendor + Common routes
+      ),
+    ),
+  );
+}

@@ -23,15 +23,15 @@ class LegalItem {
 }
 
 // --- 2. THE MENU SCREEN ---
-class LegalMenuScreen extends StatelessWidget {
-  const LegalMenuScreen({super.key});
+class vLegalMenuScreen extends StatelessWidget {
+  const vLegalMenuScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     // Define the list of available documents here
     final List<LegalItem> documents = [
       LegalItem(
-        title: "Vendor Terms of Service",
+        title: "Merchant Terms of Service",
         lastUpdated: "Dec 2025",
         onTap: () => showKorraVendorTermsSheet(context), // Defined in previous steps
       ),

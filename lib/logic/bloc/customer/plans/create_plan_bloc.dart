@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,32 +38,38 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
         bool allowExtension = false;
         final price = event.productPrice;
 
-        // --- GRANULAR TIER LOGIC ---
+        // --- GRANULAR TIER LOGIC (UPDATED FOR 3M CAP) ---
         if (price <= 7000) {
-          duration = 14; notice = 3; extension = 0; allowExtension = false;
+            // Very small items: 1 week is enough
+            duration = 7; notice = 1; extension = 0; allowExtension = false;
         } else if (price <= 15000) {
-          duration = 21; notice = 3; extension = 0; allowExtension = false;
+            // Small items: 2 weeks
+            duration = 14; notice = 3; extension = 0; allowExtension = false;
         } else if (price <= 20000) {
-          duration = 21; notice = 3; extension = 7; allowExtension = true;
-        } else if (price <= 25000) {
-          duration = 25; notice = 3; extension = 7; allowExtension = true;
+            // 15k - 20k: 3 Weeks
+            duration = 21; notice = 3; extension = 7; allowExtension = true;
         } else if (price <= 35000) {
-          duration = 30; notice = 3; extension = 7; allowExtension = true;
-        } else if (price <= 50000) {
-          duration = 35; notice = 3; extension = 14; allowExtension = true;
+            // Casual buy: 1 Month (30 days)
+            duration = 30; notice = 3; extension = 5; allowExtension = true;
         } else if (price <= 75000) {
-          duration = 45; notice= 3; extension = 14; allowExtension = true;
+            // Budget Phone: 45 Days
+            duration = 45; notice = 3; extension = 7; allowExtension = true;
         } else if (price <= 150000) {
-          duration = 56; notice= 3; extension = 14; allowExtension = true;
-        } else if (price <= 230000) {
-          duration = 60; notice= 3; extension = 14; allowExtension = true;
-        } else if (price <= 320000) {
-          duration = 65; notice= 3; extension = 15; allowExtension = true;
-        } else if (price <= 410000) {
-          duration = 70; notice= 3; extension = 20; allowExtension = true;
+            // Mid Phone: 60 Days (2 Months)
+            duration = 60; notice = 3; extension = 10; allowExtension = true;
+        } else if (price <= 300000) {
+            // Good Phone/Laptop: 75 Days (2.5 Months)
+            duration = 75; notice = 5; extension = 14; allowExtension = true;
+        } else if (price <= 600000) {
+            // High-end Phone: 90 Days (3 Months)
+            duration = 90; notice = 5; extension = 14; allowExtension = true;
+        } else if (price <= 1200000) {
+            // MacBook/High Tech: 100 Days (~3.5 Months)
+            duration = 100; notice = 7; extension = 15; allowExtension = true;
         } else {
-          // 410k+ (Hard Cap)
-          duration = 75; notice= 3; extension = 20; allowExtension = true;
+            // Ultra High (1.2m - 3m+): 120 Days (4 Months)
+            // Vendors might complain if you go higher than 4 months for holding stock.
+            duration = 120; notice = 7; extension = 20; allowExtension = true;
         }
 
 

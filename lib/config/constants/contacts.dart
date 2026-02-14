@@ -5,6 +5,6 @@ class ContactConstants {
   static const String whatsappNumber = "2349152540533"; // No '+' for WA links
   
   // Pre-filled Messages
-  static const String whatsappMessage = "Hello Korra Support, I need help with my vendor account.";
-  static const String emailSubject = "Vendor Support Request";
+  static const String whatsappMessage = "Hello Korra Support, I need help with my business account.";
+  static const String emailSubject = "Business Support Request";
 }

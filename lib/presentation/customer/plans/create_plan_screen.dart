@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
@@ -58,6 +60,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   int _currentImageIndex = 0;
   bool _agreedToTerms = false;
   int _selectedGoalDays = 0;
+
   double userEnteredDownPayment = 0.0;
   double processingFee = 0.0;
   double totalDueNow = 0.0;
@@ -72,6 +75,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   // Store Credit Logic
   double _storeCredit = 0.0; // Available credit
   bool _useStoreCredit = true; // Default to true if they have credit
+
+  // Track how the down payment is split for fee calculation transparency
+  double _amountCoveredByCredit = 0.0;
+  double _amountCoveredByCash = 0.0;
+
+  double _creditUsedForPayment = 0.0; // Actual amount to deduct from Total Due
+  double _creditSweepAmount = 0.0;
 
   final currencyFormat = NumberFormat.currency(
     locale: 'en_NG',
@@ -106,6 +116,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       if (_amountFocusNode.hasFocus) _scrollToInput();
     });
 
+    // 1. Calculate initial fee immediately (assuming 0 credit for now)
+    // This ensures a fee shows up even before credit loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+       _recalculateFees(); 
+    });
+
+    // 2. Fetch credit (which will trigger a recalc when it arrives)
     _fetchStoreCredit(); // ✅ Fetch on init
   }
 
@@ -124,6 +141,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       if (mounted) {
         setState(() {
           _storeCredit = credit;
+          // Recalculate fees now that we know the credit balance
+          _recalculateFees();
         });
       }
     }
@@ -149,17 +168,105 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     });
   }
 
+  // --- 🧠 CORE FEE LOGIC START ---
+
+  // 1. Helper: The "Zone" Logic for Standard Fees
+  double _calculateStandardFee(double amount) {
+    if (amount <= 0) return 0.0;
+    
+    // Calculate raw 3.5%
+    double rawFee = amount * 0.035;
+
+    // Zone 1 (Small): Fee < 30k -> Pay Exact
+    if (rawFee < 30000) return rawFee;
+
+    // Zone 2 (Sweet Spot): Fee 30k - 60k -> Pay Flat 30k
+    if (rawFee >= 30000 && rawFee < 60000) return 30000;
+
+    // Zone 3 (High Ticket): Fee > 60k -> Pay Flat 60k
+    return 60000;
+  }
+
+  // 2. The Master Calculator
+  void _recalculateFees() {
+    final double totalProductPrice = widget.product.data['price']?.toDouble() ?? 0.0;
+    
+    // --- STEP 1: THE MANDATORY SWEEP ---
+    // Rule: "Store Credit First. Always."
+    // We determine how much of the Product Price is covered by Credit immediately.
+    
+    if (_useStoreCredit && _storeCredit > 0) {
+      // We sweep all available credit, capped only by the product price.
+      if (_storeCredit >= totalProductPrice) {
+        _creditSweepAmount = totalProductPrice;
+      } else {
+        _creditSweepAmount = _storeCredit;
+      }
+    } else {
+      _creditSweepAmount = 0.0;
+    }
+
+    // --- STEP 2: CALCULATE FEES ON THE SPLIT ---
+    // Fee Bucket A: The Credit Portion (Pays 10% rate)
+    // Fee Bucket B: The Cash Portion (Pays Standard rate)
+    
+    double cashPortionOfPrice = totalProductPrice - _creditSweepAmount;
+    
+    // Calculate Fee on Cash Portion
+    double feeCashPart = 0.0;
+    if (cashPortionOfPrice > 0) {
+      feeCashPart = _calculateStandardFee(cashPortionOfPrice);
+    }
+
+    // Calculate Fee on Credit Portion
+    double feeCreditPart = 0.0;
+    if (_creditSweepAmount > 0) {
+      double standard = _calculateStandardFee(_creditSweepAmount);
+      feeCreditPart = math.max(standard * 0.10, 100.0); // Min N100 covers server costs
+    }
+
+    setState(() {
+      processingFee = _roundUpAmount(feeCashPart + feeCreditPart);
+      
+      // Update the Total Due based on the CURRENT user input
+      // Logic: (User Total Target) - (Already Paid via Sweep) + (Fee)
+      
+      // Safety: Ensure User Input is at least the Sweep Amount
+      // (Visual validation happens in build, but math safety is needed here)
+      double effectivePrincipalUserPays = math.max(0, userEnteredDownPayment - _creditSweepAmount);
+      
+      totalDueNow = _roundUpAmount(effectivePrincipalUserPays + processingFee);
+      
+      // Update transparency vars
+      _amountCoveredByCredit = _creditSweepAmount;
+      _amountCoveredByCash = cashPortionOfPrice;
+    });
+
+    if (kDebugMode) {
+      print("--- MANDATORY SWEEP LOGIC ---");
+      print("Product Price: $totalProductPrice");
+      print("Credit Sweep: $_creditSweepAmount | Fee: $feeCreditPart");
+      print("Cash Remainder: $cashPortionOfPrice | Fee: $feeCashPart");
+      print("Total Fee: $processingFee");
+    }
+  }
+
+  // --- 🧠 CORE FEE LOGIC END ---
+
   void _onAmountChanged(String value) {
     final price = widget.product.data['price']?.toDouble() ?? 0.0;
     String clean = value.replaceAll(',', '');
     double val = double.tryParse(clean) ?? 0.0;
 
-    setState(() {
-      if (val > price) val = price;
-      userEnteredDownPayment = _roundUpAmount(val);
-      processingFee = _roundUpAmount(price * 0.035);
+    // Cap at product price
+    if (val > price) val = price;
 
-      totalDueNow = _roundUpAmount(userEnteredDownPayment + processingFee);
+    setState(() {
+      userEnteredDownPayment = _roundUpAmount(val);
+      
+      // Logic: User Amount - Credit Sweep + Fee
+      double cashPrincipalNeeded = math.max(0, userEnteredDownPayment - _creditSweepAmount);
+      totalDueNow = _roundUpAmount(cashPrincipalNeeded + processingFee);
     });
   }
 
@@ -198,13 +305,22 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 previous.status != current.status,
             listener: (context, state) {
               if (state.status == CreatePlanStatus.previewLoaded) {
-                setState(() {
-                  userEnteredDownPayment = _roundUpAmount(state.riskEngineUpfront);
-                  _amountCtrl.text = NumberFormat(
-                    "#,###",
-                  ).format(userEnteredDownPayment);
+               setState(() {
+                  // Determine Sweep based on loaded credit
+                  double sweep = 0.0;
+                  if (_useStoreCredit && _storeCredit > 0) {
+                    sweep = (_storeCredit >= productPrice) ? productPrice : _storeCredit;
+                  }
+                  
+                  // Set initial value to the higher of (Risk Min) or (Sweep)
+                  double startValue = math.max(state.riskEngineUpfront, sweep);
+                  
+                  userEnteredDownPayment = _roundUpAmount(startValue);
+                  _amountCtrl.text = NumberFormat("#,###").format(userEnteredDownPayment);
                   _selectedGoalDays = state.baseDurationDays;
-                  _onAmountChanged(_amountCtrl.text); // Trigger calc
+                  
+                  // Trigger calc
+                  _recalculateFees(); 
                 });
               }
               if (state.status == CreatePlanStatus.success) {
@@ -244,46 +360,28 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 );
               }
 
-              final minDownPayment = state.riskEngineUpfront;
-              if (totalDueNow == 0 && userEnteredDownPayment == 0) {
-                // Init logic moved to listener or here if listener missed
-              }
+              // 1. Get Risk Engine Min
+              final double riskMin = state.riskEngineUpfront;
+              
+              // 2. Determine the "True Floor"
+              // The user effectively starts at the Credit Sweep amount if it's higher than Risk Min
+              final double effectiveMinDownPayment = math.max(riskMin, _creditSweepAmount);
 
               final remainingBalance = getRemainingBalance(productPrice);
               final isFullPayment = remainingBalance <= 0;
 
-              // --- 💰 PAYMENT CALCULATION LOGIC ---
-              double amountToPayFromWallet = totalDueNow;
-              double creditApplied = 0.0;
-
-              if (_useStoreCredit && _storeCredit > 0) {
-                // RULE: Store Credit can ONLY pay for the Principal (Down Payment).
-                // The Processing Fee must ALWAYS come from the Wallet (Cash).
-                
-                // 1. Determine the maximum credit allowed (The Principal only)
-                double maxCreditUsage = userEnteredDownPayment; 
-
-                // 2. Calculate how much credit we actually use
-                if (_storeCredit >= maxCreditUsage) {
-                  // Credit covers the entire down payment
-                  creditApplied = maxCreditUsage;
-                } else {
-                  // Credit covers only part of the down payment
-                  creditApplied = _storeCredit;
-                }
-
-                // 3. The Wallet pays the difference (Fee is naturally left over)
-                amountToPayFromWallet = totalDueNow - creditApplied;
-                
-                // Sanity Check: Ensure wallet pays at least the fee (math guarantees this, but good for safety)
-                if (amountToPayFromWallet < processingFee) {
-                   amountToPayFromWallet = processingFee;
-                }
-              }
-
-              // 🛑 CHECK WALLET AGAINST REMAINING (After credit)
-              final isInsufficient =
-                  widget.walletBalance < amountToPayFromWallet;
+              // 💰 WALLET CHECK LOGIC
+              // We pay whatever the Credit Sweep didn't cover, plus the fee.
+              double creditUsed = _creditSweepAmount;
+              
+              double amountToPayFromWallet = totalDueNow; 
+              // (Note: totalDueNow was calculated in _recalculateFees as: (UserDP - Sweep) + Fee)
+              
+              final isInsufficient = widget.walletBalance < amountToPayFromWallet;
+              
+              // UI VALIDATION FLAG
+              // User must be at least at the effective minimum (which accounts for the sweep)
+              final bool isAmountValid = userEnteredDownPayment >= effectiveMinDownPayment;
 
               return GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
@@ -349,27 +447,26 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                     if (_storeCredit > 0) ...[
                                       SizedBox(height: 16.h),
                                       GestureDetector(
-                                        onTap: () => setState(
-                                          () => _useStoreCredit =
-                                              !_useStoreCredit,
-                                        ),
+                                        // onTap: () {
+                                        //     setState(() {
+                                        //       _useStoreCredit = !_useStoreCredit;
+                                        //       // IMPORTANT: Recalculate immediately
+                                        //       _recalculateFees();
+                                        //     });
+                                        //  },
                                         child: Container(
                                           padding: EdgeInsets.symmetric(
                                             horizontal: 16.w,
                                             vertical: 12.h,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: _useStoreCredit
-                                                ? KorraColors.brand.withOpacity(
-                                                    0.08,
-                                                  )
-                                                : const Color(0xFFF9FAFB),
+                                            color:  const Color(0xFFF9FAFB),
                                             borderRadius: BorderRadius.circular(
                                               12.r,
                                             ),
                                             border: Border.all(
                                               color: _useStoreCredit
-                                                  ? KorraColors.brand
+                                                  ? const Color(0xFFF3F4F6)
                                                   : const Color(0xFFEAECF0),
                                               width: 1.5,
                                             ),
@@ -383,7 +480,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                   color: Colors.white,
                                                   shape: BoxShape.circle,
                                                   border: Border.all(
-                                                    color: Colors.grey.shade200,
+                                                    color: Colors.grey.shade50,
                                                   ),
                                                 ),
                                                 child: Icon(
@@ -428,8 +525,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                               if (_useStoreCredit)
                                                 Icon(
                                                   Icons.check_circle,
-                                                  color: KorraColors.brand,
-                                                  size: 24.sp,
+                                                  color: Colors.green,
+                                                  size: 20.sp,
                                                 )
                                               else
                                                 Icon(
@@ -528,7 +625,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                         ),
                                                     hintText: NumberFormat(
                                                       "#,###",
-                                                    ).format(minDownPayment),
+                                                    ).format(effectiveMinDownPayment),
                                                     hintStyle:
                                                         GoogleFonts.inter(
                                                           color: Colors
@@ -560,7 +657,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                 MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(
-                                                "+ One-time Processing Fee (3.5%)",
+                                                "+ Service Fee",
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12.sp,
                                                   color: Colors.grey.shade500,
@@ -580,79 +677,56 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                             ],
                                           ),
 
-                                          // ✅ STORE CREDIT TOGGLE (If available)
-                                          if (_storeCredit > 0) ...[
+                                          // Show breakdown of savings if mixed
+                                          if (_amountCoveredByCredit > 0 && _amountCoveredByCash > 0)
+                                            Padding(
+                                               padding: EdgeInsets.only(top: 4.h),
+                                               child: Row(
+                                                 mainAxisAlignment: MainAxisAlignment.end,
+                                                 children: [
+                                                   Icon(Iconsax.flash_1, size: 10.sp, color: Colors.green),
+                                                   SizedBox(width: 4.w),
+                                                   Text(
+                                                     "Fair Split Applied",
+                                                     style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.green, fontWeight: FontWeight.w600),
+                                                   )
+                                                 ],
+                                               ),
+                                            ),
+
+                                          // SHOW CREDIT USAGE ROW
+                                          if (creditUsed > 0) ...[
                                             SizedBox(height: 12.h),
-                                            GestureDetector(
-                                              onTap: () => setState(
-                                                () => _useStoreCredit =
-                                                    !_useStoreCredit,
+                                            Container(
+                                              //padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                              decoration: BoxDecoration(
+                                                color: KorraColors.brand.withOpacity(0.0),
+                                                borderRadius: BorderRadius.circular(8.r),
+                                                border: Border.all(color: KorraColors.brand.withOpacity(0.0)),
                                               ),
-                                              child: Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 12.w,
-                                                  vertical: 8.h,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: _useStoreCredit
-                                                      ? KorraColors.brand
-                                                            .withOpacity(0.1)
-                                                      : Colors.grey.shade50,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        8.r,
+                                              child: Row(
+                                                children: [
+                                                  //Icon(Icons.check_box, color: KorraColors.brand, size: 20.sp),
+                                                  //SizedBox(width: 8.w),
+                                                  Expanded(
+                                                    child: Text(
+                                                      "Store Credit Applied",
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 12.sp,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: KorraColors.brand,
                                                       ),
-                                                  border: Border.all(
-                                                    color: _useStoreCredit
-                                                        ? KorraColors.brand
-                                                              .withOpacity(0.3)
-                                                        : Colors.grey.shade200,
+                                                    ),
                                                   ),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      _useStoreCredit
-                                                          ? Icons.check_box
-                                                          : Icons
-                                                                .check_box_outline_blank,
-                                                      color: _useStoreCredit
-                                                          ? KorraColors.brand
-                                                          : Colors.grey,
-                                                      size: 20.sp,
+                                                  Text(
+                                                    "-${currencyFormat.format(creditUsed)}",
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 12.sp,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: KorraColors.brand,
                                                     ),
-                                                    SizedBox(width: 8.w),
-                                                    Expanded(
-                                                      child: Text(
-                                                        "Use Store Credit (${currencyFormat.format(_storeCredit)})",
-                                                        style: GoogleFonts.inter(
-                                                          fontSize: 12.sp,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: _useStoreCredit
-                                                              ? KorraColors
-                                                                    .brand
-                                                              : Colors
-                                                                    .grey
-                                                                    .shade700,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    if (_useStoreCredit)
-                                                      Text(
-                                                        "-${currencyFormat.format(creditApplied)}",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                              fontSize: 12.sp,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                              color: KorraColors
-                                                                  .brand,
-                                                            ),
-                                                      ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
@@ -687,18 +761,19 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                         ],
                                       ),
                                     ),
+
                                     SizedBox(height: 12.h),
+
                                     Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          "Minimum: ${currencyFormat.format(minDownPayment + processingFee)}",
+                                          "Minimum: ${currencyFormat.format(effectiveMinDownPayment + processingFee)}",
                                           style: GoogleFonts.inter(
                                             fontSize: 12.sp,
                                             color:
-                                                userEnteredDownPayment <
-                                                    (minDownPayment + processingFee)
+                                                !isAmountValid
                                                 ? Colors.red
                                                 : Colors.grey.shade500,
                                             fontWeight: FontWeight.w500,
@@ -728,6 +803,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                         ),
                                       ],
                                     ),
+
                                     SizedBox(height: 40.h),
 
                                     if (!isFullPayment) ...[
@@ -816,13 +892,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           context,
                           state,
                           isFullPayment,
-                          minDownPayment,
+                          effectiveMinDownPayment,
                           isInsufficient,
                           processingFee,
                           isSlotsFull,
                           totalDueNow, // Pass raw total for event
                           amountToPayFromWallet, // For UI check
-                          creditApplied,
+                          creditUsed,
                         ),
                     ],
                   ),
@@ -867,7 +943,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 children: [
                   const TextSpan(
                     text:
-                        "Disclaimer: Korra facilitates and tracks payments, and monitors vendor compliance, but is ",
+                        "Disclaimer: Korra facilitates and tracks payments, and monitors merchant compliance, but is ",
                   ),
                   TextSpan(
                     text: "not liable ",
@@ -878,7 +954,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                   ),
                   const TextSpan(
                     text:
-                        "for product quality, authenticity, or delivery. All fulfillment issues are the responsibility of the vendor.",
+                        "for product quality, authenticity, or delivery. All fulfillment issues are the responsibility of the merchant.",
                   ),
                 ],
               ),
@@ -889,58 +965,58 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildStrictDeadlineCard({
-    required int duration,
-    required bool canExtend,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(12.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E5), // Warning Orange
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFFFDDB3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Iconsax.shield_tick,
-            size: 20.sp,
-            color: const Color(0xFFB95000),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF96490B),
-                  height: 1.4,
-                ),
-                children: [
-                  const TextSpan(text: "Strict "),
-                  TextSpan(
-                    text: "$duration-Day ",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const TextSpan(
-                    text: " Late completion defaults trigger the ",
-                  ),
-                  TextSpan(
-                    text: "50% penalty.",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildStrictDeadlineCard({
+  //   required int duration,
+  //   required bool canExtend,
+  // }) {
+  //   return Container(
+  //     padding: EdgeInsets.all(12.r),
+  //     decoration: BoxDecoration(
+  //       color: const Color(0xFFFFF4E5), // Warning Orange
+  //       borderRadius: BorderRadius.circular(12.r),
+  //       border: Border.all(color: const Color(0xFFFFDDB3)),
+  //     ),
+  //     child: Row(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Icon(
+  //           Iconsax.shield_tick,
+  //           size: 20.sp,
+  //           color: const Color(0xFFB95000),
+  //         ),
+  //         SizedBox(width: 10.w),
+  //         Expanded(
+  //           child: RichText(
+  //             text: TextSpan(
+  //               style: GoogleFonts.inter(
+  //                 fontSize: 12.sp,
+  //                 color: const Color(0xFF96490B),
+  //                 height: 1.4,
+  //               ),
+  //               children: [
+  //                 const TextSpan(text: "Strict "),
+  //                 TextSpan(
+  //                   text: "$duration-Day ",
+  //                   style: const TextStyle(fontWeight: FontWeight.bold),
+  //                 ),
+  //                 const TextSpan(
+  //                   text: " Late completion defaults trigger the ",
+  //                 ),
+  //                 TextSpan(
+  //                   text: "50% penalty.",
+  //                   style: TextStyle(
+  //                     fontWeight: FontWeight.bold,
+  //                     color: Colors.red.shade800,
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildModelPill(ProductModelType type) {
     final isStrict = type == ProductModelType.strict;
@@ -1469,7 +1545,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               ],
             ),
             Text(
-              "Verified Vendor",
+              "Verified Merchant",
               style: GoogleFonts.inter(
                 fontSize: 11.sp,
                 color: KorraColors.textMuted,
@@ -1874,9 +1950,9 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           // REASON 1 (Universal)
           _buildReasonRow(
             icon: Iconsax.shop,
-            title: "Vendor Commitment",
+            title: "Merchant Commitment",
             desc:
-                "The vendor removes this item from the shelf for you. They lose other potential buyers while waiting.",
+                "The merchant removes this item from the shelf for you. They lose other potential buyers while waiting.",
           ),
           SizedBox(height: 16.h),
 
@@ -1886,7 +1962,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
               icon: Iconsax.clock,
               title: "Time Compensation",
               desc:
-                  "If you default, the 50% fee compensates the vendor for lost time and holding costs.",
+                  "If you default, the 50% fee compensates the merchant for lost time and holding costs.",
             ),
 
             SizedBox(height: 16.h),
@@ -1913,7 +1989,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
               icon: Iconsax.refresh_circle, // Or loop icon
               title: "Flexible Spending",
               desc:
-                  "Your funds are converted to Store Credit valid only with this specific vendor. You can use it to purchase any other item from them immediately.",
+                  "Your funds are converted to Store Credit valid only with this specific merchant. You can use it to purchase any other item from them immediately.",
             ),
 
           SizedBox(height: 32.h),

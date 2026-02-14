@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.korra"
+        // ❌ REMOVED: applicationId = "com.example.korra" (Moved to flavors)
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,7 +32,25 @@ android {
         multiDexEnabled = true
     }
 
-    // 🔑 SIGNING FIX (THIS IS THE KEY PART)
+    // ✅ FLAVOR CONFIGURATION (Kotlin DSL)
+    flavorDimensions += "app_type"
+
+    productFlavors {
+        // 🛍️ Customer App
+        create("customer") {
+            dimension = "app_type"
+            applicationId = "com.korra.shop"
+            resValue("string", "app_name", "Korra")
+        }
+
+        // 🏢 Merchant App
+        create("merchant") {
+            dimension = "app_type"
+            applicationId = "com.korra.business"
+            resValue("string", "app_name", "Korra Biz")
+        }
+    }
+
     signingConfigs {
         create("release") {
             storeFile = file("keystore.jks")
@@ -60,6 +78,7 @@ android {
         }
     }
 }
+
 
 flutter {
     source = "../.."

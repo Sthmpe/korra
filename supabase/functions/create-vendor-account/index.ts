@@ -87,7 +87,7 @@ serve(async (req) => {
       // ✅ TRAFFIC LIGHT STATUS (Starts Red)
       status: 'verification_pending', 
       reason: 'New Account',
-      publicMessage: 'Withdrawals Locked. Please schedule your Verification Video Call.',
+      publicMessage: 'To protect your funds, we need to verify your identity before enabling withdrawals.',
       ///
       livenessCheckPassed: false,
       livenessBypass: true, // ✅ Default to TRUE (Bypass ON)

@@ -17,6 +17,7 @@ import '../../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
+import '../../payout/widgets/contact_support_sheet.dart';
 import 'image_upload_box.dart';
 
 class AddProductPage extends StatefulWidget {
@@ -36,6 +37,9 @@ class AddProductPage extends StatefulWidget {
 class _AddProductPageState extends State<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
 
+  String _complianceStatus = 'active';
+  String _blockMessage = '';
+
   // Controllers
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -54,6 +58,8 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // ✅ ADD THIS LINE HERE:
   int _calculatedDurationInt = 14;
+  int _calculatedNoticeInt = 3;
+  int _calculatedExtensionInt = 0;
 
   // DYNAMIC DISPLAY STRINGS
   String _baseDuration = "14 Days";
@@ -89,9 +95,27 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   void initState() {
     super.initState();
+
     // 2. Initialize the stream ONCE here
     _statsStream = widget.vendors.streamVendorStats(widget.vendorUid);
     _priceCtrl.addListener(_updatePlanLogic);
+
+    _fetchComplianceStatus();
+  }
+
+  Future<void> _fetchComplianceStatus() async {
+    try {
+      final compliance = await widget.vendors.getComplianceStatus(widget.vendorUid);
+      if (mounted) {
+        setState(() {
+          _complianceStatus = compliance['status'] ?? 'active';
+          _blockMessage = compliance['message'] ?? '';
+        });
+      }
+    } catch (e) {
+      // If error, keep default (active) or handle error
+      debugPrint("Error fetching status: $e");
+    }
   }
 
   @override
@@ -125,60 +149,39 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     // 1. Determine Base Duration & Max Extension from Price Table
-    if (cleanPrice <= 7000) {
-      baseDays = 14;
-      allowExt = false;
-      extDays = 0;
-    } else if (cleanPrice <= 15000) {
-      baseDays = 21;
-      allowExt = false;
-      extDays = 0;
-    } else if (cleanPrice <= 20000) {
-      baseDays = 21;
-      allowExt = true;
-      extDays = 7;
-    } else if (cleanPrice <= 25000) {
-      baseDays = 25;
-      allowExt = true;
-      extDays = 7;
-    } else if (cleanPrice <= 40000) {
-      baseDays = 30;
-      allowExt = true;
-      extDays = 7;
-    } else if (cleanPrice <= 50000) {
-      baseDays = 35;
-      allowExt = true;
-      extDays = 14;
-    } else if (cleanPrice <= 75000) {
-      baseDays = 40;
-      allowExt = true;
-      extDays = 14;
-    } else if (cleanPrice <= 85000) {
-      baseDays = 45;
-      allowExt = true;
-      extDays = 14;
-    } else if (cleanPrice <= 150000) {
-      baseDays = 56;
-      allowExt = true;
-      extDays = 14;
-    } else if (cleanPrice <= 230000) {
-      baseDays = 60; 
-      allowExt = true; 
-      extDays = 14; // Total: 77 Days
-    } else if (cleanPrice <= 320000) {
-      baseDays = 65; 
-      allowExt = true; 
-      extDays = 15; // Total: 83 Days
-    } else if (cleanPrice <= 410000) {
-      baseDays = 70; 
-      allowExt = true; 
-      extDays = 20; // Total: 93 Days (3 Months)
-    } else {
-      // 410k - 500k (Hard Cap)
-      baseDays = 75; 
-      allowExt = true; 
-      extDays = 20; // Total: 98 Days
-    }
+    // --- GRANULAR TIER LOGIC (UPDATED FOR 3M CAP) ---
+        if (cleanPrice <= 7000) {
+            // Very small items: 1 week is enough
+            baseDays = 7; noticeDays = 1; extDays = 0; allowExt = false;
+        } else if (cleanPrice <= 15000) {
+            // Small items: 2 weeks
+            baseDays = 14; noticeDays = 3; extDays = 0; allowExt = false;
+        } else if (cleanPrice <= 20000) {
+            // 15k - 20k: 3 Weeks
+            baseDays = 21; noticeDays = 3; extDays = 7; allowExt = true;
+        } else if (cleanPrice <= 35000) {
+            // Casual buy: 1 Month (30 days)
+            baseDays = 30; noticeDays = 3; extDays = 5; allowExt = true;
+        } else if (cleanPrice <= 75000) {
+            // Budget Phone: 45 Days
+            baseDays = 45; noticeDays = 3; extDays = 7; allowExt = true;
+        } else if (cleanPrice <= 150000) {
+            // Mid Phone: 60 Days (2 Months)
+            baseDays = 60; noticeDays = 3; extDays = 10; allowExt = true;
+        } else if (cleanPrice <= 300000) {
+            // Good Phone/Laptop: 75 Days (2.5 Months)
+            baseDays = 75; noticeDays = 5; extDays = 14; allowExt = true;
+        } else if (cleanPrice <= 600000) {
+            // High-end Phone: 90 Days (3 Months)
+            baseDays = 90; noticeDays = 5; extDays = 14; allowExt = true;
+        } else if (cleanPrice <= 1200000) {
+            // MacBook/High Tech: 100 Days (~3.5 Months)
+            baseDays = 100; noticeDays = 7; extDays = 15; allowExt = true;
+        } else {
+            // Ultra High (1.2m - 3m+): 120 Days (4 Months)
+            // Vendors might complain if you go higher than 4 months for holding stock.
+            baseDays = 120; noticeDays = 7; extDays = 20; allowExt = true;
+        }
 
     // 2. Apply Model Logic
     if (_selectedModel == ProductModelType.direct) {
@@ -207,6 +210,8 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() {
       _priceAllowsExtension = allowExt;
       _calculatedDurationInt = baseDays;
+      _calculatedNoticeInt = noticeDays;
+      _calculatedExtensionInt = extDays;
 
       if (isPriceTooHigh) {
          _baseDuration = "Limit Exceeded";
@@ -310,7 +315,9 @@ class _AddProductPageState extends State<AddProductPage> {
         directDownPayment: _selectedModel == ProductModelType.direct
             ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
             : null,
-        duration: _calculatedDurationInt, 
+        duration: _calculatedDurationInt,
+        noticePeriod: _calculatedNoticeInt,
+        extensionPeriod: _calculatedExtensionInt,
       ),
     );
   }
@@ -697,42 +704,13 @@ class _AddProductPageState extends State<AddProductPage> {
                         SizedBox(height: 32.h),
             
                         // 7. SUBMIT
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52.h,
-                          child: ElevatedButton(
-                            onPressed: isLoading
-                                ? null
-                                : () => _saveProduct(imageBloc, productBloc, state),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: KorraColors.brand,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14.r),
-                              ),
-                              disabledBackgroundColor: KorraColors.brand.withOpacity(
-                                0.6,
-                              ),
-                            ),
-                            child: isLoading
-                                ? SizedBox(
-                                    width: 24.w,
-                                    height: 24.w,
-                                    child: const CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    "Create Product",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16.sp,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
+                        _buildSubmitArea(
+                          context, 
+                          status: _complianceStatus, 
+                          isLoading: isLoading, 
+                          onSubmit: () => _saveProduct(imageBloc, productBloc, state)
                         ),
+                        
                         SizedBox(height: 40.h),
                       ],
                     ),
@@ -745,6 +723,181 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
   // --- MODEL SPECIFIC WIDGETS ---
+  Widget _buildSubmitArea(BuildContext context, {required String status, required bool isLoading, required VoidCallback onSubmit}) {
+    // 🛑 Case 1: Restricted / Suspended (BLOCK ACTION)
+    // If the account is flagged, we stop them from adding more items.
+    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
+      return Padding(
+        padding: EdgeInsets.only(top: 24.h),
+        child: _buildStatusCard( 
+          context,
+          title: "Creation Paused",
+          message: "New product creation is disabled for your account. Please contact support to resolve your status.",
+          icon: Icons.lock_outline,
+          accentColor: const Color(0xFFD92D20), // Premium Error Red
+          buttonText: "Resolve Issue",
+          onPressed: () => _showContactSheet(
+            context, 
+            title: "Account Support", 
+            subTitle: "Product creation is restricted. Please contact us to resolve this."
+          ),
+        ),
+      );
+    }
+
+    // ✅ Case 2: Active OR Pending (ALLOW ACTION)
+    // We allow 'pending' users to add products so they can set up their shop 
+    // while waiting for verification.
+    return SizedBox(
+      width: double.infinity,
+      height: 52.h,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onSubmit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: KorraColors.brand,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.r),
+          ),
+          disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: 24.w,
+                height: 24.w,
+                child: const CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                "Create Product",
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+      ),
+    );
+  }
+  // 💎 THE PREMIUM CARD WIDGET
+  Widget _buildStatusCard(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color accentColor,
+    required String buttonText,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(top: 0.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20.r), // Softer corners
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF101828).withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4), // Soft elevation
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(20.w),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Icon with Soft Background
+                Container(
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accentColor, size: 24.sp),
+                ),
+                SizedBox(width: 16.w),
+                
+                // 2. Text Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.inter(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF101828), // Slate 900
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      SizedBox(height: 6.h),
+                      Text(
+                        message,
+                        style: GoogleFonts.inter(
+                          fontSize: 13.sp,
+                          height: 1.5, // Better readability
+                          color: const Color(0xFF667085), // Slate 500
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // 3. Integrated Action Button (Bottom Strip)
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade100)),
+            ),
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(20.r),
+                bottomRight: Radius.circular(20.r),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      buttonText,
+                      style: GoogleFonts.inter(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: accentColor,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    Icon(Icons.arrow_forward_rounded, size: 16.sp, color: accentColor),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true, // Allows it to be taller if needed
+      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
+    );
+  }
 
   Widget _buildStrictSettings() {
     return Column(

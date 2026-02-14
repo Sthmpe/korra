@@ -221,28 +221,36 @@ Widget _buildActionArea(BuildContext context, PayoutState state) {
   if (state.complianceStatus == 'verification_pending') {
     return _buildStatusCard(
       context,
-      title: "Identity Verification",
+      title: "Identity Verification Required", // More direct title
       message: state.blockMessage.isNotEmpty
           ? state.blockMessage
-          : "To ensure the security of your funds, we need a quick video verification.",
-      icon: Icons.shield_outlined, // Or Iconsax.shield_tick
+          : "To protect your funds, we need to verify your identity before enabling withdrawals.", // Clear security context
+      icon: Icons.shield_outlined,
       accentColor: const Color(0xFFF79009), // Premium Warning Orange
-      buttonText: "Start Verification",
-      onPressed: () => _showContactSheet(context),
+      buttonText: "Complete Verification",
+      onPressed: () => _showContactSheet(
+        context, 
+        title: "Verification Support", 
+        subTitle: "Please contact our support team to complete your identity verification and unlock your withdrawals."
+      ),
     );
   }
 
   // Case 3: Suspended (Premium Alert Card)
   return _buildStatusCard(
     context,
-    title: "Account Restricted",
+    title: "Withdrawals Restricted", // Specific to this screen
     message: state.blockMessage.isNotEmpty
         ? state.blockMessage
-        : "Your account access is currently paused. Please contact our team to resolve this.",
-    icon: Icons.lock_outline, // Or Iconsax.lock
+        : "Your payout access has been temporarily paused. Please contact our team to resolve this.", // Professional tone
+    icon: Icons.lock_outline,
     accentColor: const Color(0xFFD92D20), // Premium Error Red
     buttonText: "Resolve Issue",
-    onPressed: () => _showContactSheet(context),
+    onPressed: () => _showContactSheet(
+      context, 
+      title: "Account Support", 
+      subTitle: "Your withdrawals are currently restricted. Please contact us to resolve this issue immediately."
+    ),
   );
 }
 
@@ -355,12 +363,12 @@ Widget _buildStatusCard(
   );
 }
 
-void _showContactSheet(BuildContext context) {
+void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true, // Allows it to be taller if needed
-    builder: (context) => const ContactSupportSheet(),
+    builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
   );
 }
 

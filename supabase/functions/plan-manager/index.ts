@@ -41,15 +41,39 @@ function to2DP_Floor(num: number): number {
 }
 
 function generateRandomDp(price: number): number {
-    let minPct = 0.30;
-    let maxPct = 0.40;
-    if (price <= 15000) { minPct = 0.35; maxPct = 0.45; }
-    else if (price <= 35000) { minPct = 0.30; maxPct = 0.40; }
-    else if (price <= 75000) { minPct = 0.35; maxPct = 0.45; }
-    else { minPct = 0.40; maxPct = 0.45; }
-    const randomPct = minPct + Math.random() * (maxPct - minPct);
-    return to2DP(price * randomPct);
+    let percentage: number;
+    
+    if (price <= 100000) {
+        // Small Items (0 - 100k): 30%
+        // Example: N50k item -> N15k down
+        percentage = 0.30;
+    } 
+    else if (price <= 500000) {
+        // Mid Range (100k - 500k): 25%
+        // Example: N200k phone -> N50k down
+        percentage = 0.25;
+    } 
+    else if (price <= 1500000) {
+        // High End (500k - 1.5m): 20%
+        // Example: N1m laptop -> N200k down
+        percentage = 0.20;
+    } 
+    else {
+        // Ultra High (> 1.5m): 15%
+        // Example: N3m item -> N450k down (Keeps it realistic)
+        percentage = 0.15;
+    }
+
+    return to2DP(price * percentage);
 }
+
+const calculateZoneFee = (amt: number): number => {
+    if (amt <= 0) return 0;
+    const raw = amt * 0.035; // 3.5%
+    if (raw < 30000) return raw;
+    if (raw >= 30000 && raw < 60000) return 30000;
+    return 60000;
+};
 
 // ✅ HELPER: Safely convert any date format to ISO String (Prevents Crash)
 function safeIsoDate(val: any): string | null {
@@ -115,7 +139,7 @@ serve(async (req) => {
     try {
         const {
             action, customerUid, productId, planData, secureToken,
-            planId, amount, pin, vendorUid
+            planId, amount, pin, vendorUid, reason, category, adminPassword
         } = await req.json();
 
         const secretKey = new TextEncoder().encode(HMAC_SECRET);
@@ -230,35 +254,73 @@ serve(async (req) => {
 
                 // --- FINANCIALS ---
                 const price = to2DP(product.price);
-                const processingFee = to2DP(price * PLATFORM_FEE_PERCENTAGE);
-                const userRequiredDownPayment = to2DP(requiredPrincipal);
-                const minRequiredPrincipal = to2DP(userRequiredDownPayment + processingFee);
-
-                if (amount < minRequiredPrincipal) throw `Payment too low. Min: ${minRequiredPrincipal}`;
-
                 const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
-                let creditUsed = 0;
-                let walletUsed = 0;
-                let userPrincipalPayment = to2DP(amount - processingFee);
 
-                if (userPrincipalPayment > price) userPrincipalPayment = price;
-
-                if (availableStoreCredit >= userPrincipalPayment) {
-                    creditUsed = userPrincipalPayment;
-                    walletUsed = processingFee;
-                } else {
-                    creditUsed = availableStoreCredit;
-                    walletUsed = to2DP((userPrincipalPayment - creditUsed) + processingFee);
+                // 1. 🧹 THE MANDATORY SWEEP
+                // Rule: "Store Credit First. Always." 
+                // We take all available credit, capped only by the product price.
+                let creditSweep = 0;
+                if (availableStoreCredit > 0) {
+                    creditSweep = (availableStoreCredit >= price) ? price : availableStoreCredit;
                 }
 
-                // 3. The Smart Check
+                // 2. 🧮 CALCULATE FEE (The Split)
+                const cashPortionOfPrice = price - creditSweep;
+
+                // Fee on Cash Part (Standard Zone Logic)
+                let feeCashPart = 0;
+                if (cashPortionOfPrice > 0) {
+                    feeCashPart = calculateZoneFee(cashPortionOfPrice);
+                }
+
+                // Fee on Credit Part (10% Rule)
+                let feeCreditPart = 0;
+                if (creditSweep > 0) {
+                    const standard = calculateZoneFee(creditSweep);
+                    // Apply 10% logic, ensure min N100
+                    feeCreditPart = Math.max(standard * 0.10, 100); 
+                }
+
+                const processingFee = to2DP(feeCashPart + feeCreditPart);
+                
+                // 3. 🔍 DETERMINE USER PAYMENT
+                // The 'amount' from UI is treated as 'User Desired Principal'
+                let userDesiredPrincipal = amount;
+
+                // Cap the Principal at the Product Price (Overpayment Protection)
+                if (userDesiredPrincipal > price) {
+                    userDesiredPrincipal = price;
+                }
+
+                // 4. 🧱 VALIDATE MINIMUMS
+                // The absolute minimum Principal is max(RiskMin, CreditSweep).
+                const effectiveMinDown = Math.max(requiredPrincipal, creditSweep);
+
+                // if (userDesiredPrincipal < effectiveMinDown) {
+                //     const gap = to2DP(effectiveMinDown - userDesiredPrincipal);
+                //     throw `Payment too low. Min Required: ₦${effectiveMinDown.toLocaleString()}.`;
+                // }
+
+                const userRequiredDownPayment = to2DP(requiredPrincipal);
+                // const minRequiredPrincipal = to2DP(userRequiredDownPayment + processingFee);
+
+                // if (amount < minRequiredPrincipal) throw `Payment too low. Min: ${minRequiredPrincipal}`;
+
+               
+                // 5. 🧮 CALCULATE WHO PAYS WHAT (The Split)
+                let creditUsed = creditSweep; // We always use the full sweep
+
+                let cashPrincipalNeeded = to2DP(userDesiredPrincipal - creditUsed);
+                if (cashPrincipalNeeded < 0) cashPrincipalNeeded = 0;
+
+                // Calculate Total Wallet Deduction (Cash Principal + Fee)
+                let walletUsed = to2DP(cashPrincipalNeeded + processingFee);
+                let userPrincipalPayment = to2DP(creditUsed + cashPrincipalNeeded);
+
+                // 6. 💳 CHECK WALLET BALANCE
                 if (walletBalance < walletUsed) {
-                    if (creditUsed > 0) {
-                        const shortBy = to2DP(walletUsed - walletBalance);
-                        throw `Insufficient wallet balance. \nWe applied ₦${creditUsed.toLocaleString()} Store Credit. \nYou still need to pay the Processing Fee + Remaining Down Payment. \n\nTotal needed: ₦${walletUsed.toLocaleString()} \nPlease fund ₦${shortBy.toLocaleString()} more.`;
-                    } else {
-                        throw `Insufficient wallet balance. You need ₦${walletUsed.toLocaleString()} but have ₦${walletBalance.toLocaleString()}.`;
-                    }
+                    const shortBy = to2DP(walletUsed - walletBalance);
+                    throw `Insufficient wallet balance.\nFee: ₦${processingFee.toLocaleString()}.\nCash Down Payment: ₦${cashPrincipalNeeded.toLocaleString()}.\nTotal needed: ₦${walletUsed.toLocaleString()}.`;
                 }
 
                 const newPlanRef = db.collection('plans').doc();
@@ -270,7 +332,7 @@ serve(async (req) => {
                 let pickupCode = null;
 
                 // If remaining is less than 1 Naira, treat as fully paid immediately
-                if (remainingOnCreate < 1.0) {
+                if (remainingOnCreate < 100.0) {
                     isFinished = true;
                     userPrincipalPayment = price; // Auto-fill the dust
                     remainingOnCreate = 0;
@@ -352,9 +414,11 @@ serve(async (req) => {
                 }, { merge: true });
 
                 // 5. UPDATE ANALYTICS
-                const now = new Date();
-                const currentMonth = now.toISOString().slice(0, 7);
-                const currentDay = now.toISOString().slice(8, 10);
+               const now = new Date();
+                const currentMonth = now.toISOString().slice(0, 7); // e.g. "2026-02"
+                const currentDay = now.toISOString().slice(8, 10);  // e.g. "13"
+                const currentDateStr = now.toISOString().slice(0, 10); // e.g. "2026-02-13"
+                const currentYearStr = now.getFullYear().toString();   // e.g. "2026"
                 
                 const custMonthlyRef = db.collection('customers').doc(customerUid)
                                             .collection('monthly_stats').doc(currentMonth);
@@ -421,6 +485,49 @@ serve(async (req) => {
                     });
                 }
 
+                // 🚀 KORRA PROFIT LEDGER (Our 3.5% Vendor Commission)
+                const korraLedger1 = db.collection('company_ledger').doc();
+                t.set(korraLedger1, {
+                    id: korraLedger1.id,
+                    type: 'credit',
+                    category: 'vendor_commission',
+                    amount: feeDeducted, 
+                    description: `3.5% fee on ${product.name}`,
+                    planId: planId,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    dateStr: currentDateStr,
+                    monthStr: currentMonth,
+                    yearStr: currentYearStr
+                });
+
+                // 🚀 KORRA PROFIT LEDGER (Customer Processing Fee)
+                if (processingFee > 0) {
+                    const korraLedger2 = db.collection('company_ledger').doc();
+                    t.set(korraLedger2, {
+                        id: korraLedger2.id,
+                        type: 'credit',
+                        category: 'customer_processing_fee',
+                        amount: processingFee, 
+                        description: `Processing fee from ${planData.customerName}`,
+                        planId: planId,
+                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                        dateStr: currentDateStr,
+                        monthStr: currentMonth,
+                        yearStr: currentYearStr
+                    });
+                }
+
+                // 🚀 MASTER COMPANY WALLET (Total Cash Available)
+                const totalProfitEarned = feeDeducted + processingFee;
+                if (totalProfitEarned > 0) {
+                    const companyWalletRef = db.collection('company_wallet').doc('main');
+                    t.set(companyWalletRef, {
+                        availableBalance: admin.firestore.FieldValue.increment(totalProfitEarned),
+                        totalAllTimeEarnings: admin.firestore.FieldValue.increment(totalProfitEarned),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
                 if (creditUsed > 0) {
                     const vLiabRef = db.collection('vendors').doc(vendorId).collection('liabilities').doc();
                     t.set(vLiabRef, {
@@ -459,6 +566,7 @@ serve(async (req) => {
                 return {
                     planId: planId,
                     productName: product.name,
+                    productImage: (product.images && product.images.length > 0) ? product.images[0] : null,
                     vendorId: vendorId,
                     customerName: planData.customerName,
                     downPayment: userPrincipalPayment,
@@ -469,7 +577,14 @@ serve(async (req) => {
             });
 
             // NOTIFICATIONS
-            await sendFcm(customerUid, "Reservation Confirmed 🔒", `Plan for ${result.productName} is active!`, { type: "plan_detail", planId: result.planIdStr });
+            await sendFcm(
+                customerUid, 
+                "Reservation Confirmed 🔒", 
+                `Plan for ${result.productName} is active!`, 
+                { type: "plan_detail", planId: result.planIdStr, image: result.productImage }, // Added to data
+                'customers', // Assuming default role is customers
+                result.productImage // ✅ Pass image explicitly if your sendFcm supports it
+            );
 
             if (result.pickupCode) {
                  await sendFcm(customerUid, "Plan Completed! 🎉", `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to the vendor.`, { type: "plan_detail", planId: result.planIdStr });
@@ -478,9 +593,10 @@ serve(async (req) => {
             await sendFcm(
                 result.vendorId,
                 "New Order: Action Required 📦",
-                `Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} down payment. Please RESERVE ${result.productName} immediately.`,
-                { type: "vendor_order", planId: result.planIdStr },
-                'vendors' 
+                `Please RESERVE ${result.productName} immediately.\nCustomer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} down payment.`,
+                { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
+                'vendors',
+                result.productImage // ✅ 
             );
 
             await sendFcm(
@@ -518,6 +634,8 @@ serve(async (req) => {
                 if (plan.customerId !== customerUid) throw "Plan does not belong to user.";
 
                 const userData = userDoc.exists ? userDoc.data() : {};
+                const statsDoc = await t.get(statsRef);
+                const statsData = statsDoc.exists ? statsDoc.data() : {};
                 
                 // ✅ MONEY
                 const walletBalance = to2DP_Floor(userData.monnify?.availableBalance || 0);
@@ -549,8 +667,8 @@ serve(async (req) => {
                 let isFinished = false;
                 let pickupCode = null;
 
-                // 🎯 CHANGED: Tolerance is now strictly less than 1 Naira (e.g. 0.99 clears, 1.00 does not)
-                if (remainingBalance < 1.0) {
+                // 🎯 CHANGED: Tolerance is now strictly less than 100 Naira (e.g. 0.99 clears, 100.00 does not)
+                if (remainingBalance < 100.0) {
                     isFinished = true;
                     newAmountPaid = plan.totalAmount; 
                     remainingBalance = 0;
@@ -628,17 +746,43 @@ serve(async (req) => {
                 // ---------------------------------------------------------
                 // 📝 3. USER STATS (If Finished) & ANALYTICS
                 // ---------------------------------------------------------
+                let upgradedTier = null;
+                
                 if (isFinished) {
+                    // 1. Calculate the new completed count
+                    const currentCompleted = statsData.completedPlansCount || 0;
+                    const newCompletedCount = currentCompleted + 1;
+                    
+                    // 2. Determine the new Tier (Auto-Upgrade Logic)
+                    const currentTier = statsData.tier || 'Starter';
+                    let newTier = currentTier;
+
+                    if (newCompletedCount >= 25) {
+                        newTier = 'VIP';
+                    } else if (newCompletedCount >= 10) {
+                        newTier = 'Collector';
+                    } else if (newCompletedCount >= 3) {
+                        newTier = 'Keeper';
+                    }
+                    // Else: It stays as whatever it currently is
+
+                    
+                    if (newTier !== currentTier) {
+                        upgradedTier = newTier;
+                    }
+
+                    // 3. Save Stats & New Tier to Database
                     t.set(statsRef, {
                         activePlansCount: admin.firestore.FieldValue.increment(-1),
                         completedPlansCount: admin.firestore.FieldValue.increment(1),
+                        tier: newTier, // ✅ Auto-upgrade applied here
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
 
                     const now = new Date();
                     const currentMonth = now.toISOString().slice(0, 7);
                     const custMonthlyRef = db.collection('customers').doc(customerUid)
-                                            .collection('monthly_stats').doc(currentMonth);
+                                                .collection('monthly_stats').doc(currentMonth);
                     
                     t.set(custMonthlyRef, {
                         month: currentMonth,
@@ -675,6 +819,12 @@ serve(async (req) => {
                     is_read: false
                 });
 
+                const nowForLedger = new Date();
+                const currentDateStr = nowForLedger.toISOString().slice(0, 10); // "2026-02-13"
+                const currentMonthStr = nowForLedger.toISOString().slice(0, 7); // "2026-02"
+                const currentYearStr = nowForLedger.getFullYear().toString();   // "2026"
+                const currentDayStr = nowForLedger.toISOString().slice(8, 10);  // "13"
+
                 // Vendor Stats & Ledger
                 const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
                 const vendorFeeRate = 0.035; 
@@ -701,6 +851,30 @@ serve(async (req) => {
                         grossAmount: walletUsed,
                         feeAmount: feeDeducted
                     });
+
+                    const korraLedger = db.collection('company_ledger').doc();
+                    t.set(korraLedger, {
+                        id: korraLedger.id,
+                        type: 'credit',
+                        category: 'vendor_commission',
+                        amount: feeDeducted, 
+                        description: `3.5% fee on installment for ${plan.title}`,
+                        planId: planId,
+                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                        dateStr: currentDateStr,
+                        monthStr: currentMonthStr,
+                        yearStr: currentYearStr
+                    });
+
+                    // 🚀 MASTER COMPANY WALLET (Total Cash Available)
+                    if (feeDeducted > 0) {
+                        const companyWalletRef = db.collection('company_wallet').doc('main');
+                        t.set(companyWalletRef, {
+                            availableBalance: admin.firestore.FieldValue.increment(feeDeducted),
+                            totalAllTimeEarnings: admin.firestore.FieldValue.increment(feeDeducted),
+                            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    }
 
                     t.update(vendorStatsRef, {
                         totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
@@ -729,27 +903,24 @@ serve(async (req) => {
                 }
 
                 // C. Vendor Monthly Analytics
-                if (walletUsed > 0) {
-                    const now = new Date();
-                    const currentMonth = now.toISOString().slice(0, 7);
-                    const currentDay = now.toISOString().slice(8, 10);
-                    
+                if (walletUsed > 0) {                
                     const monthlyRef = db.collection('vendors').doc(vendorId)
-                                            .collection('monthly_stats').doc(currentMonth);
+                                            .collection('monthly_stats').doc(currentMonthStr);
                     
                     t.set(monthlyRef, {
-                        month: currentMonth,
-                        year: now.getFullYear().toString(),
+                        month: currentMonthStr,
+                        year: currentYearStr,
                         earnings: admin.firestore.FieldValue.increment(vendorNet),
-                        [`daily_breakdown.${currentDay}`]: admin.firestore.FieldValue.increment(vendorNet),
+                        [`daily_breakdown.${currentDayStr}`]: admin.firestore.FieldValue.increment(vendorNet),
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 }
 
                 return {
                     success: true,
+                    upgradedTier: upgradedTier,
                     receiptData: { ...receiptPayload, feeDeducted: feeDeducted },
-                    pickupCode: pickupCode // Pass back to display if needed immediately
+                    pickupCode: pickupCode, // Pass back to display if needed immediately
                 };
             });
 
@@ -793,6 +964,16 @@ serve(async (req) => {
                         { type: "plan_detail", planId: planId }
                     );
                 }
+            }
+
+            // 6. 🏆 NEW: Notify Customer of Tier Upgrade
+            if (result.upgradedTier) {
+                await sendFcm(
+                    customerUid,
+                    "Level Up! 🌟",
+                    `Congratulations! You've been upgraded to the ${result.upgradedTier} tier. Enjoy your new perks and extra active plan slots!`,
+                    { type: "home" } // You can route this to 'home', 'profile', or wherever makes sense
+                );
             }
 
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -1119,6 +1300,75 @@ serve(async (req) => {
             );
 
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // =======================================================================
+        // 🚀 ACTION: RECORD EXPENSE (Admin Only - Money Out)
+        // =======================================================================
+        if (action === 'RECORD_EXPENSE') {
+            // 1. Extract from your payload (ensure these are passed from your frontend/Postman)
+            const { amount, reason, category, adminPassword } = payload; // or req.body depending on your setup
+            
+            // 🔐 SECURITY: Protect your company funds!
+            if (adminPassword !== "David2026Boss") throw "Unauthorized Access. Admin only.";
+            if (!amount || Number(amount) <= 0) throw "Amount must be greater than zero.";
+            if (!reason) throw "You must provide a reason for the expense.";
+
+            const expenseAmount = to2DP(Number(amount));
+            
+            // --- GLOBAL DATE HELPERS FOR LEDGERS ---
+            const nowForLedger = new Date();
+            const currentDateStr = nowForLedger.toISOString().slice(0, 10); // "2026-02-13"
+            const currentMonthStr = nowForLedger.toISOString().slice(0, 7); // "2026-02"
+            const currentYearStr = nowForLedger.getFullYear().toString();   // "2026"
+
+            const result = await db.runTransaction(async (t) => {
+                const walletRef = db.collection('company_wallet').doc('main');
+                const walletDoc = await t.get(walletRef);
+                
+                let currentBalance = 0;
+                if (walletDoc.exists) {
+                    currentBalance = walletDoc.data().availableBalance || 0;
+                }
+
+                // 🛑 Prevent withdrawing more than Korra has earned!
+                if (currentBalance < expenseAmount) {
+                    throw `Insufficient Company Funds. You only have ₦${currentBalance.toLocaleString()} available.`;
+                }
+
+                // 📝 1. LOG THE DEBIT IN KORRA'S LEDGER
+                const expenseLedgerRef = db.collection('company_ledger').doc();
+                t.set(expenseLedgerRef, {
+                    id: expenseLedgerRef.id,
+                    type: 'debit', // MONEY OUT
+                    category: category || 'general_expense', // e.g., 'salary', 'marketing', 'software'
+                    amount: -expenseAmount, // Negative number for expenses
+                    description: reason,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    dateStr: currentDateStr,
+                    monthStr: currentMonthStr,
+                    yearStr: currentYearStr
+                });
+
+                // 📉 2. DEDUCT FROM MASTER COMPANY WALLET
+                t.set(walletRef, {
+                    availableBalance: admin.firestore.FieldValue.increment(-expenseAmount),
+                    totalAllTimeExpenses: admin.firestore.FieldValue.increment(expenseAmount),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                return {
+                    expenseId: expenseLedgerRef.id,
+                    amountSpent: expenseAmount,
+                    newBalance: to2DP(currentBalance - expenseAmount)
+                };
+            });
+
+            return new Response(JSON.stringify({ 
+                status: "SUCCESS", 
+                message: `₦${result.amountSpent.toLocaleString()} expense recorded. Reason: ${reason}.`,
+                newBalance: result.newBalance 
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400 });

@@ -132,7 +132,7 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
             failure: const KorraFailure(
               code: 'role_mismatch',
               title: 'Check role selected',
-              message: 'This account is not registered as a vendor.',
+              message: 'This account is not registered as a merchant.',
             ),
           ),
         );

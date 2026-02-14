@@ -118,17 +118,10 @@ class VendorProductsBloc
 
       // ... (Rest of the duration calculation remains the same) ...
       final baseDays = event.duration;
-      final noticeDays = 3;
-      int extDays = 0;
-      if (event.extensionsEnabled) {
-         final p = event.price;
-         if (p <= 20000) extDays = 7;
-         else if (p <= 40000) extDays = 7;
-         else if (p <= 150000) extDays = 14;
-         else if (p <= 320000) extDays = 15;
-         else extDays = 20;
-      }
-      final totalDays = baseDays + noticeDays + extDays;
+      final noticeDays = event.noticePeriod;
+      final extDays = event.extensionPeriod;
+      
+      final totalDays = baseDays + noticeDays + (event.extensionsEnabled ? extDays : 0);
 
       final newProductMap = {
         'vendorId': vendorUid,

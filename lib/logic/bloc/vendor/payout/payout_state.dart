@@ -9,7 +9,7 @@ class PayoutState extends Equatable {
   final PayoutStatus status;
   final PayoutStep step;
   final String? errorMessage;
-  final String complianceStatus; // e.g., 'active', 'verification_pending'
+  final String complianceStatus; // e.g., 'active', 'verification_pending', 'restricted'
   final String blockMessage;     // e.g., 'Video Verification Required'
 
   // 1. Money

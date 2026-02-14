@@ -6,7 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/constants/contacts.dart';
 
 class ContactSupportSheet extends StatelessWidget {
-  const ContactSupportSheet({Key? key}) : super(key: key);
+  const ContactSupportSheet({
+    Key? key,
+    required this.title,
+    required this.subTitle,
+  }) : super(key: key);
+
+  final String title;
+  final String subTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +45,7 @@ class ContactSupportSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Verification Support",
+                  title,
                   style: GoogleFonts.inter(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w700,
@@ -48,9 +55,9 @@ class ContactSupportSheet extends StatelessWidget {
                 ),
                 SizedBox(height: 8.h),
                 Text(
-                  "Verification usually takes less than 5 minutes. Choose a method below to reach our team.",
+                  subTitle,
                   style: GoogleFonts.inter(
-                    fontSize: 14.sp,
+                    fontSize: 13.sp,
                     color: const Color(0xFF667085),
                     height: 1.4,
                   ),
@@ -140,7 +147,7 @@ class _ContactOption extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: Colors.grey.shade200, width: 0.5), // Subtle border
           borderRadius: BorderRadius.circular(16.r),
           color: Colors.white,
         ),

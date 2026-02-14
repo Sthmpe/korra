@@ -85,7 +85,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                 ),
               ),
             Text(
-              'Create Vendor Account',
+              'Create Business Account',
               style: GoogleFonts.inter(
                 fontSize: 18.sp,
                 fontWeight: FontWeight.w700,
@@ -165,7 +165,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
         
                       if (s.status == SignupStatus.success) {
                         showAppSnackbar(
-                          'Your vendor account has been created successfully.',
+                          'Your business account has been created successfully.',
                           SnackbarType.success,
                         );
                         Get.offAllNamed(Routes.vendorShell);

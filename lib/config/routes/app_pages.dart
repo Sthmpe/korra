@@ -43,6 +43,7 @@ import '../../presentation/vendor/product/widgets/product_edit_screen.dart';
 import '../../presentation/vendor/profile/change_password_screen.dart';
 import '../../presentation/vendor/profile/vendor_receipt_screen.dart';
 import '../../presentation/vendor/profile/vendor_settlement_screen.dart';
+import '../../presentation/vendor/profile/widgets/legal_screen.dart';
 import '../../presentation/vendor/reservation/reservations_page.dart';
 import 'app_routes.dart';
 import 'auth_middleware.dart';
@@ -71,8 +72,12 @@ Widget _guard(Widget Function(dynamic args) builder) {
 }
 
 class AppPages {
-  static final routes = [
-    // --- Public ---
+  
+  // ==============================================================================
+  // 1. SHARED ROUTES (Both Apps need these)
+  // ==============================================================================
+  static final _commonRoutes = [
+    // --- Login & Auth ---
     GetPage(name: Routes.roleLoginScreen, page: () => const RoleLoginScreen()),
 
     GetPage(
@@ -80,17 +85,26 @@ class AppPages {
       page: () => _guard((args) => ResetLinkSentScreen(
         email: args['email'],
       )),
-      // No AuthMiddleware needed here (user is usually logged out)
     ),
 
+    GetPage(
+      name: Routes.forgotPassword,
+      page: () => const ForgotPasswordScreen(),
+    ),
+  ];
+
+  // ==============================================================================
+  // 2. CUSTOMER APP ROUTES
+  // ==============================================================================
+  static final customerRoutes = [
+    ..._commonRoutes, // Include Login/Forgot Password
+    
     // 👤 Customer Signup
     GetPage(
       name: Routes.customerSignup,
       page: () {
-        // Check for arguments (optional)
         final args = Get.arguments as Map<String, dynamic>?;
-        final showIcon = args?['showLeadingIcon'] ?? false; 
-        
+        final showIcon = args?['showLeadingIcon'] ?? false;
         return BlocProvider(
           create: (_) => SignupCustomerBloc()..add(SignupCustomerInit()),
           child: SignupCustomerScreen(showLeadingIcon: showIcon),
@@ -98,14 +112,223 @@ class AppPages {
       },
     ),
 
+    // --- Customer Shell ---
+    GetPage(
+      name: Routes.customerShell,
+      page: () => CustomerShell(uid: FirebaseAuth.instance.currentUser!.uid),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // --- Customer Feature Pages ---
+    
+    // 🔔 Notifications
+    GetPage(
+      name: Routes.customerNotifications,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return NotificationScreen(
+          repo: map['repo'],
+          uid: map['uid'],
+          onJumpToPlans: () => Get.back(result: 'jump_to_plans'),
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // ➕ Create Plan
+    GetPage(
+      name: Routes.customerCreatePlan,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return CreatePlanScreen(
+          product: map['product'],
+          customerRepo: map['customerRepo'],
+          customerUid: map['customerUid'],
+          customer: map['customer'],
+          walletBalance: map['walletBalance'],
+          onJumpToHome: () => Get.back(result: 'jump_to_home'),
+          onJumpToPlan: () => Get.back(result: 'jump_to_plans'),
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🧾 Transaction Receipt
+    GetPage(
+      name: Routes.customerTransactionReceipt,
+      page: () => _guard(
+        (args) => TransactionReceiptScreen(data: args as PaymentReceiptData),
+      ),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🏦 Bank Details
+    GetPage(
+      name: Routes.customerBankDetails,
+      page: () =>
+          _guard((args) => BankDetailsScreen(customer: args as Customer)),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    GetPage(
+      name: Routes.customerPlanDetailsLoader,
+      page: () => _guard((args) => PlanDetailsLoaderScreen(
+        planId: args['planId'],
+      )),
+      middlewares: [AuthMiddleware()],
+    ),
+    
+    // 📄 Plan Details
+    GetPage(
+      name: Routes.customerPlanDetails,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PlanDetailsScreen(
+          plan: map['plan'],
+          customerRepo: map['customerRepo'],
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 📄 Statements
+    GetPage(
+      name: Routes.customerStatements,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return StatementsScreen(repo: map['repo'], customerUid: map['uid']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 💳 Pay Plan Input
+    GetPage(
+      name: Routes.customerPayPlan,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PayPlanInputScreen(plan: map['plan'], repo: map['repo']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // ✅ Payment Result
+    GetPage(
+      name: Routes.customerPaymentResult,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PaymentResultScreen(
+          isSuccess: map['isSuccess'],
+          amount: map['amount'],
+          planName: map['planName'],
+          fullReceiptData: map['fullReceiptData'],
+          isPlanCompleted: map['isPlanCompleted'] ?? false,
+          errorMessage: map['errorMessage'],
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 📱 My QR
+    GetPage(
+      name: Routes.customerQr,
+      page: () => _guard((args) => MyQrScreen(customer: args)),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // ✏️ Edit Profile
+    GetPage(
+      name: Routes.customerEditProfile,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return EditProfileScreen(customer: map['customer'], repo: map['repo']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 💰 Store Credits
+    GetPage(
+      name: Routes.customerStoreCredits,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return MyStoreCreditsScreen(customerUid: map['uid']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🚀 Limit Upgrade
+    GetPage(
+      name: Routes.customerLimitUpgrade,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return LimitUpgradeScreen(
+          repo: map['repo'],
+          customer: map['customer'],
+          currentMaxSlots: map['currentMaxSlots'],
+          completedPlansCount: map['completedPlansCount'],
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🏪 My Vendors
+    GetPage(
+      name: Routes.customerMyVendors,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return MyVendorsScreen(customerUid: map['uid']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🔒 Change Password
+    GetPage(
+      name: Routes.customerChangePassword,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return ChangePasswordScreen(repo: map['repo']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 📜 Legal & Help
+    GetPage(
+      name: Routes.customerLegal,
+      page: () => const LegalMenuScreen(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.customerHelp,
+      page: () => const HelpCenterScreen(),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    /*
+    GetPage(
+      name: Routes.customerLiveness,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return LivenessScreen(
+          onVerificationSuccess: map['onSuccess'], 
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+    */
+  ];
+
+
+  // ==============================================================================
+  // 3. VENDOR APP ROUTES
+  // ==============================================================================
+  static final vendorRoutes = [
+    ..._commonRoutes, // Include Login/Forgot Password
+
     // 🏪 Vendor Signup
     GetPage(
       name: Routes.vendorSignup,
       page: () {
-        // Check for optional arguments
         final args = Get.arguments as Map<String, dynamic>?;
-        final showIcon = args?['showLeadingIcon'] ?? false; // Default to false
-
+        final showIcon = args?['showLeadingIcon'] ?? false;
         return BlocProvider(
           create: (_) => SignupVendorBloc()..add(SignupVendorInit()),
           child: SignupVendorScreen(showLeadingIcon: showIcon),
@@ -113,33 +336,18 @@ class AppPages {
       },
     ),
 
-    // ❓ Forgot Password
-    GetPage(
-      name: Routes.forgotPassword,
-      page: () => const ForgotPasswordScreen(),
-    ),
-
-    // --- Vendor ---
+    // --- Vendor Shell ---
     GetPage(
       name: Routes.vendorShell,
-      // 🔹 WE USE THE SAME ARGUMENT NAME (uid)
       page: () => VendorShell(uid: FirebaseAuth.instance.currentUser!.uid),
       middlewares: [AuthMiddleware()],
     ),
 
-    // --- Customer ---
-    GetPage(
-      name: Routes.customerShell,
-      page: () => CustomerShell(uid: FirebaseAuth.instance.currentUser!.uid),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    ///-----------VENDOR PAGE--------------///
+    // --- Vendor Feature Pages ---
     
     // 🔔 Vendor Notifications
     GetPage(
       name: Routes.vendorNotifications,
-      // 🛡️ GUARD APPLIED: Ensures 'uid' exists before building
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
         return VendorNotificationScreen(
@@ -149,25 +357,23 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
 
-    // 💰 Vendor Payout (With Bloc Provider Injection)
+    // 💰 Vendor Payout
     GetPage(
       name: Routes.vendorPayout,
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
-        
-        // 💉 Inject Bloc here, so the screen stays clean
         return BlocProvider(
           create: (_) => PayoutBloc(
             vendorUid: map['uid'],
             repo: map['repo'],
-          )..add(PayoutStarted(map['withdrawableAmount'])), // Fire event immediately
+          )..add(PayoutStarted(map['withdrawableAmount'])),
           child: const PayoutScreen(),
         );
       }),
       middlewares: [AuthMiddleware()],
     ),
 
-    // 📅 Vendor Reservations (With Filters)
+    // 📅 Vendor Reservations
     GetPage(
       name: Routes.vendorReservations,
       page: () => _guard((args) {
@@ -175,7 +381,7 @@ class AppPages {
         return ReservationsPage(
           vendorId: map['uid'],
           vendors: map['repo'],
-          initialFilter: map['filter'], // Passing the enum
+          initialFilter: map['filter'],
           showLeadingIcon: map['showLeadingIcon'] ?? true,
         );
       }),
@@ -198,20 +404,16 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
 
-    // ➕ Vendor Add Product (MultiBloc Preserved)
+    // ➕ Vendor Add Product
     GetPage(
       name: Routes.vendorAddProduct,
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
-        
         return MultiBlocProvider(
           providers: [
-            // 1. Pass the EXISTING Bloc (received via arguments)
             BlocProvider.value(
               value: map['listBloc'] as VendorProductsBloc,
             ),
-            
-            // 2. Create the NEW Image Bloc
             BlocProvider(
               create: (_) => ImageBloc(),
             ),
@@ -230,8 +432,6 @@ class AppPages {
       name: Routes.vendorProductDetails,
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
-        
-        // 💉 Inject the EXISTING Bloc
         return BlocProvider.value(
           value: map['listBloc'] as VendorProductsBloc,
           child: ProductDetailsScreen(product: map['product']),
@@ -240,19 +440,16 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
 
-    // ✏️ Edit Product (MultiBloc)
+    // ✏️ Edit Product
     GetPage(
       name: Routes.vendorEditProduct,
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
-        
         return MultiBlocProvider(
           providers: [
-            // 1. Pass the EXISTING Bloc
             BlocProvider.value(
               value: map['listBloc'] as VendorProductsBloc,
             ),
-            // 2. Create NEW Image Bloc
             BlocProvider(
               create: (_) => ImageBloc(),
             ),
@@ -262,24 +459,6 @@ class AppPages {
       }),
       middlewares: [AuthMiddleware()],
     ),
-
-    // ✏️ Edit Vendor Profile
-    // GetPage(
-    //   name: Routes.vendorEditProfile,
-    //   page: () => _guard((args) => EditVendorProfileScreen(
-    //     vendor: args['vendor'],
-    //   )),
-    //   middlewares: [AuthMiddleware()],
-    // ),
-
-    // 📱 Vendor QR
-    // GetPage(
-    //   name: Routes.vendorQr,
-    //   page: () => _guard((args) => VendorQrScreen(
-    //     vendor: args['vendor'],
-    //   )),
-    //   middlewares: [AuthMiddleware()],
-    // ),
 
     // 🏦 Settlement Settings
     GetPage(
@@ -294,22 +473,22 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
 
-    // 🔒 Change Password (Vendor Context)
+    // 🔒 Change Password (Vendor)
     GetPage(
       name: Routes.vendorChangePassword,
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
         return VendorChangePasswordScreen(
-          repo: map['repo'], // Injecting Vendor Repo here
+          repo: map['repo'],
         );
       }),
       middlewares: [AuthMiddleware()],
     ),
 
-    // 📜 Legal Menu (Shared)
+    // 📜 Legal Menu (Vendor)
     GetPage(
       name: Routes.vendorLegal,
-      page: () => const LegalMenuScreen(),
+      page: () => const vLegalMenuScreen(),
       middlewares: [AuthMiddleware()],
     ),
 
@@ -322,216 +501,22 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
 
+    // ✏️ Edit Vendor Profile (Commented)
+    // GetPage(
+    //   name: Routes.vendorEditProfile,
+    //   page: () => _guard((args) => EditVendorProfileScreen(
+    //     vendor: args['vendor'],
+    //   )),
+    //   middlewares: [AuthMiddleware()],
+    // ),
 
-    ///----------CUSTOMERS PAGE------------///
-
-    // 🔔 Notifications
-    GetPage(
-      name: Routes.customerNotifications,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return NotificationScreen(
-          repo: map['repo'],
-          uid: map['uid'],
-          onJumpToPlans: () => Get.back(result: 'jump_to_plans'),
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // ➕ Create Plan
-    GetPage(
-      name: Routes.customerCreatePlan,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return CreatePlanScreen(
-          product: map['product'],
-          customerRepo: map['customerRepo'],
-          customerUid: map['customerUid'],
-          customer: map['customer'],
-          walletBalance: map['walletBalance'],
-          onJumpToHome: () => Get.back(result: 'jump_to_home'),
-          onJumpToPlan: () => Get.back(result: 'jump_to_plans'),
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 🧾 Transaction Receipt (Object Pass)
-    GetPage(
-      name: Routes.customerTransactionReceipt,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard(
-        (args) => TransactionReceiptScreen(data: args as PaymentReceiptData),
-      ),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 🏦 Bank Details (Object Pass)
-    GetPage(
-      name: Routes.customerBankDetails,
-      // 🛡️ GUARD APPLIED
-      page: () =>
-          _guard((args) => BankDetailsScreen(customer: args as Customer)),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    GetPage(
-      name: Routes.customerPlanDetailsLoader,
-      page: () => _guard((args) => PlanDetailsLoaderScreen(
-        planId: args['planId'],
-      )),
-      middlewares: [AuthMiddleware()],
-    ),
-    
-    // 📄 Plan Details (Map Pass)
-    GetPage(
-      name: Routes.customerPlanDetails,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return PlanDetailsScreen(
-          plan: map['plan'],
-          customerRepo: map['customerRepo'],
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 📄 Statements
-    GetPage(
-      name: Routes.customerStatements,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return StatementsScreen(repo: map['repo'], customerUid: map['uid']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 💳 Pay Plan Input
-    GetPage(
-      name: Routes.customerPayPlan,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return PayPlanInputScreen(plan: map['plan'], repo: map['repo']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // ✅ Payment Result
-    GetPage(
-      name: Routes.customerPaymentResult,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return PaymentResultScreen(
-          isSuccess: map['isSuccess'],
-          amount: map['amount'],
-          planName: map['planName'],
-          fullReceiptData: map['fullReceiptData'],
-          isPlanCompleted: map['isPlanCompleted'] ?? false,
-          errorMessage: map['errorMessage'],
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 📱 My QR
-    GetPage(
-      name: Routes.customerQr,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) => MyQrScreen(customer: args)),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // ✏️ Edit Profile
-    GetPage(
-      name: Routes.customerEditProfile,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return EditProfileScreen(customer: map['customer'], repo: map['repo']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 💰 Store Credits
-    GetPage(
-      name: Routes.customerStoreCredits,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return MyStoreCreditsScreen(customerUid: map['uid']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 🚀 Limit Upgrade
-    GetPage(
-      name: Routes.customerLimitUpgrade,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return LimitUpgradeScreen(
-          repo: map['repo'],
-          customer: map['customer'],
-          currentMaxSlots: map['currentMaxSlots'],
-          completedPlansCount: map['completedPlansCount'],
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 🏪 My Vendors
-    GetPage(
-      name: Routes.customerMyVendors,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return MyVendorsScreen(customerUid: map['uid']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 🔒 Change Password
-    GetPage(
-      name: Routes.customerChangePassword,
-      // 🛡️ GUARD APPLIED
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return ChangePasswordScreen(repo: map['repo']);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 📜 Legal & Help (Simple Routes - No Args needed usually)
-    GetPage(
-      name: Routes.customerLegal,
-      page: () => const LegalMenuScreen(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
-      name: Routes.customerHelp,
-      page: () => const HelpCenterScreen(),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 📸 Liveness (Commented out as requested, but guard applied)
-    /*
-    GetPage(
-      name: Routes.customerLiveness,
-      page: () => _guard((args) {
-        final map = args as Map<String, dynamic>;
-        return LivenessScreen(
-          onVerificationSuccess: map['onSuccess'], 
-        );
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-    */
+    // 📱 Vendor QR (Commented)
+    // GetPage(
+    //   name: Routes.vendorQr,
+    //   page: () => _guard((args) => VendorQrScreen(
+    //     vendor: args['vendor'],
+    //   )),
+    //   middlewares: [AuthMiddleware()],
+    // ),
   ];
 }

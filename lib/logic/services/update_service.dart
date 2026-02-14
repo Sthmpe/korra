@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../flavors/app_config.dart';
+
 class UpdateService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -16,7 +18,12 @@ class UpdateService {
       final data = doc.data()!;
       
       // 2. Master Switch
-      final bool forceUpdate = data['force_update'] ?? false;
+      // 2. Determine Keys based on Flavor
+      // If Customer App -> look for 'min_version_android_customer'
+      // If Merchant App -> look for 'min_version_android_merchant'
+      final String suffix = AppConfig.isVendor ? '_merchant' : '_customer';
+      
+      final bool forceUpdate = data['force_update$suffix'] ?? false;
       if (!forceUpdate) return UpdateCheckResult.allowed();
 
       // 3. Get Current App Version
@@ -27,9 +34,9 @@ class UpdateService {
       String minVersionStr = "1.0.0";
       
       if (Platform.isAndroid) {
-        minVersionStr = data['min_version_android'] ?? '1.0.0';
+        minVersionStr = data['min_version_android$suffix'] ?? '1.0.0';
       } else if (Platform.isIOS) {
-        minVersionStr = data['min_version_ios'] ?? '1.0.0';
+        minVersionStr = data['min_version_ios$suffix'] ?? '1.0.0';
       }
 
       final Version minVersion = Version.parse(minVersionStr);
@@ -39,7 +46,7 @@ class UpdateService {
         String? targetUrl;
         
         if (Platform.isAndroid) {
-          final String? storeUrl = data['store_url_android'];
+          final String? storeUrl = data['store_url_android$suffix'];
           // ✅ Smart Fallback: Use Store if available, else Direct APK
           if (storeUrl != null && storeUrl.isNotEmpty) {
             targetUrl = storeUrl;
@@ -48,12 +55,12 @@ class UpdateService {
           }
         } else if (Platform.isIOS) {
           // iOS users usually go to TestFlight or Web
-          targetUrl = data['store_url_ios'] ?? "https://korra.com.ng"; 
+          targetUrl = data['store_url_ios$suffix'] ?? "https://korra.com.ng"; 
         }
 
         return UpdateCheckResult.blocked(
           updateUrl: targetUrl ?? "https://korra.com.ng",
-          latestVersion: data['latest_version_code'] ?? minVersionStr,
+          latestVersion: data['latest_version_code$suffix'] ?? minVersionStr,
         );
       }
 

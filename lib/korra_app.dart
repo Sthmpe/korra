@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart'; // ✅ Import GetX
 import 'package:google_fonts/google_fonts.dart';
-import 'config/routes/app_pages.dart'; // ✅ Import AppPages
+//import 'config/routes/app_pages.dart'; // ✅ Import AppPages
 // import 'config/routes/app_routes.dart'; // Optional, if needed for unknownRoute
 
 import 'config/theme/app_theme.dart';
@@ -13,8 +13,13 @@ import 'presentation/shared/not_found_screen.dart';
 
 class KorraApp extends StatelessWidget {
   // 🔄 CHANGED: Now accepts a String Route Name
-  const KorraApp({super.key, required this.initialRoute});
+  const KorraApp({
+    super.key, 
+    required this.initialRoute,
+    required this.appPages
+  });
   final String initialRoute;
+  final List<GetPage> appPages;
 
   // 🔒 Threshold: Any screen wider than this gets the "Blocker"
   static const double kMaxMobileWidth = 600.0;
@@ -28,7 +33,7 @@ class KorraApp extends StatelessWidget {
       
       // 🚀 NAVIGATION SETUP
       initialRoute: initialRoute, // 1. Set the start route
-      getPages: AppPages.routes,  // 2. Load the route map
+      getPages: appPages,  // 2. Load the route map
       
       // Fallback for bad URLs
       unknownRoute: GetPage(

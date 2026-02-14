@@ -205,8 +205,8 @@ class ProfilePage extends StatelessWidget {
 
                                   RowWithChevron(
                                     icon: Iconsax.shop,
-                                    title: 'My Vendors',
-                                    subtitle: 'Vendors you interact with',
+                                    title: 'My Merchants',
+                                    subtitle: 'Merchants you interact with',
                                     onTap: () => Get.toNamed(
                                       Routes.customerMyVendors, 
                                       arguments: {'uid': customer.uid}

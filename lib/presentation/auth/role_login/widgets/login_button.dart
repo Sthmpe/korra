@@ -101,7 +101,7 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
                         )
                       : AutoSizeText(
                           role == KorraRole.vendor
-                              ? 'Sign in as Vendor'
+                              ? 'Sign in as Merchant'
                               : 'Sign in as Customer',
                           style: GoogleFonts.inter(
                             fontSize: 16.sp,
