@@ -13,35 +13,39 @@ class ShareService {
   /// Shares the Korra Referral Image + Text
   static Future<void> shareAppReferral({required String referrerName}) async {
     try {
-      // 1. Prepare the Message
-      final String text = 
-          "Hey! $referrerName is inviting you to join Korra.\n\n"
-          "Secure your purchases and lock prices against inflation.\n"
-          "Download the app now: https://korra.com.ng"; 
+      // 1. Prepare the Message (Updated Brand-Aligned Copy)
+      final String text =
+          "Hey! $referrerName invited you to join Korra.\n\n"
+          "Your bridge to ownership.\n"
+          "Reserve today. Complete at your pace.\n\n"
+          "Download Korra: https://korra.com.ng";
 
       // 2. Load the Image from Assets
-      // ✅ UPDATED: Loading the specific WebP file
-      final ByteData bytes = await rootBundle.load('assets/images/korra_invite.webp');
+      final ByteData bytes =
+          await rootBundle.load('assets/images/korra_invite.webp');
       final Uint8List list = bytes.buffer.asUint8List();
 
       // 3. Create a Temporary File for the Image
       final tempDir = await getTemporaryDirectory();
-      // ✅ UPDATED: Saving as .webp in the temp folder so the OS recognizes it
-      final file = await File('${tempDir.path}/korra_invite.webp').create();
+      final file =
+          await File('${tempDir.path}/korra_invite.webp').create();
       await file.writeAsBytes(list);
 
       // 4. Share the File + Text
       await Share.shareXFiles(
         [XFile(file.path)],
         text: text,
-        subject: 'Join Korra', 
+        subject: 'Join Korra',
       );
-      
     } catch (e) {
       debugPrint('Error sharing: $e');
-      // Fallback: If image fails, just share text
+
+      // Fallback: Share text only (Brand Consistent)
       Share.share(
-          "Join $referrerName on Korra! Lock prices today. https://korra.com.ng");
+        "$referrerName invited you to Korra.\n\n"
+        "Reserve today. Complete at your pace.\n\n"
+        "https://korra.com.ng",
+      );
     }
   }
 }

@@ -200,7 +200,7 @@ extension CustomerPlans on CustomerRepository {
          }
       }
 
-      throw KorraException("Could not cancel plan.");
+      throw KorraException("Could not close plan.");
     }
   }
 
@@ -252,7 +252,7 @@ extension CustomerPlans on CustomerRepository {
     
     // 1. Money Issues
     if (err.contains('insufficient') || err.contains('wallet')) {
-      throw KorraException("Your wallet balance is too low for this down payment.");
+      throw KorraException("Your wallet balance is too low for this initial deposit.");
     }
     
     // 2. Inventory Issues
@@ -263,7 +263,7 @@ extension CustomerPlans on CustomerRepository {
     // 3. Slot / Limit Issues
     // Handles: "Slot Limit Reached"
     if (err.contains('slot limit')) {
-      throw KorraException("Slot Limit Reached. Please complete or cancel an active plan first.");
+      throw KorraException("Slot Limit Reached. Please complete or close an active plan first.");
     }
     
     // 4. Security / Validation Issues
@@ -271,7 +271,7 @@ extension CustomerPlans on CustomerRepository {
       throw KorraException("Session expired. Please go back and try again.");
     }
     if (err.contains('payment too low')) {
-      throw KorraException("The payment amount does not meet the required down payment.");
+      throw KorraException("The payment amount does not meet the required deposit.");
     }
     
     // Default Fallback
@@ -287,8 +287,8 @@ extension CustomerPlans on CustomerRepository {
 
   void _handleCancelErrors(String? error) {
     final err = error?.toLowerCase() ?? '';
-    if (err.contains('inactive')) throw KorraException("Cannot cancel an inactive plan.");
-    throw KorraException(error ?? "Cancellation failed.");
+    if (err.contains('inactive')) throw KorraException("Cannot close an inactive plan.");
+    throw KorraException(error ?? "Closing failed.");
   }
 
   // ===========================================================================

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../config/constants/colors.dart';
@@ -19,41 +22,47 @@ import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 import 'vendor_header.dart';
 
-class PlanDetailsScreen extends StatelessWidget {
+class PlanDetailsScreen extends StatefulWidget {
   final Plan plan;
   final CustomerRepository customerRepo;
 
-  PlanDetailsScreen({
+  const PlanDetailsScreen({
     super.key,
     required this.plan,
     required this.customerRepo,
   });
+   @override
+  State<PlanDetailsScreen> createState() => _PlanDetailsScreenState();
+}
 
+class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   final currencyFormat = NumberFormat.currency(
     locale: 'en_NG',
     symbol: '₦',
     decimalDigits: 2,
   );
 
+  int _currentImageIndex = 0;
+
   static const _brand = KorraColors.brand;
   static const _stroke = Color(0xFFF2F4F7);
 
   double get _smartTargetAmount {
     // 1. If backend has a valid specific target, use it.
-    if (plan.nextAmount > 0) return plan.nextAmount;
+    if (widget.plan.nextAmount > 0) return widget.plan.nextAmount;
 
     // 2. Otherwise, calculate based on cadence (Weekly/Monthly)
-    double total = plan.outstandingLoanAmount;
+    double total = widget.plan.outstandingLoanAmount;
     if (total <= 0) return 0;
 
-    int daysRemaining = plan.planExpiryDate.difference(DateTime.now()).inDays;
+    int daysRemaining = widget.plan.planExpiryDate.difference(DateTime.now()).inDays;
     if (daysRemaining <= 0) return total; // Overdue? Pay all.
 
     // Determine interval (e.g., 30 days for monthly, 7 for weekly)
     int intervalDays = 30;
-    if (plan.cadenceType == 'weekly') intervalDays = 7;
-    if (plan.cadenceType == 'bi-weekly') intervalDays = 14;
-    if (plan.cadenceType == 'daily') intervalDays = 1;
+    if (widget.plan.cadenceType == 'weekly') intervalDays = 7;
+    if (widget.plan.cadenceType == 'bi-weekly') intervalDays = 14;
+    if (widget.plan.cadenceType == 'daily') intervalDays = 1;
 
     // How many payments are left?
     double intervalsLeft = daysRemaining / intervalDays;
@@ -70,7 +79,7 @@ class PlanDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // 1. WRAP WITH CUBIT PROVIDER
     return BlocProvider(
-      create: (context) => PlanActionCubit(customerRepo),
+      create: (context) => PlanActionCubit(widget.customerRepo),
       child: BlocListener<PlanActionCubit, PlanActionState>(
         listener: (context, state) {
           if (state is PlanActionSuccess) {
@@ -83,10 +92,10 @@ class PlanDetailsScreen extends StatelessWidget {
           }
         },
         child: StreamBuilder<Plan?>(
-          stream: customerRepo.streamSinglePlan(plan.id),
-          initialData: plan,
+          stream: widget.customerRepo.streamSinglePlan(widget.plan.id),
+          initialData: widget.plan,
           builder: (context, snapshot) {
-            final currentPlan = snapshot.data ?? plan;
+            final currentPlan = snapshot.data ?? widget.plan;
 
             // 2. DETERMINE STATE
             final bool isCompleted = currentPlan.status == 'completed';
@@ -117,7 +126,7 @@ class PlanDetailsScreen extends StatelessWidget {
                           ignoring: isLoading,
                           child: Opacity(
                             opacity: isLoading ? 0.6 : 1.0,
-                            child: _buildStickyAction(context, currentPlan),
+                            child: _buildStickyAction(context, currentPlan, isLoading: isLoading),
                           ),
                         )
                       : null,
@@ -131,22 +140,21 @@ class PlanDetailsScreen extends StatelessWidget {
                         if (isCancelled)
                           _buildStatusBanner(
                             icon: Iconsax.info_circle,
-                            title: "Plan Converted",
-                            subtitle:
-                                "This plan was converted to Store Credit.",
-                            color: Colors.grey.shade700,
-                            bg: Colors.grey.shade200,
+                            title: "Plan Closed",
+                            // ✅ "Secured in" sounds like a vault. "Transferred to" is also fine.
+                            subtitle: "Funds are secured in your Store Balance.", 
+                            color: const Color(0xFF344054),
+                            bg: const Color(0xFFF2F4F7),
                           ),
 
-                        // Show "Terminated" banner if time is up (even if DB says active)
                         if (isTerminated && !isCancelled && !isCompleted)
                           _buildStatusBanner(
-                            icon: Iconsax.close_circle,
-                            title: "Plan Expired",
-                            subtitle:
-                                "Deadline passed. Processing termination...",
-                            color: Colors.red.shade700,
-                            bg: const Color(0xFFFEF2F2),
+                            icon: Iconsax.timer_1,
+                            title: "Timeline Ended",
+                            // ✅ "Moved to" is active and clear.
+                            subtitle: "Plan incomplete. Funds moved to Store Balance.",
+                            color: const Color(0xFFB54708),
+                            bg: const Color(0xFFFFFAEB),
                           ),
 
                         // Show "Overdue" banner only if active & late
@@ -211,7 +219,7 @@ class PlanDetailsScreen extends StatelessWidget {
                                   color: Colors.grey.shade400,
                                 ),
                                 label: Text(
-                                  "End Plan & Convert to Credit",
+                                  "Close Plan & Secure Funds",
                                   style: GoogleFonts.inter(
                                     fontSize: 13.sp,
                                     fontWeight: FontWeight.w600,
@@ -257,7 +265,7 @@ class PlanDetailsScreen extends StatelessWidget {
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(color: const Color(0xFFEAECF0)),
+          //border: Border.all(color: const Color(0xFFEAECF0)),
         ),
         child: Column(
           children: [
@@ -300,16 +308,12 @@ class PlanDetailsScreen extends StatelessWidget {
               width: double.infinity,
               height: 48.h,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  Share.share(
-                    "I just bought a ${p.title} debt-free using Korra! 🚀",
-                  );
-                },
+                onPressed: () => _shareProductAchievement(context),
                 icon: Icon(Iconsax.share, size: 18.sp),
                 label: const Text("Share Achievement"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF344054),
-                  side: const BorderSide(color: Color(0xFFD0D5DD)),
+                  side: BorderSide(color: Color(0xFFD0D5DD).withOpacity(0.5)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10.r),
                   ),
@@ -336,7 +340,7 @@ class PlanDetailsScreen extends StatelessWidget {
               offset: const Offset(0, 8),
             ),
           ],
-          border: Border.all(color: const Color(0xFFEAECF0)),
+          //border: Border.all(color: const Color(0xFFEAECF0)),
         ),
         child: Column(
           children: [
@@ -347,8 +351,8 @@ class PlanDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB), // Very light grey header
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFEAECF0)),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFEAECF0).withOpacity(0.5)),
                 ),
               ),
               child: Row(
@@ -358,7 +362,7 @@ class PlanDetailsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFEAECF0)),
+                      //border: Border.all(color: const Color(0xFFEAECF0)),
                     ),
                     child: const Icon(
                       Iconsax.box_tick,
@@ -414,9 +418,9 @@ class PlanDetailsScreen extends StatelessWidget {
                         0xFFFFF7ED,
                       ), // Very light brand tint (Cream/Orange)
                       borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(
-                        color: KorraColors.brand.withOpacity(0.2),
-                      ),
+                      // border: Border.all(
+                      //   color: KorraColors.brand.withOpacity(0.2),
+                      // ),
                     ),
                     child: Center(
                       child: Text(
@@ -488,9 +492,110 @@ class PlanDetailsScreen extends StatelessWidget {
   // =========================================================
   // 1. HEADER & HERO
   // =========================================================
+  Future<void> _shareProductAchievement(BuildContext context) async {
+    // 1. Define the High-Status Text
+    final String text = 
+        "Just secured my ${widget.plan.title} on Korra.\n"
+        "Paid at my pace. 100% Owned. 🚀\n\n"
+        "Start your journey: https://korra.com.ng";
+
+    try {
+      // 2. Check if we have an image to share
+      final String? imageUrl = (widget.plan.imageUrls != null && widget.plan.imageUrls!.isNotEmpty)
+          ? widget.plan.imageUrls!.first
+          : null;
+
+      if (imageUrl != null) {
+        // --- IMAGE SHARE PATH ---
+        
+        // A. Download the image bytes (Using built-in NetworkAssetBundle to avoid extra packages)
+        final ByteData bytes = await NetworkAssetBundle(Uri.parse(imageUrl)).load("");
+        final Uint8List list = bytes.buffer.asUint8List();
+
+        // B. Save to Temp Directory
+        final tempDir = await getTemporaryDirectory();
+        final file = await File('${tempDir.path}/korra_share.png').create();
+        await file.writeAsBytes(list);
+
+        // C. Share File + Text
+        if (context.mounted) {
+           await Share.shareXFiles(
+            [XFile(file.path)],
+            text: text,
+            subject: "My New ${widget.plan.title}",
+          );
+        }
+      } else {
+        // --- FALLBACK: TEXT ONLY (If no image exists) ---
+        await Share.share(text, subject: "My New ${widget.plan.title}");
+      }
+
+    } catch (e) {
+      debugPrint("Error sharing image: $e");
+      // --- FALLBACK: TEXT ONLY (If download fails) ---
+      await Share.share(text, subject: "My New ${widget.plan.title}");
+    }
+  }
+
+Widget _buildImageCarousel(List<dynamic> images) {
+    if (images.isEmpty) return SizedBox(height: 200.h);
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        SizedBox(
+          height: 280.h,
+          width: double.infinity,
+          child: PageView.builder(
+            onPageChanged: (index) =>
+                setState(() => _currentImageIndex = index),
+            itemCount: images.length,
+            itemBuilder: (context, index) => CachedNetworkImage(
+              imageUrl: images[index],
+              fit: BoxFit.cover,
+              errorWidget: (context, url, error) => Container(
+                color: Colors.grey[100],
+                child: const Icon(Icons.image_not_supported, color: Colors.grey),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 16.h,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: images
+                  .asMap()
+                  .entries
+                  .map(
+                    (entry) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: _currentImageIndex == entry.key ? 16.0.w : 6.0.w,
+                      height: 4.0.h,
+                      margin: const EdgeInsets.symmetric(horizontal: 3.0),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: _currentImageIndex == entry.key
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.4),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildProductHeader(Plan p) {
-    final bool isStrict = p.cancellationPolicy.contains("50%");
+    final bool isStrict = p.cancellationPolicy.contains("Store");
     final String modelName = isStrict ? "Strict Lock" : "Korra Direct";
     final Color modelColor = isStrict
         ? const Color(0xFF9E0A05)
@@ -502,22 +607,7 @@ class PlanDetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            height: 220.h,
-            color: Colors.grey.shade50,
-            child: CachedNetworkImage(
-              imageUrl: p.imageUrls.isNotEmpty ? p.imageUrls.first : '',
-              fit: BoxFit.cover,
-              errorWidget: (context, url, error) => Container(
-                color: Colors.grey[100],
-                child: const Icon(
-                  Icons.image_not_supported,
-                  color: Colors.grey,
-                ),
-              ),
-            ),
-          ),
+          _buildImageCarousel(p.imageUrls),
           Padding(
             padding: EdgeInsets.all(20.r),
             child: Column(
@@ -576,14 +666,14 @@ class PlanDetailsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: _stroke),
+        border: Border.all(color: _stroke.withOpacity(0.8)),
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _amountCol("Paid Equity", p.amountPaid, _brand),
+              _amountCol("Paid", p.amountPaid, _brand),
               _amountCol(
                 "Remaining",
                 p.outstandingLoanAmount,
@@ -598,11 +688,11 @@ class PlanDetailsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   value: percent.clamp(0.0, 1.0),
-                  minHeight: 12.h,
+                  minHeight: 10.h,
                   backgroundColor: const Color(0xFFF2F4F7),
                   // Green if unlocked, otherwise Brand color
                   valueColor: AlwaysStoppedAnimation(
-                    isUnlocked ? Colors.green : _brand,
+                    isUnlocked ? const Color(0xFF039855) : _brand,
                   ),
                 ),
               ),
@@ -623,15 +713,15 @@ class PlanDetailsScreen extends StatelessWidget {
             children: [
               Text(
                 showExtensionLogic
-                    ? (isUnlocked
-                          ? "Extension Unlocked! ✅"
-                          : "Pay to 80% to extend")
-                    : "Payment Progress",
+                  ? (isUnlocked
+                      ? "Time Extension Available" // ✅ Celebration of status
+                      : "Reach 80% to unlock time")  // ✅ "Reach" implies a goal, not a bill
+                  : "Ownership Progress",
                 style: GoogleFonts.inter(
                   fontSize: 11.sp,
                   fontWeight: FontWeight.w600,
                   color: showExtensionLogic
-                      ? (isUnlocked ? Colors.green : Colors.red)
+                      ? (isUnlocked ? const Color(0xFF039855) : Colors.red)
                       : Colors.grey,
                 ),
               ),
@@ -665,21 +755,21 @@ class PlanDetailsScreen extends StatelessWidget {
 
     // 3 Days Grace logic for display
     String title = "$daysLeft Days Remaining";
-    String subtitle = "Expires on ${DateFormat('MMM d').format(deadline)}";
+    String subtitle = "Timeline ends on ${DateFormat('MMM d').format(deadline)}";
     Color bg = const Color(0xFFF0F9FF);
-    Color iconColor = Colors.blue;
+    Color iconColor = const Color(0xFF1570EF);
     IconData icon = Iconsax.calendar_1;
 
     if (p.isOverdue) {
-      title = "Final Notice: Action Required";
+      title = "Action Required";
       subtitle =
-          "Plan terminates in ${daysLeft.abs() + 3} days."; // Assuming 3 days hard termination
+          "Plan closing in ${daysLeft.abs() + 3} days."; // Assuming 3 days hard termination
       isCritical = true;
     } else if (isExtension) {
       title = "Extension Active";
-      subtitle = "New deadline: ${DateFormat('MMM d').format(deadline)}";
+      subtitle = "Timeline extended to ${DateFormat('MMM d').format(deadline)}";
       bg = const Color(0xFFECFDF5);
-      iconColor = Colors.green;
+      iconColor = const Color(0xFF039855); // Premium Success Green
       icon = Iconsax.tick_circle;
       isCritical = false;
     }
@@ -696,8 +786,9 @@ class PlanDetailsScreen extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(
-          color: bg == const Color(0xFFFEF2F2)
-              ? Colors.red.shade100
+          width: 0.0,
+          color: bg == const Color(0xFFFEF2F2).withOpacity(0.8)
+              ? Colors.red.shade100.withOpacity(0.05)
               : Colors.transparent,
         ),
       ),
@@ -736,7 +827,7 @@ class PlanDetailsScreen extends StatelessWidget {
   // 4. ACTION BAR & LOGIC
   // =========================================================
 
-  Widget _buildStickyAction(BuildContext context, Plan p) {
+  Widget _buildStickyAction(BuildContext context, Plan p, {bool isLoading = false}) {
     final bool isOverdue = p.isOverdue;
 
     return Container(
@@ -780,29 +871,40 @@ class PlanDetailsScreen extends StatelessWidget {
             width: 160.w,
             height: 52.h,
             child: FilledButton(
-              onPressed: () {
-                if (isOverdue) {
-                  _showResolveSheet(context, p);
-                } else {
-                  Get.toNamed(
-                    Routes.customerPayPlan,
-                    arguments: {'plan': p, 'repo': customerRepo},
-                  );
-                }
-              },
+              onPressed: isLoading 
+                  ? null 
+                  : () {
+                      if (isOverdue) {
+                        _showResolveSheet(context, p);
+                      } else {
+                        Get.toNamed(
+                          Routes.customerPayPlan,
+                          arguments: {'plan': p, 'repo': widget.customerRepo},
+                        );
+                      }
+                    },
               style: FilledButton.styleFrom(
-                backgroundColor: isOverdue ? const Color(0xFFD92D20) : _brand,
+                backgroundColor: isOverdue ? const Color(0xFFB42318): _brand,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
                 ),
               ),
-              child: Text(
-                isOverdue ? "Resolve Plan" : "Make Payment",
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              child: isLoading
+                ? SizedBox(
+                    height: 20.h,
+                    width: 20.h,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    isOverdue ? "Resolve Plan" : "Make Payment",
+                    style: GoogleFonts.inter(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
             ),
           ),
         ],
@@ -829,10 +931,18 @@ class PlanDetailsScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Resolve Overdue Plan",
+              "Resolve Past Due",
               style: GoogleFonts.inter(
                 fontSize: 18.sp,
                 fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              "Choose an action to secure your product.",
+              style: GoogleFonts.inter(
+                fontSize: 13.5.sp,
+                color: const Color(0xFF667085),
               ),
             ),
             SizedBox(height: 24.h),
@@ -841,14 +951,14 @@ class PlanDetailsScreen extends StatelessWidget {
             if (!canExtend)
               _resolveTile(
                 icon: Iconsax.card,
-                title: "Pay to 80% & Extend",
-                subtitle: "Unlock ${p.extensionGraceDays} days grace period",
+                title: "Reach 80% to Extend",
+                subtitle: "Fund plan to 80% to unlock +${p.extensionGraceDays} days.",
                 color: Colors.blue,
                 onTap: () {
                   Navigator.pop(ctx);
                   Get.toNamed(
                     Routes.customerPayPlan,
-                    arguments: {'plan': p, 'repo': customerRepo},
+                    arguments: {'plan': p, 'repo': widget.customerRepo},
                   );
                 },
               ),
@@ -857,9 +967,9 @@ class PlanDetailsScreen extends StatelessWidget {
             if (canExtend)
               _resolveTile(
                 icon: Iconsax.timer_1,
-                title: "Activate Extension",
-                subtitle: "You qualify! Add ${p.extensionGraceDays} days now.",
-                color: Colors.green,
+                title: "Activate Time Extension",
+                subtitle: "Extension Unlocked. Add +${p.extensionGraceDays} days now.",
+                color: const Color(0xFF039855),
                 onTap: () {
                   Navigator.pop(ctx);
                   // Call Cubit to extend
@@ -872,9 +982,9 @@ class PlanDetailsScreen extends StatelessWidget {
             // OPTION 3: Convert
             _resolveTile(
               icon: Iconsax.wallet_3,
-              title: "Convert to Store Credit",
-              subtitle: "End plan and move funds to credit",
-              color: Colors.orange,
+              title: "Close & Secure Funds",
+              subtitle: "Move payments to Store Balance instantly.",
+              color: const Color(0xFF344054),
               onTap: () {
                 Navigator.pop(ctx);
                 _showConversionSheet(context, p);
@@ -895,13 +1005,11 @@ class PlanDetailsScreen extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent, // Important for the floating look
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => BlocProvider.value(
-        // ✅ Provide the EXISTING cubit to the sheet
         value: cubit,
         child: BlocBuilder<PlanActionCubit, PlanActionState>(
-          // ✅ Listen to state changes
           builder: (context, state) {
             final bool isLoading = state is PlanActionLoading;
 
@@ -927,24 +1035,24 @@ class PlanDetailsScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // 2. Icon Hero
+                  // 2. Icon Hero (Shield/Safe vibe)
                   Container(
                     padding: EdgeInsets.all(16.r),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED), // Brand Orange-50
+                      color: const Color(0xFFF2F4F7), // Neutral Grey bg
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Iconsax.wallet_3,
-                      color: KorraColors.brand,
-                      size: 32,
+                    child: Icon(
+                      Iconsax.wallet_check, // ✅ "Wallet Check" implies verification/safety
+                      color: const Color(0xFF344054),
+                      size: 32.sp,
                     ),
                   ),
                   SizedBox(height: 16.h),
 
-                  // 3. Headline
+                  // 3. Headline (Strategic Exit)
                   Text(
-                    "Convert to Store Credit",
+                    "Close Plan & Secure Funds", // ✅ "Secure" is the keyword
                     style: GoogleFonts.inter(
                       fontSize: 20.sp,
                       fontWeight: FontWeight.w700,
@@ -953,7 +1061,7 @@ class PlanDetailsScreen extends StatelessWidget {
                   ),
                   SizedBox(height: 8.h),
                   Text(
-                    "This will end your current plan immediately.",
+                    "End this plan and move your funds to your Store Balance.",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 14.sp,
@@ -969,33 +1077,33 @@ class PlanDetailsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(16.r),
-                      border: Border.all(color: const Color(0xFFEAECF0)),
+                      border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.01), width: 0.0),
                     ),
                     child: Column(
                       children: [
                         _receiptRow(
-                          "Total Paid Equity",
+                          "Total Funds Paid", // ✅ "Equity" sounds like an asset
                           currencyFormat.format(p.amountPaid),
                           isBold: true,
                         ),
                         Padding(
                           padding: EdgeInsets.symmetric(vertical: 12.h),
-                          child: const Divider(height: 1),
+                          child: const Divider(height: 0.1, thickness: 0.1),
                         ),
                         _receiptRow(
-                          "Cancellation Fee",
+                          "Closing Fee", // ✅ Neutral term
                           "₦0.00",
-                          color: Colors.green,
+                          color: Colors.green, // Reinforce the "Free" benefit
                         ),
                         Padding(
                           padding: EdgeInsets.symmetric(vertical: 12.h),
-                          child: const Divider(height: 1),
+                          child: const Divider(height: 0.1, thickness: 0.1),
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              "Credit to Receive",
+                              "Funds to Secure", // ✅ "Secure" again
                               style: GoogleFonts.inter(
                                 fontSize: 13.sp,
                                 color: const Color(0xFF667085),
@@ -1006,7 +1114,7 @@ class PlanDetailsScreen extends StatelessWidget {
                               style: GoogleFonts.inter(
                                 fontSize: 18.sp,
                                 fontWeight: FontWeight.w800,
-                                color: KorraColors.brand,
+                                color: const Color(0xFF101828), // Dark High Status
                               ),
                             ),
                           ],
@@ -1017,22 +1125,22 @@ class PlanDetailsScreen extends StatelessWidget {
 
                   SizedBox(height: 24.h),
 
-                  // 5. Warning Note
+                  // 5. Value Proposition Note
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Iconsax.info_circle,
                         size: 18.sp,
-                        color: const Color(0xFFF79009),
+                        color: const Color(0xFF344054), // Neutral
                       ),
                       SizedBox(width: 8.w),
                       Expanded(
                         child: Text(
-                          "This credit can be used to purchase any item from ${p.storeName} in the future.",
+                          "Your funds never expire. Use them to start a new plan anytime.",
                           style: GoogleFonts.inter(
                             fontSize: 12.sp,
-                            color: const Color(0xFFB54708),
+                            color: const Color(0xFF475467),
                             height: 1.4,
                           ),
                         ),
@@ -1045,20 +1153,19 @@ class PlanDetailsScreen extends StatelessWidget {
                   // 6. Action Buttons
                   Row(
                     children: [
+                      // "Go Back" Button
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: isLoading
-                              ? null
-                              : () => Navigator.pop(ctx),
+                          onPressed: isLoading ? null : () => Navigator.pop(ctx),
                           style: OutlinedButton.styleFrom(
                             padding: EdgeInsets.symmetric(vertical: 16.h),
-                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                            side: BorderSide(color: Color(0xFFD0D5DD).withOpacity(0.5)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12.r),
                             ),
                           ),
                           child: Text(
-                            "Cancel",
+                            "Keep Plan", // ✅ Positive reinforcement to stay
                             style: GoogleFonts.inter(
                               fontSize: 14.sp,
                               fontWeight: FontWeight.w600,
@@ -1068,13 +1175,14 @@ class PlanDetailsScreen extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: 12.w),
+                      
+                      // "Secure Funds" Button
                       Expanded(
                         child: FilledButton(
                           onPressed: isLoading
-                              ? null // Disable click while loading
+                              ? null
                               : () {
                                   Navigator.pop(ctx);
-                                  // Trigger Cubit
                                   context
                                       .read<PlanActionCubit>()
                                       .convertToStoreCredit(
@@ -1083,7 +1191,7 @@ class PlanDetailsScreen extends StatelessWidget {
                                       );
                                 },
                           style: FilledButton.styleFrom(
-                            backgroundColor: KorraColors.brand,
+                            backgroundColor: const Color(0xFF101828), // Dark/Professional
                             padding: EdgeInsets.symmetric(vertical: 16.h),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12.r),
@@ -1092,7 +1200,6 @@ class PlanDetailsScreen extends StatelessWidget {
                           ),
                           child: isLoading
                               ? SizedBox(
-                                  // ✅ LOADING SPINNER
                                   height: 20.h,
                                   width: 20.h,
                                   child: const CircularProgressIndicator(
@@ -1101,7 +1208,7 @@ class PlanDetailsScreen extends StatelessWidget {
                                   ),
                                 )
                               : Text(
-                                  "Confirm Conversion",
+                                  "Secure Funds", // ✅ Action oriented
                                   style: GoogleFonts.inter(
                                     fontSize: 14.sp,
                                     fontWeight: FontWeight.w600,
@@ -1216,9 +1323,9 @@ class PlanDetailsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          color: isExtraTime ? const Color(0xFFFEDF89) : _stroke,
-        ),
+        // border: Border.all(
+        //   color: isExtraTime ? const Color(0xFFFEDF89) : _stroke,
+        // ),
       ),
       child: Row(
         children: [
@@ -1286,7 +1393,7 @@ class PlanDetailsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: _stroke),
+        border: Border.all(color: _stroke.withOpacity(0.5)),
       ),
       child: Column(
         children: [
@@ -1317,7 +1424,7 @@ class PlanDetailsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : const Border(bottom: BorderSide(color: _stroke)),
+            : Border(bottom: BorderSide(color: _stroke.withOpacity(0.5))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1391,7 +1498,7 @@ class PlanDetailsScreen extends StatelessWidget {
           const Icon(Iconsax.danger, color: Colors.white, size: 18),
           SizedBox(width: 8.w),
           Text(
-            "Reservation Overdue. Resolve to prevent termination.",
+            "Reservation Past Due. Resolve to secure item.",
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 12.sp,
@@ -1457,7 +1564,7 @@ class PlanDetailsScreen extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(16.r),
         decoration: BoxDecoration(
-          border: Border.all(color: _stroke),
+          border: Border.all(color: _stroke.withOpacity(0.0)),
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Row(

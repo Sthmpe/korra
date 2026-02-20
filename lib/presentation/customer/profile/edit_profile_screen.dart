@@ -178,7 +178,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: Colors.blue.shade100),
+        //border: Border.all(color: Colors.blue.shade100),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.grey.shade50, // Greyed out background
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.grey.shade200.withOpacity(0.25)),
       ),
       child: Row(
         children: [
@@ -234,8 +234,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             filled: true,
             fillColor: Colors.white,
             contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: Colors.grey.shade300)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: Colors.grey.shade300.withOpacity(0.35))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: Colors.grey.shade300.withOpacity(0.35))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFA54600), width: 1.5)),
           ),
           validator: (val) => (val == null || val.isEmpty) ? "Required" : null,

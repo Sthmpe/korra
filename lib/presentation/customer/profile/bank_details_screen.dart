@@ -74,7 +74,7 @@ class BankDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20.r),
-                border: Border.all(color: _stroke),
+                border: Border.all(color: _stroke.withOpacity(0.25)),
                 boxShadow: [
                   BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))
                 ],
@@ -138,7 +138,7 @@ class BankDetailsScreen extends StatelessWidget {
                       label: Text("Share Account Details", style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF344054),
-                        side: const BorderSide(color: _stroke),
+                        side: BorderSide(color: _stroke.withOpacity(0.5)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                       ),
                     ),
@@ -155,7 +155,7 @@ class BankDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF7ED), // Light orange background
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: const Color(0xFFFFE4C2)),
+                //border: Border.all(color: const Color(0xFFFFE4C2)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

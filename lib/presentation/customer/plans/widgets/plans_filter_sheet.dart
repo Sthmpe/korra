@@ -113,7 +113,7 @@ class _FilterSheetContentState extends State<_FilterSheetContent> {
             spacing: 10.w, 
             runSpacing: 10.h, 
             children: [
-              _buildChoiceChip('Next due date', SortBy.nextDue),
+              _buildChoiceChip('Next due', SortBy.nextDue),
               _buildChoiceChip('Total Amount',  SortBy.amount),
               _buildChoiceChip('Progress %', SortBy.progress),
             ]
@@ -129,7 +129,7 @@ class _FilterSheetContentState extends State<_FilterSheetContent> {
             runSpacing: 10.h, 
             children: [
               _buildFilterChip('AutoPay enabled', _auto, (v) => setState(() => _auto = v)),
-              _buildFilterChip('Overdue', _over, (v) => setState(() => _over = v)),
+              _buildFilterChip('Past due', _over, (v) => setState(() => _over = v)),
               _buildFilterChip('High value (> 50k)', _high, (v) => setState(() => _high = v)),
             ]
           ),
@@ -166,9 +166,9 @@ class _FilterSheetContentState extends State<_FilterSheetContent> {
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
         decoration: BoxDecoration(
-          color: selected ? _brand.withOpacity(0.08) : Colors.white,
+          color: selected ? _brand.withOpacity(0.1) : Colors.white,
           borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(color: selected ? _brand : _stroke),
+          border: Border.all(color: selected ? _brand.withOpacity(0) : _stroke.withOpacity(0.25)),
         ),
         child: Text(
           label,
@@ -189,9 +189,9 @@ class _FilterSheetContentState extends State<_FilterSheetContent> {
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
         decoration: BoxDecoration(
-          color: isSelected ? _brand.withOpacity(0.08) : Colors.white,
+          color: isSelected ? _brand.withOpacity(0.1) : Colors.white,
           borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(color: isSelected ? _brand : _stroke),
+          border: Border.all(color: isSelected ? _brand.withOpacity(0) : _stroke.withOpacity(0.25)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

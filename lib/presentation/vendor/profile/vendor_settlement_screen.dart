@@ -66,7 +66,7 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
                     ),
                     SizedBox(width: 12.w),
                     _StatsCard(
-                      label: "Liability (Credits)",
+                      label: "Store Credits",
                       amount: stats.totalLiability,
                       icon: Iconsax.card,
                       color: const Color(0xFFB42318),

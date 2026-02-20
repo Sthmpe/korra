@@ -342,8 +342,8 @@ class ProfilePage extends StatelessWidget {
                                     child: OutlinedButton(
                                       onPressed: () => _confirmLogout(context, bloc),
                                       style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(
-                                          color: Color(0xFFD0D5DD),
+                                        side: BorderSide(
+                                          color: const Color(0xFFD0D5DD).withOpacity(0.5),
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(

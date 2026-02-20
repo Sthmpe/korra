@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Haptics
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +14,7 @@ import '../../../../../data/repository/customer/customer_repository.dart';
 import '../../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
 import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/payment_receipt_data.dart';
+import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 
 class PayPlanInputScreen extends StatefulWidget {
@@ -28,6 +30,7 @@ class PayPlanInputScreen extends StatefulWidget {
 class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
   String _inputString = ""; 
   final _moneyFormat = NumberFormat("#,##0.##", "en_US");
+  int _currentImageIndex = 0;
 
   // ✅ HELPER 1: Paid Amount (Standard 2DP Display)
   // Prevents long decimals like 5000.333333
@@ -191,9 +194,8 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
       ),
     );
   }
-
-  // =========================================================
-  // ✅ THE UPDATED MAIN CONTENT
+// =========================================================
+  // ✅ THE UPDATED MAIN CONTENT (PREMIUM SPACING)
   // =========================================================
   Widget _buildMainContent(BuildContext context) {
     // 1. Stream Wallet (Main Doc)
@@ -203,8 +205,6 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
         final walletBal = snapshotCust.data?.availableBalance ?? 0.0;
         
         // 2. Stream Store Credit (Vendor Relation)
-        // Make sure your repo has this method, fetching from: 
-        // customers/{uid}/vendor_relations/{vendorId}/storeCredit
         return StreamBuilder<double>(
           stream: widget.repo.streamStoreCredit(widget.plan.customerId, widget.plan.vendorId),
           initialData: 0.0,
@@ -221,19 +221,18 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
 
             return Scaffold(
               backgroundColor: Colors.white,
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                elevation: 0,
-                leading: const BackButton(color: Colors.black),
+              appBar: KorraHeader(
+                showLeadingIcon: true,
+                title: "Paying for ${widget.plan.title}"
               ),
               body: Column(
                 children: [
-                  Text(
-                    "Paying for ${widget.plan.title}",
-                    style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 13.sp, fontWeight: FontWeight.w500),
-                  ),
                   
-                  const Spacer(),
+                  _buildImageCarousel(widget.plan.imageUrls ?? []),
+
+                  // ✅ SPACING: Give the image some room to breathe before the numbers
+                  // SizedBox(height: 24.h),
+                  Spacer(),
 
                   // --- BIG DISPLAY ---
                   FittedBox(
@@ -261,21 +260,22 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                     ),
                   ),
 
-                  SizedBox(height: 12.h),
+                  // ✅ SPACING: Increased from 12.h to 24.h to separate Value from Status
+                  // SizedBox(height: 24.h),
+                  Spacer(),
 
                   // --- ✅ SMART STATUS PILLS ---
                   if (isOverBalance)
-                    // Logic: Even if they have credit, if total is low, show total shortfall
                     _buildStatusPill(
                       Icons.error_outline, 
                       "Insufficient Funds (Total: ₦${_moneyFormat.format(_clipAmount(totalAvailable))})", 
                       Colors.red.shade50, 
-                      Colors.red
+                      Colors.red,
+                      width: 300.w 
                     )
                   else if (isOverRemaining)
-                    _buildStatusPill(Icons.warning_amber, "Exceeds remaining balance", Colors.orange.shade50, Colors.orange.shade800)
+                    _buildStatusPill(Icons.warning_amber, "Exceeds remaining balance", Colors.orange.shade50, Colors.orange.shade800, width: 300.w)
                   else
-                    // ✅ Logic: Show split view if Store Credit exists
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -288,16 +288,18 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                         if (storeCredit > 0) ...[
                           SizedBox(width: 8.w),
                           _buildStatusPill(
-                            Iconsax.shop, // Shop icon for Store Credit
-                            "Credit: ₦${_moneyFormat.format(_clipAmount(storeCredit))}", 
-                            const Color(0xFFECFDF3), // Light Green
-                            const Color(0xFF027A48)  // Dark Green
+                            Iconsax.shop, 
+                            "Store: ₦${_moneyFormat.format(_clipAmount(storeCredit))}", 
+                            const Color(0xFFECFDF3), 
+                            const Color(0xFF027A48) 
                           ),
                         ]
                       ],
                     ),
 
-                  const Spacer(),
+                  // ✅ SPACING: Distinct separation between Status Info and Suggestion Chips
+                  // SizedBox(height: 24.h),
+                  Spacer(),
 
                   // CHIPS (With Date Logic)
                   Padding(
@@ -315,12 +317,19 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                     ),
                   ),
 
-                  SizedBox(height: 24.h),
+                  // ✅ SPACING: Major break before the Keypad. 
+                  // This pushes the keypad down, giving the top section "Hero" status.
+                  // Increased from 24.h to 40.h
+                  // SizedBox(height: 40.h),
+                  Spacer(),
 
                   // KEYPAD
                   _buildKeypad(),
 
-                  SizedBox(height: 16.h),
+                  // ✅ SPACING: Give the finger room between Keypad and Button.
+                  // Increased from 16.h to 32.h
+                  Spacer(),
+                  //SizedBox(height: 32.h),
 
                   // ACTION BUTTON
                   Padding(
@@ -337,9 +346,9 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                               return;
                             }
                             Get.toNamed(
-                                Routes.customerBankDetails, 
-                                arguments: customerData 
-                              );
+                              Routes.customerBankDetails, 
+                              arguments: customerData 
+                            );
                           } else if (isValid) {
                             context.read<PayPlanBloc>().add(PayInstallmentConfirmed(
                               planId: widget.plan.id,
@@ -354,13 +363,16 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                           elevation: 0,
                         ),
                         child: Text(
-                          isOverBalance ? "Top Up Wallet" : "Confirm Pay",
+                          isOverBalance ? "Fund Wallet" : "Confirm Pay",
                           style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
                   ),
-                  SizedBox(height: 20.h),
+                  
+                  // ✅ SPACING: Bottom Safe Area padding so it doesn't look crushed.
+                  // Increased from 20.h to 32.h
+                  SizedBox(height: 32.h),
                 ],
               ),
             );
@@ -370,16 +382,89 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     );
   }
 
-  Widget _buildStatusPill(IconData icon, String text, Color bg, Color fg) {
+  Widget _buildImageCarousel(List<dynamic> images) {
+    if (images.isEmpty) return SizedBox(height: 150.h); // Reduced empty height slightly
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        SizedBox(
+          height: 230.h,
+          width: double.infinity,
+          child: PageView.builder(
+            onPageChanged: (index) =>
+                setState(() => _currentImageIndex = index),
+            itemCount: images.length,
+            itemBuilder: (context, index) => CachedNetworkImage(
+              imageUrl: images[index],
+              fit: BoxFit.cover,
+              errorWidget: (context, url, error) => Container(
+                color: Colors.grey[100],
+                child: const Icon(Icons.image_not_supported, color: Colors.grey),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 16.h,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: images
+                  .asMap()
+                  .entries
+                  .map(
+                    (entry) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: _currentImageIndex == entry.key ? 16.0.w : 6.0.w,
+                      height: 4.0.h,
+                      margin: const EdgeInsets.symmetric(horizontal: 3.0),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: _currentImageIndex == entry.key
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.4),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusPill(IconData icon, String text, Color bg, Color fg, {double? width}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20.r)),
+      decoration: BoxDecoration(
+        color: bg, 
+        borderRadius: BorderRadius.circular(20.r)
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min, // ✅ Important: Shrinks the Row to fit the content
         children: [
           Icon(icon, size: 14.sp, color: fg),
           SizedBox(width: 6.w),
-          Text(text, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: fg)),
+          // ✅ Change SizedBox to ConstrainedBox
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width ?? 150.w), // Sets the limit, but allows shrinking
+            child: Text(
+              text, 
+              overflow: TextOverflow.ellipsis, 
+              maxLines: 1, 
+              style: GoogleFonts.inter(
+                fontSize: 12.sp, 
+                fontWeight: FontWeight.w600, 
+                color: fg
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -84,7 +84,7 @@ class PayConfirmationSheet extends StatelessWidget {
                       SizedBox(height: 12.h),
                       Divider(height: 1, color: Colors.grey.shade300),
                       SizedBox(height: 12.h),
-                      _row("Installment Amount", formatToCurrency(amountToPay)),
+                      _row("Amount Paid", formatToCurrency(amountToPay)),
                       SizedBox(height: 8.h),
                       _row("Wallet Balance", formatToCurrency(walletBalance), color: canPay ? Colors.green : Colors.red),
                     ],
@@ -147,7 +147,7 @@ class PayConfirmationSheet extends StatelessWidget {
                             backgroundColor: Colors.black, // Dark for "Action needed"
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                           ),
-                          child: Text("Top Up Wallet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                          child: Text("Fund Wallet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: Colors.white)),
                         ),
                       );
                     }

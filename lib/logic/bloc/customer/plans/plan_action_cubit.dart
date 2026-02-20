@@ -43,7 +43,7 @@ class PlanActionCubit extends Cubit<PlanActionState> {
         customerUid: customerUid,
         reason: "User converted to Store Credit",
       );
-      emit(PlanActionSuccess("Your balance has been moved to Store Credit."));
+      emit(PlanActionSuccess("Your funds have been moved to Store Balance."));
     } catch (e, stackTrace) {
       _handleError("conversion", e, stackTrace);
     }
@@ -54,7 +54,7 @@ class PlanActionCubit extends Cubit<PlanActionState> {
     emit(PlanActionLoading());
     try {
       await repo.extendPlan(planId);
-      emit(PlanActionSuccess("Success! New deadline set. 🗓️"));
+      emit(PlanActionSuccess("Plan extended. New deadline confirmed."));
     } catch (e, stackTrace) {
       _handleError("extension", e, stackTrace);
     }
@@ -67,20 +67,20 @@ class PlanActionCubit extends Cubit<PlanActionState> {
     debugPrint("Stacktrace: $stack");
 
     // 2. Map to a User-Friendly message
-    String userMessage = "Something went wrong. Please try again later.";
+    String userMessage = "We encountered an issue. Please try again.";
 
     final errorString = e.toString().toLowerCase();
 
     if (errorString.contains('network') || errorString.contains('connectivity')) {
-      userMessage = "No internet connection. Please check your signal and try again.";
+      userMessage = "Connection lost. Please check your internet.";
     } else if (errorString.contains('permission-denied')) {
       userMessage = "You don't have permission to modify this plan.";
     } else if (errorString.contains('not-found')) {
       userMessage = "We couldn't find this plan. It might have already been updated.";
     } else if (errorString.contains('insufficient-funds')) {
-      userMessage = "You haven't reached the 80% requirement to extend this plan.";
+      userMessage = "Eligibility requirement not met. 80% payment needed to extend.";
     } else if (errorString.contains('already-extended')) {
-      userMessage = "This plan has already been extended and cannot be extended again.";
+      userMessage = "Extension limit reached. This plan cannot be extended further.";
     }
 
     emit(PlanActionError(userMessage));

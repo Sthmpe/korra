@@ -36,7 +36,7 @@ class MyQrScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24.r),
-                  border: Border.all(color: const Color(0xFFEAECF0)),
+                  //border: Border.all(color: const Color(0xFFEAECF0)),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.05),

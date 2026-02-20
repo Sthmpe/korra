@@ -18,28 +18,29 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = "";
 
-  // --- KNOWLEDGE BASE (Updated for Store Credit & Merchant Terms) ---
+  // --- KNOWLEDGE BASE (Updated for Store Balance & Merchant Terms) ---
   final List<FaqItem> _allFaqs = [
     FaqItem(
       question: "How does Korra work?",
       answer: "Korra allows you to 'Reserve Now, Pay Later' directly with Merchants.\n\n"
-              "1. Find a Merchant or use their private link.\n"
-              "2. Pay the down payment to lock the price and reserve stock immediately.\n"
-              "3. Pay the balance at your own pace.\n"
-              "4. Pick up your item once fully paid."
+              "1. Locate a Merchant and get their reservation link.\n"
+              "2. Paste the link in the app to view the item.\n"
+              "3. Pay the initial deposit to lock the price and reserve stock immediately.\n"
+              "4. Fund the balance at your own pace.\n"
+              "5. Pick up your item once fully paid."
     ),
     FaqItem(
-      question: "What happens if I cancel a plan?",
-      answer: "We have a strict 'No Cash Refund' policy to protect Merchant inventory. \n\n"
-              "If you cancel, 100% of the principal amount you have paid is instantly converted into Store Credit. You can use this credit to buy other items from the same Merchant in the future."
+      question: "What happens if I close a plan?",
+      answer: "We have a strict 'No Cash Refund' policy to protect Merchant inventory.\n\n"
+              "If you close a plan, 100% of the principal amount you have paid is instantly converted into Store Balance. You can use this balance to buy other items from the same Merchant in the future."
     ),
     FaqItem(
-      question: "Is there a cancellation penalty?",
-      answer: "No. There are no breakage fees or penalties. You retain the full value of your payments, but they are stored as Store Credit rather than returned as cash."
+      question: "Is there a closing penalty?",
+      answer: "No. There are no penalties for changing your mind. You retain the full value of your payments, but they are held as Store Balance rather than returned as cash."
     ),
     FaqItem(
       question: "Do I pay extra to use Korra?",
-      answer: "We charge a one-time Platform Fee of 3.5% when you start a plan. This fee covers the payment gateway and the technology used to secure your Price Lock. This fee is non-refundable."
+      answer: "We charge a one-time Platform Fee of 3.5% when you start a plan. This fee is non-refundable."
     ),
     FaqItem(
       question: "What if the Merchant sells me a fake product?",
@@ -55,8 +56,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       answer: "Korra does not handle logistics. Delivery or pickup is arranged privately between you and the Merchant. Do not release the 'Collection Code' until you have physically received your item."
     ),
     FaqItem(
-      question: "What is 'Store Credit'?",
-      answer: "Store Credit is a digital balance held with a specific Merchant. It cannot be withdrawn to your bank, but it can be used as cash to start new plans or buy items from that specific Merchant shop."
+      question: "What is 'Store Balance'?",
+      answer: "Store Balance is a digital balance held with a specific Merchant. It cannot be withdrawn to your bank, but it can be used as cash to start new plans or buy items from that specific Merchant shop."
     ),
   ];
 
@@ -89,7 +90,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 fillColor: const Color(0xFFF9FAFB), // Subtle grey
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10.r),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(color: Colors.grey.shade300.withOpacity(0.5)),
                 ),
                 contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                 isDense: true, 

@@ -225,25 +225,47 @@ class Plan {
 
   // 2. Effective Deadline Logic
   DateTime get effectiveDeadline {
-    if (isExtensionActive) {
-      // If extended, deadline = Extension Start + Grace Days
+    // If extended, the deadline is calculated from the day they clicked "Extend"
+    // Example: Clicked Wed + 5 Days = Ends next Monday.
+    if (isExtensionActive && extensionStartDate != null) {
       return extensionStartDate!.add(Duration(days: extensionGraceDays));
     }
-    // Otherwise, normal expiry
+    // Normal deadline
     return planExpiryDate;
+  }
+
+  // The "Hard Stop" (When the plan effectively dies)
+  DateTime get absoluteTerminationDate {
+    // CASE 1: EXTENDED PLAN (The "Hard Stop")
+    // If they already extended, they don't get another Notice Period.
+    // The Deadline IS the Termination Date.
+    if (isExtensionActive) {
+      return effectiveDeadline;
+    }
+
+    // CASE 2: NORMAL PLAN (The "Warning Zone")
+    // They haven't extended yet. We give them the Notice Period to act.
+    // Termination = Deadline + 3 Days Warning.
+    return effectiveDeadline.add(Duration(days: noticePeriodDays ?? 0));
   }
 
   // 3. Overdue Logic (Uses Effective Deadline)
   bool get isOverdue {
     if (status != 'active') return false;
-    return DateTime.now().isAfter(effectiveDeadline);
+    
+    final now = DateTime.now();
+    // It is overdue if NOW is past the Deadline BUT before the Hard Stop.
+    return now.isAfter(effectiveDeadline) && now.isBefore(absoluteTerminationDate);
   }
 
-  // 4. UI Protection Logic
+  // 4. Termination Logic (Game Over 🛑)
   bool get isEffectivelyTerminated {
     if (status == 'cancelled') return true;
-    // If active but past the absolute limit, treat as terminated
-    if (status == 'active' && DateTime.now().isAfter(effectiveDeadline)) {
+    
+    // If active, but we are past the Hard Stop.
+    // - For Extended plans: Happens 1 second after the extension ends.
+    // - For Normal plans: Happens 1 second after the Notice Period ends.
+    if (status == 'active' && DateTime.now().isAfter(absoluteTerminationDate)) {
       return true;
     }
     return false;

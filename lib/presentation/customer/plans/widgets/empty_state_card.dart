@@ -22,7 +22,7 @@ class EmptyStateCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFFAFAFA), // Very subtle grey background
           borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: const Color(0xFFF0F0F0)),
+          border: Border.all(color: const Color(0xFFF0F0F0).withOpacity(0.35)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

@@ -168,8 +168,10 @@ serve(async (req) => {
             const productRef = db.collection('products').doc(productId);
             const productDoc = await productRef.get();
             if (!productDoc.exists) throw "Product not found";
-
             const productData = productDoc.data();
+                if (productData.availableStock < 1) throw "Out of Stock";
+
+            
             const dbPrice = Number(productData.price);
             if (!dbPrice || isNaN(dbPrice)) throw "System Error: Product price is missing in database.";
 
@@ -285,7 +287,7 @@ serve(async (req) => {
                 
                 // 3. 🔍 DETERMINE USER PAYMENT
                 // The 'amount' from UI is treated as 'User Desired Principal'
-                let userDesiredPrincipal = amount;
+                let userDesiredPrincipal = amount - processingFee;
 
                 // Cap the Principal at the Product Price (Overpayment Protection)
                 if (userDesiredPrincipal > price) {
@@ -320,7 +322,7 @@ serve(async (req) => {
                 // 6. 💳 CHECK WALLET BALANCE
                 if (walletBalance < walletUsed) {
                     const shortBy = to2DP(walletUsed - walletBalance);
-                    throw `Insufficient wallet balance.\nFee: ₦${processingFee.toLocaleString()}.\nCash Down Payment: ₦${cashPrincipalNeeded.toLocaleString()}.\nTotal needed: ₦${walletUsed.toLocaleString()}.`;
+                    throw `Insufficient wallet balance.\nFee: ₦${processingFee.toLocaleString()}.\nCash Initial Deposit: ₦${cashPrincipalNeeded.toLocaleString()}.\nTotal needed: ₦${walletUsed.toLocaleString()}.`;
                 }
 
                 const newPlanRef = db.collection('plans').doc();
@@ -376,7 +378,7 @@ serve(async (req) => {
                     totalValue: price,
                     amountPaidSoFar: userPrincipalPayment,
                     amountPaidNow: userPrincipalPayment,
-                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Credit + Wallet)" : "Store Credit") : "Wallet Transfer",
+                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Store Balance + Wallet)" : "Store Balance") : "Wallet Transfer",
                     balanceRemaining: remainingOnCreate,
                     status: isFinished ? "COMPLETED" : "IN PROGRESS",
                     isFinished: isFinished,
@@ -391,7 +393,7 @@ serve(async (req) => {
                     customerId: customerUid,
                     amount: -walletUsed,
                     type: 'plan_creation',
-                    description: `Down Payment for ${product.name}`,
+                    description: `Initial deposit for ${product.name}`,
                     planId: planId,
                     reference: ledgerRef.id,
                     status: 'success',
@@ -473,7 +475,7 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: vendorNet,
                         type: 'sale',
-                        description: `Down payment for ${product.name} (minus 3.5% fee)`,
+                        description: `Initial payment for ${product.name} (minus 3.5% fee)`,
                         reference: `SALE-${planId.substring(0, 6)}`,
                         planId: planId,
                         status: 'success',
@@ -535,7 +537,7 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: -creditUsed,
                         type: 'redemption',
-                        description: `Credit Used by ${planData.customerName}`,
+                        description: `Store Balance applied by ${planData.customerName}`,
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         planId: planId
                     });
@@ -587,13 +589,13 @@ serve(async (req) => {
             );
 
             if (result.pickupCode) {
-                 await sendFcm(customerUid, "Plan Completed! 🎉", `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to the vendor.`, { type: "plan_detail", planId: result.planIdStr });
+                 await sendFcm(customerUid, "Plan Completed! 🎉", `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to your merchant.`, { type: "plan_detail", planId: result.planIdStr });
             }
 
             await sendFcm(
                 result.vendorId,
                 "New Order: Action Required 📦",
-                `Please RESERVE ${result.productName} immediately.\nCustomer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} down payment.`,
+                `Please RESERVE ${result.productName} immediately, Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} initial deposit.`,
                 { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
                 'vendors',
                 result.productImage // ✅ 
@@ -711,7 +713,7 @@ serve(async (req) => {
                     totalValue: plan.totalAmount,
                     amountPaidSoFar: newAmountPaid,
                     amountPaidNow: paymentAmount,
-                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Credit + Wallet)" : "Store Credit") : "Wallet Transfer",
+                    paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Store Balance + Wallet)" : "Store Balance") : "Wallet Transfer",
                     balanceRemaining: remainingBalance,
                     status: isFinished ? "COMPLETED" : "IN PROGRESS",
                     isFinished: isFinished,
@@ -842,7 +844,7 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: vendorNet,
                         type: 'sale',
-                        description: `Installment: ${plan.customerName}`,
+                        description: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title}`,
                         reference: txRefId,
                         planId: planId,
                         status: 'success',
@@ -891,7 +893,7 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: -creditUsed,
                         type: 'redemption',
-                        description: `Credit Used: ${plan.customerName}`,
+                        description: `Store Balance Used: ${plan.customerName}`,
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         planId: planId
                     });
@@ -992,6 +994,7 @@ serve(async (req) => {
 
                 if (!planDoc.exists) throw "Plan not found.";
                 const plan = planDoc.data();
+                const vendorId = plan.vendorId;
 
                 // 2. Security & State Checks
                 if (plan.customerId !== customerUid) throw "Unauthorized.";
@@ -1014,12 +1017,21 @@ serve(async (req) => {
                     throw "Extension unavailable. You may have already used your one-time extension.";
                 }
 
+                // 🛠️ HELPER: Safely parse date (Handles Timestamp OR String)
+                const parseFirestoreDate = (val) => {
+                    if (!val) return new Date(); // Fallback
+                    // If it has .toDate(), it's a Timestamp. Otherwise, it's a String/Date.
+                    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
+                };
+
+
+
                 // 5. Calculate New Dates
-                const oldExpiry = plan.planExpiryDate.toDate();
+                const oldExpiry = parseFirestoreDate(plan.planExpiryDate);
                 const newExpiry = new Date(oldExpiry);
                 newExpiry.setDate(oldExpiry.getDate() + daysToAdd);
 
-                const oldNextDue = plan.nextDueDate.toDate();
+                const oldNextDue = parseFirestoreDate(plan.nextDueDate);
                 const newNextDue = new Date(oldNextDue);
                 newNextDue.setDate(oldNextDue.getDate() + daysToAdd);
 
@@ -1039,7 +1051,7 @@ serve(async (req) => {
                     customerId: customerUid,
                     amount: 0, // No money moved
                     type: 'plan_extension',
-                    description: `Plan Extended by ${daysToAdd} Days`,
+                    description: `Timeline Extended (+${daysToAdd} Days)`,
                     planId: planId,
                     reference: `EXT-${planId.substring(0,6)}`,
                     status: 'success',
@@ -1053,19 +1065,24 @@ serve(async (req) => {
                     id: activityRef.id,
                     type: 'reservation_extended',
                     title: 'Reservation Extended',
-                    body: `${plan.customerName} extended payment deadline by ${daysToAdd} days.`,
+                    body: `${plan.customerName} extended timeline by ${daysToAdd} days.`,
                     ref_id: planId,
                     amount_display: null,
                     date: admin.firestore.FieldValue.serverTimestamp(),
                     is_read: false
                 });
 
+                const productImage = (plan.imageUrls && plan.imageUrls.length > 0) 
+                    ? plan.imageUrls[0] 
+                    : null;
+
                 return { 
                     status: "SUCCESS", 
                     daysAdded: daysToAdd,
                     newDate: newExpiry.toISOString(),
                     vendorId: plan.vendorId,
-                    productName: plan.title || "Product"
+                    productName: plan.title || "Product",
+                    productImage: productImage
                 };
             });
 
@@ -1074,18 +1091,23 @@ serve(async (req) => {
             // To Customer
             await sendFcm(
                 customerUid, 
-                "Plan Extended 🗓️", 
-                `Success! You added ${result.daysAdded} extra days to complete your payment.`, 
-                { type: "plan_detail", planId: planId }
+                "Timeline Extended ✅", 
+                `You have secured +${result.daysAdded} extra days. Keep your momentum and finish strong.`, 
+                // 👇 Add image to data payload
+                { type: "plan_detail", planId: planId, image: result.productImage }, 
+                'customers',
+                result.productImage // 👈 Pass explicitly if your helper uses it for iOS
             );
 
             // To Vendor
             await sendFcm(
                 result.vendorId,
-                "Plan Update ⏳",
-                `Customer has extended the deadline for ${result.productName}. Inventory remains reserved.`,
-                { type: "vendor_order", planId: planId },
-                'vendors'
+                "Reservation Update ⏳",
+                `Timeline extended by ${result.daysAdded} days for ${result.productName}. Order remains active.`,
+                // 👇 Add image to data payload
+                { type: "vendor_order", planId: planId, image: result.productImage }, 
+                'vendors',
+                result.productImage // 👈 Pass explicitly
             );
 
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -1119,7 +1141,7 @@ serve(async (req) => {
                     cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
                     refundAmount: refundAmount,
                     penaltyAmount: 0,
-                    cancellationReason: 'Converted to Store Credit'
+                    cancellationReason: 'Converted to Store Balance'
                 });
 
                 // 4. CUSTOMER SIDE: Increase Store Credit
@@ -1149,7 +1171,7 @@ serve(async (req) => {
                     customerId: customerUid,
                     amount: 0, // No cash returned to wallet, so 0 flow
                     type: 'plan_cancelled',
-                    description: `Converted ₦${refundAmount.toLocaleString()} to Store Credit`,
+                    description: `Credited ₦${refundAmount.toLocaleString()} to Store Balance`,
                     planId: planId,
                     status: 'success',
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1169,7 +1191,7 @@ serve(async (req) => {
                     userId: vendorId,
                     amount: refundAmount,
                     type: 'conversion', // New type for clarity
-                    description: `Plan Cancelled: ${plan.customerName}`,
+                    description: `Plan Closed: ${plan.customerName}`,
                     planId: planId,
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 });
@@ -1194,8 +1216,8 @@ serve(async (req) => {
                 t.set(activityRef, {
                     id: activityRef.id,
                     type: 'reservation_cancel',
-                    title: 'Plan Converted',
-                    body: `${plan.customerName} cancelled ${plan.title}. Funds converted to Store Credit.`,
+                    title: 'Plan Closed',
+                    body: `${plan.customerName} closed ${plan.title}. Funds secured in Store Balance.`,
                     ref_id: planId,
                     amount_display: `+₦${refundAmount.toLocaleString()} Credit`,
                     date: admin.firestore.FieldValue.serverTimestamp(),
@@ -1214,16 +1236,18 @@ serve(async (req) => {
             // 8. NOTIFICATIONS
             await sendFcm(
                 customerUid, 
-                "Plan Converted 🔄", 
-                `Your ₦${result.refundAmount.toLocaleString()} has been moved to Store Credit for ${result.storeName}.`, 
+                "Funds Secured 🔒", // Title focuses on the MONEY, not the cancellation.
+                // "Your money is safe here."
+                `Your ₦${result.refundAmount.toLocaleString()} is now available in your Store Balance at ${result.storeName}.`, 
                 { type: "plan_detail", planId: planId }
             );
 
             // To Vendor
             await sendFcm(
                 result.vendorId,
-                "Plan Converted 🔄",
-                `Customer has converted the payment for ${result.productName} to Store Credit.`,
+                "Plan Closed 📁", // "Closed" implies the file is put away.
+                // clear instruction: The deal is off, money moved.
+                `Customer closed the plan for ${result.productName}. Funds moved to their Store Balance.`,
                 { type: "vendor_order", planId: planId },
                 'vendors'
             );

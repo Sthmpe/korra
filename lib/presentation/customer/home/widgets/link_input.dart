@@ -72,8 +72,8 @@ class _LinkInputState extends State<LinkInput> {
         children: [
           // --- THE INPUT FIELD ---
           Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            child: Container(
+              //duration: const Duration(milliseconds: 200),
               height: 54.h, // Taller, friendlier touch target
               decoration: BoxDecoration(
                 // Soft grey fill by default, White when focused
@@ -124,7 +124,26 @@ class _LinkInputState extends State<LinkInput> {
                       color: _isFocused ? KorraColors.brand : const Color(0xFF9CA3AF),
                     ),
                     prefixIconConstraints: BoxConstraints(minWidth: 48.w),
-                    border: InputBorder.none,
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.transparent),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.transparent),
+                      borderRadius: BorderRadius.circular(16.r), 
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.transparent),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.transparent),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.transparent),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
                     contentPadding: EdgeInsets.symmetric(vertical: 16.h),
                     
                     // Animated Submit Button inside the field

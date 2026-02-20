@@ -58,7 +58,7 @@ class StepReview extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: const Color(0xFFE5E5E5)),
+              border: Border.all(color: const Color(0xFFE5E5E5).withOpacity(0.35)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.03),
@@ -112,7 +112,7 @@ class StepReview extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB), // Very subtle grey
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: const Color(0xFFF3F4F6)),
+              border: Border.all(color: const Color(0xFFF3F4F6).withOpacity(0.35)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

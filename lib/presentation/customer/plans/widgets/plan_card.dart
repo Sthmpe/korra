@@ -54,7 +54,7 @@ class PlanCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: _stroke),
+        border: Border.all(color: _stroke.withOpacity(0.35)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -89,7 +89,7 @@ class PlanCard extends StatelessWidget {
               Positioned(
                 top: 12.h,
                 left: 12.w,
-                child: _buildStatusBadge(isCompleted, isOverdue, isPending), // ✅ Updated Arg
+                child: _buildStatusBadge(isCompleted, isOverdue, isPending, isCancelled), // ✅ Updated Arg
               ),
             ],
           ),
@@ -150,7 +150,7 @@ class PlanCard extends StatelessWidget {
                       style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      'Left: ${formatToCurrency(_roundUpAmount(plan.amountRemaining))}',
+                      'Remaining: ${formatToCurrency(_roundUpAmount(plan.amountRemaining))}',
                       style: GoogleFonts.inter(fontSize: 12.sp, color: _brand, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -225,7 +225,7 @@ class PlanCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12.r),
                           ),
                           child: Text(
-                            "Plan Cancelled",
+                            "Plan Closed",
                             style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: Colors.grey),
                           ),
                         ),
@@ -240,7 +240,7 @@ class PlanCard extends StatelessWidget {
                         child: OutlinedButton(
                           onPressed: onView,
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: _stroke),
+                            side: BorderSide(color: _stroke.withOpacity(0.5)),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                             foregroundColor: const Color(0xFF344054),
                           ),
@@ -263,7 +263,7 @@ class PlanCard extends StatelessWidget {
 
   // --- HELPER WIDGETS ---
 
-  Widget _buildStatusBadge(bool isCompleted, bool isOverdue, bool isPending) {
+  Widget _buildStatusBadge(bool isCompleted, bool isOverdue, bool isPending, bool isCancelled) {
     String text = "Active";
     Color bg = Colors.black.withOpacity(0.6);
     Color fg = Colors.white;
@@ -274,13 +274,17 @@ class PlanCard extends StatelessWidget {
       bg = const Color(0xFF1DB954);
       icon = Icons.check_circle;
     } else if (isOverdue) {
-      text = "Overdue";
+      text = "Past Due";
       bg = const Color(0xFFD92D20);
       icon = Icons.warning_amber_rounded;
     } else if (isPending) {
       text = "Pending Approval";
       bg = const Color(0xFFF79009); // Warning Orange
       icon = Iconsax.timer_1;
+    } else if (isCancelled) {
+      text = "Closed";
+      bg = const Color(0xFF6B7280); // Gray
+      icon = Icons.cancel;
     }
 
     return Container(

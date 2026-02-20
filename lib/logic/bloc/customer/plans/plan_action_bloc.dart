@@ -70,7 +70,7 @@ class PlanActionBloc extends Bloc<PlanActionEvent, PlanActionState> {
           customerUid: event.uid,
           reason: event.reason
         );
-        emit(const PlanActionState(status: PlanActionStatus.success, message: "Plan Cancelled. Refund processing."));
+        emit(const PlanActionState(status: PlanActionStatus.success, message: "Plan closed. Funds credited to Store Balance."));
       } catch (e) {
         emit(PlanActionState(status: PlanActionStatus.error, message: e.toString()));
       }

@@ -41,7 +41,7 @@ extension CustomerActivityFeed on CustomerRepository {
         switch (tx.type) {
           case 'deposit': // Wallet Funding
             type = ActivityType.autopay; 
-            title = "Wallet Top-up";
+            title = "Wallet Funded";
             richSubtitle = [
               TextSpan(text: "Successfully credited ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
@@ -53,31 +53,29 @@ extension CustomerActivityFeed on CustomerRepository {
             type = ActivityType.payment;
             title = "Reservation Secured";
             richSubtitle = [
-              TextSpan(text: "You paid ", style: _baseStyle),
+              TextSpan(text: "You made an Initial Deposit of ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
-              TextSpan(text: " upfront to secure ", style: _baseStyle),
-              // Use metadata vendor/product name if available, else generic
-              TextSpan(text: "the plan.", style: _baseStyle),
+              TextSpan(text: " to activate your plan. ", style: _baseStyle),
             ];
             break;
 
           case 'installment': // Regular Payment
             type = ActivityType.payment;
-            title = "Installment Paid";
+            title = "Payment Received";
             richSubtitle = [
-              TextSpan(text: "Repayment of ", style: _baseStyle),
+              TextSpan(text: "Payment of ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
               TextSpan(text: " applied to your plan.", style: _baseStyle),
             ];
             break;
 
-          case 'refund': // Cancellation
-            type = ActivityType.expired;
-            title = "Plan Refund";
+          case 'Plan Closed': // Plan Cancelled -> Money moves to Wallet
+            type = ActivityType.autopay; 
+            title = "Funds Secured"; // High Status: Sounds safe and intentional
             richSubtitle = [
-              TextSpan(text: "Refund of ", style: _baseStyle),
+              TextSpan(text: "Value of ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),
-              TextSpan(text: " credited to wallet.", style: _baseStyle),
+              TextSpan(text: " moved to Store Balance.", style: _baseStyle),
             ];
             break;
 

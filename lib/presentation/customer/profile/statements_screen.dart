@@ -260,7 +260,7 @@ class _FilterChip extends StatelessWidget {
           color: selected ? KorraColors.brand : Colors.transparent,
           borderRadius: BorderRadius.circular(30.r),
           border: Border.all(
-            color: selected ? KorraColors.brand : const Color(0xFFE4E7EC),
+            color: selected ? KorraColors.brand : const Color(0xFFE4E7EC).withOpacity(0.35),
             width: 1.5
           ),
         ),

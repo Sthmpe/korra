@@ -75,7 +75,7 @@ class _LegalMenuTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12.r),
-            border: Border.all(color: const Color(0xFFEAECF0)),
+            border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.35)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.02),

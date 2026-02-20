@@ -126,7 +126,7 @@ class _StepIdentityState extends State<StepIdentity> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF2F8FD), // Light Blue tint
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: const Color(0xFFE1F0FA)),
+                border: Border.all(color: const Color(0xFFE1F0FA).withOpacity(0.35)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

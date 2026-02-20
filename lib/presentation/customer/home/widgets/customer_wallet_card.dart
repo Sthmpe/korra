@@ -174,7 +174,7 @@ class _CustomerWalletCardState extends State<CustomerWalletCard> {
                                 ),
                                 SizedBox(width: 6.w),
                                 Text(
-                                  'Top Up',
+                                  'Fund Wallet',
                                   style: GoogleFonts.inter(
                                     fontSize: 13.sp,
                                     fontWeight: FontWeight.w700,

@@ -25,7 +25,7 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: const Color(0xFFEAECF0)),
+          border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.08)),
         ),
         padding: EdgeInsets.all(4.r),
         child: SingleChildScrollView(
@@ -37,9 +37,9 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
                _chip('Active', PlansTab.active),
               _chip('Ready for Pickup', PlansTab.readyForPickup, isHighPriority: true),
               _chip('Completed', PlansTab.completed),
-              _chip('Overdue', PlansTab.overdue),
+              _chip('Past due', PlansTab.overdue),
               _chip('Pending', PlansTab.pending),
-              _chip('Cancelled', PlansTab.cancelled),
+              _chip('Closed', PlansTab.cancelled),
             ],
           ),
         ),

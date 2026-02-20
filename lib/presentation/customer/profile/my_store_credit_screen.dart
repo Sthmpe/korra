@@ -18,7 +18,7 @@ class MyStoreCreditsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: KorraHeader(title: "My Store Credits", showLeadingIcon: true),
+      appBar: KorraHeader(title: "My Store Balance", showLeadingIcon: true),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('customers')
@@ -42,12 +42,12 @@ class MyStoreCreditsScreen extends StatelessWidget {
                   Icon(Iconsax.wallet_minus, size: 48.sp, color: Colors.grey.shade300),
                   SizedBox(height: 16.h),
                   Text(
-                    "No Store Credits",
+                    "No Store Balance Yet",
                     style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade900),
                   ),
                   SizedBox(height: 8.h),
                   Text(
-                    "Refunds from 'Strict' plans appear here\nas credits specific to that vendor.",
+                    "Refunds from plans appear here\nas store balance specific to that merchant.",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500),
                   ),
@@ -71,7 +71,7 @@ class MyStoreCreditsScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16.r),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: Colors.grey.shade200.withOpacity(0.5)),
                   boxShadow: [
                     BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
                   ]
@@ -104,7 +104,7 @@ class MyStoreCreditsScreen extends StatelessWidget {
                           ),
                           SizedBox(height: 4.h),
                           Text(
-                            "Available Credit",
+                            "Available Store Balance",
                             style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500),
                           ),
                         ],

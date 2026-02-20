@@ -356,7 +356,7 @@ class _BottomNav extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16.r),
                 ),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                side: BorderSide(color: const Color(0xFFE5E7EB).withOpacity(0.45)),
                 backgroundColor: Colors.white,
               ),
               child: Icon(Iconsax.arrow_left, color: Colors.black, size: 24.sp),

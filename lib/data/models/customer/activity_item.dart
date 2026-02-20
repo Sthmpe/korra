@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-enum ActivityType { payment, dueSoon, link, autopay, expired, milestone }
+enum ActivityType { payment, dueSoon, link, autopay, expired, milestone, cancel }
 
 class ActivityItem {
   final String id;

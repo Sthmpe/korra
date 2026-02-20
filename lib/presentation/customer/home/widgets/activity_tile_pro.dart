@@ -68,7 +68,7 @@ class _ActivityTileProState extends State<_ActivityTilePro>
                   decoration: BoxDecoration(
                     color: spec.bg,
                     shape: BoxShape.circle,
-                    border: Border.all(color: spec.stroke),
+                    //border: Border.all(color: spec.stroke),
                   ),
                   alignment: Alignment.center,
                   child: Icon(spec.icon, size: 14.sp, color: spec.fg),
@@ -87,14 +87,14 @@ class _ActivityTileProState extends State<_ActivityTilePro>
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   curve: Curves.easeOut,
-                  padding: EdgeInsets.all(12.r),
+                  padding: EdgeInsets.fromLTRB(12.r, 0.r, 12.r, 12.r),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16.r),
                     border: _expanded
-                        ? Border.all(color: spec.stroke, width: 1.5.sp)
+                        ? Border.all(color: spec.stroke.withOpacity(0.05), width: 1.5.sp)
                         : Border.all(
-                            color: const Color(0xFFEAE6E2),
+                            color: const Color(0xFFEAE6E2).withOpacity(0.05),
                             width: 1.sp,
                           ),
                   ),
@@ -103,7 +103,7 @@ class _ActivityTileProState extends State<_ActivityTilePro>
                     children: [
                       // --- HEADER & TEXT ---
                       Padding(
-                        padding: EdgeInsets.all(12.r),
+                        padding: EdgeInsets.fromLTRB(12.r, 0.r, 12.r, 12.r),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -208,19 +208,19 @@ class _ActivityTileProState extends State<_ActivityTilePro>
           if (widget.onViewReceipt != null)
             _secondary('View receipt', () => widget.onViewReceipt!(a)),
         ];
-      case 'Installment Paid':
+      case 'Payment Received':
         return [
           if (widget.onViewPlan != null)
             _primary('View plan', () => widget.onViewPlan!(a)),
           if (widget.onViewReceipt != null)
             _secondary('View receipt', () => widget.onViewReceipt!(a)),
         ];
-      case 'Wallet Top-up':
+      case 'Wallet Funded':
         return [
           if (widget.onViewReceipt != null)
             _primary('View receipt', () => widget.onViewReceipt!(a)),
         ];
-      case 'Plan Cancellation Pending':
+      case 'Plan Closed':
         return [
           if (widget.onViewPlan != null)
             _secondary('View details', () => widget.onViewPlan!(a)),
@@ -311,7 +311,7 @@ Widget _secondary(String text, VoidCallback onTap) {
     child: OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: Color(0xFFEAE6E2)),
+        side: BorderSide(color: Color(0xFFEAE6E2).withOpacity(0.25)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.r),
         ),

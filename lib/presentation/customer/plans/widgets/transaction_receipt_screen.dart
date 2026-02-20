@@ -115,7 +115,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: KorraColors.brand.withOpacity(0.1),
+                              color: KorraColors.brand.withOpacity(0.0),
                               shape: BoxShape.circle,
                             ),
                             padding: EdgeInsets.all(2.r),
@@ -123,8 +123,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             child: Image.asset(
                               'assets/images/korra_logo_icon.webp',
                               fit: BoxFit.cover,
-                              height: 24.h,
-                              width: 24.w,
+                              height: 60.h,
+                              width: 60.w,
                               errorBuilder: (c, o, s) => Icon(
                                 Icons.wallet_rounded,
                                 size: 24.sp,
@@ -167,7 +167,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             child: Text(
                               isCompleted
                                   ? "PLAN COMPLETED"
-                                  : "INSTALLMENT PAID",
+                                  : "DEPOSIT CONFIRMED",
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 11.sp,
                                 fontWeight: FontWeight.w700,
@@ -203,7 +203,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
 
                           if (widget.data.creditUsed > 0)
                             _detailRow(
-                              "Store Credit Applied",
+                              "Store Balance Applied",
                               "- ${currencyFormat.format(widget.data.creditUsed)}",
                               color: Colors.green,
                             ),
@@ -246,7 +246,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    "Next Payment Due",
+                                    "Next Due",
                                     style: GoogleFonts.inter(
                                       fontSize: 12.sp,
                                       fontWeight: FontWeight.w600,

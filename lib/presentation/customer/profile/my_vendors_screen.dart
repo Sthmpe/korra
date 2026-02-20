@@ -106,7 +106,7 @@ class _VendorCard extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16.r),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: Colors.grey.shade200.withOpacity(0.35)),
           ),
           child: Column(
             children: [
@@ -121,7 +121,7 @@ class _VendorCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade300),
+                        //border: Border.all(color: Colors.grey.shade300),
                       ),
                       alignment: Alignment.center,
                       child: Text(initial, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
@@ -158,7 +158,7 @@ class _VendorCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text("Store Credit", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
+                            Text("Store Balance", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
                             Text(currencyFormat.format(storeCredit), style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w800, color: const Color(0xFF15803D))),
                           ],
                         ),

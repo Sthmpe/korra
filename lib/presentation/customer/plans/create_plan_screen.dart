@@ -423,7 +423,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                         _buildModelPill(modelType),
                                       ],
                                     ),
-                                    SizedBox(height: 12.h),
+                                    SizedBox(height: 14.h),
                                     Text(
                                       widget.product.data['name'] ??
                                           'Product Name',
@@ -464,12 +464,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                             borderRadius: BorderRadius.circular(
                                               12.r,
                                             ),
-                                            border: Border.all(
-                                              color: _useStoreCredit
-                                                  ? const Color(0xFFF3F4F6)
-                                                  : const Color(0xFFEAECF0),
-                                              width: 1.5,
-                                            ),
+                                            // border: Border.all(
+                                            //   color: _useStoreCredit
+                                            //       ? const Color(0xFFF3F4F6)
+                                            //       : const Color(0xFFEAECF0),
+                                            //   width: 1.5,
+                                            // ),
                                           ),
                                           child: Row(
                                             children: [
@@ -498,7 +498,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                       CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      "Use $storeName Credit", // ✅ Explicit Context
+                                                      "Apply Store Balance", // ✅ Explicit Context
                                                       style: GoogleFonts.inter(
                                                         fontSize: 13.sp,
                                                         fontWeight:
@@ -564,15 +564,15 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                     // Amount Input
                                     Container(
                                       key: _scrollKey,
-                                      padding: EdgeInsets.all(16.r),
+                                      padding: EdgeInsets.symmetric(vertical:16.h, horizontal:0.w),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
                                         borderRadius: BorderRadius.circular(
                                           16.r,
                                         ),
-                                        border: Border.all(
-                                          color: const Color(0xFFE5E7EB),
-                                        ),
+                                        // border: Border.all(
+                                        //   color: const Color(0xFFE5E7EB),
+                                        // ),
                                         boxShadow: [
                                           BoxShadow(
                                             color: Colors.black.withOpacity(
@@ -633,7 +633,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                               .shade300,
                                                         ),
                                                     labelText:
-                                                        "Down Payment Amount",
+                                                        "",
                                                     labelStyle:
                                                         GoogleFonts.inter(
                                                           fontSize: 12.sp,
@@ -647,7 +647,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                           Padding(
                                             padding: EdgeInsets.only(top: 12.h),
                                             child: const Divider(
-                                              height: 1,
+                                              height: 0,
                                               color: Color(0xFFF3F4F6),
                                             ),
                                           ),
@@ -684,11 +684,11 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                child: Row(
                                                  mainAxisAlignment: MainAxisAlignment.end,
                                                  children: [
-                                                   Icon(Iconsax.flash_1, size: 10.sp, color: Colors.green),
+                                                   Icon(Iconsax.flash_1, size: 9.5.sp, color: Colors.green),
                                                    SizedBox(width: 4.w),
                                                    Text(
-                                                     "Fair Split Applied",
-                                                     style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.green, fontWeight: FontWeight.w600),
+                                                     "Fair Split",
+                                                     style: GoogleFonts.inter(fontSize: 9.sp, color: Colors.green, fontWeight: FontWeight.w600),
                                                    )
                                                  ],
                                                ),
@@ -710,7 +710,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                   //SizedBox(width: 8.w),
                                                   Expanded(
                                                     child: Text(
-                                                      "Store Credit Applied",
+                                                      "Store Balance Applied",
                                                       style: GoogleFonts.inter(
                                                         fontSize: 12.sp,
                                                         fontWeight: FontWeight.w600,
@@ -825,9 +825,9 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                           borderRadius: BorderRadius.circular(
                                             12.r,
                                           ),
-                                          border: Border.all(
-                                            color: const Color(0xFFEAECF0),
-                                          ),
+                                          // border: Border.all(
+                                          //   color: const Color(0xFFEAECF0),
+                                          // ),
                                         ),
                                         child: Row(
                                           children: [
@@ -839,7 +839,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                             SizedBox(width: 12.w),
                                             Expanded(
                                               child: Text(
-                                                "You have ${state.baseDurationDays} days to complete payment.",
+                                                "${state.baseDurationDays} days allocation to complete payment.",
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13.sp,
                                                   fontWeight: FontWeight.w600,
@@ -918,7 +918,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.grey.shade200),
+        //border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1023,11 +1023,11 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: isStrict ? const Color(0xFFFFF7ED) : const Color(0xFFF0F9FF),
+        //color: isStrict ? const Color(0xFFFFF7ED) : const Color(0xFFF0F9FF),
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(
-          color: isStrict ? const Color(0xFFFFEDD5) : const Color(0xFFE0F2FE),
-        ),
+        // border: Border.all(
+        //   color: isStrict ? const Color(0xFFFFEDD5) : const Color(0xFFE0F2FE),
+        // ),
       ),
       child: Row(
         children: [
@@ -1063,7 +1063,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFF4E5),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFFFDDB3)),
+        //border: Border.all(color: const Color(0xFFFFDDB3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,10 +1084,11 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                     text: "$duration Days.\n",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  TextSpan(
+                 TextSpan(
                     text: type == ProductModelType.strict
-                        ? "Failure to complete triggers the penalty."
-                        : "Flexible timeline, but refund is Store Credit only.",
+                        // ✅ "Incomplete plans" is objective. "Failure" is personal.
+                        ? "Incomplete plans convert your reservation to Store Balance."
+                        : "Flexible timeline. Refunds are secured in Store Balance.",
                   ),
                 ],
               ),
@@ -1106,9 +1107,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     // Logic: Does the string contain "50%"?
     final bool is50Percent = policyString.contains("50%");
 
-    final String highlightText = is50Percent
-        ? "50% Non-Refundable Penalty"
-        : "Store Credit Only Policy";
+    final String highlightText = "Store Balance Terms";
 
     return Padding(
       padding: EdgeInsets.only(top: 24.h, bottom: 16.h),
@@ -1139,15 +1138,15 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 children: [
                   const TextSpan(
                     text:
-                        "I agree to complete this plan. If I cancel or default, I accept the ",
+                        "I acknowledge that incomplete plans are secured under the ",
                   ),
                   TextSpan(
                     text: highlightText,
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFFD92D20),
+                      color: KorraColors.brand,
                       decoration: TextDecoration.underline,
-                      decorationColor: const Color(0xFFD92D20).withOpacity(0.5),
+                      decorationColor: KorraColors.brand.withOpacity(0.5),
                     ),
                     recognizer: TapGestureRecognizer()
                       ..onTap = () =>
@@ -1239,9 +1238,9 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: isSlotsFull ? Colors.orange.shade100 : const Color(0xFFF3F4F6),
-        ),
+        // border: Border.all(
+        //   color: isSlotsFull ? Colors.orange.shade100 : const Color(0xFFF3F4F6),
+        // ),
       ),
       child: Row(
         children: [
@@ -1333,7 +1332,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       btnColor = Colors.orange.shade800;
       customAction = widget.onJumpToPlan;
     } else if (isInsufficient) {
-      btnText = "Top Up Wallet & Start";
+      btnText = "Fund Wallet & Start";
       btnColor = Colors.black;
       customAction = () {
         Get.toNamed(Routes.customerBankDetails, arguments: widget.customer);
@@ -1570,12 +1569,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           duration: const Duration(milliseconds: 200),
           padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
           decoration: BoxDecoration(
-            color: isSelected ? KorraColors.brand : Colors.white,
+            color: isSelected ? KorraColors.brand : const Color(0xFFE5E7EB).withOpacity(0.5),
             borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(
-              color: isSelected ? KorraColors.brand : const Color(0xFFE5E7EB),
-              width: 1.5,
-            ),
+            // border: Border.all(
+            //   color: isSelected ? KorraColors.brand : const Color(0xFFE5E7EB),
+            //   width: 1.5,
+            // ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
@@ -1623,14 +1622,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           duration: const Duration(milliseconds: 200),
           padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF10B981) : Colors.white,
+            color: isSelected ? const Color(0xFF10B981) : const Color(0xFFE5E7EB).withOpacity(0.5),
             borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFFE5E7EB),
-              width: 1.5,
-            ),
+            // border: Border.all(
+            //   color: isSelected
+            //       ? const Color(0xFF10B981)
+            //       : const Color(0xFFE5E7EB),
+            //   width: 1.5,
+            // ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
@@ -1807,9 +1806,9 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               ? const Color(0xFFECFDF5)
               : Colors.blue.shade50.withOpacity(0.6),
           borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(
-            color: isFlex ? const Color(0xFFA7F3D0) : Colors.blue.shade100,
-          ),
+          // border: Border.all(
+          //   color: isFlex ? const Color(0xFFA7F3D0) : Colors.blue.shade100,
+          // ),
         ),
         child: Row(
           children: [
@@ -1841,12 +1840,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDF4), // Green-50
         borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        //border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(8.r),
+            padding: EdgeInsets.all(4.r),
             decoration: const BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
@@ -1889,14 +1888,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 }
 
 class _PenaltyExplainerSheet extends StatelessWidget {
-  final String policyString; // "50% Refund" or "Store Credit"
+  final String policyString; // Kept for interface compatibility, but logic is now Universal.
 
   const _PenaltyExplainerSheet({required this.policyString});
 
   @override
   Widget build(BuildContext context) {
-    final is50Percent = policyString.contains("50%");
-
+    // ✅ Logic Simplified: No more "50% Penalty" checks. It's always Store Balance.
+    
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
@@ -1906,17 +1905,19 @@ class _PenaltyExplainerSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // --- HEADER ---
           Row(
             children: [
               Container(
                 padding: EdgeInsets.all(10.r),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
+                  // ✅ Changed from Red (Error) to Brand Blue (Safe/Info)
+                  color: const Color(0xFFEFF6FF), 
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  is50Percent ? Iconsax.shield_cross : Iconsax.card_remove,
-                  color: const Color(0xFFD92D20),
+                  Iconsax.shield_tick, // ✅ Changed from "Cross" to "Tick/Shield"
+                  color: const Color(0xFF1570EF), // Brand Blue
                   size: 24.sp,
                 ),
               ),
@@ -1926,7 +1927,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      is50Percent ? "The 50% Penalty" : "Store Credit Only",
+                      "Store Balance Terms", // ✅ Professional Title
                       style: GoogleFonts.inter(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w700,
@@ -1934,7 +1935,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      "Cancellation Terms",
+                      "How your funds are secured", // ✅ Reassuring Subtitle
                       style: GoogleFonts.inter(
                         fontSize: 12.sp,
                         color: const Color(0xFF667085),
@@ -1947,59 +1948,39 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           ),
           SizedBox(height: 24.h),
 
-          // REASON 1 (Universal)
+          // --- REASON 1: The Value of Reservation ---
           _buildReasonRow(
             icon: Iconsax.shop,
-            title: "Merchant Commitment",
-            desc:
-                "The merchant removes this item from the shelf for you. They lose other potential buyers while waiting.",
+            title: "Confirmed Reservation",
+            desc: "When you start a plan, the merchant removes this item from the shelf. It is reserved exclusively for you.",
           ),
           SizedBox(height: 16.h),
 
-          // REASON 2 (Dynamic)
-          if (is50Percent)
-            _buildReasonRow(
-              icon: Iconsax.clock,
-              title: "Time Compensation",
-              desc:
-                  "If you default, the 50% fee compensates the merchant for lost time and holding costs.",
-            ),
-
-            SizedBox(height: 16.h),
-
-            _buildReasonRow(
-              icon: Iconsax.bag_2,
-              title: "Use Anywhere",
-              desc:
-                  "Since cash refunds aren't readily available for this item, your funds will be returned as Korra Store Credit instantly.",
-            ),
-
+          // --- REASON 2: The Safety Net ---
+          _buildReasonRow(
+            icon: Iconsax.wallet_check,
+            title: "100% Funds Secured",
+            desc: "If you stop a plan early, you don't lose money. Your payments are moved to your Store Balance.",
+          ),
           SizedBox(height: 16.h),
 
-          // REASON 3 (Dynamic)
-          if (is50Percent)
-            _buildReasonRow(
-              icon: Iconsax.wallet_check,
-              title: "Your Refund or Flexible Spending",
-              desc:
-                  "The remaining 50% is refunded to your wallet instantly. or you can choose to keep it as Store Credit for future purchases.",
-            )
-          else
-            _buildReasonRow(
-              icon: Iconsax.refresh_circle, // Or loop icon
-              title: "Flexible Spending",
-              desc:
-                  "Your funds are converted to Store Credit valid only with this specific merchant. You can use it to purchase any other item from them immediately.",
-            ),
-
+          // --- REASON 3: Liquidity ---
+          _buildReasonRow(
+            icon: Iconsax.refresh_circle,
+            title: "Flexible Usage",
+            desc: "Your Store Balance is available immediately. You can use it to purchase or reserve any other item from this merchant.",
+          ),
+          
           SizedBox(height: 32.h),
+
+          // --- FOOTER BUTTON ---
           SizedBox(
             width: double.infinity,
             height: 50.h,
             child: OutlinedButton(
               onPressed: () => Navigator.pop(context),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey.shade300),
+                side: BorderSide(color: Colors.grey.shade300.withOpacity(0.5)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
                 ),
@@ -2020,16 +2001,11 @@ class _PenaltyExplainerSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildReasonRow({
-    required IconData icon,
-    required String title,
-    required String desc,
-  }) {
-    // ... (Keep existing implementation)
+  Widget _buildReasonRow({required IconData icon, required String title, required String desc}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18.sp, color: const Color(0xFF475467)),
+        Icon(icon, size: 20.sp, color: Colors.grey.shade700),
         SizedBox(width: 12.w),
         Expanded(
           child: Column(
@@ -2038,18 +2014,18 @@ class _PenaltyExplainerSheet extends StatelessWidget {
               Text(
                 title,
                 style: GoogleFonts.inter(
-                  fontSize: 13.sp,
+                  fontSize: 14.sp, 
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF344054),
+                  color: const Color(0xFF344054)
                 ),
               ),
-              SizedBox(height: 2.h),
+              SizedBox(height: 4.h),
               Text(
                 desc,
                 style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  height: 1.4,
+                  fontSize: 12.sp, 
                   color: const Color(0xFF667085),
+                  height: 1.4
                 ),
               ),
             ],
@@ -2059,3 +2035,4 @@ class _PenaltyExplainerSheet extends StatelessWidget {
     );
   }
 }
+

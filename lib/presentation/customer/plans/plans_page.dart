@@ -357,17 +357,17 @@ class _PlansPageState extends State<PlansPage> {
   String _emptyText(PlansTab t) {
     switch (t) {
       case PlansTab.active:
-        return 'No active plans yet.\nPaste a link or scan to start.';
+        return 'No active plans yet.\nStart a plan to build ownership.';
       case PlansTab.readyForPickup: // ✅ NEW MESSAGE
-        return 'Nothing to collect.\nFinish a plan to see it here!';
+        return 'No items ready.\nComplete a plan to claim your item.';
       case PlansTab.completed:
-        return 'No completed history yet.';
+        return 'No completed plans yet.';
       case PlansTab.overdue:
-        return 'No overdue payments.\nYou’re all caught up 🎉';
+        return 'No plans past due.\nYour standing is excellent. 🛡️';
       case PlansTab.cancelled:
-        return 'No cancelled plans.';
+        return 'No closed plans.';
       case PlansTab.pending:
-        return 'No pending plans.';
+        return 'No pending approvals.';
     }
   }
 

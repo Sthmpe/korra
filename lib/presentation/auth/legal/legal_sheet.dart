@@ -14,7 +14,7 @@ Future<void> showKorraVendorTermsSheet(BuildContext context) {
         heading: '1. The Merchant Program',
         items: [
           'Korra operates as a financial infrastructure tool designed to facilitate reservation-based transactions. We act as a payment processor and agreement recorder, not a marketplace or an escrow agent.',
-          'You (The Merchant) retain full autonomy over your customer sourcing and sales agreements. Korra provides the digital rails to structure payments and secure price locks.',
+          'You (The Merchant) retain full autonomy over your customer sourcing and sales agreements. Korra provides the digital rails to structure payments and secure inventory reservations.',
           'We connect you with customers who want to "Reserve Now, Pay Later", securing your sales volume in advance.',
         ],
       ),
@@ -27,18 +27,18 @@ Future<void> showKorraVendorTermsSheet(BuildContext context) {
         ],
       ),
       _Section(
-        heading: '3. Payments & Store Credit Policy',
+        heading: '3. Payments & Store Balance Policy',
         items: [
           'Settlements are processed directly to your Merchant Wallet.',
-          'No Cash Refunds: Under the Korra agreement, cash refunds are NOT processed for cancellations. If a customer cancels a plan, the funds are converted into Store Credit valid specifically with your store.',
-          'By using Korra, you agree to honor this Store Credit for future purchases by that customer.',
-          'Price Lock Obligations: You are obligated to maintain the reservation and the agreed price as long as the customer is active on the plan.',
+          'No Cash Refunds: Under the Korra agreement, cash refunds are NOT processed for closed plans. If a customer closes a plan, the funds are converted into Store Balance valid specifically with your store.',
+          'By using Korra, you agree to honor this Store Balance for future purchases by that customer.',
+          'Inventory Obligation: You are obligated to maintain the reservation and the agreed price as long as the customer has an active plan.',
         ],
       ),
       _Section(
         heading: '4. Delivery & Logistics Responsibility',
         items: [
-          'Korra does not oversee logistics, enforce shipping timelines, or require proof of delivery (Waybills). Delivery is a private contractual obligation between you and the Customer.',
+          'Korra does not oversee logistics or enforce shipping timelines. Delivery is a private contractual obligation between you and the Customer.',
           'Funds are released based on the payment schedule, not on the physical handover of goods.',
           'You bear full liability for fulfilling orders. Any failure to deliver after funds are settled constitutes a breach of contract with the Customer, for which you are solely responsible.',
         ],
@@ -55,11 +55,12 @@ Future<void> showKorraVendorTermsSheet(BuildContext context) {
         items: [
           'You are solely liable for maintaining your business reputation. Korra does not mediate product quality disputes.',
           'You guarantee that the product delivered matches the description provided. Issues regarding authenticity, quality, or warranty are your sole responsibility.',
-          'In the event of a breach of contract (e.g., failure to deliver after collecting funds), you acknowledge that you are personally liable to the Customer, and Korra may provide your verified identity details to relevant parties for resolution.',
+          'In the event of a breach of contract (e.g., failure to deliver after collecting funds), you explicitly authorize Korra to provide your verified identity details (KYC) to the Customer or Law Enforcement to facilitate resolution.',
+          'By creating an account or using the Korra App, you legally agree to be bound by these Terms. If you do not agree, you must discontinue use immediately.',
         ],
       ),
       _Section(
-        heading: '7. Amendments',
+        heading: '7. Changes to Terms',
         items: [
           'Korra reserves the right to update these terms. Continued use of the Merchant App constitutes acceptance of the updated terms.',
         ],
@@ -76,15 +77,15 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
       _Section(
         heading: '1. The Core Relationship',
         items: [
-          'Korra Finance acts solely as the payment infrastructure and agreement recording tool. We are not a retailer, distributor, or warehouse.',
+          'Korra acts solely as the payment infrastructure and agreement recording tool. We are not a retailer, distributor, or warehouse.',
           'You (The Merchant) retain full legal title and liability for the quality, authenticity, and physical custody of the products you list.',
-          'By accepting a deposit, you enter a binding legal contract with the Customer to lock the price and reserve the inventory immediately.',
+          'By accepting an Initial Deposit, you enter a binding legal contract with the Customer to lock the price and reserve the inventory immediately.',
         ],
       ),
       _Section(
         heading: '2. Inventory Integrity (Immediate Price Lock)',
         items: [
-          'The "Price Lock" is active from Day 1 (the moment the customer makes the first down payment).',
+          'The "Price Lock" is active from Day 1 (the moment the customer makes the Initial Deposit).',
           'You MUST remove the item from your public shelf immediately upon the first deposit. Selling a reserved item to a walk-in customer or another online buyer constitutes a Breach of Contract.',
         ],
       ),
@@ -97,11 +98,11 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         ],
       ),
       _Section(
-        heading: '4. Handling Cancellations (Store Credit)',
+        heading: '4. Handling Closed Plans (Store Balance)',
         items: [
           'We enforce a strict "No Cash Refund" policy to protect your cash flow.',
-          'If a customer cancels a plan, the funds you have already received remain with you. However, you now have a "Liability" to the customer in the form of Store Credit.',
-          'You must allow the customer to use this credit to purchase other items from your store in the future.',
+          'If a customer closes a plan, the funds you have already received remain with you. However, you now hold a liability to the customer in the form of Store Balance.',
+          'You must allow the customer to use this balance to purchase other items from your store in the future.',
         ],
       ),
       _Section(
@@ -109,14 +110,14 @@ Future<void> showKorraVendorPartnershipSheet(BuildContext context) {
         items: [
           'You guarantee that "What You See Is What You Get". The product must match the exact description and images shared via the link.',
           'The sale of counterfeit (fake), stolen, or refurbished items sold as "New" is strictly prohibited.',
-          'If a customer reports a verified defect or fake specification, you are contractually obligated to resolve the matter immediately (whether through replacement or warranty service). Korra is not liable for your inventory quality.',
+          'If a customer reports a verified defect or fake specification, you are contractually obligated to resolve the matter immediately. Korra is not liable for your inventory quality.',
         ],
       ),
       _Section(
         heading: '6. Social Media & Identity Transparency',
         items: [
           'You agree to maintain active, verifiable contact details. Korra reserves the right to audit your business reputation.',
-          'In the event of a dispute where you become unresponsive (ghosting), Korra is authorized to release your verified Identity Details (BVN Name, Phone, Address) to the Customer to facilitate police action.',
+          'In the event of a dispute where you become unresponsive ("ghosting"), Korra is authorized to release your verified Identity Details (BVN Name, Phone, Address) to the Customer to facilitate police action.',
         ],
       ),
       _Section(
@@ -141,14 +142,14 @@ Future<void> showKorraVendorPrivacySheet(BuildContext context) {
           'Identity Data: NIN, BVN, and Government-issued ID details for KYC compliance.',
           'Business Data: CAC Certificate (if applicable), Store Address, and Bank Account details.',
           'Social Reputation Data: We collect and monitor your provided social media handles to verify business legitimacy.',
-          'Transaction Data: History of sales, payouts, and Store Credit records.',
+          'Transaction Data: History of sales, payouts, and Store Balance records.',
         ],
       ),
       _Section(
         heading: '2. How We Use Your Data',
         items: [
           'To verify that your business is real and not a "ghost" shop.',
-          'To process wallet settlements and manage Store Credit ledgers.',
+          'To process wallet settlements and manage Store Balance ledgers.',
           'To conduct background checks and fraud risk assessments.',
           'To comply with CBN (Central Bank of Nigeria) and anti-money laundering (AML) regulations.',
         ],
@@ -209,18 +210,18 @@ Future<void> showKorraTermsSheet(BuildContext context) {
       _Section(
         heading: '2. Fees & Charges',
         items: [
-          'Korra charges a Service Fee of 3.5% on plan initiation.',
-          'This fee covers payment gateway charges and the cost of securing the "Price Lock" technology.',
+          'Korra charges a Platform Fee of 3.5% on plan initiation.',
+          'This fee covers the cost of securing the "Price Lock" technology.',
           'This fee is non-refundable.',
         ],
       ),
       _Section(
-        heading: '3. Store Credit Refund Policy',
+        heading: '3. Store Balance Policy',
         items: [
           'By creating a plan, you are reserving an item and removing it from the market. Therefore, Cash Refunds are NOT available.',
-          'If you cancel your plan for any reason, 100% of the principal amount you paid will be converted into Store Credit.',
-          'This Store Credit is valid specifically with the Merchant you reserved from and can be used for future purchases.',
-          'There are no cancellation penalties or breakage fees. You keep the full value of what you paid, stored as credit.',
+          'If you close your plan for any reason, 100% of the principal amount you paid will be converted into Store Balance.',
+          'This Store Balance is valid specifically with the Merchant you reserved from and can be used for future purchases.',
+          'There are no closing penalties. You keep the full value of what you paid, securely held as balance.',
         ],
       ),
       _Section(
@@ -235,21 +236,43 @@ Future<void> showKorraTermsSheet(BuildContext context) {
         heading: '5. Delivery & Logistics',
         items: [
           'Korra does not manage delivery. Delivery is arranged between you and the Merchant.',
-          'We strongly recommend using insured courier services (GIG, Kwik, DHL).',
-          'Ensure you inspect the item immediately upon collection.',
+          'We strongly recommend using insured courier services.',
+          'Ensure you inspect the item immediately upon collection. Releasing the Collection Code signifies your acceptance of the item.',
         ],
       ),
       _Section(
-        heading: '6. Acceptable Use',
+        heading: '6. Acceptance & Prohibited Conduct',
         items: [
-          'You agree to provide accurate identity details for KYC verification.',
-          'You agree to complete payments within the agreed duration.',
+          // 1. The Binding Agreement (The Lock)
+          'By creating an account or using the Korra App, you legally agree to be bound by these Terms. If you do not agree, you must discontinue use immediately.',
+          
+          // 2. Anti-Money Laundering (AML) Shield
+          'You represent and warrant that all funds used on Korra are from legitimate sources and do not constitute the proceeds of financial crime, fraud, or money laundering.',
+          
+          // 3. Identity Integrity
+          'You agree to provide accurate, current, and verified identity details. Impersonation or the use of false credentials is a criminal offense under Nigerian law.',
+          
+          // 4. Payment Obligation
+          'You agree to complete payments within the agreed duration. Deliberate misuse of the reservation system to manipulate inventory is prohibited.',
         ],
       ),
+      
       _Section(
-        heading: '7. Changes to Terms',
+        heading: '7. Governing Law & Jurisdiction',
         items: [
-          'Korra may update these terms. Continued use of the app signifies your acceptance of any changes.',
+          // 1. The "Home Turf" Rule (Strictly Nigeria)
+          'These Terms shall be governed by and construed in accordance with the laws of the Federal Republic of Nigeria.',
+          
+          // 2. Exclusive Jurisdiction
+          'Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of the courts of Nigeria.',
+        ],
+      ),
+
+      _Section(
+        heading: '8. Changes to Terms', // ✅ RESTORED
+        items: [
+          'Korra reserves the right to update or modify these Terms at any time.',
+          'Continued use of the Service following the posting of any changes constitutes acceptance of those changes.',
         ],
       ),
     ],
@@ -312,7 +335,6 @@ Future<void> showKorraPrivacySheet(BuildContext context) {
     ],
   );
 }
-
 // --- PRIVATE HELPERS ---
 
 Future<void> _showSheet(
