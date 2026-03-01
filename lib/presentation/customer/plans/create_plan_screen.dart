@@ -1960,7 +1960,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           _buildReasonRow(
             icon: Iconsax.wallet_check,
             title: "100% Funds Secured",
-            desc: "If you stop a plan early, you don't lose money. Your payments are moved to your Store Balance.",
+            desc: "If you stop a plan, you don't lose money. Your payments are moved to your Store Balance.",
           ),
           SizedBox(height: 16.h),
 

@@ -32,17 +32,17 @@ class vLegalMenuScreen extends StatelessWidget {
     final List<LegalItem> documents = [
       LegalItem(
         title: "Merchant Terms of Service",
-        lastUpdated: "Dec 2025",
+        lastUpdated: "Feb 2026",
         onTap: () => showKorraVendorTermsSheet(context), // Defined in previous steps
       ),
       LegalItem(
         title: "Partnership & Integrity Policy",
-        lastUpdated: "Nov 2025",
+        lastUpdated: "Feb 2026",
         onTap: () => showKorraVendorPartnershipSheet(context), // Defined in previous steps
       ),
       LegalItem(
         title: "Privacy Policy",
-        lastUpdated: "Oct 2025",
+        lastUpdated: "Feb 2026",
         onTap: () => showKorraPrivacySheet(context), // Defined in previous steps
       ),
     ];
@@ -80,7 +80,7 @@ class _LegalMenuTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12.r),
-            border: Border.all(color: const Color(0xFFEAECF0)),
+            //border: Border.all(color: const Color(0xFFEAECF0)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.02),

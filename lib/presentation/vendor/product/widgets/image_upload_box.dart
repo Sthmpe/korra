@@ -129,7 +129,7 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24.r),
         color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade200),
+        //border: Border.all(color: Colors.grey.shade200),
       ),
       child: Center(
         child: SizedBox(
@@ -149,7 +149,7 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24.r),
           color: Colors.grey.shade100,
-          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+          //border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -283,11 +284,11 @@ class VendorProfilePage extends StatelessWidget {
                             _sectionTitle('Social Media'),
                             SizedBox(height: 12.h),
                             if (vendor.whatsappGroup != null) 
-                              RowWithChevron(icon: Iconsax.message, title: 'WhatsApp', onTap: (){}),
+                              RowWithChevron(icon: FontAwesomeIcons.whatsapp, title: 'WhatsApp', onTap: (){}),
                             if (vendor.instagram != null) 
-                              RowWithChevron(icon: Iconsax.camera, title: 'Instagram', onTap: (){}),
+                              RowWithChevron(icon: FontAwesomeIcons.instagram, title: 'Instagram', onTap: (){}),
                             if (vendor.website != null) 
-                              RowWithChevron(icon: Iconsax.global, title: 'Website', onTap: (){}),
+                              RowWithChevron(icon: FontAwesomeIcons.globe, title: 'Website', onTap: (){}),
                           ],
                         ),
                       ),
@@ -467,7 +468,7 @@ class _StaticInfoRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFFAF7F4),
               borderRadius: BorderRadius.circular(10.r),
-              border: Border.all(color: const Color(0xFFEAE6E2)),
+              //border: Border.all(color: const Color(0xFFEAE6E2)),
             ),
             alignment: Alignment.center,
             child: Icon(icon, size: 18.sp, color: _brand),

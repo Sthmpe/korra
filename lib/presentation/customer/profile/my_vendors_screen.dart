@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/constants/colors.dart';
@@ -183,23 +185,23 @@ class _VendorCard extends StatelessWidget {
                       isVisible: phone.isNotEmpty,
                     ),
                     _SocialBtn(
-                      icon: Iconsax.message, // WhatsApp
+                      icon: MdiIcons.whatsapp, // WhatsApp
                       label: "WhatsApp", 
                       color: const Color(0xFF25D366), 
                       onTap: () => _launchUri("https://wa.me/${phone.replaceAll('+', '')}"), // Fallback to phone if group link missing
                       isVisible: phone.isNotEmpty,
                     ),
                     _SocialBtn(
-                      icon: Iconsax.camera, // Instagram
+                      icon: MdiIcons.instagram, // Instagram
                       label: "Instagram", 
                       color: const Color(0xFFE1306C), 
                       onTap: () => _launchUri("https://instagram.com/$instagram"), 
                       isVisible: instagram != null && instagram.isNotEmpty,
                     ),
                     _SocialBtn(
-                      icon: Iconsax.global, // Twitter/X
-                      label: "Twitter", 
-                      color: Colors.blue, 
+                      icon: FontAwesomeIcons.x, // Twitter/X
+                      label: "X.com", 
+                      color: Colors.black, 
                       onTap: () => _launchUri("https://twitter.com/$twitter"), 
                       isVisible: twitter != null && twitter.isNotEmpty,
                     ),

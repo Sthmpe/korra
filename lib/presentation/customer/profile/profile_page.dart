@@ -141,8 +141,8 @@ class ProfilePage extends StatelessWidget {
 
                                   RowWithChevron(
                                     icon: Icons.store_mall_directory_outlined,
-                                    title: 'My Store Credits',
-                                    subtitle: 'View your credits',
+                                    title: 'My Store Balance',
+                                    subtitle: 'View your store balance',
                                     onTap: () {
                                       Get.toNamed(
                                         Routes.customerStoreCredits, 

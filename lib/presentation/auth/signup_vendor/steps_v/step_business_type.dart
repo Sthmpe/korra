@@ -233,7 +233,7 @@ class _StepBusinessTypeState extends State<StepBusinessType> {
       decoration: BoxDecoration(
         color: const Color(0xFFF2F8FD),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFE1F0FA)),
+        //border: Border.all(color: const Color(0xFFE1F0FA)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

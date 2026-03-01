@@ -60,7 +60,7 @@ class LoginHeader extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 35.w), // Prevent edge touching on small screens
               child: Text(
-                'Your bridge to ownership.',
+                'Smart People Own Things Differently.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 14.5.sp,

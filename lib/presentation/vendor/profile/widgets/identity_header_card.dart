@@ -39,7 +39,7 @@ class IdentityHeaderCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20.r), 
-          border: Border.all(color: const Color(0xFFEAECF0)),
+          //border: Border.all(color: const Color(0xFFEAECF0)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -66,7 +66,7 @@ class IdentityHeaderCard extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      border: Border.all(color: const Color(0xFFFFE4C2), width: 1.5),
+                      //border: Border.all(color: const Color(0xFFFFE4C2), width: 1.5),
                     ),
                     alignment: Alignment.center,
                     child: Text(

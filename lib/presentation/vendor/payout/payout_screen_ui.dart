@@ -269,7 +269,7 @@ Widget _buildStatusCard(
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20.r), // Softer corners
-      border: Border.all(color: Colors.grey.shade100),
+      //border: Border.all(color: Colors.grey.shade100),
       boxShadow: [
         BoxShadow(
           color: const Color(0xFF101828).withOpacity(0.06),
@@ -418,7 +418,7 @@ void _showContactSheet(BuildContext context, {required String title, required St
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: const Color(0xFFEAECF0)),
+          //border: Border.all(color: const Color(0xFFEAECF0)),
         ),
         child: Row(
           children: [

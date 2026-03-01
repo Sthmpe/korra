@@ -538,6 +538,7 @@ serve(async (req) => {
                         amount: -creditUsed,
                         type: 'redemption',
                         description: `Store Balance applied by ${planData.customerName}`,
+                        status: 'success',
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         planId: planId
                     });
@@ -894,6 +895,7 @@ serve(async (req) => {
                         amount: -creditUsed,
                         type: 'redemption',
                         description: `Store Balance Used: ${plan.customerName}`,
+                        status: 'success',
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         planId: planId
                     });
@@ -1193,6 +1195,7 @@ serve(async (req) => {
                     type: 'conversion', // New type for clarity
                     description: `Plan Closed: ${plan.customerName}`,
                     planId: planId,
+                    status: 'success',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 

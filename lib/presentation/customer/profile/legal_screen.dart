@@ -32,12 +32,12 @@ class LegalMenuScreen extends StatelessWidget {
     final List<LegalItem> documents = [
       LegalItem(
         title: "Customer Terms of Service",
-        lastUpdated: "Dec 2025",
+        lastUpdated: "Feb 2026",
         onTap: () => showKorraTermsSheet(context), // Defined in previous steps
       ),
       LegalItem(
         title: "Privacy Policy",
-        lastUpdated: "Oct 2025",
+        lastUpdated: "Feb 2026",
         onTap: () => showKorraPrivacySheet(context), // Defined in previous steps
       ),
     ];

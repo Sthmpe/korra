@@ -64,7 +64,7 @@ class StepReviewVendor extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: const Color(0xFFE5E5E5)),
+              //border: Border.all(color: const Color(0xFFE5E5E5)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.03),
@@ -142,9 +142,9 @@ class StepReviewVendor extends StatelessWidget {
                 // 3. UI now reacts to 'isAgreed' from Bloc
                 color: isAgreed ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB), 
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(
-                  color: isAgreed ? const Color(0xFFBBF7D0) : const Color(0xFFF3F4F6)
-                ),
+                // border: Border.all(
+                //   color: isAgreed ? const Color(0xFFBBF7D0) : const Color(0xFFF3F4F6)
+                // ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

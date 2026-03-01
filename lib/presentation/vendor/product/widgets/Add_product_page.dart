@@ -8,6 +8,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/product_categories.dart';
 import '../../../../config/utils/currency_formatters.dart';
 import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
@@ -47,6 +48,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final _stockCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
   final _downPaymentCtrl = TextEditingController(); // Only for Direct
+  final _durationCtrl = TextEditingController();
 
   // --- LOGIC STATE ---
   ProductModelType _selectedModel = ProductModelType.strict;
@@ -56,39 +58,25 @@ class _AddProductPageState extends State<AddProductPage> {
 
   bool _termsAccepted = false;
 
-  // ✅ ADD THIS LINE HERE:
+  bool _isPriceTooHigh = false;
+
+  // ✅ TRACK MINIMUM VS SELECTED
+  int _minAllowedBaseDays = 14; 
+
   int _calculatedDurationInt = 14;
   int _calculatedNoticeInt = 3;
   int _calculatedExtensionInt = 0;
 
+
   // DYNAMIC DISPLAY STRINGS
-  String _baseDuration = "14 Days";
   String _noticePeriod = "3 Days";
   String _extensionDuration = "0 Days"; // Visual only
   String _totalMaxTime = "17 Days";
   bool _priceAllowsExtension = false;
 
   // We need to store the current limit to use it inside listener
-  double _currentMaxPlanLimit = 100000;
+  double _currentMaxPlanLimit = 1000000;
 
-  final List<String> _categories = [
-    "Mens Clothing",
-    "Womens Clothing",
-    "Kids & Baby",
-    "Shoes & Footwear",
-    "Bags & Handbags",
-    "Jewelry & Watches",
-    "Wigs & Hair",
-    "Accessories",
-    "Phones",
-    "Laptops",
-    "Gadgets",
-    "Home Appliances",
-    "Furniture",
-    "Health & Beauty",
-    "Food & Drinks",
-    "Automotive",
-  ];
   // 1. Define the stream variable here
   late Stream<VendorStats> _statsStream;
 
@@ -99,6 +87,7 @@ class _AddProductPageState extends State<AddProductPage> {
     // 2. Initialize the stream ONCE here
     _statsStream = widget.vendors.streamVendorStats(widget.vendorUid);
     _priceCtrl.addListener(_updatePlanLogic);
+    _durationCtrl.addListener(_onDurationInputChanged);
 
     _fetchComplianceStatus();
   }
@@ -118,107 +107,81 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _descCtrl.dispose();
-    _priceCtrl.dispose();
-    _stockCtrl.dispose();
-    _categoryCtrl.dispose();
-    _downPaymentCtrl.dispose();
-    super.dispose();
+  void _onDurationInputChanged() {
+    if (_isPriceTooHigh) return;
+
+    int typedDays = int.tryParse(_durationCtrl.text) ?? 0;
+    
+    // We don't overwrite their typing immediately (prevents UX issues if they type "1" before "15")
+    // But we use the valid minimum for the Timeline calculation
+    int effectiveDays = typedDays < _minAllowedBaseDays ? _minAllowedBaseDays : typedDays;
+
+    setState(() {
+      _calculatedDurationInt = effectiveDays;
+      int totalDays = effectiveDays + _calculatedNoticeInt + _calculatedExtensionInt;
+      _totalMaxTime = "$totalDays Days";
+    });
   }
 
   // --- 🧠 CORE LOGIC ENGINE ---
   void _updatePlanLogic() {
-    final cleanPrice =
-        double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
-
-    // ✅ FIX: Use the synced limit from Firestore, not hardcoded 100k
+    final cleanPrice = double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
     final double calculationCeiling = _currentMaxPlanLimit; 
 
-    int baseDays = 14;
+    int minBaseDays = 14;
     int noticeDays = 3;
     int extDays = 0;
     bool allowExt = false;
 
-    bool isPriceTooHigh = false;
+    _isPriceTooHigh = false;
 
     if (cleanPrice > calculationCeiling) {
-       isPriceTooHigh = true;
+       _isPriceTooHigh = true;
     }
 
-    // 1. Determine Base Duration & Max Extension from Price Table
-    // --- GRANULAR TIER LOGIC (UPDATED FOR 3M CAP) ---
-        if (cleanPrice <= 7000) {
-            // Very small items: 1 week is enough
-            baseDays = 7; noticeDays = 1; extDays = 0; allowExt = false;
-        } else if (cleanPrice <= 15000) {
-            // Small items: 2 weeks
-            baseDays = 14; noticeDays = 3; extDays = 0; allowExt = false;
-        } else if (cleanPrice <= 20000) {
-            // 15k - 20k: 3 Weeks
-            baseDays = 21; noticeDays = 3; extDays = 7; allowExt = true;
-        } else if (cleanPrice <= 35000) {
-            // Casual buy: 1 Month (30 days)
-            baseDays = 30; noticeDays = 3; extDays = 5; allowExt = true;
-        } else if (cleanPrice <= 75000) {
-            // Budget Phone: 45 Days
-            baseDays = 45; noticeDays = 3; extDays = 7; allowExt = true;
-        } else if (cleanPrice <= 150000) {
-            // Mid Phone: 60 Days (2 Months)
-            baseDays = 60; noticeDays = 3; extDays = 10; allowExt = true;
-        } else if (cleanPrice <= 300000) {
-            // Good Phone/Laptop: 75 Days (2.5 Months)
-            baseDays = 75; noticeDays = 5; extDays = 14; allowExt = true;
-        } else if (cleanPrice <= 600000) {
-            // High-end Phone: 90 Days (3 Months)
-            baseDays = 90; noticeDays = 5; extDays = 14; allowExt = true;
-        } else if (cleanPrice <= 1200000) {
-            // MacBook/High Tech: 100 Days (~3.5 Months)
-            baseDays = 100; noticeDays = 7; extDays = 15; allowExt = true;
-        } else {
-            // Ultra High (1.2m - 3m+): 120 Days (4 Months)
-            // Vendors might complain if you go higher than 4 months for holding stock.
-            baseDays = 120; noticeDays = 7; extDays = 20; allowExt = true;
-        }
+    // 1. Determine Minimum Allowed Base Duration
+    if (cleanPrice <= 20000) {
+        minBaseDays = 14; noticeDays = 3; extDays = 0; allowExt = false;
+    } else if (cleanPrice <= 120000) {
+        minBaseDays = 30; noticeDays = 3; extDays = 5; allowExt = true;
+    } else if (cleanPrice <= 350000) {
+        minBaseDays = 60; noticeDays = 3; extDays = 7; allowExt = true;
+    } else if (cleanPrice <= 950000) {
+        minBaseDays = 90; noticeDays = 3; extDays = 7; allowExt = true;
+    } else {
+        minBaseDays = 120; noticeDays = 3; extDays = 7; allowExt = true;
+    }
 
-    // 2. Apply Model Logic
+    // 2. Pre-fill or enforce the controller value
+    int currentInput = int.tryParse(_durationCtrl.text) ?? 0;
+    int effectiveDays = currentInput < minBaseDays ? minBaseDays : currentInput;
+
+    // 3. Apply Model Logic for Extensions
     if (_selectedModel == ProductModelType.direct) {
-      // Direct Model Rules:
-      // - Extensions are always 14 days if enabled (or match strict table logic if preferred)
-      // - Let's stick to your table logic for consistency:
       if (!allowExt) {
-        // Even Direct can't extend cheap items
         _isDirectExtensionEnabled = false;
         extDays = 0;
-      } else {
-        // If price allows, check user toggle
-        if (!_isDirectExtensionEnabled) {
-          extDays = 0;
-        }
+      } else if (!_isDirectExtensionEnabled) {
+        extDays = 0;
       }
     } else {
-      // Strict Model Rules:
-      // - Extensions are fixed based on price table
       if (!allowExt) extDays = 0;
     }
 
-    // 3. Calculate Total
-    int totalDays = baseDays + noticeDays + extDays;
+   // 4. Calculate Total (Using effectiveDays)
+    int totalDays = effectiveDays + noticeDays + extDays;
 
     setState(() {
       _priceAllowsExtension = allowExt;
-      _calculatedDurationInt = baseDays;
+      _minAllowedBaseDays = minBaseDays; 
+      _calculatedDurationInt = effectiveDays; 
       _calculatedNoticeInt = noticeDays;
       _calculatedExtensionInt = extDays;
 
-      if (isPriceTooHigh) {
-         _baseDuration = "Limit Exceeded";
+      if (_isPriceTooHigh) {
          _totalMaxTime = "N/A";
          _extensionDuration = "N/A";
       } else {
-        _baseDuration = "$baseDays Days";
         _noticePeriod = "$noticeDays Days";
         _extensionDuration = allowExt ? "$extDays Days" : "None";
         _totalMaxTime = "$totalDays Days";
@@ -254,9 +217,9 @@ class _AddProductPageState extends State<AddProductPage> {
     final stock = int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
 
     // Rule 1: Cap
-    if (price > 100000) {
+    if (price > _currentMaxPlanLimit) {
       showAppSnackbar(
-        "Single product price cannot exceed ₦100,000.",
+        "Single product price cannot exceed ₦${_currentMaxPlanLimit.toStringAsFixed(2)}.",
         SnackbarType.error,
       );
       return;
@@ -287,6 +250,16 @@ class _AddProductPageState extends State<AddProductPage> {
         showAppSnackbar("Enter valid down payment.", SnackbarType.error);
         return;
       }
+    }
+
+    // ✅ ADD THIS: Rule 4: Manual Duration Check
+    int finalDuration = int.tryParse(_durationCtrl.text) ?? _minAllowedBaseDays;
+    if (finalDuration < _minAllowedBaseDays) {
+      showAppSnackbar(
+        "Duration cannot be less than $_minAllowedBaseDays days for a product of this price.", 
+        SnackbarType.error
+      );
+      return;
     }
 
     // Prepare Policy
@@ -320,6 +293,18 @@ class _AddProductPageState extends State<AddProductPage> {
         extensionPeriod: _calculatedExtensionInt,
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    _priceCtrl.dispose();
+    _stockCtrl.dispose();
+    _categoryCtrl.dispose();
+    _downPaymentCtrl.dispose();
+    _durationCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -411,8 +396,18 @@ class _AddProductPageState extends State<AddProductPage> {
                         SizedBox(height: 12.h),
                         _buildInput(
                           controller: _descCtrl,
-                          hint: "Description",
+                          hint: "Description (min 20 characters)",
                           maxLines: 3,
+                          // ✅ ADDED: Custom validator for minimum characters
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return "Description is required";
+                            }
+                            if (value.trim().length < 20) {
+                              return "Please enter at least 20 characters";
+                            }
+                            return null;
+                          },
                         ),
                         SizedBox(height: 24.h),
             
@@ -431,10 +426,7 @@ class _AddProductPageState extends State<AddProductPage> {
                                     controller: _priceCtrl,
                                     hint: "0.00",
                                     prefixIcon: Padding(
-                                      padding: EdgeInsets.only(
-                                        left: 14.w,
-                                        right: 4.w,
-                                      ),
+                                      padding: EdgeInsets.only(left: 14.w, right: 4.w),
                                       child: Text(
                                         "₦",
                                         style: GoogleFonts.inter(
@@ -444,19 +436,25 @@ class _AddProductPageState extends State<AddProductPage> {
                                         ),
                                       ),
                                     ),
-                                    prefixIconConstraints: const BoxConstraints(
-                                      minWidth: 0,
-                                      minHeight: 0,
-                                    ),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
+                                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
                                       CurrencyInputFormatter(),
                                     ],
                                   ),
+                                  // ✅ ADDED: Only show this if price is too high
+                                  if (_isPriceTooHigh) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFFD92D20), // Error Red
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -468,26 +466,27 @@ class _AddProductPageState extends State<AddProductPage> {
                                 children: [
                                   Text("Base Duration", style: _labelStyle()),
                                   SizedBox(height: 8.h),
-                                  Container(
-                                    height: 48.h,
-                                    padding: EdgeInsets.symmetric(horizontal: 12.w),
-                                    alignment: Alignment.centerLeft,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF2F4F7),
-                                      borderRadius: BorderRadius.circular(12.r),
-                                      border: Border.all(
-                                        color: const Color(0xFFEAECF0),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _baseDuration,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14.sp,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
+                                  _buildInput(
+                                    controller: _durationCtrl,
+                                    hint: "e.g. $_minAllowedBaseDays",
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    validator: (value) => null,
                                   ),
+                                  // ✅ ADDED: Only show if they type a number LOWER than the minimum
+                                  if ((int.tryParse(_durationCtrl.text) ?? 0) < _minAllowedBaseDays) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      "Min allowed: $_minAllowedBaseDays days",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFFD92D20), // Error Red
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -580,7 +579,7 @@ class _AddProductPageState extends State<AddProductPage> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF9FAFB),
                             borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(color: const Color(0xFFEAECF0)),
+                            //border: Border.all(color: const Color(0xFFEAECF0)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -594,7 +593,7 @@ class _AddProductPageState extends State<AddProductPage> {
                                 ),
                               ),
                               SizedBox(height: 12.h),
-                              _buildTimelineRow("Base Duration", _baseDuration),
+                              _buildTimelineRow("Base Duration", _calculatedDurationInt.toString()),
                               _buildTimelineRow(
                                 "Notice Period",
                                 _noticePeriod,
@@ -663,11 +662,11 @@ class _AddProductPageState extends State<AddProductPage> {
                           child: Container(
                             padding: EdgeInsets.all(12.r),
                             decoration: BoxDecoration(
-                              border: Border.all(
-                                color: _termsAccepted
-                                    ? KorraColors.brand
-                                    : const Color(0xFFEAECF0),
-                              ),
+                              // border: Border.all(
+                              //   color: _termsAccepted
+                              //       ? KorraColors.brand
+                              //       : const Color(0xFFEAECF0),
+                              // ),
                               borderRadius: BorderRadius.circular(12.r),
                               color: _termsAccepted
                                   ? const Color(0xFFFFF4ED)
@@ -922,7 +921,7 @@ class _AddProductPageState extends State<AddProductPage> {
           decoration: BoxDecoration(
             color: const Color(0xFFF9FAFB),
             borderRadius: BorderRadius.circular(12.r),
-            border: Border.all(color: const Color(0xFFEAECF0)),
+            //border: Border.all(color: const Color(0xFFEAECF0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -937,7 +936,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
               SizedBox(height: 4.h),
               Text(
-                "If a customer ever cancels, they receive a refund as Store Credit. This protects your cash flow.",
+                "If a customer ever cancels, they receive their refund ito their Store Balance. This protects your cash flow.",
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   color: const Color(0xFF667085),
@@ -984,7 +983,7 @@ class _AddProductPageState extends State<AddProductPage> {
           decoration: BoxDecoration(
             color: const Color(0xFFFFF4ED),
             borderRadius: BorderRadius.circular(8.r),
-            border: Border.all(color: const Color(0xFFFFE0D0)),
+            //border: Border.all(color: const Color(0xFFFFE0D0)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,7 +996,7 @@ class _AddProductPageState extends State<AddProductPage> {
               SizedBox(width: 10.w),
               Expanded(
                 child: Text(
-                  "Flexible Plan. Refunds are strictly 'Store Credit' to protect you from cancellations.",
+                  "Flexible Plan. Refunds are strictly converted to 'Store Balance' to protect you from cancellations.",
                   style: GoogleFonts.inter(
                     fontSize: 12.sp,
                     color: const Color(0xFF344054),
@@ -1097,9 +1096,9 @@ class _AddProductPageState extends State<AddProductPage> {
             ? const Color(0xFFFEF3F2)
             : KorraColors.brandLight, // Red or Blue bg
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: isExceeded ? const Color(0xFFFECDCA) : KorraColors.brandDark.withOpacity(0.3),
-        ),
+        // border: Border.all(
+        //   color: isExceeded ? const Color(0xFFFECDCA) : KorraColors.brandDark.withOpacity(0.3),
+        // ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1290,13 +1289,14 @@ class _AddProductPageState extends State<AddProductPage> {
     BoxConstraints? prefixIconConstraints,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
-      validator: (v) => v!.isEmpty ? "Required" : null,
+      validator: validator ?? (v) => v!.trim().isEmpty ? "Required" : null,
       style: GoogleFonts.inter(
         fontSize: 15.sp,
         fontWeight: FontWeight.w600,
@@ -1309,6 +1309,7 @@ class _AddProductPageState extends State<AddProductPage> {
         prefixIcon: prefixIcon,
         prefixIconConstraints: prefixIconConstraints,
         contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+        errorStyle: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFFD92D20)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
           borderSide: const BorderSide(color: Color(0xFFEAECF0)),
@@ -1337,7 +1338,7 @@ class _AddProductPageState extends State<AddProductPage> {
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: const Color(0xFFEAECF0)),
+        //border: Border.all(color: const Color(0xFFEAECF0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1373,7 +1374,12 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  void _showCategorySheet(BuildContext context) {
+ void _showCategorySheet(BuildContext context) {
+    // 1. Create a local copy of the categories and a controller for the search bar
+    // 1. Point this to the new flatList
+    List<String> filteredCategories = List.from(ProductCategories.flatList);
+    final searchCtrl = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1381,57 +1387,114 @@ class _AddProductPageState extends State<AddProductPage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            SizedBox(height: 12.h),
-            Container(
-              width: 40.w,
-              height: 4.h,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              "Select Category",
-              style: GoogleFonts.inter(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollController,
-                itemCount: _categories.length,
-                separatorBuilder: (_, __) =>
-                    const Divider(height: 1, color: Color(0xFFF2F4F7)),
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  return ListTile(
-                    title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
-                    onTap: () {
-                      setState(() => _categoryCtrl.text = cat);
-                      Navigator.pop(context);
-                    },
-                    trailing: _categoryCtrl.text == cat
-                        ? const Icon(
-                            Iconsax.tick_circle,
-                            color: KorraColors.brand,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: DraggableScrollableSheet(
+              initialChildSize: 0.7, 
+              minChildSize: 0.5,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) => Column(
+                children: [
+                  SizedBox(height: 12.h),
+                  Container(
+                    width: 40.w,
+                    height: 4.h,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
+                  Text(
+                    "Select Category",
+                    style: GoogleFonts.inter(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
+                  
+                  // ✅ NEW: SEARCH BAR
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20.w),
+                    child: TextField(
+                      controller: searchCtrl,
+                      onChanged: (query) {
+                        setSheetState(() {
+                          // 2. Point this to the new flatList as well
+                          filteredCategories = ProductCategories.searchCategories(query);
+                        });
+                      },
+                      style: GoogleFonts.inter(fontSize: 14.sp),
+                      decoration: InputDecoration(
+                        hintText: "Search categories...",
+                        hintStyle: GoogleFonts.inter(color: Colors.grey.shade400),
+                        prefixIcon: const Icon(Iconsax.search_normal, color: Colors.grey, size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFB),
+                        contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16.w),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                          borderSide: const BorderSide(color: KorraColors.brand),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+                  
+                  // ✅ UPDATED: LIST VIEW USING filteredCategories
+                  Expanded(
+                    child: filteredCategories.isEmpty
+                        ? Center(
+                            child: Text(
+                              "No categories found",
+                              style: GoogleFonts.inter(
+                                fontSize: 14.sp, 
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
                           )
-                        : null,
-                  );
-                },
+                        : ListView.separated(
+                            controller: scrollController,
+                            itemCount: filteredCategories.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, color: Color(0xFFF2F4F7)),
+                            itemBuilder: (context, index) {
+                              final cat = filteredCategories[index];
+                              return ListTile(
+                                contentPadding: EdgeInsets.symmetric(horizontal: 20.w),
+                                title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
+                                onTap: () {
+                                  // This updates the main page's state
+                                  setState(() => _categoryCtrl.text = cat);
+                                  Navigator.pop(context);
+                                },
+                                trailing: _categoryCtrl.text == cat
+                                    ? const Icon(
+                                        Iconsax.tick_circle,
+                                        color: KorraColors.brand,
+                                      )
+                                    : null,
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

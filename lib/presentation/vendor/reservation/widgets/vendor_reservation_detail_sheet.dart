@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -36,9 +37,32 @@ class _VendorReservationDetailSheetState
   // State to drive the visual PIN boxes
   String _currentPin = "";
 
-  Future<void> _launch(String scheme, String path) async {
-    final Uri uri = Uri(scheme: scheme, path: path);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  // ✅ ADDED: Specific launcher for regular phone calls
+  Future<void> _launchCall(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final Uri uri = Uri(scheme: 'tel', path: cleanPhone);
+    
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        showAppSnackbar("Could not open phone dialer", SnackbarType.error);
+      }
+    }
+  }
+
+  // ✅ ADDED: Specific launcher for WhatsApp
+  Future<void> _launchWhatsapp(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final Uri uri = Uri.parse("https://wa.me/$cleanPhone");
+    
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        showAppSnackbar("Could not open WhatsApp", SnackbarType.error);
+      }
+    }
   }
 
   // ✅ THE MISSING METHOD
@@ -57,7 +81,6 @@ class _VendorReservationDetailSheetState
         );
   }
 
-  // ✅ PREMIUM PIN DIALOG
   // ✅ PREMIUM PIN DIALOG (Live Update)
   void _showPinDialog() {
     _pinController.clear();
@@ -416,8 +439,8 @@ class _VendorReservationDetailSheetState
                           decoration: BoxDecoration(
                             color: const Color(0xFFF9FAFB),
                             borderRadius: BorderRadius.circular(16.r),
-                            border:
-                                Border.all(color: const Color(0xFFF3F4F6)),
+                            // border:
+                            //     Border.all(color: const Color(0xFFF3F4F6)),
                           ),
                           child: Row(
                             children: [
@@ -448,11 +471,26 @@ class _VendorReservationDetailSheetState
                                   ],
                                 ),
                               ),
-                              if (d.customerPhone.isNotEmpty)
-                                _ActionBtn(
-                                    icon: Iconsax.call,
-                                    onTap: () =>
-                                        _launch('tel', d.customerPhone)),
+                              if (d.customerPhone.isNotEmpty && (isReady || isFulfilled))
+                                Row(
+                                  children: [
+                                    // 1. Call Button (Blue)
+                                    _ActionBtn(
+                                      icon: Iconsax.call,
+                                      bgColor: Colors.blue.shade50,
+                                      iconColor: Colors.blue.shade700,
+                                      onTap: () => _launchCall(d.customerPhone),
+                                    ),
+                                    SizedBox(width: 8.w),
+                                    // 2. WhatsApp Button (Green)
+                                    _ActionBtn(
+                                      icon: FontAwesomeIcons.whatsapp,
+                                      bgColor: const Color(0xFFE8FDF0),
+                                      iconColor: const Color(0xFF25D366),
+                                      onTap: () => _launchWhatsapp(d.customerPhone),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),
@@ -574,19 +612,31 @@ class _FinanceRow extends StatelessWidget {
 class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _ActionBtn({required this.icon, required this.onTap});
+  final Color bgColor;    
+  final Color iconColor; 
+
+  const _ActionBtn({
+    required this.icon, 
+    required this.onTap,
+    required this.bgColor,
+    required this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(8.r),
+        padding: EdgeInsets.all(10.r), // Slightly larger tap target
         decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade300),
-            shape: BoxShape.circle),
-        child: Icon(icon, size: 18.sp, color: Colors.black),
+            color: bgColor, // Uses the passed color
+            shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon, 
+          size: 18.sp, 
+          color: iconColor, // Uses the passed color
+        ),
       ),
     );
   }

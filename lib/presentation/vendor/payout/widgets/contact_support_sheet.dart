@@ -147,7 +147,7 @@ class _ContactOption extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade200, width: 0.5), // Subtle border
+          border: Border.all(color: Colors.grey.shade200.withOpacity(0.35)), // Subtle border
           borderRadius: BorderRadius.circular(16.r),
           color: Colors.white,
         ),

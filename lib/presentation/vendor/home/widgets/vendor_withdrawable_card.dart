@@ -122,39 +122,39 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
                         ],
                       ),
 
-                      // Right: Total Ledger Badge (With Overflow Protection)
-                      if (widget.totalBalanceText != null) ...[
-                        SizedBox(width: 12.w),
-                        Flexible(
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(20.r),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'Net Worth: ',
-                                    style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white70),
-                                  ),
-                                  Text(
-                                    _isBalanceVisible ? widget.totalBalanceText! : '••••',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10.sp, 
-                                      fontWeight: FontWeight.w700, 
-                                      color: Colors.white
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ]
+                      // // Right: Total Ledger Badge (With Overflow Protection)
+                      // if (widget.totalBalanceText != null) ...[
+                      //   SizedBox(width: 12.w),
+                      //   Flexible(
+                      //     child: Container(
+                      //       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+                      //       decoration: BoxDecoration(
+                      //         color: Colors.black.withOpacity(0.25),
+                      //         borderRadius: BorderRadius.circular(20.r),
+                      //         border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      //       ),
+                      //       child: FittedBox(
+                      //         fit: BoxFit.scaleDown,
+                      //         child: Row(
+                      //           children: [
+                      //             Text(
+                      //               'Net Worth: ',
+                      //               style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white70),
+                      //             ),
+                      //             Text(
+                      //               _isBalanceVisible ? widget.totalBalanceText! : '••••',
+                      //               style: GoogleFonts.inter(
+                      //                 fontSize: 10.sp, 
+                      //                 fontWeight: FontWeight.w700, 
+                      //                 color: Colors.white
+                      //               ),
+                      //             ),
+                      //           ],
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ),
+                      // ]
                     ],
                   ),
 

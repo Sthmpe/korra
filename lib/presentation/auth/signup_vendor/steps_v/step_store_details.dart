@@ -344,9 +344,9 @@ class _RequirementProgress extends StatelessWidget {
       decoration: BoxDecoration(
         color: isComplete ? const Color(0xFFF0FDF4) : const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: isComplete ? const Color(0xFFBBF7D0) : const Color(0xFFFFEDD5),
-        ),
+        // border: Border.all(
+        //   color: isComplete ? const Color(0xFFBBF7D0) : const Color(0xFFFFEDD5),
+        // ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

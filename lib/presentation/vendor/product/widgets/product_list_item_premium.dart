@@ -29,7 +29,7 @@ class ProductListItemPremium extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: const Color(0xFFEAECF0), width: 1),
+          border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.3), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
@@ -158,7 +158,7 @@ class ProductListItemPremium extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFF4ED), // Light brand orange
                                   borderRadius: BorderRadius.circular(8.r),
-                                  border: Border.all(color: const Color(0xFFFFE0D0)),
+                                  //border: Border.all(color: const Color(0xFFFFE0D0)),
                                 ),
                                 child: Icon(
                                   // ✅ UPDATED ICON: The standard "Share Node"

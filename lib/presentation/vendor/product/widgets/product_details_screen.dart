@@ -141,7 +141,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFEAECF0)),
+                //border: Border.all(color: const Color(0xFFEAECF0)),
               ),
               child: Column(
                 children: [
@@ -153,7 +153,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFEAECF0)),
+                          //border: Border.all(color: const Color(0xFFEAECF0)),
                         ),
                         child: Icon(
                           // ✅ Correct Icon logic based on Enum
@@ -216,7 +216,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFEAECF0)),
+                border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.3)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -293,7 +293,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ),
         SizedBox(height: 4.h),
         Text(
-          value,
+          value.contains("Credit") ? "Store Balance" : value,
           style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF101828), fontWeight: FontWeight.w600),
         ),
       ],

@@ -32,7 +32,7 @@ class RowWithChevron extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFAF7F4),
                 borderRadius: BorderRadius.circular(10.r),
-                border: Border.all(color: const Color(0xFFEAE6E2)),
+                //border: Border.all(color: const Color(0xFFEAE6E2)),
               ),
               alignment: Alignment.center,
               child: Icon(icon, size: 18.sp, color: _brand),

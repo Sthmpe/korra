@@ -34,7 +34,7 @@ class VendorCapacityCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: const Color(0xFFEAE6E2)),
+          border: Border.all(color: const Color(0xFFEAE6E2).withOpacity(0.3)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
@@ -161,7 +161,7 @@ class VendorCapacityCard extends StatelessWidget {
                           Container(width: 6.w, height: 6.w, decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle)),
                           SizedBox(width: 6.w),
                           Text(
-                            "Store Credit: ₦${formatToCurrency(storeCreditValue)}",
+                            "Store Balance: ₦${formatToCurrency(storeCreditValue)}",
                             style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFFB54D08), fontWeight: FontWeight.w600),
                           ),
                         ],

@@ -66,7 +66,7 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
                     ),
                     SizedBox(width: 12.w),
                     _StatsCard(
-                      label: "Store Credits",
+                      label: "Store Balance",
                       amount: stats.totalLiability,
                       icon: Iconsax.card,
                       color: const Color(0xFFB42318),
@@ -90,7 +90,7 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
                   onTap: () => setState(() => _filter = 'Cash')
                 ),
                 _FilterTab(
-                  label: "Store Credits", 
+                  label: "Store Balance", 
                   isSelected: _filter == 'Store Credit', 
                   onTap: () => setState(() => _filter = 'Store Credit')
                 ),
@@ -179,7 +179,7 @@ class _StatsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.grey.shade200),
+        //border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
         ],

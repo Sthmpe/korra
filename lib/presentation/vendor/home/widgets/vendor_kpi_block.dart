@@ -106,7 +106,7 @@ class VendorKpiBlock extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: Colors.grey.shade100),
+              border: Border.all(color: Colors.grey.shade100.withOpacity(0.5)),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF101828).withOpacity(0.04), 

@@ -182,7 +182,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFF9FAFB),
                         borderRadius: BorderRadius.circular(12.r),
-                        border: Border.all(color: const Color(0xFFEAECF0)),
+                        //border: Border.all(color: const Color(0xFFEAECF0)),
                       ),
                       child: Row(
                         children: [
@@ -404,7 +404,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0F9FF),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFB2DDFF)),
+        //border: Border.all(color: const Color(0xFFB2DDFF)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
