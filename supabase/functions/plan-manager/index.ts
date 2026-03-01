@@ -43,26 +43,7 @@ function to2DP_Floor(num: number): number {
 function generateRandomDp(price: number): number {
     let percentage: number;
     
-    if (price <= 100000) {
-        // Small Items (0 - 100k): 30%
-        // Example: N50k item -> N15k down
-        percentage = 0.30;
-    } 
-    else if (price <= 500000) {
-        // Mid Range (100k - 500k): 25%
-        // Example: N200k phone -> N50k down
-        percentage = 0.25;
-    } 
-    else if (price <= 1500000) {
-        // High End (500k - 1.5m): 20%
-        // Example: N1m laptop -> N200k down
-        percentage = 0.20;
-    } 
-    else {
-        // Ultra High (> 1.5m): 15%
-        // Example: N3m item -> N450k down (Keeps it realistic)
-        percentage = 0.15;
-    }
+    percentage = 0.30;
 
     return to2DP(price * percentage);
 }
