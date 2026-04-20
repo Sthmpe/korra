@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -145,7 +144,7 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
                       width: 20, height: 20, 
                       child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                     )
-                  : Icon(Iconsax.share, size: 22.sp),
+                  : Icon(Icons.share, size: 22.sp),
               label: Text(
                 _isSharing ? "Generating..." : "Share Image",
                 style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700),

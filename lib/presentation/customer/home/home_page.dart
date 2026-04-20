@@ -351,8 +351,16 @@ class _HomePageState extends State<HomePage> {
                                     );
                                   }
 
-                                  // 🔄 CHANGE: Named Route (Pass Object)
-                                  Get.toNamed(Routes.customerTransactionReceipt, arguments: receiptData);
+                                  // 🔄 THE FIX: Wrap it in the Map structure the Route expects
+                                  Get.toNamed(
+                                    Routes.customerTransactionReceipt, 
+                                    arguments: {
+                                      'data': receiptData,
+                                      // If item.type is an Enum (like ActivityType.payment), use .name 
+                                      // Or if you added the raw backend string to ActivityItem, use that!
+                                      'type': item.type.toString(), 
+                                    }
+                                  );
                                 },
                                 onViewPlan: (item) {
                                   if (item.planId == null || item.planId!.isEmpty) return;

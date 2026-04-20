@@ -142,7 +142,10 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
 
                           Get.toNamed(
                             Routes.customerTransactionReceipt, 
-                            arguments: data
+                            arguments: {
+                              'data': data,
+                              'type': 'installment'
+                            }
                           );
                         },
                         style: OutlinedButton.styleFrom(

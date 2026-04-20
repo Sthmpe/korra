@@ -68,7 +68,7 @@ class ReservationStatusTabs extends StatelessWidget {
 
           // 5. CANCELLED
           _Tab(
-            label: "Cancelled",
+            label: "Closed",
             count: cancelledCount,
             isActive: current == ReservationStatus.cancelled,
             onTap: () => onChanged(ReservationStatus.cancelled),

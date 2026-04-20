@@ -8,10 +8,12 @@ import 'profile_state.dart';
 class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   final VendorRepository vendorRepo;
   final NetCubit net;
+  final String vendorUid; // Add vendorUid to the constructor
 
   ProfileBloc({
     required this.vendorRepo,
     required this.net,
+    required this.vendorUid, // Initialize vendorUid
   }) : super(const ProfileState()) {
     on<LogoutRequested>(_onLogout);
     on<DeleteAccountRequested>(_onDelete);
@@ -24,7 +26,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     // if (!online) return;
 
     try {
-      await vendorRepo.logout();
+      await vendorRepo.logout(vendorUid);
       emit(state.copyWith(status: ProfileStatus.logout, message: "Logged out successfully"));
     } catch (e) {
       emit(state.copyWith(status: ProfileStatus.failure, errorMessage: "Logout failed: $e"));

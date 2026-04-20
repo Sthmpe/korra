@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,6 +11,9 @@ class MonnifyFunctions {
   final FunctionsClient _fx;
   MonnifyFunctions({FunctionsClient? fx})
     : _fx = fx ?? Supabase.instance.client.functions;
+
+  final korraSecret = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
+
 
   /// Call the OTP authorization function
   Future<Map<String, dynamic>> authorizeTransferOtp({
@@ -164,11 +171,34 @@ class MonnifyFunctions {
     required String accountNumber,
     required String bankCode,
   }) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) throw "You must be logged in.";
+
+    // 1. Get the User VIP Pass (Who they are)
+    final idToken = await user.getIdToken(true);
+
+    // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+    debugPrint("User ID: ${user.uid}");
+    debugPrint("🔒 Calling validate-bank-account with Double Lock...");
+
     final res = await _fx.invoke(
       'validate-bank-account',
+      headers: {
+        'firebase-token': 'Bearer $idToken', // 🔐 Protect Monnify API limits!
+        'x-korra-timestamp': timestamp,
+        'x-korra-signature': signature,
+      },
       body: {'accountNumber': accountNumber, 'bankCode': bankCode},
     );
-
+    
     final data = res.data;
     if (data == null || data['ok'] != true) {
       throw Exception(data?['message'] ?? "Bank account validation failed");
@@ -271,10 +301,25 @@ class MonnifyFunctions {
   /// }
   Future<void> verifyNin(String nin) async {
     try {
+      // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling nin-verify with Lock...");
+
       final res = await _fx.invoke(
-        'nin-verify', // Supabase Edge Function name
-        body: {'nin': nin},
-      );
+        'nin-verify',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        }, 
+        body: {
+          'nin': nin
+        });
 
       final data = res.data as Map<String, dynamic>?;
 
@@ -317,8 +362,22 @@ class MonnifyFunctions {
     required String dateOfBirthIso, // "YYYY-MM-DD"
     required String mobileNo,
   }) async {
+    // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // Do the Math: Hash the timestamp using the secret key
+    final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+    final digest = hmacSha256.convert(utf8.encode(timestamp));
+    final signature = digest.toString();
+
+    debugPrint("🔒 Calling bvn-verify with Lock...");
+
     final res = await _fx.invoke(
       'bvn-verify',
+      headers: {
+        'x-korra-timestamp': timestamp,
+        'x-korra-signature': signature,
+      },
       body: {
         'bvn': bvn,
         'name': name,

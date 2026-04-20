@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 
@@ -18,8 +21,30 @@ extension CustomerPlans on CustomerRepository {
     required String productId,
   }) async {
     try {
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
+
       final response = await fx.invoke(
-        'plan-manager',
+        'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,      // 🔐 Lock 1: Time Check
+          'x-korra-signature': signature,      // 🔐 Lock 1: Signature Check
+        },
         body: {
           "action": "PREVIEW",
           "customerUid": customerUid,
@@ -67,8 +92,30 @@ extension CustomerPlans on CustomerRepository {
       final rawMap = plan.toMap();
       final safeMap = _sanitizeMap(rawMap);
 
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
+
       final response = await fx.invoke(
-        'plan-manager', 
+        'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,      // 🔐 Lock 1: Time Check
+          'x-korra-signature': signature,      // 🔐 Lock 1: Signature Check
+        },
         body: {
           "action": "CREATE",
           "secureToken": secureToken, // ✅ Send Token
@@ -116,8 +163,30 @@ extension CustomerPlans on CustomerRepository {
     required double amount,
   }) async {
     try {
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
+
       final response = await fx.invoke(
-        'plan-manager',
+        'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,      // 🔐 Lock 1: Time Check
+          'x-korra-signature': signature,      // 🔐 Lock 1: Signature Check
+        },
         body: {
           "action": "PAY_INSTALLMENT",
           "planId": planId,
@@ -153,12 +222,17 @@ extension CustomerPlans on CustomerRepository {
           status: "SUCCESSFUL",
         );
       }
-
     } on FunctionException catch (e) {
-      throw KorraException(e.toString());
+      final details = e.details;
+       if (details is Map && details['error'] != null) {
+          throw KorraException(details['error']);
+       }
+       throw KorraException(
+        "Payment failed. Please try again.",
+        technicalDetails: e.toString(),
+      );
     } catch (e) {
-      // If it's not a function error, rethrow
-      throw KorraException(e.toString());
+      throw KorraException("Payment failed. Please try again.");
     }
   }
 
@@ -171,8 +245,30 @@ extension CustomerPlans on CustomerRepository {
     required String reason,
   }) async {
     try {
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
+
       final response = await fx.invoke(
-        'plan-manager',
+        'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,      // 🔐 Lock 1: Time Check
+          'x-korra-signature': signature,      // 🔐 Lock 1: Signature Check
+        },
         body: {
           "action": "CANCEL",
           "planId": planId,
@@ -210,10 +306,29 @@ extension CustomerPlans on CustomerRepository {
   Future<void> extendPlan(String planId) async {
     try {
       final user = auth.currentUser;
-      if (user == null) throw KorraException("You must be logged in.");
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+     final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
 
       final response = await fx.invoke(
-        'plan-manager',
+        'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,      // 🔐 Lock 1: Time Check
+          'x-korra-signature': signature,      // 🔐 Lock 1: Signature Check
+        },
         body: {
           "action": "EXTEND",
           "planId": planId,
@@ -338,7 +453,7 @@ extension CustomerPlans on CustomerRepository {
     return firestore
         .collection("plans")
         .where("customerId", isEqualTo: customerId)
-        .orderBy("createdAt", descending: true)
+        .orderBy("updatedAt", descending: true)
         .snapshots()
         .map(
           (snap) =>
@@ -363,5 +478,36 @@ extension CustomerPlans on CustomerRepository {
       if (!doc.exists) throw Exception("Plan not found");
       return Plan.fromMap(doc.data()!, doc.id);
     });
+  }
+
+  Future<Map<String, dynamic>> getComplianceStatus(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('vendor_compliance').doc(uid).get();
+      
+      // Default to 'verification_pending' if doc doesn't exist 
+      // (We set blockPayments to false here so new merchants can still accept initial digital reservations)
+      if (!doc.exists) {
+        return {
+          'status': 'verification_pending', 
+          'blockPayments': false,
+          'message': 'Account verification required.'
+        };
+      }
+      
+      final data = doc.data()!;
+      return {
+        'status': data['status']?.toString() ?? 'verification_pending',
+        'blockPayments': data['blockPayments'] ?? false, // Pull the new field, default to false if missing
+        'message': data['publicMessage']?.toString() ?? 'Account verification required.'
+      };
+    } catch (e) {
+      // 🛑 If error, completely fail safe and lock the transaction
+      debugPrint("Error fetching compliance: $e");
+      return {
+        'status': 'error', 
+        'blockPayments': true, // Force block on backend failure
+        'message': 'Could not verify merchant account status.'
+      };
+    }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +21,47 @@ class VendorNotificationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: const KorraHeader(title: "Notifications", showLeadingIcon: true),
+      appBar: KorraHeader(
+        title: "Notifications",
+        showLeadingIcon: true,
+        onBackpressed: () => Get.back(),
+        // Optional: Keep "Mark all read" if you want functionality, 
+        // but removed to match Vendor UI strictness. Uncomment if needed.
+        
+        trailingActions: [
+          TextButton(
+            onPressed: () {
+              // Mark all read logic (Engineering Polish)
+              FirebaseFirestore.instance
+                  .collection('vendors')
+                  .doc(vendorUid)
+                  .collection('notifications')
+                  .where('isRead', isEqualTo: false)
+                  .get()
+                  .then((snapshot) {
+                    // If there are no unread messages, do nothing
+                    if (snapshot.docs.isEmpty) return;
+
+                    final batch = FirebaseFirestore.instance.batch();
+
+                    for (var doc in snapshot.docs) {
+                      batch.update(doc.reference, {'isRead': true});
+                    }
+                    
+                    batch.commit();
+                  });
+            },
+            child: Text(
+              "Mark all read", 
+              style: GoogleFonts.inter(
+                fontSize: 12.sp, 
+                fontWeight: FontWeight.w600, 
+                color: KorraColors.brand
+              )
+            ),
+          )
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot>(
         // ✅ Correctly targets 'vendors' collection
         stream: FirebaseFirestore.instance

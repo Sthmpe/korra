@@ -36,6 +36,9 @@ class SignupCustomerBloc
     on<DobChanged>((e, emit) => emit(state.copyWith(dob: e.value)));
     on<GenderChanged>((e, emit) => emit(state.copyWith(gender: e.value)));
 
+    on<SignupSendEmailOtpPressed>(_onSendEmailOtp);
+    on<SignupVerifyEmailOtpPressed>(_onVerifyEmailOtp);
+
     // step 2
     on<NinChanged>(_onNinChanged);
     on<BvnChanged>(_onBvnChanged);
@@ -113,6 +116,17 @@ class SignupCustomerBloc
   ) async {
     final email = event.value.trim();
 
+    final newEmailText = event.value.toLowerCase().trim();
+
+    // 🚀 2. THE SMART CHECK: Is this the exact email they already verified?
+    final isStillVerified = newEmailText.isNotEmpty && newEmailText == state.lastVerifiedEmail;
+
+    emit(state.copyWith(
+      email: newEmailText,
+      emailOtpVerified: isStillVerified, // Instantly revokes the green tick if they change 1 letter!
+      emailError: "", // clear errors while typing
+    ));
+
     emit(
       state.copyWith(emailChecking: true, emailError: null, emailUnused: false),
     );
@@ -187,6 +201,65 @@ class SignupCustomerBloc
     }
   }
 
+  // =======================================================================
+  // 📧 SEND EMAIL OTP (BLoC)
+  // =======================================================================
+  Future<void> _onSendEmailOtp(
+    SignupSendEmailOtpPressed event, 
+    Emitter<SignupCustomerState> emit,
+  ) async {
+    emit(state.copyWith(sendingEmailOtp: true, emailError: ""));
+    
+    try {
+      // 🚀 Await the Repository!
+      await _customerRepo.sendEmailOtp(
+        email: state.email.toLowerCase().trim(),
+        firstName: state.firstName,
+      );
+
+      emit(state.copyWith(sendingEmailOtp: false));
+    } catch (e) {
+      // Catch repo errors and show them in the UI
+      emit(state.copyWith(
+        sendingEmailOtp: false, 
+        emailError: e.toString().replaceAll("Exception: ", "")
+      ));
+    }
+  }
+
+  // =======================================================================
+  // 🔐 VERIFY EMAIL OTP (BLoC)
+  // =======================================================================
+  Future<void> _onVerifyEmailOtp(
+    SignupVerifyEmailOtpPressed event, 
+    Emitter<SignupCustomerState> emit,
+  ) async {
+    emit(state.copyWith(emailChecking: true, emailError: ""));
+
+    try {
+      // 🚀 Await the Repository!
+      await _customerRepo.verifyEmailOtp(
+        email: state.email.toLowerCase().trim(),
+        code: event.code, // The 6-digits they typed
+        firstName: state.firstName,
+      );
+
+      // 🎉 Success State!
+      emit(state.copyWith(
+        emailChecking: false, 
+        emailOtpVerified: true, 
+        emailError: "",
+        lastVerifiedEmail: state.email.toLowerCase().trim(),
+      ));
+    } catch (e) {
+      // Catch repo errors (e.g. "Incorrect code") and show them in the UI
+      emit(state.copyWith(
+        emailChecking: false, 
+        emailError: e.toString().replaceAll("Exception: ", "")
+      ));
+    }
+  }
+
   void _onBack(SignupCustomerBackPressed event, Emit emit) {
     final prev = (state.pageIndex - 1).clamp(0, state.totalPages - 1);
     emit(state.copyWith(pageIndex: prev));
@@ -243,6 +316,13 @@ class SignupCustomerBloc
          add(EmailChangedCU(state.email)); 
          return;
       }
+
+      if (!state.emailOtpVerified) {
+         debugPrint("Debug: Email OTP not verified.");
+         // Tell the UI to show the red error text under the email field
+         emit(state.copyWith(emailError: "Please verify your email to continue."));
+         return;
+      }
     }
 
     if (state.pageIndex != identityStepIndex) {
@@ -270,10 +350,12 @@ class SignupCustomerBloc
       );
       return;
     }
+
     if (ninNeedsVerification && state.nin.trim().length != 11) {
       emit(state.copyWith(ninError: 'Enter a valid 11-digit NIN'));
       return;
     }
+
     if (bvnNeedsVerification && state.bvn.trim().length != 11) {
       emit(state.copyWith(bvnError: 'Enter a valid 11-digit BVN'));
       return;
@@ -284,70 +366,53 @@ class SignupCustomerBloc
       // We check DB before calling external APIs to save money and prevent duplicates.
 
       if (ninNeedsVerification) {
-        emit(
-          state.copyWith(ninVerifying: true, ninError: null, kycError: null),
-        );
-
-        final ninExists = await _customerRepo.checkIdentityExists(
-          nin: state.nin.trim(),
-        );
+        emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
+        
+        final ninExists = await _customerRepo.checkIdentityExists(nin: state.nin.trim());
         if (ninExists) {
-          emit(
-            state.copyWith(
-              ninVerifying: false,
-              ninError:
-                  'This NIN is linked to another account.', // Fraud Message
-            ),
-          );
-          return; // Stop here
-        }
-      }
-
-      if (bvnNeedsVerification) {
-        emit(
-          state.copyWith(bvnVerifying: true, bvnError: null, kycError: null),
-        );
-
-        final bvnExists = await _customerRepo.checkIdentityExists(
-          bvn: state.bvn.trim(),
-        );
-        if (bvnExists) {
-          emit(
-            state.copyWith(
-              bvnVerifying: false,
-              bvnError:
-                  'This BVN is linked to another account.', // Fraud Message
-            ),
-          );
-          return; // Stop here
-        }
-      }
-
-      if (ninNeedsVerification) {
-        emit(
-          state.copyWith(ninVerifying: true, ninError: null, kycError: null),
-        );
-
-        await _customerRepo.verifyNin(state.nin.trim());
-        emit(
-          state.copyWith(
+           emit(state.copyWith(
             ninVerifying: false,
-            ninVerified: true,
-            lastVerifiedNin: state.nin.trim(),
-          ),
-        );
+            bvnVerifying: false,
+            ninError: 'This NIN is linked to another account.', // Fraud Message
+          ));
+          return; // Stop here
+        }
+
+        await _customerRepo.verifyNin(state.nin.trim(), state.firstName, state.lastName, state.otherName, state.dob != null ? state.dob!.toIso8601String() : '', state.phone);
+
+        emit(state.copyWith(
+          ninVerifying: false,
+          bvnVerifying: false,
+          ninVerified: true,
+          ninError: null,
+          lastVerifiedNin: state.nin.trim(),
+        ));
       }
 
       if (bvnNeedsVerification) {
-        emit(
-          state.copyWith(bvnVerifying: true, bvnError: null, kycError: null),
-        );
+        emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
+
+        final bvnExists = await _customerRepo.checkIdentityExists(bvn: state.bvn.trim());
+
+        if (bvnExists) {
+           emit(state.copyWith(
+            ninVerifying: false,
+            bvnVerifying: false,
+            bvnError: 'This BVN is linked to another account.', // Fraud Message
+          ));
+          return; // Stop here
+        }
+
         final fullName = '${state.firstName} ${state.lastName}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
         final localPhone = _normalizeNigerianMsisdn(state.phone);
 
         if (dobForBvn == null) {
-          emit(state.copyWith(kycError: 'Date of birth is missing'));
+          emit(state.copyWith(
+            ninVerifying: false,
+            bvnVerifying: false,
+            bvnError: 'Date of birth is missing'
+          ));
           return;
         }
 
@@ -357,13 +422,14 @@ class SignupCustomerBloc
           dateOfBirthIso: dobForBvn,
           mobileNo: localPhone,
         );
-        emit(
-          state.copyWith(
-            bvnVerifying: false,
-            bvnVerified: true,
-            lastVerifiedBvn: state.bvn.trim(),
-          ),
-        );
+
+        emit(state.copyWith(
+          bvnVerifying: false,
+          ninVerifying: false,
+          bvnVerified: true,
+          bvnError: null,
+          lastVerifiedBvn: state.bvn.trim(),
+        ));
       }
 
       emit(state.copyWith(pageIndex: next));
@@ -395,8 +461,20 @@ class SignupCustomerBloc
           ),
         );
       } else {
-        emit(state.copyWith(kycError: userMessage));
+        emit(
+          state.copyWith(
+            kycError: userMessage, 
+            bvnVerifying: false, 
+            ninVerifying: false,
+          ));
       }
+
+      emit(
+        state.copyWith(
+          ninVerifying: false,
+          bvnVerifying: false,
+        )
+      );
     }
   }
 
@@ -405,7 +483,7 @@ class SignupCustomerBloc
     emit(
       state.copyWith(
         nin: event.value,
-        ninError: null,
+        ninError: '',
         ninVerified: changed ? false : state.ninVerified,
         lastVerifiedNin: changed ? null : state.lastVerifiedNin,
       ),
@@ -417,7 +495,7 @@ class SignupCustomerBloc
     emit(
       state.copyWith(
         bvn: event.value,
-        bvnError: null,
+        bvnError: '',
         bvnVerified: changed ? false : state.bvnVerified,
         lastVerifiedBvn: changed ? null : state.lastVerifiedBvn,
       ),
@@ -443,7 +521,7 @@ class SignupCustomerBloc
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      await _customerRepo.verifyNin(state.nin.trim());
+      await _customerRepo.verifyNin(state.nin.trim(), state.firstName, state.lastName, state.otherName, state.dob != null ? state.dob!.toIso8601String() : '', state.phone);
       emit(
         state.copyWith(
           ninVerifying: false,
@@ -486,7 +564,7 @@ class SignupCustomerBloc
       final localPhone = _normalizeNigerianMsisdn(state.phone);
 
       if (dobIso == null) {
-        emit(state.copyWith(kycError: 'Date of birth is missing'));
+        emit(state.copyWith(kycError: 'Date of birth is missing', bvnVerifying: false));
         return;
       }
 

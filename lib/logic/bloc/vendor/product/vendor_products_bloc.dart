@@ -37,6 +37,11 @@ class VendorProductsBloc
     on<VendorProductsRequested>(_productsRequested);
     on<VendorProductsUpdated>(_productsUpdated);
     on<VendorProductsLoadMore>(_productsLoadMore);
+    on<VendorProductsDelete>(_onDeleteProduct);
+    on<VendorProductsToggleSelection>(_onToggleSelection);
+    on<VendorProductsSelectAll>(_onSelectAll);
+    on<VendorProductsClearSelection>(_onClearSelection);
+    on<VendorProductsDeleteMultiple>(_onDeleteMultiple);
   }
 
   // Event Handlers 
@@ -75,14 +80,22 @@ class VendorProductsBloc
     VendorProductsQueryChanged event,
     Emitter<VendorProductsState> emit,
   ) {
-    emit(state.copyWith(query: event.query));
+    emit(state.copyWith(
+      query: event.query,
+      flow: ProductFlow.idle, // 🚀 Reset flow
+      errorMessage: null,     // 🚀 Clear old errors
+    ));
   }
 
   void _onFilterChanged(
     VendorProductsFilterChanged event,
     Emitter<VendorProductsState> emit,
   ) {
-    emit(state.copyWith(filter: event.filter));
+    emit(state.copyWith(
+      filter: event.filter,
+      flow: ProductFlow.idle, // 🚀 Reset flow
+      errorMessage: null,     // 🚀 Clear old errors
+    ));
   }
   
   Future<void> _onAddPressed(
@@ -192,7 +205,10 @@ class VendorProductsBloc
         updateData: updateData,
       );
 
-      emit(state.copyWith(isSubmitting: false, success: true));
+      emit(state.copyWith(
+        isSubmitting: false, 
+        success: true,
+      ));
       add(const VendorProductsRefresh());
 
     } catch (e) {
@@ -235,70 +251,27 @@ class VendorProductsBloc
 
   StreamSubscription<List<ProductItem>>? _productsStreamSub;
 
-  Map<ProductFilter, int> _calculateStatusCounts(List<ProductItem> products) {
-    final counts = <ProductFilter, int>{
-      ProductFilter.all: products.length,
-      ProductFilter.approved: 0,
-      ProductFilter.pending: 0,
-      ProductFilter.rejected: 0,
-      ProductFilter.outOfStock: 0,
-    };
-
-    for (final p in products) {
-      if (p.stock <= 0) {
-        counts[ProductFilter.outOfStock] = (counts[ProductFilter.outOfStock] ?? 0) + 1;
-        continue; // Skip the switch, we are done with this item
-      }
-      
-      switch (p.status) {
-        case ProductStatus.approved:
-          counts[ProductFilter.approved] =
-              (counts[ProductFilter.approved] ?? 0) + 1;
-          break;
-        case ProductStatus.pending:
-          counts[ProductFilter.pending] =
-              (counts[ProductFilter.pending] ?? 0) + 1;
-          break;
-        case ProductStatus.rejected:
-          counts[ProductFilter.rejected] =
-              (counts[ProductFilter.rejected] ?? 0) + 1;
-          break;
-        case ProductStatus.outOfStock:
-          counts[ProductFilter.outOfStock] =
-              (counts[ProductFilter.outOfStock] ?? 0) + 1;
-          break;
-      }
-    }
-
-    return counts;
-  }
 
   Future<void> _productsRequested(
     VendorProductsRequested event,
     Emitter<VendorProductsState> emit,
   ) async {
-    emit(state.copyWith(isSubmitting: true));
-    debugPrint('🔹 Fetching vendor products...');
+    emit(state.copyWith(isSubmitting: true, currentLimit: 10, hasReachedMax: false, flow: ProductFlow.idle, errorMessage: null, success: false));
+    debugPrint('🔹 Fetching products and tab counts...');
 
     try {
-      await vendors.refreshVendorProductItems(vendorUid);
-      final cached = vendors.cachedProductItems;
-      debugPrint("🔹 Cached products: ${cached.length}");
+      // 1. Fetch the exact counts cheaply
+      final tabCounts = await vendors.fetchProductTabCounts(vendorUid);
 
-      final cachedCounts = _calculateStatusCounts(cached);
+      // 2. Update state with the counts immediately so the UI tabs populate
+      emit(state.copyWith(statusCounts: tabCounts));
 
-      emit(state.copyWith(
-        items: cached.take(10).toList(),
-        isSubmitting: false,
-        statusCounts: cachedCounts,
-      ));
-
+      // 3. Start the stream with just 10 items for pagination
       await _productsStreamSub?.cancel();
-      _productsStreamSub =
-          vendors.streamVendorProductItems(vendorUid).listen((updatedList) {
-        final liveCounts = _calculateStatusCounts(updatedList);
-        add(VendorProductsUpdated(updatedList, liveCounts));
+      _productsStreamSub = vendors.streamVendorProductItems(vendorUid, limit: state.currentLimit).listen((updatedList) {
+        add(VendorProductsUpdated(updatedList, tabCounts)); // Pass the tab counts along
       });
+      
     } catch (e, st) {
       debugPrint('❌ Error fetching products: $e\n$st');
       emit(state.copyWith(isSubmitting: false, errorMessage: e.toString()));
@@ -309,16 +282,15 @@ class VendorProductsBloc
     VendorProductsLoadMore event,
     Emitter<VendorProductsState> emit,
   ) async {
-    final all = vendors.cachedProductItems;
-    final current = state.items.length;
+    if (state.hasReachedMax) return;
 
-    if (current >= all.length) {
-      debugPrint("⚠️ No more products to load.");
-      return;
-    }
+    final newLimit = state.currentLimit + 10;
+    emit(state.copyWith(currentLimit: newLimit));
 
-    final nextBatch = all.skip(current).take(10).toList();
-    emit(state.copyWith(items: [...state.items, ...nextBatch]));
+    await _productsStreamSub?.cancel();
+    _productsStreamSub = vendors.streamVendorProductItems(vendorUid, limit: newLimit).listen((updatedList) {
+      add(VendorProductsUpdated(updatedList, state.statusCounts));
+    });
   }
 
   @override
@@ -333,11 +305,106 @@ class VendorProductsBloc
   ) async {
     debugPrint("♻️ Products updated from Firestore stream (${event.items.length})");
 
-    final int targetLength = math.max(state.items.length, 20);
+    final bool reachedEnd = event.items.length < state.currentLimit;
+
+    //final int targetLength = math.max(state.items.length, 20);
 
     emit(state.copyWith(
-      items: event.items.take(targetLength).toList(),
+      isSubmitting: false,
+      items: event.items,
       statusCounts: event.statusCounts ?? state.statusCounts,
+      hasReachedMax: reachedEnd, // Tell the UI to stop showing the loading spinner
     ));
+  }
+
+  Future<void> _onDeleteProduct(
+    VendorProductsDelete event,
+    Emitter<VendorProductsState> emit,
+  ) async {
+    // 1. Tell the UI we are deleting
+    emit(state.copyWith(
+      flow: ProductFlow.delete, 
+      isSubmitting: true, 
+      success: false, 
+      errorMessage: null,
+    ));
+
+    try {
+      await vendors.deleteProductSecure(vendorUid, event.productId, 'single-delete');
+
+      final newTabCounts = await vendors.fetchProductTabCounts(vendorUid);
+      
+      emit(state.copyWith(
+        flow: ProductFlow.delete,
+        isSubmitting: false,
+        success: true,
+        statusCounts: newTabCounts, // 🚀 Updates the UI tabs instantly
+      ));
+    } catch (e) {
+      debugPrint("❌ Delete Error: $e");
+      // 4. Tell the UI it failed
+      emit(state.copyWith(
+        flow: ProductFlow.delete,
+        isSubmitting: false,
+        success: false,
+        errorMessage: e.toString().replaceAll("Exception:", "").trim(),
+      ));
+    }
+  }
+
+  void _onToggleSelection(VendorProductsToggleSelection event, Emitter<VendorProductsState> emit) {
+    final selected = Set<String>.from(state.selectedIds);
+    
+    if (selected.contains(event.productId)) {
+      selected.remove(event.productId);
+    } else {
+      selected.add(event.productId);
+    }
+
+    // Automatically enter/exit selection mode based on if anything is selected
+    emit(state.copyWith(
+      selectedIds: selected,
+      isSelectionMode: selected.isNotEmpty, 
+    ));
+  }
+
+  void _onSelectAll(VendorProductsSelectAll event, Emitter<VendorProductsState> emit) {
+    final allIds = state.visibleItems.map((p) => p.id).toSet();
+    emit(state.copyWith(selectedIds: allIds, isSelectionMode: true));
+  }
+
+  void _onClearSelection(VendorProductsClearSelection event, Emitter<VendorProductsState> emit) {
+    emit(state.copyWith(selectedIds: const {}, isSelectionMode: false));
+  }
+
+  Future<void> _onDeleteMultiple(VendorProductsDeleteMultiple event, Emitter<VendorProductsState> emit) async {
+    if (state.selectedIds.isEmpty) return;
+
+    emit(state.copyWith(flow: ProductFlow.delete, isSubmitting: true, success: false, errorMessage: ""));
+
+    try {
+      // 🚀 Call repo with a LIST of IDs (We will create this next)
+      await vendors.deleteMultipleProductsSecure(vendorUid, state.selectedIds.toList());
+      
+      final newTabCounts = await vendors.fetchProductTabCounts(vendorUid);
+      
+      emit(state.copyWith(
+        flow: ProductFlow.delete,
+        isSubmitting: false,
+        success: true,
+        statusCounts: newTabCounts,
+        selectedIds: const {}, // Clear selection after delete!
+        isSelectionMode: false,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        flow: ProductFlow.delete,
+        isSubmitting: false,
+        success: false,
+        selectedIds: const {},
+        isSelectionMode: false,
+        errorMessage: e.toString().replaceAll("Exception:", "").trim(),
+      ));
+    }
   }
 }

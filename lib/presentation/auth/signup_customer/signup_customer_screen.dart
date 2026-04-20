@@ -115,7 +115,9 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                         await Future.delayed(
                           const Duration(milliseconds: 1500),
                         ); // Give user time to see "Success"
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (context.mounted && _kycSheetOpen) {
+                          Navigator.of(context).pop(); 
+                        }
                         _kycSheetOpen = false;
                       }
                       _animateTo(s.pageIndex);
@@ -133,7 +135,9 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                     listener: (context, s) async {
                       if (_kycSheetOpen) {
                         await Future.delayed(const Duration(seconds: 2));
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (context.mounted && _kycSheetOpen) {
+                          Navigator.of(context).pop(); 
+                        }
                         _kycSheetOpen = false;
                       }
                     },
@@ -184,6 +188,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
             // --- BOTTOM NAVIGATION ---
             BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
               builder: (context, state) {
+                debugPrint("debugging: Loading state: ${state.loading}, NIN Verifying: ${state.ninVerifying}, BVN Verifying: ${state.bvnVerifying}");
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     KorraSizes.gutter.w,
@@ -194,7 +199,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                   child: _BottomNav(
                     formKey: _formKeys[state.pageIndex],
                     isLast: state.pageIndex == state.totalPages - 1,
-                    loading: state.loading,
+                    loading: state.loading || state.ninVerifying || state.bvnVerifying,
                     pageIndex: state.pageIndex,
                     openKycSheet: () {
                       if (!_kycSheetOpen) {
@@ -210,7 +215,10 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                             value: bloc, // Pass the captured bloc instance
                             child: const _KycProgressSheet(),
                           ),
-                        );
+                        ).whenComplete(() {
+                          // 🚀 GUARANTEES THE FLAG RESETS NO MATTER HOW IT CLOSES
+                          _kycSheetOpen = false; 
+                        });
                       }
                     },
                   ),
@@ -423,6 +431,7 @@ class _KycProgressSheet extends StatelessWidget {
         child: BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
           builder: (_, s) {
             final allVerified = s.ninVerified && s.bvnVerified;
+            final anyVerifying = s.ninVerifying || s.bvnVerifying;
             final anyError = s.ninError != null || s.bvnError != null;
 
             return Column(
@@ -477,23 +486,33 @@ class _KycProgressSheet extends StatelessWidget {
                 SizedBox(height: 24.h),
 
                 // Status Footer
-                if (anyError)
+                // Status Footer
+                if (allVerified && !anyVerifying)
+                  Text(
+                    "Verification successful! Proceeding to the next step.",
+                    style: GoogleFonts.inter(
+                      fontSize: 13.sp,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (anyError && !anyVerifying)
                   Text(
                     "Verification Failed. Please check your details.",
                     style: GoogleFonts.inter(
-                      fontSize: 14.sp,
+                      fontSize: 13.sp,
                       color: Colors.red,
                       fontWeight: FontWeight.w600,
                     ),
                   )
-                else if (!allVerified)
+                else if (!allVerified && anyVerifying)
                   Text(
                     "This usually takes a few seconds...",
                     style: GoogleFonts.inter(
                       fontSize: 13.sp,
                       color: Colors.grey,
                     ),
-                  ),
+                  )
               ],
             );
           },

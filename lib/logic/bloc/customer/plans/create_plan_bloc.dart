@@ -39,37 +39,16 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
         final price = event.productPrice;
 
         // --- GRANULAR TIER LOGIC (UPDATED FOR 3M CAP) ---
-        if (price <= 7000) {
-            // Very small items: 1 week is enough
-            duration = 7; notice = 1; extension = 0; allowExtension = false;
-        } else if (price <= 15000) {
-            // Small items: 2 weeks
-            duration = 14; notice = 3; extension = 0; allowExtension = false;
-        } else if (price <= 20000) {
-            // 15k - 20k: 3 Weeks
-            duration = 21; notice = 3; extension = 7; allowExtension = true;
-        } else if (price <= 35000) {
-            // Casual buy: 1 Month (30 days)
+        if (price <= 20000) {
+          duration = 14; notice = 3; extension = 0; allowExtension = false;
+        } else if (price <= 120000) {
             duration = 30; notice = 3; extension = 5; allowExtension = true;
-        } else if (price <= 75000) {
-            // Budget Phone: 45 Days
-            duration = 45; notice = 3; extension = 7; allowExtension = true;
-        } else if (price <= 150000) {
-            // Mid Phone: 60 Days (2 Months)
-            duration = 60; notice = 3; extension = 10; allowExtension = true;
-        } else if (price <= 300000) {
-            // Good Phone/Laptop: 75 Days (2.5 Months)
-            duration = 75; notice = 5; extension = 14; allowExtension = true;
-        } else if (price <= 600000) {
-            // High-end Phone: 90 Days (3 Months)
-            duration = 90; notice = 5; extension = 14; allowExtension = true;
-        } else if (price <= 1200000) {
-            // MacBook/High Tech: 100 Days (~3.5 Months)
-            duration = 100; notice = 7; extension = 15; allowExtension = true;
+        } else if (price <= 350000) {
+            duration = 60; notice = 3; extension = 7; allowExtension = true;
+        } else if (price <= 950000) {
+            duration = 90; notice = 3; extension = 7; allowExtension = true;
         } else {
-            // Ultra High (1.2m - 3m+): 120 Days (4 Months)
-            // Vendors might complain if you go higher than 4 months for holding stock.
-            duration = 120; notice = 7; extension = 20; allowExtension = true;
+            duration = 120; notice = 3; extension = 7; allowExtension = true;
         }
 
 

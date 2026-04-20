@@ -55,7 +55,7 @@ class _StepBusinessTypeState extends State<StepBusinessType> {
   Widget build(BuildContext context) {
     return BlocListener<SignupVendorBloc, SignupVendorState>(
       listenWhen: (p, c) =>
-          p.cacError != c.cacError || p.legalName != c.legalName,
+          p.cacError != c.cacError,
       listener: (context, state) {
         // 1. Show Error Sheet
         if (state.cacError != null && state.cacError!.isNotEmpty) {
@@ -209,7 +209,7 @@ class _StepBusinessTypeState extends State<StepBusinessType> {
                           label: 'Legal Business Name',
                           hint: 'As it appears on documents',
                           icon: Iconsax.briefcase,
-                          readOnly: s.cacVerified, // Lock if verified
+                          //readOnly: s.cacVerified, // Lock if verified
                           fillColor: s.cacVerified
                               ? Colors.grey.shade100
                               : null,
@@ -217,6 +217,8 @@ class _StepBusinessTypeState extends State<StepBusinessType> {
                       ],
                     ),
                   ),
+                  SizedBox(height: 24.h),
+                  if (s.registered) _buildInfoBoxCac(),
                   SizedBox(height: 40.h),
                 ],
               ),
@@ -243,6 +245,34 @@ class _StepBusinessTypeState extends State<StepBusinessType> {
           Expanded(
             child: Text(
               'You can start selling immediately with lower limits. You can always add your CAC details later.',
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                height: 1.4,
+                color: Colors.blue.shade900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBoxCac() {
+    return Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F8FD),
+        borderRadius: BorderRadius.circular(12.r),
+        //border: Border.all(color: const Color(0xFFE1F0FA)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Iconsax.info_circle, color: Colors.blue.shade700, size: 20.sp),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Text(
+              'Your CAC details and business name will be manually reviewed by our compliance team to ensure security.',
               style: GoogleFonts.inter(
                 fontSize: 13.sp,
                 height: 1.4,
@@ -281,9 +311,7 @@ class _SelectionCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         height: 56.h,
         decoration: BoxDecoration(
-          color: isSelected
-              ? KorraColors.brand.withOpacity(0.08)
-              : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(
             color: isSelected ? KorraColors.brand : const Color(0xFFE5E5E5),

@@ -182,7 +182,7 @@ class PayoutScreen extends StatelessWidget {
                   SizedBox(height: 8.h),
                   _buildAmountInput(context, state),
                       
-                  SizedBox(height: 40.h),
+                  SizedBox(height: 28.h),
                       
                   // 4. Action Button
                   _buildActionArea(context, state),
@@ -372,201 +372,247 @@ void _showContactSheet(BuildContext context, {required String title, required St
   );
 }
 
-  Widget _buildBankSelector(BuildContext context, PayoutState state) {
-    final hasBank = state.accountNumber.isNotEmpty;
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => BankSelectorSheet(
-            banks: state.bankList,
+Widget _buildBankSelector(BuildContext context, PayoutState state) {
+  final hasBank = state.accountNumber.isNotEmpty;
+  return GestureDetector(
+    onTap: () {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => BankSelectorSheet(
+          banks: state.bankList,
 
-            // ✅ FIXED VALIDATION LOGIC
-            onValidate: (code, number) async {
-              // The repo method returns Map<String, dynamic>
-              final result = await context
-                  .read<PayoutBloc>()
-                  .repo
-                  .validateBankAccount(accountNumber: number, bankCode: code);
+          // ✅ FIXED VALIDATION LOGIC
+          onValidate: (code, number) async {
+            // The repo method returns Map<String, dynamic>
+            final result = await context
+                .read<PayoutBloc>()
+                .repo
+                .validateBankAccount(accountNumber: number, bankCode: code);
 
-              // Handle potential null safely
-              final name = result['accountName'];
-              if (name == null || name.isEmpty) {
-                throw Exception("Account name not found");
-              }
+            // Handle potential null safely
+            final name = result['accountName'];
+            if (name == null || name.isEmpty) {
+              throw Exception("Account name not found");
+            }
 
-              return name; // Returns non-nullable String
-            },
+            return name; // Returns non-nullable String
+          },
 
-            onConfirm: (bank, accNum, accName) {
-              Navigator.pop(context);
-              context.read<PayoutBloc>().add(
-                BankDetailsUpdated(
-                  bankName: bank.name,
-                  bankCode: bank.code,
-                  accountNumber: accNum,
-                  accountName: accName,
-                ),
-              );
-            },
-          ),
-        );
-      },
-      child: Container(
-        padding: EdgeInsets.all(16.r),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(12.r),
-          //border: Border.all(color: const Color(0xFFEAECF0)),
+          onConfirm: (bank, accNum, accName) {
+            Navigator.pop(context);
+            context.read<PayoutBloc>().add(
+              BankDetailsUpdated(
+                bankName: bank.name,
+                bankCode: bank.code,
+                accountNumber: accNum,
+                accountName: accName,
+              ),
+            );
+          },
         ),
-        child: Row(
-          children: [
-            // Bank Icon or Logo
-            Container(
-              padding: EdgeInsets.all(8.r),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.r),
-              ),
-              child: const Icon(
-                Icons.account_balance,
-                color: Color(0xFFA54600),
-              ),
+      );
+    },
+    child: Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12.r),
+        //border: Border.all(color: const Color(0xFFEAECF0)),
+      ),
+      child: Row(
+        children: [
+          // Bank Icon or Logo
+          Container(
+            padding: EdgeInsets.all(8.r),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8.r),
             ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: hasBank
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          state.bankName,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          "${state.accountNumber} • ${state.accountName}",
-                          style: GoogleFonts.inter(
-                            color: Colors.grey,
-                            fontSize: 12.sp,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      "Select Bank Account",
-                      style: GoogleFonts.inter(color: Colors.grey),
-                    ),
+            child: const Icon(
+              Icons.account_balance,
+              color: Color(0xFFA54600),
             ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: hasBank
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        state.bankName,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        "${state.accountNumber} • ${state.accountName}",
+                        style: GoogleFonts.inter(
+                          color: Colors.grey,
+                          fontSize: 12.sp,
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(
+                    "Select Bank Account",
+                    style: GoogleFonts.inter(color: Colors.grey),
+                  ),
+          ),
+          const Icon(Icons.chevron_right, color: Colors.grey),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildAmountInput(BuildContext context, PayoutState state) {
+  // 1. SAFELY PARSE AMOUNT (Strip commas so double.tryParse doesn't fail)
+  final rawAmount = state.amountInput.replaceAll(',', '');
+  final amount = double.tryParse(rawAmount) ?? 0.0;
+  
+  // 2. CALCULATE EMTL
+  final emtlFee = amount >= 10000 ? 50.0 : 0.0;
+  final totalRequired = amount + emtlFee;
+
+  // 3. DETERMINE SPECIFIC ERROR MESSAGE
+  String? getErrorText() {
+    if (state.amountInput.isEmpty) return null;
+    if (amount <= 0) return null; // Don't show error while typing 0
+    
+    if (amount < 1000) {
+      return "Minimum withdrawal is ₦1,000";
+    }
+    
+    if (totalRequired > state.withdrawableBalance) {
+      // If they have enough for the amount, but NOT enough for the fee
+      if (amount <= state.withdrawableBalance && emtlFee > 0) {
+        return "Balance not sufficient for the ₦50 EMTL fee";
+      }
+      return "Insufficient balance";
+    }
+    
+    return null; // Valid
+  }
+
+  final errorText = getErrorText();
+  final hasError = errorText != null;
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        "Amount", 
+        style: GoogleFonts.inter(
+          fontSize: 13.sp, 
+          fontWeight: FontWeight.w600, 
+          color: const Color(0xFF344054) // Cool Grey
+        )
+      ),
+      SizedBox(height: 8.h),
+      
+      TextFormField(
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          CurrencyInputFormatter(),
+        ],
+        onChanged: (val) => context.read<PayoutBloc>().add(AmountChanged(val)),
+        style: GoogleFonts.inter(
+          fontSize: 20.sp, 
+          fontWeight: FontWeight.w700, 
+          color: const Color(0xFF101828),
+          letterSpacing: 0.5
+        ),
+        decoration: InputDecoration(
+          prefixIcon: Padding(
+            padding: EdgeInsets.only(left: 16.w, right: 8.w),
+            child: Text(
+              '₦', 
+              style: GoogleFonts.inter(
+                fontSize: 20.sp, 
+                fontWeight: FontWeight.w700, 
+                color: const Color(0xFF98A2B3) 
+              )
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          hintText: "0.00",
+          hintStyle: GoogleFonts.inter(color: const Color(0xFFD0D5DD)),
+          filled: true,
+          fillColor: Colors.white,
+          
+          // We manually control the border colors so we don't need the default errorText
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(color: hasError ? const Color(0xFF667085) : const Color(0xFFD0D5DD)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(color: hasError ? const Color(0xFF667085) : const Color(0xFFD0D5DD)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(
+              color: hasError ? const Color(0xFF667085) : KorraColors.brand, 
+              width: 1.5
+            ),
+          ),
         ),
       ),
-    );
-  }
 
- Widget _buildAmountInput(BuildContext context, PayoutState state) {
-    // Logic to determine the specific error message
-    String? getErrorText() {
-      if (state.amountInput.isEmpty) return null;
-      
-      final amount = double.tryParse(state.amountInput) ?? 0.0;
-      
-      if (amount <= 0) return null; // Don't show error while typing 0
-      if (amount > state.withdrawableBalance) return "Insufficient balance";
-      
-      return null; // Valid
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Amount", 
-          style: GoogleFonts.inter(
-            fontSize: 13.sp, 
-            fontWeight: FontWeight.w600, 
-            color: const Color(0xFF344054) // Cool Grey
-          )
-        ),
+      // 4. CUSTOM DYNAMIC MESSAGE ROW
+      if (hasError) ...[
+        // 🔴 SHOW GRAY ERROR WITH WARNING ICON
         SizedBox(height: 8.h),
-        
-        TextFormField(
-          // Ensure keyboard allows decimals
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          
-          // Enforce 2 Decimal Places
-          inputFormatters: [
-            CurrencyInputFormatter(),
-          ],
-          
-          onChanged: (val) => context.read<PayoutBloc>().add(AmountChanged(val)),
-          
-          // Big, Bold Text for the Amount
-          style: GoogleFonts.inter(
-            fontSize: 20.sp, 
-            fontWeight: FontWeight.w700, 
-            color: const Color(0xFF101828),
-            letterSpacing: 0.5
-          ),
-          
-          decoration: InputDecoration(
-            // Permanent Naira Sign
-            prefixIcon: Padding(
-              padding: EdgeInsets.only(left: 16.w, right: 8.w),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Iconsax.warning_2, // Using Iconsax for a premium look
+              size: 15.sp, 
+              color: const Color(0xFF667085) // Slate Gray
+            ),
+            SizedBox(width: 6.w),
+            Expanded(
               child: Text(
-                '₦', 
+                errorText,
                 style: GoogleFonts.inter(
-                  fontSize: 20.sp, 
-                  fontWeight: FontWeight.w700, 
-                  color: const Color(0xFF98A2B3) // Muted Grey for currency symbol
-                )
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF667085), // Slate Gray
+                  height: 1.3,
+                ),
               ),
             ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-            
-            hintText: "0.00",
-            hintStyle: GoogleFonts.inter(color: const Color(0xFFD0D5DD)),
-            
-            filled: true,
-            fillColor: Colors.white,
-            
-            // Clean, Premium Borders
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+          ],
+        ),
+      ] else if (emtlFee > 0) ...[
+        // 🔵 SHOW EMTL WARNING (Only if NO errors)
+        SizedBox(height: 8.h),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.info_outline_rounded, 
+              size: 15.sp, 
+              color: const Color(0xFF667085) // Slate Gray
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+            SizedBox(width: 6.w),
+            Expanded(
+              child: Text(
+                "A government EMTL fee of ₦50 will be deducted from your wallet balance.",
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF667085), // Slate Gray
+                  height: 1.3,
+                ),
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: KorraColors.brand, width: 1.5),
-            ),
-            
-            // Error Styling (Small & Clean)
-            errorText: getErrorText(),
-            errorStyle: GoogleFonts.inter(
-              fontSize: 11.sp, 
-              fontWeight: FontWeight.w500, 
-              color: const Color(0xFFD92D20) // Premium Alert Red
-            ),
-            // Remove the default red border on error to keep it clean? 
-            // Or keep it subtle. Flutter adds red border by default if errorText != null.
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFD92D20)),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFD92D20), width: 1.5),
-            ),
-          ),
+          ],
         ),
       ],
-    );
-  }
+    ],
+  );
+}
 
   // ---------------------------------------------------------
   // 1. SHOW "WRONG PIN" DIALOG

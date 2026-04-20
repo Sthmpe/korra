@@ -83,6 +83,10 @@ final String? cacError;
 final String? lastVerifiedCac; // To prevent verifying same number twice
 final String? selfiePath;
 
+final bool emailOtpVerified;
+final bool sendingEmailOtp;
+final String lastVerifiedEmail;
+
   const SignupVendorState({
     this.pageIndex = 0,
     this.totalPages = 7,
@@ -138,6 +142,9 @@ final String? selfiePath;
     this.cacError,
     this.lastVerifiedCac,
     this.selfiePath,
+    this.emailOtpVerified = false,
+    this.sendingEmailOtp = false,
+    this.lastVerifiedEmail = '',
   });
 
   SignupVendorState copyWith({
@@ -194,6 +201,9 @@ final String? selfiePath;
     String? cacError,
     String? lastVerifiedCac,
     String? selfiePath,
+    bool? emailOtpVerified,
+    bool? sendingEmailOtp,
+    String? lastVerifiedEmail,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -250,6 +260,9 @@ final String? selfiePath;
       cacError: cacError ?? this.cacError,
       lastVerifiedCac: lastVerifiedCac ?? this.lastVerifiedCac,
       selfiePath: selfiePath ?? this.selfiePath,
+      emailOtpVerified: emailOtpVerified ?? this.emailOtpVerified,
+      sendingEmailOtp: sendingEmailOtp ?? this.sendingEmailOtp,
+      lastVerifiedEmail: lastVerifiedEmail ?? this.lastVerifiedEmail,
     );
   }
 
@@ -306,5 +319,8 @@ final String? selfiePath;
     cacError,
     lastVerifiedCac,
     selfiePath,
+    emailOtpVerified,
+    sendingEmailOtp,
+    lastVerifiedEmail,
   ];
 }

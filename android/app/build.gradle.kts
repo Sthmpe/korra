@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -6,6 +9,32 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// --- 🚀 KORRA ENVIRONMENT CONFIG SWITCHER (Kotlin DSL) ---
+var isLive = false
+if (project.hasProperty("dart-defines")) {
+    val dartDefines = project.property("dart-defines") as String
+    // "IS_LIVE=true" encoded in Base64 is exactly "SVNfTElWRT10cnVl"
+    if (dartDefines.contains("SVNfTElWRT10cnVl")) {
+        isLive = true
+    }
+}
+
+val targetJson = if (isLive) "google-services-prod.json" else "google-services-dev.json"
+println("🚀 KORRA BUILD: Instantly copying $targetJson to google-services.json")
+
+copy {
+    from(targetJson)
+    into(project.projectDir)
+    rename { "google-services.json" }
+}
+// ---------------------------------------------------------
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -51,12 +80,14 @@ android {
         }
     }
 
+    // 🔐 SECURE SIGNING CONFIGURATION
     signingConfigs {
         create("release") {
-            storeFile = file("keystore.jks")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            val storeFilePath = keystoreProperties["storeFile"] as String?
+            storeFile = if (storeFilePath != null) file(storeFilePath) else null
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
@@ -87,7 +118,6 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("androidx.multidex:multidex:2.0.1")
-
     implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")

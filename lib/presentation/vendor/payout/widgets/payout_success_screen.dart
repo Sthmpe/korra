@@ -8,11 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../../../../config/constants/image_string.dart';
 
 class PayoutSuccessScreen extends StatefulWidget {
   final double amount;
@@ -252,7 +253,7 @@ class _PayoutSuccessScreenState extends State<PayoutSuccessScreen> {
                                  Icon(Icons.lock, size: 14.sp, color: const Color(0xFF98A2B3)),
                                  SizedBox(width: 6.w),
                                  Text(
-                                   "Secured by Monnify",
+                                   "Secured by",
                                    style: GoogleFonts.inter(
                                      fontSize: 12.sp,
                                      fontWeight: FontWeight.w500,
@@ -261,8 +262,9 @@ class _PayoutSuccessScreenState extends State<PayoutSuccessScreen> {
                                  ),
                                  SizedBox(width: 8.w),
                                  Image.asset(
-                                   'assets/images/moniepoint-inc-icon.png',
+                                   ImageString.monnify,
                                    height: 40.h,
+                                   width: 100.w,
                                    fit: BoxFit.contain,
                                  ),
                                ],
@@ -300,7 +302,7 @@ class _PayoutSuccessScreenState extends State<PayoutSuccessScreen> {
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Iconsax.export_1, size: 20.sp, color: const Color(0xFF344054)),
+                                Icon(Icons.share, size: 20.sp, color: const Color(0xFF344054)),
                                 SizedBox(width: 8.w),
                                 Text(
                                   "Share",

@@ -7,21 +7,48 @@ import 'package:iconsax/iconsax.dart'; // Premium Icons
 
 import '../../../config/constants/colors.dart';
 import '../../../config/routes/app_routes.dart';
+import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 
 // We will build these widgets next
+import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/product_list_item_premium.dart';
 import 'widgets/product_search_bar.dart';
 import 'widgets/product_filter_pills.dart';
 
 class VendorProductsBody extends StatelessWidget {
-  const VendorProductsBody({super.key});
+  final VendorRepository vendors;
+  final String vendorUid;
+
+  const VendorProductsBody({
+    super.key,
+    required this.vendors,
+    required this.vendorUid,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<VendorProductsBloc, VendorProductsState>(
+    return BlocConsumer<VendorProductsBloc, VendorProductsState>(
+      listenWhen: (previous, current) => current.flow == ProductFlow.delete && previous.success != current.success,
+      listener: (context, state) {
+        // Handle Success
+        if (state.isSubmitting == false) {
+          
+          if (state.success == true) {
+            showAppSnackbar(
+              "Product removed and capacity restored.",
+              SnackbarType.success,
+            );
+          } else if (state.errorMessage != null) {
+            showAppSnackbar(
+              state.errorMessage ?? "Failed to remove product",
+              SnackbarType.error,
+            );
+          }
+        }
+      },
       builder: (context, state) {
         // Handle "Init" Loading differently (Shimmer preferred, but spinner for now)
         if (state.items.isEmpty && (state.isSubmitting ?? false)) {
@@ -32,77 +59,159 @@ class VendorProductsBody extends StatelessWidget {
           color: KorraColors.brand,
           backgroundColor: Colors.white,
           onRefresh: () async => context.read<VendorProductsBloc>().add(const VendorProductsRefresh()),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            slivers: [
-              // 1. Search & Filter Header (Sticky-ish feel via SliverToBox)
-              SliverToBoxAdapter(
-                child: Container(
-                  color: Colors.white, // Continues from AppBar
-                  padding: EdgeInsets.only(bottom: 16.h),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 20.w),
-                        child: ProductSearchBar(
-                          initialValue: state.query,
-                          onChanged: (q) => context.read<VendorProductsBloc>().add(VendorProductsQueryChanged(q)),
+          child: Stack(
+            children: [
+              CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                slivers: [
+                  // 🚀 1. THE NEW LINEAR LOADER (Appears at the very top)
+                    if (state.flow == ProductFlow.delete && state.isSubmitting == true)
+                      SliverToBoxAdapter(
+                        child: Column(
+                          children: [
+                            LinearProgressIndicator(
+                              color: const Color(0xFFA54600), // Korra brand color
+                              backgroundColor: const Color(0xFFA54600).withOpacity(0.1),
+                              minHeight: 3.h,
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 6.h),
+                              child: Text(
+                                "Deleting product and restoring capacity...",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF667085),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      SizedBox(height: 16.h),
-                      ProductFilterPills(
-                        activeFilter: state.filter,
-                        counts: state.statusCounts,
-                        onChanged: (f) => context.read<VendorProductsBloc>().add(VendorProductsFilterChanged(f)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 2. The List or Empty State
-              if (state.visibleItems.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _buildEmptyState(context, state),
-                )
-              else
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final product = state.visibleItems[index];
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: 12.h),
-                          child: ProductListItemPremium(
-                            product: product,
-                            onTap: () {
-                              // Capture the current bloc
-                              final currentBloc = context.read<VendorProductsBloc>();
-                              
-                              Get.toNamed(
-                                Routes.vendorProductDetails,
-                                arguments: {
-                                  'product': product,
-                                  'listBloc': currentBloc, // 👈 Passing the Bloc
-                                },
-                              );
-                            },
-                            onEdit: () => _navigateToEdit(context, product),
-                            onShare: product.shareable
-                                ? () => context.read<VendorProductsBloc>().add(VendorProductsSharePressed(product))
-                                : null,
+              
+                    // 2. Search & Filter Header (Your existing code)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      color: Colors.white, // Continues from AppBar
+                      padding: EdgeInsets.only(bottom: 16.h),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 20.w),
+                            child: ProductSearchBar(
+                              initialValue: state.query,
+                              onChanged: (q) => context.read<VendorProductsBloc>().add(VendorProductsQueryChanged(q)),
+                            ),
                           ),
-                        );
-                      },
-                      childCount: state.visibleItems.length,
+                          SizedBox(height: 16.h),
+                          ProductFilterPills(
+                            activeFilter: state.filter,
+                            counts: state.statusCounts,
+                            onChanged: (f) => context.read<VendorProductsBloc>().add(VendorProductsFilterChanged(f)),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
               
-              // 3. Bottom Padding for Scroll
-              SliverToBoxAdapter(child: SizedBox(height: 40.h)),
+                  // 3. The List or Empty State
+                  if (state.visibleItems.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _buildEmptyState(context, state),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final product = state.visibleItems[index];
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: 12.h),
+                              child: ProductListItemPremium(
+                                product: product,
+                                isSelectionMode: state.isSelectionMode,
+                                isSelected: state.selectedIds.contains(product.id),
+                                onTap: () {
+                                  if (state.isSelectionMode) {
+                                    context.read<VendorProductsBloc>().add(VendorProductsToggleSelection(product.id));
+                                  } else {
+                                      // Capture the current bloc
+                                      final currentBloc = context.read<VendorProductsBloc>();
+                                      
+                                      Get.toNamed(
+                                        Routes.vendorProductDetails,
+                                        arguments: {
+                                          'product': product,
+                                          'repo': vendors,
+                                          'uid': vendorUid,
+                                          'listBloc': currentBloc, // 👈 Passing the Bloc
+                                        },
+                                      );
+                                  }
+                                },
+                                onLongPress: () => context.read<VendorProductsBloc>().add(VendorProductsToggleSelection(product.id)),
+                                onEdit: () => _navigateToEdit(context, product),
+                                onDelete: () => _showDeleteDialog(context, product),
+                                onShare: product.shareable
+                                    ? () => context.read<VendorProductsBloc>().add(VendorProductsSharePressed(product))
+                                    : null,
+                              ),
+                            );
+                          },
+                          childCount: state.visibleItems.length,
+                        ),
+                      ),
+                    ),
+                  
+                  // 4. Bottom Padding for Scroll
+                  SliverToBoxAdapter(child: SizedBox(height: 40.h)),
+                ],
+              ),
+              
+              // 🚀 The Floating Action Bar
+               if (state.isSelectionMode)
+                  Positioned(
+                    bottom: 24.h, left: 20.w, right: 20.w,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF101828), // Dark premium bar
+                        borderRadius: BorderRadius.circular(100.r),
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Left side: Count and close
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.close, color: Colors.white, size: 20.sp),
+                                onPressed: () => context.read<VendorProductsBloc>().add(VendorProductsClearSelection()),
+                                constraints: const BoxConstraints(), padding: EdgeInsets.zero,
+                              ),
+                              SizedBox(width: 12.w),
+                              Text("${state.selectedIds.length} Selected", 
+                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.sp)
+                              ),
+                            ],
+                          ),
+                          
+                          // Right side: Delete
+                          GestureDetector(
+                            onTap: () => _showMultiDeleteDialog(context, state.selectedIds.length),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                              decoration: BoxDecoration(color: const Color(0xFFD92D20), borderRadius: BorderRadius.circular(100.r)),
+                              child: Text("Delete", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.sp)),
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
             ],
           ),
         );
@@ -145,6 +254,83 @@ class VendorProductsBody extends StatelessWidget {
           Text(
             "Try adjusting your search or filters.",
             style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, ProductItem product) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Delete Product"),
+        content: RichText(
+          text: TextSpan(
+            style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.black87, height: 1.5),
+            children: [
+              TextSpan(text: "Are you sure you want to delete "),
+              TextSpan(text: "'${product.name}'?\n\n", style: const TextStyle(fontWeight: FontWeight.bold)),
+              TextSpan(
+                text: "Note: Ongoing plans are still active, but customers won't see this product in your store anymore.",
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13.sp),
+              ),
+            ],
+          ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              // 1. Fire the bloc event
+              context.read<VendorProductsBloc>().add(VendorProductsDelete(product.id));
+              // 2. Close the dialog immediately
+              Navigator.pop(dialogContext); 
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMultiDeleteDialog(BuildContext context, int selectedCount) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text("Delete $selectedCount Products"),
+        content: RichText(
+          text: TextSpan(
+            style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.black87, height: 1.5),
+            children: [
+              const TextSpan(text: "Are you sure you want to delete these "),
+              TextSpan(text: "$selectedCount products?\n\n", style: const TextStyle(fontWeight: FontWeight.bold)),
+              TextSpan(
+                text: "Note: Ongoing plans are still active, but customers won't see these products in your store anymore.",
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13.sp),
+              ),
+            ],
+          ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              // 1. Fire the bulk delete event
+              context.read<VendorProductsBloc>().add(VendorProductsDeleteMultiple());
+              
+              // 2. Close the dialog immediately
+              Navigator.pop(dialogContext); 
+            },
+            child: const Text("Delete All", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

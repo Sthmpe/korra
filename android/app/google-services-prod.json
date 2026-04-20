@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "761341878280",
+    "project_id": "korra-prod-63687",
+    "storage_bucket": "korra-prod-63687.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:761341878280:android:8ee7f32e0fad0feabcf1bd",
+        "android_client_info": {
+          "package_name": "com.example.korra"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:761341878280:android:f8c6f33d552ede49bcf1bd",
+        "android_client_info": {
+          "package_name": "com.korra.business"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:761341878280:android:cafeb92a369c9ab2bcf1bd",
+        "android_client_info": {
+          "package_name": "com.korra.shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

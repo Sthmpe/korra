@@ -53,7 +53,17 @@ class ReservationsPage extends StatelessWidget {
             backgroundColor: const Color(0xFFF9FAFB),
             appBar: KorraHeader(title: 'Reservations', showLeadingIcon: showLeadingIcon),
             body: RefreshIndicator(
-              onRefresh: () async => bloc.add(const ResRefresh()),
+              onRefresh: () async {
+                // 1. Trigger the refresh event
+                bloc.add(const ResRefresh());
+                
+                // 2. Tell the spinner to keep spinning until the bloc says loading is false
+                try {
+                  await bloc.stream
+                      .firstWhere((s) => !s.loading)
+                      .timeout(const Duration(seconds: 10)); // Safety catch so it never spins forever
+                } catch (_) {}
+              },
               color: const Color(0xFFA54600), // KorraColors.brand
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),

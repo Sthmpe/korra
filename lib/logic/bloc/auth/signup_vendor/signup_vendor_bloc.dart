@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/vendors/verification_repository.dart';
@@ -26,6 +25,8 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     on<SignupVendorNextPressed>(_onNext);
     on<SignupVendorBackPressed>(_onBack);
     on<SignupVendorSubmitPressed>(_onSubmit);
+    on<SignupVendorSendEmailOtpPressed>(_onSendEmailOtp);
+    on<SignupVendorVerifyEmailOtpPressed>(_onVerifyEmailOtp);
 
     // V1 — Business type
     on<RegisteredToggled>((e, emit) => emit(state.copyWith(registered: e.registered)));
@@ -80,6 +81,38 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
   // ── Navigation ──────────────────────────────────────────────────────────────
 
   void _onInit(SignupVendorInit event, Emit emit) {}
+
+  Future<void> _onSendEmailOtp(SignupVendorSendEmailOtpPressed event, Emitter<SignupVendorState> emit) async {
+    emit(state.copyWith(sendingEmailOtp: true, emailError: ""));
+    try {
+      await _vendorsRepo.sendEmailOtp(
+        email: state.email.toLowerCase().trim(),
+        vendorName: state.firstName, // Or firstName, depending on your flow
+      );
+      emit(state.copyWith(sendingEmailOtp: false));
+    } catch (e) {
+      emit(state.copyWith(sendingEmailOtp: false, emailError: e.toString().replaceAll("Exception: ", "")));
+    }
+  }
+
+  Future<void> _onVerifyEmailOtp(SignupVendorVerifyEmailOtpPressed event, Emitter<SignupVendorState> emit) async {
+    emit(state.copyWith(emailChecking: true, emailError: ""));
+    try {
+      await _vendorsRepo.verifyEmailOtp(
+        email: state.email.toLowerCase().trim(),
+        code: event.code,
+        vendorName: state.firstName,
+      );
+      emit(state.copyWith(
+        emailChecking: false, 
+        emailOtpVerified: true, 
+        lastVerifiedEmail: state.email.toLowerCase().trim(), // Lock it in!
+        emailError: "",
+      ));
+    } catch (e) {
+      emit(state.copyWith(emailChecking: false, emailError: e.toString().replaceAll("Exception: ", "")));
+    }
+  }
 
   void _onBack(SignupVendorBackPressed event, Emit emit) {
     final prev = (state.pageIndex - 1).clamp(0, state.totalPages - 1);
@@ -142,6 +175,13 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
          add(VendorEmailChanged(state.email)); 
          return;
       }
+
+      if (!state.emailOtpVerified) {
+         debugPrint("Debug: Email OTP not verified.");
+         // Tell the UI to show the red error text under the email field
+         emit(state.copyWith(emailError: "Please verify your email to continue."));
+         return;
+      }
     }
 
     if (state.pageIndex != identityStepIndex) {
@@ -161,10 +201,12 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       emit(state.copyWith(kycError: 'Fill first name, last name, and date of birth.'));
       return;
     }
+
     if (ninNeedsVerification && state.nin.trim().length != 11) {
       emit(state.copyWith(ninError: 'Enter a valid 11-digit NIN'));
       return;
     }
+
     if (bvnNeedsVerification && state.bvn.trim().length != 11) {
       emit(state.copyWith(bvnError: 'Enter a valid 11-digit BVN'));
       return;
@@ -181,56 +223,62 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
         if (ninExists) {
            emit(state.copyWith(
             ninVerifying: false,
+            bvnVerifying: false,
             ninError: 'This NIN is linked to another account.', // Fraud Message
           ));
           return; // Stop here
         }
-      }
 
-      if (bvnNeedsVerification) {
-        emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
+        await _vendorsRepo.verifyNin(state.nin.trim(), state.firstName, state.lastName, state.otherName, state.dob != null ? state.dob!.toIso8601String() : '', state.phone);
 
-        final bvnExists = await _vendorsRepo.checkIdentityExists(bvn: state.bvn.trim());
-        if (bvnExists) {
-           emit(state.copyWith(
-            bvnVerifying: false,
-            bvnError: 'This BVN is linked to another account.', // Fraud Message
-          ));
-          return; // Stop here
-        }
-      }
-
-      if (ninNeedsVerification) {
-        emit(state.copyWith(ninVerifying: true, ninError: null, kycError: null));
-        
-        await _vendorsRepo.verifyNin(state.nin.trim());
         emit(state.copyWith(
           ninVerifying: false,
+          bvnVerifying: false,
           ninVerified: true,
+          ninError: null,
           lastVerifiedNin: state.nin.trim(),
         ));
       }
 
       if (bvnNeedsVerification) {
         emit(state.copyWith(bvnVerifying: true, bvnError: null, kycError: null));
+
+        final bvnExists = await _vendorsRepo.checkIdentityExists(bvn: state.bvn.trim());
+
+        if (bvnExists) {
+           emit(state.copyWith(
+            ninVerifying: false,
+            bvnVerifying: false,
+            bvnError: 'This BVN is linked to another account.', // Fraud Message
+          ));
+          return; // Stop here
+        }
+
         final fullName = '${state.firstName} ${state.lastName}'.trim();
         final dobForBvn = _formatDobForBvn(state.dob);
         final localPhone = _normalizeNigerianMsisdn(state.phone);
 
         if (dobForBvn == null) {
-          emit(state.copyWith(kycError: 'Date of birth is missing'));
+          emit(state.copyWith(
+            ninVerifying: false,
+            bvnVerifying: false,
+            bvnError: 'Date of birth is missing'
+          ));
           return;
         }
 
-          await _vendorsRepo.verifyBvn(
-            bvn: state.bvn.trim(),
-            name: fullName,
-            dateOfBirthIso: dobForBvn,
-            mobileNo: localPhone,
-          );
+        await _vendorsRepo.verifyBvn(
+          bvn: state.bvn.trim(),
+          name: fullName,
+          dateOfBirthIso: dobForBvn,
+          mobileNo: localPhone,
+        );
+
         emit(state.copyWith(
           bvnVerifying: false,
+          ninVerifying: false,
           bvnVerified: true,
+          bvnError: null,
           lastVerifiedBvn: state.bvn.trim(),
         ));
       }
@@ -251,8 +299,19 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
           bvnError: error.toString(),
         ));
       } else {
-        emit(state.copyWith(kycError: error.toString()));
+        emit(state.copyWith(
+          kycError: error.toString(),
+          bvnVerified: false,
+          ninVerified: false,
+        ));
       }
+
+      emit(
+        state.copyWith(
+          ninVerifying: false,
+          bvnVerifying: false,
+        )
+      );
     }
   }
 
@@ -320,6 +379,17 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
   ) async {
     final email = event.value.trim();
 
+    final newEmailText = event.value.toLowerCase().trim();
+
+    // 🚀 2. THE SMART CHECK: Is this the exact email they already verified?
+    final isStillVerified = newEmailText.isNotEmpty && newEmailText == state.lastVerifiedEmail;
+
+    emit(state.copyWith(
+      email: newEmailText,
+      emailOtpVerified: isStillVerified, // Instantly revokes the green tick if they change 1 letter!
+      emailError: "", // clear errors while typing
+    ));
+
     emit(state.copyWith(emailChecking: true, emailError: null, emailUnused: false));
     
     if (email.isEmpty) {
@@ -377,6 +447,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
   // ── Submit (final) ─────────────────────────────────────────────────────────
   Future<void> _onSubmit(SignupVendorSubmitPressed event, Emit emit) async {
+    /// TO be uncommented after Monnify live api integration
     if (!state.ninVerified || !state.bvnVerified) {
       emit(state.copyWith(signUpError: 'Please verify both NIN and BVN first.', status: SignupStatus.failure));
       return;
@@ -410,7 +481,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     final changed = event.value != state.nin;
     emit(state.copyWith(
       nin: event.value,
-      ninError: null,
+      ninError: '',
       ninVerified: changed ? false : state.ninVerified,
       lastVerifiedNin: changed ? null : state.lastVerifiedNin,
     ));
@@ -420,7 +491,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     final changed = event.value != state.bvn;
     emit(state.copyWith(
       bvn: event.value,
-      bvnError: null,
+      bvnError: '',
       bvnVerified: changed ? false : state.bvnVerified,
       lastVerifiedBvn: changed ? null : state.lastVerifiedBvn,
     ));
@@ -439,7 +510,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
 
     emit(state.copyWith(ninVerifying: true, kycError: null));
     try {
-      await _vendorsRepo.verifyNin(state.nin.trim());
+      await _vendorsRepo.verifyNin(state.nin.trim(), state.firstName, state.lastName, state.otherName, state.dob != null ? state.dob!.toIso8601String() : '', state.phone);
 
       emit(state.copyWith(
         ninVerifying: false,

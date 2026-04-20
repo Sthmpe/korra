@@ -4,11 +4,11 @@ import admin from "npm:firebase-admin@11.11.0";
 // 1. DEFINE CORS HEADERS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, firebase-token, x-korra-signature, x-korra-timestamp',
 };
 
 // --- CONFIGURATION ---
-const MONNIFY_BASE_URL = "https://sandbox.monnify.com"; // Switch to Live for Prod
+const MONNIFY_BASE_URL =  Deno.env.get("MONNIFY_BASE_URL") || ""; // Switch to Live for Prod
 const MONNIFY_API_KEY = Deno.env.get("MONNIFY_API_KEY") ?? "";
 const MONNIFY_SECRET_KEY = Deno.env.get("MONNIFY_SECRET_KEY") ?? "";
 const MONNIFY_WALLET_ACCOUNT = Deno.env.get("MONNIFY_WALLET_ACCOUNT") ?? "";
@@ -53,7 +53,15 @@ async function verifyPin(inputPin: string, storedHash: string): Promise<boolean>
 }
 
 // --- HELPER: SEND PREMIUM NOTIFICATION ---
-async function sendNotification(uid: string, title: string, body: string, type: string) {
+async function sendNotification(
+  uid: string, 
+  title: string, 
+  body: string, 
+  type: string, 
+  amountDisplay: string = "", 
+  refId: string = ""
+) {
+  // 1. Save to your original notifications collection
   await db.collection('vendors').doc(uid).collection('notifications').add({
     title: title,
     body: body,
@@ -61,6 +69,49 @@ async function sendNotification(uid: string, title: string, body: string, type: 
     isRead: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  // 2. Save to the new Activity Feed collection
+  const activityRef = db.collection('vendors').doc(uid).collection('activity_feed').doc();
+  await activityRef.set({
+    id: activityRef.id,
+    type: type, // Maps to your VendorActivityType
+    title: title,
+    body: body,
+    ref_id: refId,
+    amount_display: amountDisplay,
+    date: admin.firestore.FieldValue.serverTimestamp(),
+    is_read: false
+  });
+
+  // 3. Send FCM Push Notification to the Device
+  try {
+    const vendorDoc = await db.collection('vendors').doc(uid).get();
+    const vendorData = vendorDoc.data();
+    
+    // Look for the FCM token (handles both string and array formats)
+    const fcmToken = vendorData?.fcmToken || vendorData?.fcmTokens;
+
+    if (fcmToken) {
+      const payload = {
+        notification: {
+          title: title,
+          body: body,
+        },
+        data: {
+          type: type,
+          refId: refId,
+        }
+      };
+
+      if (Array.isArray(fcmToken) && fcmToken.length > 0) {
+        await admin.messaging().sendEachForMulticast({ ...payload, tokens: fcmToken });
+      } else if (typeof fcmToken === 'string') {
+        await admin.messaging().send({ ...payload, token: fcmToken });
+      }
+    }
+  } catch (err) {
+    console.error('FCM Push Notification Error:', err);
+  }
 }
 
 // --- MAIN HANDLER ---
@@ -71,7 +122,69 @@ serve(async (req) => {
   }
 
   try {
+    // =======================================================================
+    // 🔐 LOCK 1: HMAC ANTI-FORGERY & ANTI-REPLAY
+    // =======================================================================
+    const clientTimestamp = req.headers.get('x-korra-timestamp');
+    const clientSignature = req.headers.get('x-korra-signature');
+    const KORRA_SECRET = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
+
+    if (!clientTimestamp || !clientSignature) {
+        throw new Error("Unauthorized: Missing security signatures.");
+    }
+
+    // 🛑 1. The Time Check (Anti-Replay)
+    // If the request is older than 2 minutes (120,000 milliseconds), kill it immediately.
+    const now = Date.now();
+    const requestTime = parseInt(clientTimestamp, 10);
+    if (Math.abs(now - requestTime) > 120000) {
+        throw new Error("Unauthorized: Request expired (Replay attack blocked).");
+    }
+
+    // 🛑 2. The Math Check (Anti-Forgery)
+    // The server recalculates the hash using the exact same logic as Flutter
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(KORRA_SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(clientTimestamp));
+    const hashArray = Array.from(new Uint8Array(signatureBuffer));
+    const expectedServerSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (clientSignature !== expectedServerSignature) {
+        throw new Error("Unauthorized: Cryptographic signature mismatch.");
+    }
+
+    // =======================================================================
+    // 🔐 LOCK 2: AUTH TOKEN (Proves WHO the user is)
+    // =======================================================================
+    const authHeader = req.headers.get('firebase-token');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new Error("Unauthorized Access: Missing VIP pass.");
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+
+    let secureUid: string;
+
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        secureUid = decodedToken.uid;
+    } catch (error) {
+        throw new Error("Unauthorized Access: Token expired or invalid.");
+    }
+
     const { type, uid, pin, amount, destination } = await req.json();
+
+    if (uid !== secureUid) {
+        throw new Error("Security Violation: You cannot perform actions for another user.");
+    }
 
     if (!uid || !pin) throw new Error("Missing UID or PIN");
 
@@ -93,8 +206,16 @@ serve(async (req) => {
     // 2. TRANSFER (PAYOUT)
     // ====================================================
     if (type === 'transfer') {
-      if (!amount || amount <= 0) throw new Error("Invalid amount");
+      // 🚀 HARD BLOCK: Minimum 1000
+      if (!amount || amount < 1000) throw new Error("Minimum withdrawal amount is ₦1,000");
       if (!destination || !destination.bankCode || !destination.accountNumber) throw new Error("Invalid destination");
+
+      // --- CALCULATE EMTL FEE ---
+      const EMTL_THRESHOLD = 10000;  // ₦10,000 (Govt Rule)
+      const GOVT_LEVY = 50;          // ₦50 (Govt Rule)
+      
+      const fee = amount >= EMTL_THRESHOLD ? GOVT_LEVY : 0;
+      const totalDeduction = amount + fee; // The exact total coming out of their Korra Wallet
 
       // --- STEP A: VERIFY PIN ---
       const pinDoc = await db.collection('vendors').doc(uid).collection('security').doc('transaction_pin').get();
@@ -104,7 +225,14 @@ serve(async (req) => {
       if (!isValid) throw new Error("Incorrect PIN");
 
       // --- STEP B: ATOMIC LEDGER CHECK & DEDUCT (THE 2ND CHECK) ---
-      const payoutRef = `PAYOUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // 1. Convert timestamp to a short string of letters and numbers (e.g., "LTT8F140")
+      const timeStr = Date.now().toString(36).toUpperCase(); 
+
+      // 2. Grab just the last 4 characters of the vendor's UID (e.g., "EYT2")
+      const userSlice = uid.slice(-4).toUpperCase(); 
+
+      // 3. Combine them for a beautiful, bulletproof reference: "PAYOUT-LTT8F140-EYT2"
+      const payoutRef = `PAYOUT-${timeStr}-${userSlice}`;
       
       await db.runTransaction(async (t) => {
         const statsRef = db.collection('vendor_stats').doc(uid);
@@ -117,16 +245,20 @@ serve(async (req) => {
         const currentBalance = earnings - locked - paidOut;
 
         // THE CHECK
-        if (currentBalance < amount) {
+        if (currentBalance < totalDeduction) {
+          if (fee > 0) {
+            throw new Error(`Insufficient funds. You need ₦${totalDeduction.toLocaleString()} to cover the withdrawal + ₦50 Govt Levy.`);
+          }
           throw new Error(`Insufficient funds. Available: ₦${currentBalance.toLocaleString()}`);
         }
 
-        // Deduct Money (Create Record)
+        // Deduct Payout Amount
         const ledgerRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
         t.set(ledgerRef, {
           amount: -amount, // Negative
           type: 'payout',
           status: 'pending_monnify', 
+          settlementStatus: 'cleared',
           reference: payoutRef,
           description: `Withdrawal to ${destination.accountName}`,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -134,39 +266,61 @@ serve(async (req) => {
           balanceAfter: currentBalance - amount,
           metadata: {
             destinationBank: destination.bankCode,
-            destinationAccount: destination.accountNumber
+            destinationAccount: destination.accountNumber,
+            destinationName: destination.accountName
           }
         });
 
-        // Update Stats (Optimistic)
+        // 🚀 DEDUCT EMTL FEE (As a separate, clean ledger record)
+        if (fee > 0) {
+          const feeRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
+          t.set(feeRef, {
+            amount: -fee,
+            type: 'fee',
+            status: 'success', // Fees are final
+            reference: `FEE-${payoutRef}`,
+            description: `EMTL Government Levy`,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            balanceBefore: currentBalance - amount,
+            balanceAfter: currentBalance - totalDeduction,
+          });
+
+          await sendNotification(
+            uid,
+            "EMTL Levy Deducted",
+            "A ₦50 Government Levy was applied to your withdrawal.",
+            "system",           // type
+            "-₦50",             // amountDisplay
+            `FEE-${payoutRef}`  // refId
+          );
+        }
+
+        // Update Stats (Optimistic) - We add the total deduction so it lowers their balance correctly
         t.update(statsRef, {
-          totalPayouts: admin.firestore.FieldValue.increment(amount)
+          totalPayouts: admin.firestore.FieldValue.increment(totalDeduction)
+        });
+
+        // Create a mapping for this payout reference to the vendor UID (for easy lookups when Monnify calls us back)
+        const mappingRef = db.collection('monnify_mappings').doc(payoutRef);
+        t.set(mappingRef, {
+            vendorUid: uid,
+            type: 'payout',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
       });
 
       // --- STEP C: CALL MONNIFY ---
-      const EMTL_THRESHOLD = 10000;  // ₦10,000 (Govt Rule)
-      const GOVT_LEVY = 50;          // ₦50 (Govt Rule)
-      
-      let amountToSend = amount;
-      let narrationText = "Korra Payout"; // Default Narration
-
-      if (amount >= EMTL_THRESHOLD) {
-        amountToSend = amount - GOVT_LEVY;
-        // ⚠️ UPDATED: Notify them in the bank alert why it's ₦50 short
-        narrationText = `Korra Payout (Less ₦${GOVT_LEVY} Govt Levy)`; 
-      }
-
-
       try {
+        let result: any;
+
         const token = await getMonnifyToken();
-        
         const monnifyPayload = {
-          amount: amountToSend,
+          amount: amount,
           reference: payoutRef,
-          narration: narrationText,
+          narration: "Korra Payout",
           destinationBankCode: destination.bankCode,
           destinationAccountNumber: destination.accountNumber,
+          destinationAccountName: destination.accountName,
           currency: "NGN",
           sourceAccountNumber: MONNIFY_WALLET_ACCOUNT, 
           async: false 
@@ -181,7 +335,10 @@ serve(async (req) => {
           body: JSON.stringify(monnifyPayload)
         });
 
-        const result = await response.json();
+        result = await response.json();
+
+
+
 
         // --- STEP D: HANDLE RESULT & NOTIFY ---
         let finalStatus = 'failed';
@@ -192,14 +349,15 @@ serve(async (req) => {
           finalStatus = 'success';
           note = 'Payout successful';
 
-          // ✅ SEND PREMIUM NOTIFICATION
           await sendNotification(
             uid,
             "Payout Successful 💸",
             `Your withdrawal of ₦${amount.toLocaleString()} to ${destination.accountName} was successful.`,
-            "payout_success"
+            "payout_success",                 // type
+            `-₦${amount.toLocaleString()}`,   // amountDisplay (Negative, money left)
+            payoutRef                         // refId
           );
-        } 
+        }
         // 2. PENDING CASE
         else if (result.requestSuccessful && result.responseBody?.status === 'PENDING') {
           finalStatus = 'pending';
@@ -209,9 +367,11 @@ serve(async (req) => {
             uid,
             "Payout Processing ⏳",
             `Your withdrawal of ₦${amount.toLocaleString()} is being processed by the bank.`,
-            "payout_pending"
+            "payout_pending",                 // type
+            `-₦${amount.toLocaleString()}`,   // amountDisplay (Negative, money locked)
+            payoutRef                         // refId
           );
-        } 
+        }
         // 3. FAILURE CASE (REFUND)
         else {
           finalStatus = 'failed';
@@ -219,6 +379,7 @@ serve(async (req) => {
           
           // Refund the Ledger
           await db.runTransaction(async (t) => {
+             // Refund main amount
              const ledgerRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
              t.set(ledgerRef, {
                amount: amount, // Positive
@@ -228,8 +389,23 @@ serve(async (req) => {
                description: `Refund for failed payout`,
                createdAt: admin.firestore.FieldValue.serverTimestamp()
              });
+
+             // Refund the fee
+             if (fee > 0) {
+               const feeRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
+               t.set(feeRef, {
+                 amount: fee,
+                 type: 'refund',
+                 status: 'success',
+                 reference: `REFUND-FEE-${payoutRef}`,
+                 description: `Refund for failed EMTL Levy`,
+                 createdAt: admin.firestore.FieldValue.serverTimestamp()
+               });
+             }
+
+             // Give the money back to their balance stat
              t.update(db.collection('vendor_stats').doc(uid), {
-                totalPayouts: admin.firestore.FieldValue.increment(-amount)
+                totalPayouts: admin.firestore.FieldValue.increment(-totalDeduction)
              });
           });
 
@@ -237,11 +413,13 @@ serve(async (req) => {
             uid,
             "Payout Failed ❌",
             `Your withdrawal of ₦${amount.toLocaleString()} failed. The funds have been returned to your wallet.`,
-            "payout_failed"
+            "payout_failed",                  // type
+            `+₦${amount.toLocaleString()}`,   // amountDisplay (Positive! Money came back)
+            payoutRef                         // refId
           );
         }
 
-        // Update Ledger Status
+        // Update Original Ledger Status
         const q = await db.collection('vendors').doc(uid).collection('ledger_transactions').where('reference', '==', payoutRef).get();
         if (!q.empty) {
           await q.docs[0].ref.update({ status: finalStatus, gatewayResponse: note });
@@ -254,9 +432,9 @@ serve(async (req) => {
           message: note
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      } catch (monnifyError) {
-        // If Monnify network fails, keep it as 'pending_monnify'
-        const errMsg = monnifyError instanceof Error ? monnifyError.message : String(monnifyError);
+      } catch (gatewayError) {
+        // If network fails, keep it as 'pending_monnify'
+        const errMsg = gatewayError instanceof Error ? gatewayError.message : String(gatewayError);
         throw new Error(`Gateway Error: ${errMsg}`);
       }
     }

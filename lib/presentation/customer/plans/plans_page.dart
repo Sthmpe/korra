@@ -47,7 +47,7 @@ class _PlansPageState extends State<PlansPage> {
   // Filters State
   PlansTab _currentTab = PlansTab.active;
 
-  SortBy _sortBy = SortBy.nextDue; // Default sort
+  SortBy _sortBy = SortBy.recent; // Default sort
   bool _autopayOnly = false;
   bool _overdueOnly = false;
   bool _highValueOnly = false;
@@ -342,6 +342,8 @@ class _PlansPageState extends State<PlansPage> {
     // C. Apply Sorting (Keep existing)
     list.sort((a, b) {
       switch (_sortBy) {
+        case SortBy.recent:
+          return b.updatedAt.compareTo(a.updatedAt);
         case SortBy.nextDue:
           return a.nextDueDate.compareTo(b.nextDueDate);
         case SortBy.amount:

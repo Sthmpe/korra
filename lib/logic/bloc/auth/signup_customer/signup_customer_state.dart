@@ -51,6 +51,10 @@ class SignupCustomerState extends Equatable {
   final SignupStatus status;
   final String uid; // Added to hold the UID after successful signup
 
+  final bool emailOtpVerified; // 🚀 New: Is the OTP confirmed?
+  final bool sendingEmailOtp;  // 🚀 New: Are we currently sending the code?
+  final String lastVerifiedEmail;
+
   const SignupCustomerState({
     this.pageIndex = 0,
     this.totalPages = 4,
@@ -86,6 +90,9 @@ class SignupCustomerState extends Equatable {
     this.signUpError,
     this.status = SignupStatus.initial,
     this.uid = '',
+    this.emailOtpVerified = false,
+    this.sendingEmailOtp = false,
+    this.lastVerifiedEmail = '',
   });
 
   SignupCustomerState copyWith({
@@ -110,6 +117,9 @@ class SignupCustomerState extends Equatable {
     String? signUpError,
     SignupStatus? status,
     String? uid,
+    bool? emailOtpVerified,
+    bool? sendingEmailOtp,
+    String? lastVerifiedEmail,
   }) {
     return SignupCustomerState(
       pageIndex: pageIndex ?? this.pageIndex,
@@ -145,7 +155,10 @@ class SignupCustomerState extends Equatable {
       stateName: stateName ?? this.stateName,
       signUpError: signUpError ?? this.signUpError,
       status: status ?? this.status,
-      uid: uid ?? this.uid
+      uid: uid ?? this.uid,
+      emailOtpVerified: emailOtpVerified ?? this.emailOtpVerified,
+      sendingEmailOtp: sendingEmailOtp ?? this.sendingEmailOtp,
+      lastVerifiedEmail: lastVerifiedEmail ?? this.lastVerifiedEmail,
     );
   }
 
@@ -169,6 +182,9 @@ class SignupCustomerState extends Equatable {
     stateName,
     signUpError,
     status,
-    uid
+    uid,
+    emailOtpVerified,
+    sendingEmailOtp,
+    lastVerifiedEmail,
   ];
 }

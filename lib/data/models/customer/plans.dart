@@ -69,6 +69,7 @@ class Plan {
   final String cancellationPolicy;
   final String customerName;
   final String customerPhone; 
+  final String customerEmail;
   final String modelType;
 
   final DateTime? extensionStartDate;
@@ -113,6 +114,7 @@ class Plan {
 
     this.customerName = '',
     this.customerPhone = '',
+    this.customerEmail = '',
     this.modelType = 'direct',
     this.extensionStartDate,
     this.pickupCode,
@@ -144,6 +146,7 @@ class Plan {
     double? amountPerPeriod,
     required String customerName,  // ✅ Require this from UI
     required String customerPhone,
+    required String customerEmail,
     
     // Tier Inputs (Passed from Bloc)
     required int baseDurationDays, 
@@ -170,6 +173,7 @@ class Plan {
       customerId: customerId,
       customerName: customerName,
       customerPhone: customerPhone,
+      customerEmail: customerEmail,
       productId: productId,
       productCode: productCode,
       vendorId: vendorId,
@@ -287,6 +291,7 @@ class Plan {
       customerId: '',
       customerName: '',
       customerPhone: '',
+      customerEmail: '',
       vendorId: '',
       title: 'Loading...',
       storeName: '...',
@@ -331,6 +336,7 @@ class Plan {
       "customerId": customerId,
       "customerName": customerName,
       "customerPhone": customerPhone,
+      "customerEmail": customerEmail,
       "vendorId": vendorId,
       "title": title,
       "storeName": storeName,
@@ -388,6 +394,7 @@ class Plan {
       customerId: map["customerId"] ?? '',
       customerName: map["customerName"] ?? "Unknown Customer",
       customerPhone: map["customerPhone"] ?? "",
+      customerEmail: map["customerEmail"] ?? "",
       vendorId: map["vendorId"] ?? '',
       title: map["title"] ?? '',
       storeName: map["storeName"] ?? '',

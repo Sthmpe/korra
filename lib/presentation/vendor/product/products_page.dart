@@ -73,7 +73,10 @@ class VendorProductsPage extends StatelessWidget {
                 ),
               ],
             ),
-            body: const VendorProductsBody(),
+            body: VendorProductsBody(
+              vendors: vendors,
+              vendorUid: vendorUid, // Placeholder, will be provided by Bloc
+            ),
           );
         },
       ),

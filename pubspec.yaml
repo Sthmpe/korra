@@ -13,11 +13,10 @@ dependencies:
   cloud_firestore: ^6.0.0
   collection: ^1.19.1
   connectivity_plus: ^6.1.5
-  crypto: ^3.0.6
+  crypto: ^3.0.7
   cupertino_icons: ^1.0.8
   dio: ^5.9.0
   equatable: ^2.0.7
-  firebase_app_check: ^0.4.1+3
   firebase_auth: ^6.0.1
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.4
@@ -68,6 +67,7 @@ flutter:
 #----Loacal Assest----#
   assets:
     - .env
+    - .env.prod
     - assets/images/
     - assets/icons/
     - assets/animations/
@@ -80,6 +80,8 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter_native_splash:
+  web: false
+
   # 1. LIGHT MODE (Brand Color Background)
   color: "#FFFFFF"
   image: "assets/images/korra_logo_icon.png" 

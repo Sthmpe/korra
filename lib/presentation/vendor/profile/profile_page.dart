@@ -42,6 +42,7 @@ class VendorProfilePage extends StatelessWidget {
       create: (context) => ProfileBloc(
         vendorRepo: vendors,
         net: context.read<NetCubit>(),
+        vendorUid: vendorUid,
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFFF9FAFB),
@@ -102,6 +103,62 @@ class VendorProfilePage extends StatelessWidget {
                     ),
                 
                     SizedBox(height: 16.h),
+
+                    // ====================================================
+                    // 🆕 NEW FINANCE SECTION (Call Settlement Screen)
+                    // ====================================================
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Finance'),
+                          SizedBox(height: 12.h),
+                
+                          RowWithChevron(
+                            icon: Iconsax.wallet_1, // Good icon for finance
+                            title: 'Settlements & Ledger',
+                            subtitle: 'Earnings, vault & history',
+                            onTap: () {
+                              // 🚀 NAVIGATE TO SETTLEMENT SCREEN
+                              Get.toNamed(
+                                Routes.vendorSettlement,
+                                arguments: {
+                                  'repo': vendors,
+                                  'uid': vendorUid,
+                                },
+                              );
+                            }
+                          ),
+
+                          _divider(),
+                          // 🚀 NEW STORE BALANCE ROW ADDED HERE
+                          RowWithChevron(
+                            icon: Iconsax.receipt_2_1, // A good icon for ledgers/liabilities
+                            title: 'Customer Store Balances',
+                            subtitle: 'Track retained customer balances',
+                            onTap: () {
+                              Get.toNamed(
+                                Routes.vendorStoreBalances,
+                                arguments: {
+                                  'uid': vendorUid,
+                                },
+                              );
+                            }
+                          ),
+
+                          _divider(),
+                          RowWithChevron(
+                            icon: Iconsax.bank,
+                            title: 'Payout Details',
+                            subtitle: 'Manage bank account',
+                            onTap: () {
+                              // Future: Navigate to Payout Settings
+                              showAppSnackbar("Payout settings coming soon!", SnackbarType.info);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                 
                     // --- 2. BUSINESS INFO ---
                     SectionCard(
@@ -175,68 +232,7 @@ class VendorProfilePage extends StatelessWidget {
                       ),
                     ),
                 
-                    // --- 4. PREFERENCES (ADDED) ---
-                    SectionCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionTitle('Preferences'),
-                          SizedBox(height: 6.h),
-                          RowWithChevron(
-                            icon: Icons.brightness_6_outlined,
-                            title: 'App Theme',
-                            subtitle: 'Coming soon',
-                            onTap: () => showAppSnackbar(
-                              "Themes are coming soon!",
-                              SnackbarType.info,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                
-                    // ====================================================
-                    // 🆕 NEW FINANCE SECTION (Call Settlement Screen)
-                    // ====================================================
-                    SectionCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionTitle('Finance'),
-                          SizedBox(height: 12.h),
-                
-                          RowWithChevron(
-                            icon: Iconsax.wallet_1, // Good icon for finance
-                            title: 'Settlements & Ledger',
-                            subtitle: 'Earnings, vault & history',
-                            onTap: () {
-                              // 🚀 NAVIGATE TO SETTLEMENT SCREEN
-                              Get.toNamed(
-                                Routes.vendorSettlement,
-                                arguments: {
-                                  'repo': vendors,
-                                  'uid': vendorUid,
-                                },
-                              );
-                            }
-                          ),
-                          
-                          _divider(),
-                
-                          RowWithChevron(
-                            icon: Iconsax.bank,
-                            title: 'Payout Details',
-                            subtitle: 'Manage bank account',
-                            onTap: () {
-                              // Future: Navigate to Payout Settings
-                              showAppSnackbar("Payout settings coming soon!", SnackbarType.info);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                
-                    // --- 5. SECURITY & LEGAL (ADDED) ---
+                    // --- 4. SECURITY & LEGAL (ADDED) ---
                     SectionCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,6 +266,26 @@ class VendorProfilePage extends StatelessWidget {
                             onTap: () {
                                       Get.toNamed(Routes.vendorLegal);
                                     },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                     // --- 5. PREFERENCES (ADDED) ---
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Preferences'),
+                          SizedBox(height: 6.h),
+                          RowWithChevron(
+                            icon: Icons.brightness_6_outlined,
+                            title: 'App Theme',
+                            subtitle: 'Coming soon',
+                            onTap: () => showAppSnackbar(
+                              "Themes are coming soon!",
+                              SnackbarType.info,
+                            ),
                           ),
                         ],
                       ),

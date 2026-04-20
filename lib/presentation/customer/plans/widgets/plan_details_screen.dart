@@ -537,62 +537,62 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
     }
   }
 
-Widget _buildImageCarousel(List<dynamic> images) {
-    if (images.isEmpty) return SizedBox(height: 200.h);
-    return Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        SizedBox(
-          height: 280.h,
-          width: double.infinity,
-          child: PageView.builder(
-            onPageChanged: (index) =>
-                setState(() => _currentImageIndex = index),
-            itemCount: images.length,
-            itemBuilder: (context, index) => CachedNetworkImage(
-              imageUrl: images[index],
-              fit: BoxFit.cover,
-              errorWidget: (context, url, error) => Container(
-                color: Colors.grey[100],
-                child: const Icon(Icons.image_not_supported, color: Colors.grey),
+  Widget _buildImageCarousel(List<dynamic> images) {
+      if (images.isEmpty) return SizedBox(height: 200.h);
+      return Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          SizedBox(
+            height: 280.h,
+            width: double.infinity,
+            child: PageView.builder(
+              onPageChanged: (index) =>
+                  setState(() => _currentImageIndex = index),
+              itemCount: images.length,
+              itemBuilder: (context, index) => CachedNetworkImage(
+                imageUrl: images[index],
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) => Container(
+                  color: Colors.grey[100],
+                  child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          bottom: 16.h,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: images
-                  .asMap()
-                  .entries
-                  .map(
-                    (entry) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: _currentImageIndex == entry.key ? 16.0.w : 6.0.w,
-                      height: 4.0.h,
-                      margin: const EdgeInsets.symmetric(horizontal: 3.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: _currentImageIndex == entry.key
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.4),
+          Positioned(
+            bottom: 16.h,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: images
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: _currentImageIndex == entry.key ? 16.0.w : 6.0.w,
+                        height: 4.0.h,
+                        margin: const EdgeInsets.symmetric(horizontal: 3.0),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(2),
+                          color: _currentImageIndex == entry.key
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.4),
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
+                    )
+                    .toList(),
+              ),
             ),
           ),
-        ),
-      ],
-    );
-  }
+        ],
+      );
+    }
 
   Widget _buildProductHeader(Plan p) {
     final bool isStrict = p.cancellationPolicy.contains("Store");
@@ -615,13 +615,33 @@ Widget _buildImageCarousel(List<dynamic> images) {
               children: [
                 VendorHeader(storeName: p.storeName),
                 SizedBox(height: 12.h),
-                Text(
-                  p.title,
-                  style: GoogleFonts.inter(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF101828),
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        p.title,
+                        style: GoogleFonts.inter(
+                          fontSize: 20.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF101828),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(width: 16.w), // Space between title and price
+
+                    Text(
+                      // Make sure to replace 'totalAmount' with your actual price field
+                      currencyFormat.format(p.totalAmount), 
+                      style: GoogleFonts.inter(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF101828), // Matches title color, or change to KorraColors.brand
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: 8.h),
                 Container(

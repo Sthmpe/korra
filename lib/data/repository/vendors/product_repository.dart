@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,10 +17,31 @@ extension ProductRepository on VendorRepository {
   // 🔹 SECURE ADD (Calls Edge Function)
   Future<void> addProductSecure(Map<String, dynamic> productMap) async {
     try {
-      debugPrint("🔒 Calling add-product-secure...");
-      
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("User ID: ${user.uid}");
+      debugPrint("🔒 Calling add-product-secure with Double Lock...");
+
       final response = await fx.invoke(
         'add-product-secure',
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
         body: {
           'vendorId': productMap['vendorId'],
           'productData': productMap, // Contains all fields including timeline
@@ -84,10 +107,31 @@ extension ProductRepository on VendorRepository {
     required Map<String, dynamic> updateData,
   }) async {
     try {
-      debugPrint("🔒 Calling edit-product-secure...");
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("User ID: ${user.uid}");
+      debugPrint("🔒 Calling edit-product-secure with Double Lock...");
       
       final response = await fx.invoke(
         'edit-product-secure',
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
         body: {
           'vendorId': vendorId,
           'productCode': productCode,
@@ -119,11 +163,12 @@ extension ProductRepository on VendorRepository {
   }
 
   /// 🔹 Stream vendor product items (real-time sync)
-  Stream<List<ProductItem>> streamVendorProductItems(String vendorId) {
+  Stream<List<ProductItem>> streamVendorProductItems(String vendorId, {int limit = 10}) {
     final query = firestore
         .collection('products')
         .where('vendorId', isEqualTo: vendorId)
-        .orderBy('createdAt', descending: true);
+        .orderBy('updatedAt', descending: true)
+        .limit(limit);
 
     return query.snapshots().map((snapshot) {
       final products = snapshot.docs.map((doc) {
@@ -145,12 +190,12 @@ extension ProductRepository on VendorRepository {
       List<ProductItem>.unmodifiable(productItemCache);
 
   /// 🔹 Manual refresh (fetch once)
-  Future<void> refreshVendorProductItems(String vendorId) async {
+  Future<void> refreshVendorProductItems(String vendorId, {int limit = 10}) async {
     final snapshot = await firestore
         .collection('products')
         .where('vendorId', isEqualTo: vendorId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
+        .orderBy('updatedAt', descending: true)
+        .limit(limit)
         .get();
 
     final products = snapshot.docs.map((doc) {
@@ -286,6 +331,130 @@ extension ProductRepository on VendorRepository {
       final path = url.split('/').last;
       await supabase.storage.from('product-images').remove([path]);
     }
+  }
+
+  /// 🔹 Delete Product
+  Future<void> deleteProductSecure(String vendorId, String productId, String type)async {
+    try {
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("User ID: ${user.uid}");
+      debugPrint("🔒 Calling delete-product-secure with Double Lock...");
+      
+      final response = await fx.invoke(
+        'delete-product-secure',
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {
+          'type': type,
+          'vendorUid': vendorId,
+          'productId': productId,
+        },
+      );
+
+      final data = response.data;
+
+      if (data['success'] != true) {
+        throw KorraException(
+          data['error'] ?? "Failed to delete product",
+          technicalDetails: "Server Validation Failed"
+        );
+      }
+
+      debugPrint("✅ Product Deleted Successfully: $productId");
+
+    } catch (e) {
+      debugPrint('Secure Delete Error: $e');
+      if (e is FunctionException) {
+         throw KorraException(
+           "Server Error: ${e.reasonPhrase}", 
+           technicalDetails: e.details.toString()
+         );
+      }
+      rethrow;
+    }
+  }
+
+  /// 🔹 Delete Multiple Products Securely (Group Delete)
+  Future<void> deleteMultipleProductsSecure(String vendorId, List<String> productIds) async {
+    try {
+      final user = auth.currentUser;
+      if (user == null) throw "You must be logged in.";
+
+      final idToken = await user.getIdToken(true);
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final signature = hmacSha256.convert(utf8.encode(timestamp)).toString();
+
+      debugPrint("🔒 Calling secure multi-delete for ${productIds.length} items...");
+      
+      final response = await fx.invoke(
+        'delete-product-secure',
+        headers: {
+          'firebase-token': 'Bearer $idToken', 
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {
+          'type': 'multiple-delete', // 🚀 NEW TYPE
+          'vendorUid': vendorId,
+          'productIds': productIds,  // 🚀 PASS THE LIST
+        },
+      );
+
+      dynamic data = response.data;
+      if (data is String) data = jsonDecode(data); // Safety net
+
+      if (data['success'] != true) throw Exception(data['error'] ?? "Failed to delete products");
+
+    } catch (e) {
+      debugPrint('Secure Multi-Delete Error: $e');
+      if (e is FunctionException) {
+         throw KorraException(
+           "Server Error: ${e.reasonPhrase}", 
+           technicalDetails: e.details.toString()
+         );
+      }
+      rethrow;
+    }
+  }
+
+  /// 🔹 Fetch counts for product tabs (All, Approved, Pending, Rejected, Out of Stock)
+  Future<Map<ProductFilter, int>> fetchProductTabCounts(String vendorId) async {
+    final baseQuery = firestore.collection('products').where('vendorId', isEqualTo: vendorId);
+
+    // Run all count queries simultaneously for speed
+    final results = await Future.wait([
+      baseQuery.count().get(), // All
+      baseQuery.where('status', isEqualTo: 'approved').where('availableStock', isGreaterThan: 0).count().get(), // Approved & In Stock
+      baseQuery.where('status', isEqualTo: 'pending').count().get(), // Pending
+      baseQuery.where('status', isEqualTo: 'rejected').count().get(), // Rejected
+      baseQuery.where('availableStock', isLessThanOrEqualTo: 0).count().get(), // Out of Stock
+    ]);
+
+    return {
+      ProductFilter.all: results[0].count ?? 0,
+      ProductFilter.approved: results[1].count ?? 0,
+      ProductFilter.pending: results[2].count ?? 0,
+      ProductFilter.rejected: results[3].count ?? 0,
+      ProductFilter.outOfStock: results[4].count ?? 0,
+    };
   }
 }
 

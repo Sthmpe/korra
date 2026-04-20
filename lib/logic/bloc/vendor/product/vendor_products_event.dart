@@ -58,6 +58,25 @@ class VendorProductsUpdated extends VendorProductsEvent {
   List<Object?> get props => [items, statusCounts];
 }
 
+class VendorProductsDelete extends VendorProductsEvent {
+  final String productId;
+  const VendorProductsDelete(this.productId);
+
+  @override
+  List<Object> get props => [productId];
+}
+
+class VendorProductsToggleSelection extends VendorProductsEvent {
+  final String productId;
+  const VendorProductsToggleSelection(this.productId);
+  @override
+  List<Object> get props => [productId];
+}
+
+class VendorProductsSelectAll extends VendorProductsEvent {}
+class VendorProductsClearSelection extends VendorProductsEvent {}
+class VendorProductsDeleteMultiple extends VendorProductsEvent {}
+
 class VendorProductsAdd extends VendorProductsEvent {
   final String name;
   final String description;

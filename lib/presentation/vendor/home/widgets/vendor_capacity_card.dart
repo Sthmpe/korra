@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../../../config/constants/colors.dart';
@@ -141,7 +143,7 @@ class VendorCapacityCard extends StatelessWidget {
                     // Active Plans Legend
                     if (activePlanValue > 0)
                       Padding(
-                        padding: EdgeInsets.only(bottom: 4.h),
+                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 10.h),
                         child: Row(
                           children: [
                             Container(width: 6.w, height: 6.w, decoration: const BoxDecoration(color: KorraColors.brandDark, shape: BoxShape.circle)),
@@ -152,20 +154,49 @@ class VendorCapacityCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                      ),
-                    
-                    // Store Credit Legend (Highlighted)
-                    if (storeCreditValue > 0)
-                      Row(
-                        children: [
-                          Container(width: 6.w, height: 6.w, decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle)),
-                          SizedBox(width: 6.w),
-                          Text(
-                            "Store Balance: ₦${formatToCurrency(storeCreditValue)}",
-                            style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFFB54D08), fontWeight: FontWeight.w600),
+                      ),  
+                  
+                      // Store Credit Legend (Clickable Button)
+                      if (storeCreditValue > 0)
+                        GestureDetector(
+                          onTap: () {
+                            // 🚀 Navigates to the new Store Balances screen
+                            Get.toNamed(
+                              '/vendor/profile/store-balances', // or Routes.vendorStoreBalances
+                              arguments: {'uid': FirebaseAuth.instance.currentUser?.uid},
+                            );
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7ED), // Premium subtle orange background
+                              borderRadius: BorderRadius.circular(12.r),
+                              //border: Border.all(color: const Color(0xFFFFEDD5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6.w, 
+                                  height: 6.w, 
+                                  decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle)
+                                ),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  "Store Balance: ₦${formatToCurrency(storeCreditValue)}",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11.sp, 
+                                    color: const Color(0xFFB54D08), 
+                                    fontWeight: FontWeight.w700
+                                  ),
+                                ),
+                                SizedBox(width: 2.w),
+                                Icon(Icons.chevron_right, size: 14.sp, color: const Color(0xFFB54D08)),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
                   ],
                 ),
               ],

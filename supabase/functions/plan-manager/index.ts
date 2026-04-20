@@ -5,7 +5,7 @@ import admin from "npm:firebase-admin@11.11.0";
 // 1. SETUP
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, firebase-token, x-korra-timestamp, x-korra-signature', 
 };
 
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
@@ -81,6 +81,13 @@ async function getVendorRelation(customerUid: string, vendorId: string) {
     return { ref: relRef, data: { storeCredit: 0 } };
 }
 
+// 🛠️ HELPER: Safely parse date (Handles Timestamp OR String)
+const parseFirestoreDate = (val) => {
+    if (!val) return new Date(); // Fallback
+    // If it has .toDate(), it's a Timestamp. Otherwise, it's a String/Date.
+    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
+};
+
 async function sendFcm(uid: string, title: string, body: string, data: any, collection = 'customers') {
   try {
     const userRef = db.collection(collection).doc(uid);
@@ -109,7 +116,7 @@ async function sendFcm(uid: string, title: string, body: string, data: any, coll
 }
 
 // CONSTANTS
-const PLATFORM_FEE_PERCENTAGE = 0.035; // 3.5%
+const PLATFORM_FEE_PERCENTAGE = 0.0; // 3.5%
 
 // 3. MAIN HANDLER
 serve(async (req) => {
@@ -118,10 +125,84 @@ serve(async (req) => {
     }
 
     try {
+        // =======================================================================
+        // 🔐 LOCK 1: HMAC ANTI-FORGERY & ANTI-REPLAY
+        // =======================================================================
+        const clientTimestamp = req.headers.get('x-korra-timestamp');
+        const clientSignature = req.headers.get('x-korra-signature');
+        const KORRA_SECRET = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
+
+        if (!clientTimestamp || !clientSignature) {
+            throw new Error("Unauthorized: Missing security signatures.");
+        }
+
+        // 🛑 1. The Time Check (Anti-Replay)
+        // If the request is older than 2 minutes (120,000 milliseconds), kill it immediately.
+        const now = Date.now();
+        const requestTime = parseInt(clientTimestamp, 10);
+        if (Math.abs(now - requestTime) > 120000) {
+            throw new Error("Unauthorized: Request expired (Replay attack blocked).");
+        }
+
+        // 🛑 2. The Math Check (Anti-Forgery)
+        // The server recalculates the hash using the exact same logic as Flutter
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+            "raw",
+            encoder.encode(KORRA_SECRET),
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["sign"]
+        );
+
+        const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(clientTimestamp));
+        const hashArray = Array.from(new Uint8Array(signatureBuffer));
+        const expectedServerSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        if (clientSignature !== expectedServerSignature) {
+            throw new Error("Unauthorized: Cryptographic signature mismatch.");
+        }
+    
+        // =======================================================================
+        // 🔐 LOCK 2: AUTH TOKEN (Proves WHO the user is)
+        // =======================================================================
+        const authHeader = req.headers.get('firebase-token');
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            throw new Error("Unauthorized Access: Missing VIP pass.");
+        }
+
+        const idToken = authHeader.split('Bearer ')[1];
+
+        let secureUid: string;
+
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(idToken);
+            secureUid = decodedToken.uid;
+        } catch (error) {
+            throw new Error("Unauthorized Access: Token expired or invalid.");
+        }
+
         const {
             action, customerUid, productId, planData, secureToken,
             planId, amount, pin, vendorUid, reason, category, adminPassword
         } = await req.json();
+
+        // =======================================================================
+        // 🚨 2. CONDITIONAL IDENTITY ROUTING (The Multi-Role Bouncer)
+        // =======================================================================
+        
+        if (action === 'VERIFY_PICKUP') {
+            // 🛡️ VENDOR CHECK: Ensure the caller is the actual vendor
+            if (secureUid !== vendorUid) {
+                throw new Error("Security Violation: Only the assigned vendor can verify this pickup.");
+            }
+        } else {
+            // 🛡️ CUSTOMER CHECK: Default fallback for creating plans, paying installments, etc.
+            if (secureUid !== customerUid) {
+                throw new Error("Security Violation: You cannot perform actions for another customer's plan.");
+            }
+        }
 
         const secretKey = new TextEncoder().encode(HMAC_SECRET);
 
@@ -213,6 +294,19 @@ serve(async (req) => {
                 
                 const vendorId = product.vendorId;
 
+                const complianceRef = db.collection('vendor_compliance').doc(vendorId);
+                const complianceDoc = await t.get(complianceRef);
+
+                if (complianceDoc.exists) {
+                    const compData = complianceDoc.data();
+                    const isExplicitlyBlocked = compData.blockPayments === true;
+                    const status = compData.status;
+
+                    if (isExplicitlyBlocked || status === 'suspended' || status === 'banned') {
+                        throw "Transactions paused. This store is currently unable to accept new digital reservations.";
+                    }
+                }
+
                 // Vendor Relations
                 const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
                 
@@ -296,6 +390,9 @@ serve(async (req) => {
                 let cashPrincipalNeeded = to2DP(userDesiredPrincipal - creditUsed);
                 if (cashPrincipalNeeded < 0) cashPrincipalNeeded = 0;
 
+                console.log(` - Cash Principal Needed: ₦${cashPrincipalNeeded.toLocaleString()}`);
+
+
                 // Calculate Total Wallet Deduction (Cash Principal + Fee)
                 let walletUsed = to2DP(cashPrincipalNeeded + processingFee);
                 let userPrincipalPayment = to2DP(creditUsed + cashPrincipalNeeded);
@@ -315,7 +412,7 @@ serve(async (req) => {
                 let pickupCode = null;
 
                 // If remaining is less than 1 Naira, treat as fully paid immediately
-                if (remainingOnCreate < 100.0) {
+                if (remainingOnCreate < 1.0) {
                     isFinished = true;
                     userPrincipalPayment = price; // Auto-fill the dust
                     remainingOnCreate = 0;
@@ -323,6 +420,43 @@ serve(async (req) => {
                     pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
                 } else {
                     isFinished = false;
+                }
+
+                // ---------------------------------------------------------
+                // 📅 PROCESS NEXT DUE DATE
+                // ---------------------------------------------------------
+                const parseFirestoreDate = (val: any) => {
+                    if (!val) return new Date();
+                    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
+                };
+
+                const rightNow = new Date();
+               let newNextDueDate = new Date();
+
+                // Determine Cadence
+                let addDays = 7; // Default Monthly
+                if (planData.cadenceType === 'weekly') addDays = 7;
+                if (planData.cadenceType === 'daily') addDays = 1;
+                if (planData.cadenceType === 'bi-weekly') addDays = 14;
+                if (planData.cadenceType === 'flexible') addDays = 14;
+                if (planData.cadenceType === 'monthly') addDays = 30;
+                
+                // Add the days to today's date
+                newNextDueDate.setDate(newNextDueDate.getDate() + addDays);
+
+                // Ensure it doesn't push past the absolute final deadline
+                const finalExpiry = new Date(planData.planExpiryDate);
+
+                if (newNextDueDate > finalExpiry) {
+                    // ✅ Set to 3 days before the expiry date
+                    newNextDueDate = new Date(finalExpiry);
+                    newNextDueDate.setDate(newNextDueDate.getDate() - 3);
+                    
+                    // Safety check: If 3 days before expiry is somehow in the past, 
+                    // just use the final expiry date so we don't accidentally make them overdue.
+                    if (newNextDueDate <= rightNow) {
+                        newNextDueDate = finalExpiry;
+                    }
                 }
 
                 // 1. Create Plan
@@ -342,6 +476,7 @@ serve(async (req) => {
                     loanAmount: remainingOnCreate,
                     outstandingLoanAmount: remainingOnCreate,
                     pickupCode: pickupCode, // Saves null or code
+                    nextDueDate: isFinished ? null : admin.firestore.Timestamp.fromDate(newNextDueDate),
                     completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null
                 });
 
@@ -366,7 +501,7 @@ serve(async (req) => {
                     creditUsed: creditUsed,
                     walletUsed: walletUsed,
                     // ✅ SAFE DATE HELPER
-                    nextDueDate: (!isFinished && planData.nextDueDate) ? safeIsoDate(planData.nextDueDate) : null
+                    nextDueDate: !isFinished ? newNextDueDate.toISOString() : null
                 };
 
                 t.set(ledgerRef, {
@@ -389,15 +524,64 @@ serve(async (req) => {
                 t.update(userRef, {
                     "monnify.availableBalance": admin.firestore.FieldValue.increment(-walletUsed)
                 });
-
+                
                 // 4. Update Plan Count
-                t.set(statsRef, {
-                    activePlansCount: admin.firestore.FieldValue.increment(1),
-                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
+                if (isFinished) {
+                    // ---------------------------------------------------------
+                    // 📝 USER STATS (If Finished) & ANALYTICS
+                    // ---------------------------------------------------------
+                    let upgradedTier = null;
+
+                    // 1. Calculate the new completed count
+                    const currentCompleted = statsData.completedPlansCount || 0;
+                    const newCompletedCount = currentCompleted + 1;
+                    
+                    // 2. Determine the new Tier (Auto-Upgrade Logic)
+                    const currentTier = statsData.tier || 'Starter';
+                    let newTier = currentTier;
+
+                    if (newCompletedCount >= 25) {
+                        newTier = 'VIP';
+                    } else if (newCompletedCount >= 10) {
+                        newTier = 'Collector';
+                    } else if (newCompletedCount >= 3) {
+                        newTier = 'Keeper';
+                    }
+                    // Else: It stays as whatever it currently is
+
+                    
+                    if (newTier !== currentTier) {
+                        upgradedTier = newTier;
+                    }
+
+                    // 3. Save Stats & New Tier to Database
+                    t.set(statsRef, {
+                        activePlansCount: admin.firestore.FieldValue.increment(-1),
+                        completedPlansCount: admin.firestore.FieldValue.increment(1),
+                        tier: newTier, // ✅ Auto-upgrade applied here
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    const now = new Date();
+                    const currentMonth = now.toISOString().slice(0, 7);
+                    const custMonthlyRef = db.collection('customers').doc(customerUid)
+                                                .collection('monthly_stats').doc(currentMonth);
+                    
+                    t.set(custMonthlyRef, {
+                        month: currentMonth,
+                        year: now.getFullYear().toString(),
+                        completedCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } else {
+                    t.set(statsRef, {
+                        activePlansCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
 
                 // 5. UPDATE ANALYTICS
-               const now = new Date();
+                const now = new Date();
                 const currentMonth = now.toISOString().slice(0, 7); // e.g. "2026-02"
                 const currentDay = now.toISOString().slice(8, 10);  // e.g. "13"
                 const currentDateStr = now.toISOString().slice(0, 10); // e.g. "2026-02-13"
@@ -425,6 +609,15 @@ serve(async (req) => {
                     storeCredit: newCreditBalance
                 }, { merge: true });
 
+                // 6b. VENDOR SIDE: Decrease Mirrored Store Credit
+                const vendorBalanceRef = db.collection('vendors').doc(vendorId).collection('customer_balances').doc(customerUid);
+                t.set(vendorBalanceRef, {
+                    customerId: customerUid,
+                    customerName: planData.customerName || "Customer",
+                    storeCredit: admin.firestore.FieldValue.increment(-creditUsed),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
                 t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
 
                 // 7. CREATE ACTIVITY FEED
@@ -434,6 +627,17 @@ serve(async (req) => {
                     type: 'reservation_new',
                     title: 'New Reservation',
                     body: `${planData.customerName} reserved ${product.name}`,
+                    ref_id: planId,
+                    amount_display: `+₦${userPrincipalPayment.toLocaleString()}`,
+                    date: admin.firestore.FieldValue.serverTimestamp(),
+                    is_read: false
+                });
+
+                t.set(activityRef, {
+                    id: activityRef.id,
+                    type: 'payment',
+                    title: 'Payment Received',
+                    body: `${planData.customerName} paid ₦${userPrincipalPayment.toLocaleString()} for ${planData.title} (Pending Settlement)`,
                     ref_id: planId,
                     amount_display: `+₦${userPrincipalPayment.toLocaleString()}`,
                     date: admin.firestore.FieldValue.serverTimestamp(),
@@ -456,7 +660,7 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: vendorNet,
                         type: 'sale',
-                        description: `Initial payment for ${product.name} (minus 3.5% fee)`,
+                        description: `Initial payment for ${product.name} received from ${planData.customerName} (pending settlement)`,
                         reference: `SALE-${planId.substring(0, 6)}`,
                         planId: planId,
                         status: 'success',
@@ -464,7 +668,8 @@ serve(async (req) => {
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         customerName: planData.customerName,
                         grossAmount: cashPrincipal,
-                        feeAmount: feeDeducted
+                        feeAmount: feeDeducted,
+                        settlementStatus: 'pending'
                     });
                 }
 
@@ -475,7 +680,7 @@ serve(async (req) => {
                     type: 'credit',
                     category: 'vendor_commission',
                     amount: feeDeducted, 
-                    description: `3.5% fee on ${product.name}`,
+                    description: `${PLATFORM_FEE_PERCENTAGE * 100}% fee on ${product.name}`,
                     planId: planId,
                     timestamp: admin.firestore.FieldValue.serverTimestamp(),
                     dateStr: currentDateStr,
@@ -542,6 +747,7 @@ serve(async (req) => {
                     year: now.getFullYear().toString(),
                     earnings: admin.firestore.FieldValue.increment(vendorNet),
                     salesVolume: admin.firestore.FieldValue.increment(price),
+                    storeCreditRedeemed: creditUsed > 0 ? admin.firestore.FieldValue.increment(creditUsed) : admin.firestore.FieldValue.increment(0), // 🚀 Track debt cleared this month
                     newPlansCount: admin.firestore.FieldValue.increment(1),
                     [`daily_breakdown.${currentDay}`]: admin.firestore.FieldValue.increment(vendorNet),
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
@@ -567,7 +773,6 @@ serve(async (req) => {
                 `Plan for ${result.productName} is active!`, 
                 { type: "plan_detail", planId: result.planIdStr, image: result.productImage }, // Added to data
                 'customers', // Assuming default role is customers
-                result.productImage // ✅ Pass image explicitly if your sendFcm supports it
             );
 
             if (result.pickupCode) {
@@ -576,20 +781,28 @@ serve(async (req) => {
 
             await sendFcm(
                 result.vendorId,
-                "New Order: Action Required 📦",
-                `Please RESERVE ${result.productName} immediately, Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} initial deposit.`,
-                { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
-                'vendors',
-                result.productImage // ✅ 
+                "Payment Received 💰",
+                // 🚀 UPDATE: Clearly stating the funds are pending
+                `${result.customerName} just paid ₦${result.downPayment.toLocaleString()}. Funds are pending settlement and will be available to withdraw soon.`,
+                { type: "vendor_order", planId: result.planIdStr },
+                'vendors'
             );
 
             await sendFcm(
                 result.vendorId,
-                "Platform Fee 📉",
-                `A platform fee of -₦${result.feeDeducted.toLocaleString()} was deducted for the new order.`,
-                { type: "payment", planId: result.planIdStr },
-                'vendors'
+                "New Order: Action Required 📦",
+                `Please RESERVE ${result.productName} immediately, Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} initial deposit.`,
+                { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
+                'vendors',
             );
+
+            // await sendFcm(
+            //     result.vendorId,
+            //     "Platform Fee 📉",
+            //     `A platform fee of -₦${result.feeDeducted.toLocaleString()} was deducted for the new order.`,
+            //     { type: "payment", planId: result.planIdStr },
+            //     'vendors'
+            // );
 
             return new Response(JSON.stringify({ status: "SUCCESS", planId: result.planIdStr }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -625,6 +838,18 @@ serve(async (req) => {
                 const walletBalance = to2DP_Floor(userData.monnify?.availableBalance || 0);
                 const vendorId = plan.vendorId;
 
+                const complianceRef = db.collection('vendor_compliance').doc(vendorId);
+                const complianceDoc = await t.get(complianceRef);
+                if (complianceDoc.exists) {
+                    const compData = complianceDoc.data();
+                    const isExplicitlyBlocked = compData.blockPayments === true;
+                    const status = compData.status;
+
+                    if (isExplicitlyBlocked || status === 'suspended' || status === 'banned') {
+                        throw "Transactions paused due to a trust and compliance issue. This store is currently flagged for violating Korra's operational terms. All payments to this store are blocked until the merchant resolves the restrictions on their portal.";
+                    }
+                }
+
                 // ✅ VENDOR RELATION
                 const { ref: vendorRelRef, data: vendorRel } = await getVendorRelation(customerUid, vendorId);
                 const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
@@ -652,7 +877,7 @@ serve(async (req) => {
                 let pickupCode = null;
 
                 // 🎯 CHANGED: Tolerance is now strictly less than 100 Naira (e.g. 0.99 clears, 100.00 does not)
-                if (remainingBalance < 100.0) {
+                if (remainingBalance < 1.0) {
                     isFinished = true;
                     newAmountPaid = plan.totalAmount; 
                     remainingBalance = 0;
@@ -664,6 +889,45 @@ serve(async (req) => {
                 }
 
                 // ---------------------------------------------------------
+                // 📅 CALCULATE NEW NEXT DUE DATE (Milestone Goalpost)
+                // ---------------------------------------------------------
+                // Helper to safely read Firestore Timestamps
+                const parseFirestoreDate = (val: any) => {
+                    if (!val) return new Date();
+                    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
+                };
+
+                let newNextDueDate = parseFirestoreDate(plan.nextDueDate);
+                const rightNow = new Date();
+
+                // Determine Cadence
+                let addDays = 7; // Default Monthly
+                if (plan.cadenceType === 'weekly') addDays = 7;
+                if (plan.cadenceType === 'daily') addDays = 1;
+                if (plan.cadenceType === 'bi-weekly') addDays = 14;
+                if (plan.cadenceType === 'flexible') addDays = 14;
+                if (plan.cadenceType === 'monthly') addDays = 30;
+ 
+                // Roll the date forward until it is in the future
+                while (newNextDueDate <= rightNow) {
+                    newNextDueDate.setDate(newNextDueDate.getDate() + addDays);
+                }
+
+                // Ensure it doesn't push past the absolute final deadline
+                const finalExpiry = new Date(plan.planExpiryDate);
+                if (newNextDueDate > finalExpiry) {
+                    // ✅ Set to 3 days before the expiry date
+                    newNextDueDate = new Date(finalExpiry);
+                    newNextDueDate.setDate(newNextDueDate.getDate() - 3);
+                    
+                    // Safety check: If 3 days before expiry is somehow in the past, 
+                    // just use the final expiry date so we don't accidentally make them overdue.
+                    if (newNextDueDate <= rightNow) {
+                        newNextDueDate = finalExpiry;
+                    }
+                }
+
+                // ---------------------------------------------------------
                 // 📝 1. UPDATE PLAN
                 // ---------------------------------------------------------
                 t.update(planRef, {
@@ -672,6 +936,7 @@ serve(async (req) => {
                     status: isFinished ? 'completed' : 'active',
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null,
+                    nextDueDate: isFinished ? null : admin.firestore.Timestamp.fromDate(newNextDueDate),
                     // ✅ SAVE PIN ONLY IF FINISHED
                     ...(isFinished && { pickupCode: pickupCode }) 
                 });
@@ -702,7 +967,7 @@ serve(async (req) => {
                     creditUsed: creditUsed,
                     walletUsed: walletUsed,
                     // ✅ SAFE DATE HELPER
-                    nextDueDate: (!isFinished && plan.nextDueDate) ? safeIsoDate(plan.nextDueDate) : null
+                    nextDueDate: !isFinished ? newNextDueDate.toISOString() : null
                 };
 
                 t.set(ledgerRef, {
@@ -780,12 +1045,20 @@ serve(async (req) => {
                 // 📝 4. VENDOR RELATION (Store Credit)
                 // ---------------------------------------------------------
                 const newCreditBalance = to2DP_Floor(availableStoreCredit - creditUsed);
-                
                 t.set(vendorRelRef, {
                     vendorId: vendorId,
                     storeName: plan.storeName,
                     lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
                     storeCredit: newCreditBalance 
+                }, { merge: true });
+
+                // 📝 4b. VENDOR SIDE: Decrease Mirrored Store Credit
+                const vendorBalanceRef = db.collection('vendors').doc(vendorId).collection('customer_balances').doc(customerUid);
+                t.set(vendorBalanceRef, {
+                    customerId: customerUid,
+                    customerName: plan.customerName || "Customer",
+                    storeCredit: admin.firestore.FieldValue.increment(-creditUsed),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
                 // ---------------------------------------------------------
@@ -796,7 +1069,7 @@ serve(async (req) => {
                     id: activityRef.id,
                     type: 'payment',
                     title: 'Payment Received',
-                    body: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title}`,
+                    body: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title} (Pending Settlement)`,
                     ref_id: planId,
                     amount_display: `+₦${paymentAmount.toLocaleString()}`,
                     date: admin.firestore.FieldValue.serverTimestamp(),
@@ -811,7 +1084,7 @@ serve(async (req) => {
 
                 // Vendor Stats & Ledger
                 const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
-                const vendorFeeRate = 0.035; 
+                const vendorFeeRate = PLATFORM_FEE_PERCENTAGE; // 3.5% fee
                 let vendorNet = 0;
                 let feeDeducted = 0;
 
@@ -826,14 +1099,15 @@ serve(async (req) => {
                         userId: vendorId,
                         amount: vendorNet,
                         type: 'sale',
-                        description: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title}`,
+                        description: `${plan.customerName} paid ₦${paymentAmount.toLocaleString()} for ${plan.title} (pending settlement, minus ${PLATFORM_FEE_PERCENTAGE * 100}% fee)`,
                         reference: txRefId,
                         planId: planId,
                         status: 'success',
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         customerName: plan.customerName,
                         grossAmount: walletUsed,
-                        feeAmount: feeDeducted
+                        feeAmount: feeDeducted,
+                        settlementStatus: 'pending'
                     });
 
                     const korraLedger = db.collection('company_ledger').doc();
@@ -842,7 +1116,7 @@ serve(async (req) => {
                         type: 'credit',
                         category: 'vendor_commission',
                         amount: feeDeducted, 
-                        description: `3.5% fee on installment for ${plan.title}`,
+                        description: `${PLATFORM_FEE_PERCENTAGE * 100}% fee on installment for ${plan.title}`,
                         planId: planId,
                         timestamp: admin.firestore.FieldValue.serverTimestamp(),
                         dateStr: currentDateStr,
@@ -888,18 +1162,17 @@ serve(async (req) => {
                 }
 
                 // C. Vendor Monthly Analytics
-                if (walletUsed > 0) {                
-                    const monthlyRef = db.collection('vendors').doc(vendorId)
-                                            .collection('monthly_stats').doc(currentMonthStr);
-                    
-                    t.set(monthlyRef, {
-                        month: currentMonthStr,
-                        year: currentYearStr,
-                        earnings: admin.firestore.FieldValue.increment(vendorNet),
-                        [`daily_breakdown.${currentDayStr}`]: admin.firestore.FieldValue.increment(vendorNet),
-                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
-                }
+                const monthlyRef = db.collection('vendors').doc(vendorId)
+                                        .collection('monthly_stats').doc(currentMonthStr);
+                
+                t.set(monthlyRef, {
+                    month: currentMonthStr,
+                    year: currentYearStr,
+                    earnings: admin.firestore.FieldValue.increment(vendorNet),
+                    storeCreditRedeemed: creditUsed > 0 ? admin.firestore.FieldValue.increment(creditUsed) : admin.firestore.FieldValue.increment(0),
+                    [`daily_breakdown.${currentDayStr}`]: admin.firestore.FieldValue.increment(vendorNet),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
 
                 return {
                     success: true,
@@ -920,7 +1193,7 @@ serve(async (req) => {
             await sendFcm(
                 result.receiptData.vendorId,
                 "Payment Received 💰",
-                `${result.receiptData.customerName} just paid ₦${paymentAmount.toLocaleString()}.`,
+                `${result.receiptData.customerName} just paid ₦${paymentAmount.toLocaleString()} Funds are pending settlement and will be available to withdraw soon.`,
                 { type: "vendor_order", planId: planId },
                 'vendors'
             );
@@ -971,7 +1244,7 @@ serve(async (req) => {
             // 1. Validate
             if (!planId || !customerUid) throw "Missing planId or customerUid.";
 
-            const result = await db.runTransaction(async (t) => {
+            const result = await db.runTransaction(async (t: any) => {
                 const planRef = db.collection("plans").doc(planId);
                 const planDoc = await t.get(planRef);
 
@@ -999,14 +1272,6 @@ serve(async (req) => {
                 if (daysToAdd <= 0) {
                     throw "Extension unavailable. You may have already used your one-time extension.";
                 }
-
-                // 🛠️ HELPER: Safely parse date (Handles Timestamp OR String)
-                const parseFirestoreDate = (val) => {
-                    if (!val) return new Date(); // Fallback
-                    // If it has .toDate(), it's a Timestamp. Otherwise, it's a String/Date.
-                    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
-                };
-
 
 
                 // 5. Calculate New Dates
@@ -1079,7 +1344,6 @@ serve(async (req) => {
                 // 👇 Add image to data payload
                 { type: "plan_detail", planId: planId, image: result.productImage }, 
                 'customers',
-                result.productImage // 👈 Pass explicitly if your helper uses it for iOS
             );
 
             // To Vendor
@@ -1090,7 +1354,6 @@ serve(async (req) => {
                 // 👇 Add image to data payload
                 { type: "vendor_order", planId: planId, image: result.productImage }, 
                 'vendors',
-                result.productImage // 👈 Pass explicitly
             );
 
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -1124,7 +1387,7 @@ serve(async (req) => {
                     cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
                     refundAmount: refundAmount,
                     penaltyAmount: 0,
-                    cancellationReason: 'Converted to Store Balance'
+                    cancellationReason: 'Converted to Store Balance',
                 });
 
                 // 4. CUSTOMER SIDE: Increase Store Credit
@@ -1137,15 +1400,54 @@ serve(async (req) => {
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // 5. CUSTOMER SIDE: Stats & Ledger
-                const { statsRef } = await getUserAndStats(customerUid);
-                
-                // Update Counts
-                t.set(statsRef, {
-                    activePlansCount: admin.firestore.FieldValue.increment(-1),
-                    cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+                const vendorBalanceRef = db.collection('vendors').doc(vendorId).collection('customer_balances').doc(customerUid);
+                t.set(vendorBalanceRef, {
+                    customerId: customerUid,
+                    customerName: plan.customerName || "Customer",
+                    storeCredit: admin.firestore.FieldValue.increment(refundAmount),
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
+
+                // 5. CUSTOMER SIDE: Stats & Ledger
+                const { statsRef } = await getUserAndStats(customerUid);
+
+                // Get Dates & Determine if it was an Expiry
+                const now = new Date();
+                const expiryDate = parseFirestoreDate(plan.planExpiryDate);
+                
+                // Set both to midnight to strictly compare the days
+                now.setHours(0, 0, 0, 0);
+                expiryDate.setHours(0, 0, 0, 0);
+                
+                // If today is past or equal to the expiry date, it's an expiry strike
+                const isExpired = now.getTime() >= expiryDate.getTime();
+
+                if (isExpired) {
+                    t.set(statsRef, {
+                        activePlansCount: admin.firestore.FieldValue.increment(-1),
+                        cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+                        expiredPlansCount: admin.firestore.FieldValue.increment(1), // New field for expired count
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } else {
+                    // Update Counts
+                    t.set(statsRef, {
+                        activePlansCount: admin.firestore.FieldValue.increment(-1),
+                        cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+                
+                const currentMonth = now.toISOString().slice(0, 7); // e.g. "2026-02"
+                const custMonthlyRef = db.collection('customers').doc(customerUid)
+                                                .collection('monthly_stats').doc(currentMonth);
+                    
+                    t.set(custMonthlyRef, {
+                        month: currentMonth,
+                        year: now.getFullYear().toString(),
+                        closedCount: admin.firestore.FieldValue.increment(1),
+                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
 
                 // Log Transaction
                 const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
@@ -1154,6 +1456,7 @@ serve(async (req) => {
                     customerId: customerUid,
                     amount: 0, // No cash returned to wallet, so 0 flow
                     type: 'plan_cancelled',
+                    reference: ledgerRef.id,
                     description: `Credited ₦${refundAmount.toLocaleString()} to Store Balance`,
                     planId: planId,
                     status: 'success',
@@ -1189,6 +1492,19 @@ serve(async (req) => {
                     // If you track 'projected_revenue', decrease it here.
                 });
 
+                const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                
+
+                // 2. UPDATE MONTHLY ANALYTICS (The Flow)
+                const monthlyRef = db.collection('vendors').doc(vendorId).collection('monthly_stats').doc(currentMonthStr);
+                t.set(monthlyRef, {
+                    month: currentMonthStr,
+                    year: now.getFullYear().toString(),
+                    storeCreditIssued: admin.firestore.FieldValue.increment(refundAmount), // 🚀 Track new debt created this month
+                    cancelledPlansCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
                 // Release Stock
                 const productRef = db.collection("products").doc(plan.productId);
                 t.update(productRef, { 
@@ -1201,7 +1517,7 @@ serve(async (req) => {
                     id: activityRef.id,
                     type: 'reservation_cancel',
                     title: 'Plan Closed',
-                    body: `${plan.customerName} closed ${plan.title}. Funds secured in Store Balance.`,
+                    body: `${plan.customerName} closed ${plan.title}. Refund secured in Store Balance.`,
                     ref_id: planId,
                     amount_display: `+₦${refundAmount.toLocaleString()} Credit`,
                     date: admin.firestore.FieldValue.serverTimestamp(),
@@ -1220,7 +1536,7 @@ serve(async (req) => {
             // 8. NOTIFICATIONS
             await sendFcm(
                 customerUid, 
-                "Funds Secured 🔒", // Title focuses on the MONEY, not the cancellation.
+                "Refund Secured 🔒", // Title focuses on the MONEY, not the cancellation.
                 // "Your money is safe here."
                 `Your ₦${result.refundAmount.toLocaleString()} is now available in your Store Balance at ${result.storeName}.`, 
                 { type: "plan_detail", planId: planId }
@@ -1231,7 +1547,7 @@ serve(async (req) => {
                 result.vendorId,
                 "Plan Closed 📁", // "Closed" implies the file is put away.
                 // clear instruction: The deal is off, money moved.
-                `Customer closed the plan for ${result.productName}. Funds moved to their Store Balance.`,
+                `Customer closed the plan for ${result.productName}. Refund secured in their Store Balance.`,
                 { type: "vendor_order", planId: planId },
                 'vendors'
             );

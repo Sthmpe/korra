@@ -107,7 +107,7 @@ class Customer {
       ninVerified: kyc['ninVerified'] ?? false,
       bvnVerified: kyc['bvnVerified'] ?? false,
 
-      // Monnify / Wallet
+      //Monnify / Wallet
       walletReference: monnify['walletReference'],
       accountNumber: monnify['accountNumber'],
       accountName: monnify['accountName'],

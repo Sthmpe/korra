@@ -45,6 +45,7 @@ class ProfilePage extends StatelessWidget {
       create: (context) => ProfileBloc(
         customerRepo: customerRepo,
         net: context.read<NetCubit>(),
+        uid: customerUid,
       ),
       child: BlocListener<ProfileBloc, ProfileState>(
         listener: (context, state) {

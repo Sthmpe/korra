@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -157,8 +160,24 @@ extension VerificationRepository on VendorRepository {
   /// Checks if NIN or BVN exists securely on the server (linked to another account).
   Future<bool> checkIdentityExists({String? nin, String? bvn}) async {
     try {
+      // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
       if (nin != null) {
-        final res = await fx.invoke('check_uniqueness', body: {
+        debugPrint("🔒 Calling check_uniqueness with Lock...");
+
+        final res = await fx.invoke(
+          'check_uniqueness', 
+          headers: {
+            'x-korra-timestamp': timestamp,
+            'x-korra-signature': signature,
+          },
+          body: {
           'type': 'nin',
           'value': nin,
           'collection': 'vendors',
@@ -167,7 +186,15 @@ extension VerificationRepository on VendorRepository {
       }
 
       if (bvn != null) {
-        final res = await fx.invoke('check_uniqueness', body: {
+        debugPrint("🔒 Calling check_uniqueness with Lock...");
+
+        final res = await fx.invoke(
+          'check_uniqueness', 
+          headers: {
+            'x-korra-timestamp': timestamp,
+            'x-korra-signature': signature,
+          },
+          body: {
           'type': 'bvn',
           'value': bvn,
           'collection': 'vendors',
@@ -194,18 +221,55 @@ extension VerificationRepository on VendorRepository {
   }
 
   /// Verify NIN through Monnify
-  Future<void> verifyNin(String nin) async {
+  // ===========================================================================
+  // 2. VERIFY NIN (Supabase Edge Function)
+  // ===========================================================================
+  Future<void> verifyNin(String nin, String firstName, String lastName, String otherName, String dateOfBirth, String phoneNumber) async {
     try {
-      await monnify.verifyNin(nin);
-      //debugPrint("NIN verified successfully for $nin");
-      return;
+      // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling nin-verify with Lock...");
+
+      final res = await fx.invoke(
+        'nin-verify',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        }, 
+        body: {
+          'nin': nin,
+          "firstName": firstName,
+          "lastName": lastName,
+          "otherName": otherName, // Pass empty string "" if they only have 2 names
+          "dateOfBirth": dateOfBirth, // Make sure this is YYYY-MM-DD
+          "mobileNumber": phoneNumber,
+        });
+      final data = res.data;
+
+      if (data['ok'] != true) {
+        // The edge function sends exactly what went wrong (e.g., "The NIN number you entered does not exist.")
+        throw KorraException(data['message'] ?? 'NIN verification failed.');
+      }
+      
+      debugPrint("✅ NIN verified successfully via Edge Function.");
+    } on FunctionException catch (e) {
+      debugPrint('❌ Check Identity Failed (Supabase): $e');
+      throw KorraException('Could not connect to verification server.', technicalDetails: e.toString());
     } catch (e) {
-      // debugPrint("NIN verification failed: $e");
-      throw Exception("NIN verification failed: $e");
+      if (e is KorraException) rethrow; // Pass through our clean errors
+      throw KorraException('Network error during NIN verification.', technicalDetails: e.toString());
     }
   }
 
-  /// ✅ Verify BVN through Monnify
+  // ===========================================================================
+  // 3. VERIFY BVN (Supabase Edge Function)
+  // ===========================================================================
   Future<void> verifyBvn({
     required String bvn,
     required String name,
@@ -213,27 +277,120 @@ extension VerificationRepository on VendorRepository {
     required String mobileNo,
   }) async {
     try {
-      final result = await monnify.verifyBvn(
-        bvn: bvn,
-        name: name,
-        dateOfBirthIso: dateOfBirthIso,
-        mobileNo: mobileNo,
+      // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling check_uniqueness with Lock...");
+
+      final res = await fx.invoke(
+        'bvn-verify', 
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {
+          'bvn': bvn,
+          'name': name,
+          'dateOfBirth': dateOfBirthIso,
+          'mobileNo': mobileNo,
+        }
       );
+      final data = res.data;
 
-      // Business rule: must not be NO_MATCH
-      final nameMatch = result['nameMatch'] as String? ?? "NO_MATCH";
-      final mobileMatch = result['mobileMatch'] as String? ?? "NO_MATCH";
-
-      if (nameMatch == "NO_MATCH" || mobileMatch == "NO_MATCH") {
-        throw Exception(
-          "BVN verification failed: Name or Mobile did not match",
-        );
+      if (data['ok'] != true) {
+        // The edge function sends the exact reason (e.g., "The name on this BVN does not match...")
+        throw KorraException(data['message'] ?? 'BVN verification failed.');
       }
 
-      //debugPrint("✅ BVN verified successfully for $name");
+      debugPrint("✅ BVN verified successfully via Edge Function.");
+    } on FunctionException catch (e) {
+      debugPrint('❌ Check Identity Failed (Supabase): $e');
+      throw KorraException('Could not connect to verification server.', technicalDetails: e.toString());
     } catch (e) {
-      // debugPrint("❌ BVN verification failed: $e");
-      throw Exception("BVN verification failed: $e");
+      if (e is KorraException) rethrow;
+      throw KorraException('Network error during BVN verification.', technicalDetails: e.toString());
+    }
+  }
+
+  // =========================================================
+  // 📧 1. SEND VENDOR EMAIL OTP
+  // =========================================================
+  Future<void> sendEmailOtp({required String email, required String vendorName}) async {
+    try {
+      final code = (Random().nextInt(900000) + 100000).toString();
+
+      await firestore.collection('otp_codes').doc(email).set({
+        'code': code,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final signature = hmacSha256.convert(utf8.encode(timestamp)).toString();
+
+      final response = await fx.invoke(
+        'send-email',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {
+          'type': 'send',
+          'email': email,
+          'name': vendorName, // Pass the vendor's business name or personal name
+          'code': code,
+        }
+      );
+
+      dynamic data = response.data;
+      if (data is String) data = jsonDecode(data);
+      if (data['success'] != true) throw Exception(data['error'] ?? "Failed to send email");
+
+    } catch (e) {
+      debugPrint("❌ Vendor OTP Send Error: $e");
+      throw "Failed to send code. Please try again."; 
+    }
+  }
+
+  // =========================================================
+  // 🔐 2. VERIFY VENDOR EMAIL OTP
+  // =========================================================
+  Future<void> verifyEmailOtp({required String email, required String code, required String vendorName}) async {
+    try {
+      final doc = await firestore.collection('otp_codes').doc(email).get();
+      if (!doc.exists) throw "Code expired. Request a new one.";
+
+      final savedCode = doc.data()?['code'];
+      if (savedCode != code) throw "Incorrect code. Please try again.";
+
+      await doc.reference.delete(); // Cleanup
+
+      // 🚀 Background Success Email
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final signature = hmacSha256.convert(utf8.encode(timestamp)).toString();
+
+      fx.invoke(
+        'send-email',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {
+          'type': 'verified',
+          'email': email,
+          'name': vendorName,
+        }
+      ).catchError((e) => debugPrint("Silent Background Email Error: $e"));
+
+    } catch (e) {
+      if (e is String) rethrow; 
+      throw "Verification failed. Please try again.";
     }
   }
 }

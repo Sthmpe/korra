@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
+import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../../../presentation/vendor/product/widgets/share_link_sheet.dart';
@@ -17,8 +18,15 @@ import '../../../shared/widgets/korra_header.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final ProductItem product;
+  final VendorRepository vendors;
+  final String vendorUid;
 
-  const ProductDetailsScreen({super.key, required this.product});
+  const ProductDetailsScreen({
+    super.key,
+    required this.product,
+    required this.vendors,
+    required this.vendorUid,
+  });
 
   @override
   State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
@@ -46,7 +54,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           if (canEdit)
             IconButton(
               onPressed: () => _navigateToEdit(context),
-              icon: Icon(Iconsax.edit, size: 22.sp, color: const Color(0xFF101828)),
+              icon: Icon(Icons.edit, size: 22.sp, color: const Color(0xFF101828)),
               tooltip: "Edit Product",
             ),
         ],
@@ -116,7 +124,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     backgroundColor: Colors.white,
                     elevation: 0,
                   ),
-                  icon: const Icon(Iconsax.export_1, size: 20, color: Color(0xFF344054)),
+                  icon: const Icon(Icons.share, size: 20, color: Color(0xFF344054)),
                   label: Text(
                     "Share Link",
                     style: GoogleFonts.inter(
@@ -416,6 +424,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       arguments: {
         'product': widget.product, // Pass the product data
         'listBloc': vendorBloc,    // 👈 Pass the LIVE bloc instance
+        'repo': widget.vendors,    // Pass the repository for any needed operations
+        'uid': widget.vendorUid,   // Pass the vendor UID for context
       },
     );
   }

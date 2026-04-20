@@ -61,15 +61,17 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isPriceTooHigh = false;
 
   // ✅ TRACK MINIMUM VS SELECTED
-  int _minAllowedBaseDays = 14; 
+  // int _minAllowedBaseDays = 14; 
+
+  int _recommendedMinDays = 14;
 
   int _calculatedDurationInt = 14;
-  int _calculatedNoticeInt = 3;
+  int _calculatedNoticeInt = 1;
   int _calculatedExtensionInt = 0;
 
 
   // DYNAMIC DISPLAY STRINGS
-  String _noticePeriod = "3 Days";
+  String _noticePeriod = "1 Days";
   String _extensionDuration = "0 Days"; // Visual only
   String _totalMaxTime = "17 Days";
   bool _priceAllowsExtension = false;
@@ -112,13 +114,10 @@ class _AddProductPageState extends State<AddProductPage> {
 
     int typedDays = int.tryParse(_durationCtrl.text) ?? 0;
     
-    // We don't overwrite their typing immediately (prevents UX issues if they type "1" before "15")
-    // But we use the valid minimum for the Timeline calculation
-    int effectiveDays = typedDays < _minAllowedBaseDays ? _minAllowedBaseDays : typedDays;
 
     setState(() {
-      _calculatedDurationInt = effectiveDays;
-      int totalDays = effectiveDays + _calculatedNoticeInt + _calculatedExtensionInt;
+      _calculatedDurationInt = typedDays;
+      int totalDays = typedDays + _calculatedNoticeInt + _calculatedExtensionInt;
       _totalMaxTime = "$totalDays Days";
     });
   }
@@ -128,8 +127,8 @@ class _AddProductPageState extends State<AddProductPage> {
     final cleanPrice = double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
     final double calculationCeiling = _currentMaxPlanLimit; 
 
-    int minBaseDays = 14;
-    int noticeDays = 3;
+    int recMinDays = 14; // Renamed to recommended
+    int noticeDays = 1;  // Set to 1 day
     int extDays = 0;
     bool allowExt = false;
 
@@ -139,22 +138,22 @@ class _AddProductPageState extends State<AddProductPage> {
        _isPriceTooHigh = true;
     }
 
-    // 1. Determine Minimum Allowed Base Duration
+    // 1. Determine Recommended Minimum Duration & Extension rules
     if (cleanPrice <= 20000) {
-        minBaseDays = 14; noticeDays = 3; extDays = 0; allowExt = false;
+        recMinDays = 14; noticeDays = 1; extDays = 0; allowExt = false;
     } else if (cleanPrice <= 120000) {
-        minBaseDays = 30; noticeDays = 3; extDays = 5; allowExt = true;
+        recMinDays = 30; noticeDays = 1; extDays = 5; allowExt = true;
     } else if (cleanPrice <= 350000) {
-        minBaseDays = 60; noticeDays = 3; extDays = 7; allowExt = true;
+        recMinDays = 60; noticeDays = 1; extDays = 7; allowExt = true;
     } else if (cleanPrice <= 950000) {
-        minBaseDays = 90; noticeDays = 3; extDays = 7; allowExt = true;
+        recMinDays = 90; noticeDays = 1; extDays = 7; allowExt = true;
     } else {
-        minBaseDays = 120; noticeDays = 3; extDays = 7; allowExt = true;
+        recMinDays = 120; noticeDays = 1; extDays = 7; allowExt = true;
     }
 
-    // 2. Pre-fill or enforce the controller value
+    // 2. Accept the controller value directly
     int currentInput = int.tryParse(_durationCtrl.text) ?? 0;
-    int effectiveDays = currentInput < minBaseDays ? minBaseDays : currentInput;
+    int effectiveDays = currentInput; // Removed the forced minimum override
 
     // 3. Apply Model Logic for Extensions
     if (_selectedModel == ProductModelType.direct) {
@@ -168,12 +167,12 @@ class _AddProductPageState extends State<AddProductPage> {
       if (!allowExt) extDays = 0;
     }
 
-   // 4. Calculate Total (Using effectiveDays)
+   // 4. Calculate Total
     int totalDays = effectiveDays + noticeDays + extDays;
 
     setState(() {
       _priceAllowsExtension = allowExt;
-      _minAllowedBaseDays = minBaseDays; 
+      _recommendedMinDays = recMinDays; 
       _calculatedDurationInt = effectiveDays; 
       _calculatedNoticeInt = noticeDays;
       _calculatedExtensionInt = extDays;
@@ -182,13 +181,14 @@ class _AddProductPageState extends State<AddProductPage> {
          _totalMaxTime = "N/A";
          _extensionDuration = "N/A";
       } else {
-        _noticePeriod = "$noticeDays Days";
+        _noticePeriod = "$noticeDays Day"; // Singular for 1 Day
         _extensionDuration = allowExt ? "$extDays Days" : "None";
         _totalMaxTime = "$totalDays Days";
       }
     });
   }
 
+  
   void _saveProduct(
     ImageBloc imageBloc,
     VendorProductsBloc productBloc,
@@ -253,10 +253,10 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     // ✅ ADD THIS: Rule 4: Manual Duration Check
-    int finalDuration = int.tryParse(_durationCtrl.text) ?? _minAllowedBaseDays;
-    if (finalDuration < _minAllowedBaseDays) {
+    int finalDuration = int.tryParse(_durationCtrl.text) ?? 0;
+    if (finalDuration <= 0) {
       showAppSnackbar(
-        "Duration cannot be less than $_minAllowedBaseDays days for a product of this price.", 
+        "Please enter a valid base duration.", 
         SnackbarType.error
       );
       return;
@@ -374,6 +374,8 @@ class _AddProductPageState extends State<AddProductPage> {
                       physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
                       children: [
+                        _buildRestrictionBanner(_complianceStatus, _blockMessage),
+                        
                         _buildLimitHeader(state.availableLimit),
             
                         // 1. IMAGES
@@ -396,18 +398,9 @@ class _AddProductPageState extends State<AddProductPage> {
                         SizedBox(height: 12.h),
                         _buildInput(
                           controller: _descCtrl,
-                          hint: "Description (min 20 characters)",
+                          hint: "Description (optional)",
                           maxLines: 3,
-                          // ✅ ADDED: Custom validator for minimum characters
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return "Description is required";
-                            }
-                            if (value.trim().length < 20) {
-                              return "Please enter at least 20 characters";
-                            }
-                            return null;
-                          },
+                          validator: (value) => null,
                         ),
                         SizedBox(height: 24.h),
             
@@ -464,27 +457,44 @@ class _AddProductPageState extends State<AddProductPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Base Duration", style: _labelStyle()),
+                                  Text("Base Duration (days)", style: _labelStyle()),
                                   SizedBox(height: 8.h),
                                   _buildInput(
                                     controller: _durationCtrl,
-                                    hint: "e.g. $_minAllowedBaseDays",
+                                    hint: "e.g. $_recommendedMinDays",
                                     keyboardType: TextInputType.number,
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
                                     ],
-                                    validator: (value) => null,
+                                    validator: (value) {
+                                      int? val = int.tryParse(value ?? '');
+                                      if (val == null || val <= 0) {
+                                        return 'Enter valid duration';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                   // ✅ ADDED: Only show if they type a number LOWER than the minimum
-                                  if ((int.tryParse(_durationCtrl.text) ?? 0) < _minAllowedBaseDays) ...[
-                                    SizedBox(height: 4.h),
-                                    Text(
-                                      "Min allowed: $_minAllowedBaseDays days",
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w500,
-                                        color: const Color(0xFFD92D20), // Error Red
-                                      ),
+                                  if ((int.tryParse(_durationCtrl.text) ?? 0) > 0 && 
+                                      (int.tryParse(_durationCtrl.text) ?? 0) < _recommendedMinDays) ...[
+                                    SizedBox(height: 6.h),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Iconsax.warning_2, size: 12.sp, color: const Color(0xFFA54600)),
+                                        SizedBox(width: 4.w),
+                                        Expanded(
+                                          child: Text(
+                                            "Warning: Plans under $_recommendedMinDays days have a high default rate.",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.sp,
+                                              fontWeight: FontWeight.w500,
+                                              color: const Color(0xFFA54600), // Warning Orange instead of Red
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ],
@@ -593,7 +603,7 @@ class _AddProductPageState extends State<AddProductPage> {
                                 ),
                               ),
                               SizedBox(height: 12.h),
-                              _buildTimelineRow("Base Duration", _calculatedDurationInt.toString()),
+                              _buildTimelineRow("Base Duration", "${_calculatedDurationInt.toString()} Days"),
                               _buildTimelineRow(
                                 "Notice Period",
                                 _noticePeriod,
@@ -721,6 +731,50 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
     );
   }
+
+  // --- RESTRICTION BANNER ---
+  Widget _buildRestrictionBanner(String status, String message) {
+    // Only show the red banner if they are blocked
+    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
+      return Container(
+        margin: EdgeInsets.only(bottom: 20.h),
+        padding: EdgeInsets.all(12.w),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3F2), // Soft error background
+          //border: Border.all(color: const Color(0xFFFEE4E2)), // Subtle red border
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.lock_outline, 
+              color: const Color(0xFFD92D20), 
+              size: 20.sp,
+            ),
+            SizedBox(width: 12.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Product Creation Paused",
+                  style: GoogleFonts.inter(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFB42318), // Darker red for header
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // If active or pending, show nothing at the top to save space
+    return const SizedBox.shrink(); 
+  }
+
   // --- MODEL SPECIFIC WIDGETS ---
   Widget _buildSubmitArea(BuildContext context, {required String status, required bool isLoading, required VoidCallback onSubmit}) {
     // 🛑 Case 1: Restricted / Suspended (BLOCK ACTION)
@@ -780,6 +834,7 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
     );
   }
+  
   // 💎 THE PREMIUM CARD WIDGET
   Widget _buildStatusCard(
     BuildContext context, {
@@ -1238,44 +1293,6 @@ class _AddProductPageState extends State<AddProductPage> {
                   : Colors.grey.shade500,
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String value,
-    required List<String> items,
-    required Function(String?) onChanged,
-  }) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFFEAECF0)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: const Icon(Iconsax.arrow_down_1, size: 18, color: Colors.grey),
-          items: items
-              .map(
-                (e) => DropdownMenuItem(
-                  value: e,
-                  child: Text(
-                    e,
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF101828),
-                    ),
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: onChanged,
         ),
       ),
     );

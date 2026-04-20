@@ -13,6 +13,12 @@ class SignupCustomerNextPressed extends SignupCustomerEvent {}
 class SignupCustomerBackPressed extends SignupCustomerEvent {}
 class SignupCustomerSubmitPressed extends SignupCustomerEvent {}
 
+class SignupSendEmailOtpPressed extends SignupCustomerEvent {}
+class SignupVerifyEmailOtpPressed extends SignupCustomerEvent {
+  final String code;
+  SignupVerifyEmailOtpPressed(this.code);
+}
+
 // field changes — step 1
 class FirstNameChanged extends SignupCustomerEvent {
   final String value;

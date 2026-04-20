@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 enum ProductModelType { strict, direct }
 enum ProductStatus { approved, pending, rejected, outOfStock }
 enum ProductFilter { all, approved, pending, outOfStock, rejected }
-enum ProductFlow { create, edit, idle}
+enum ProductFlow { create, edit, delete, idle}
 
 class ProductItem extends Equatable {
   final String id;
@@ -132,17 +132,25 @@ class VendorProductsState extends Equatable {
   final String? errorMessage;
   final Map<ProductFilter, int> statusCounts;
   final double availableLimit;
+  final int currentLimit; // Defaults to 10 for product count
+  final bool hasReachedMax; // Defaults to false
+  final bool isSelectionMode;
+  final Set<String> selectedIds;
 
   const VendorProductsState({
     required this.query,
     required this.filter,
     required this.items,
+    required this.currentLimit,
+    required this.hasReachedMax,
     this.flow,
     this.isSubmitting,
     this.success,
     this.errorMessage,
     this.statusCounts = const {},
     this.availableLimit = 0.0,
+    this.isSelectionMode = false,
+    this.selectedIds = const {},
   });
 
   List<ProductItem> get visibleItems {
@@ -210,10 +218,15 @@ class VendorProductsState extends Equatable {
     ProductFilter? filter,
     List<ProductItem>? items, 
     bool? success,
+    ProductFlow? flow,
     bool? isSubmitting,
     String? errorMessage,
     Map<ProductFilter, int>? statusCounts,
     double? availableLimit,
+    int? currentLimit,
+    bool? hasReachedMax,
+    bool? isSelectionMode,
+    Set<String>? selectedIds,
   }) {
     return VendorProductsState(
       query: query ?? this.query,
@@ -224,7 +237,11 @@ class VendorProductsState extends Equatable {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       errorMessage: errorMessage ?? this.errorMessage,
       statusCounts: statusCounts ?? this.statusCounts,
+      currentLimit: currentLimit ?? this.currentLimit,
+      hasReachedMax: hasReachedMax ?? this.hasReachedMax,
       availableLimit: availableLimit ?? this.availableLimit,
+      isSelectionMode: isSelectionMode ?? this.isSelectionMode,
+      selectedIds: selectedIds ?? this.selectedIds,
     );
   }
 
@@ -235,9 +252,13 @@ class VendorProductsState extends Equatable {
     query: '',
     filter: ProductFilter.all,
     items: [],
-    statusCounts: {}
+    statusCounts: {},
+    currentLimit: 10,
+    hasReachedMax: false,
+    isSelectionMode: false,
+    selectedIds: const {},
   );
 
   @override
-  List<Object?> get props => [query, filter, items, isSubmitting, success, errorMessage, flow, statusCounts, availableLimit];
+  List<Object?> get props => [query, filter, items, isSubmitting, success, errorMessage, flow, statusCounts, availableLimit, currentLimit, hasReachedMax, isSelectionMode, selectedIds];
 }

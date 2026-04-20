@@ -1,8 +1,10 @@
 // lib/data/repository/vendors/reservations_repository.dart
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../config/utils/korra_exception.dart';
@@ -73,7 +75,7 @@ extension ReservationsRepository on VendorRepository {
         });
   }
 
- Future<List<Reservation>> getReservations({
+ Future<Map<String, dynamic>> getReservations({
     required ReservationStatus status,
     required String vendorId,
     DocumentSnapshot? lastDoc,
@@ -88,22 +90,23 @@ extension ReservationsRepository on VendorRepository {
       case ReservationStatus.newRes:
       case ReservationStatus.ongoing:
         // Fetch all active, we will sort/filter later if needed
-        query = query.where('status', isEqualTo: 'active');
+        query = query.where('status', isEqualTo: 'active')
+                     .orderBy('createdAt', descending: true); 
         break;
         
       case ReservationStatus.readyForPickup:
       case ReservationStatus.completed:
         // ✅ FETCH ALL COMPLETED (Both Ready & History)
         // We cannot rely on .where('fulfilledAt', isNull: true) because the field might be missing.
-        query = query.where('status', isEqualTo: 'completed');
+        query = query.where('status', isEqualTo: 'completed')
+                     .orderBy('updatedAt', descending: true);  
         break;
         
       case ReservationStatus.cancelled:
-        query = query.where('status', whereIn: ['cancelled', 'defaulted']);
+        query = query.where('status', whereIn: ['cancelled', 'defaulted'])
+                     .orderBy('updatedAt', descending: true); 
         break;
     }
-
-    query = query.orderBy('createdAt', descending: true);
 
     if (lastDoc != null) {
       query = query.startAfterDocument(lastDoc);
@@ -111,7 +114,7 @@ extension ReservationsRepository on VendorRepository {
 
     // Note: We might fetch slightly more than 'limit' to handle client-side filtering
     // but for now, keep it simple.
-    query = query.limit(limit + 10); 
+    query = query.limit(limit * 4); 
 
     final snapshot = await query.get();
     
@@ -143,7 +146,18 @@ extension ReservationsRepository on VendorRepository {
       results = results.sublist(0, limit);
     }
 
-    return results;
+    DocumentSnapshot? newLastDoc;
+    if (results.isNotEmpty) {
+      // Find the raw Firestore document that matches the very last item in our filtered list
+      newLastDoc = snapshot.docs.firstWhere((doc) => doc.id == results.last.id);
+    }
+
+    // 🚀 Return the Map so the BLoC can paginate!
+    return {
+      'items': results,
+      'lastDoc': newLastDoc,
+      'hasReachedMax': snapshot.docs.length < (limit * 4), // If we got fewer than requested, we hit the end
+    };
   }
 
   // ✅ 3. FETCH COUNTS (Initial Load)
@@ -225,8 +239,31 @@ extension ReservationsRepository on VendorRepository {
     required String customerUid,
   }) async {
     try {
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("User ID: ${user.uid}");
+      debugPrint("🔒 Calling plan-manager with Double Lock...");
+
       final result = await fx.invoke(
         'plan-manager', // The unified backend function
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,  // 🔐 Lock 1: Time-based Anti-Replay
+          'x-korra-signature': signature,  // 🔐 Lock 1: Cryptographic Anti-Forgery
+        },
         body: {
           "action": "VERIFY_PICKUP",
           "planId": planId,

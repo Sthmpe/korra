@@ -55,6 +55,8 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
   // --- Local State for Gamification ---
   int _filledCount = 0;
 
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
@@ -162,26 +164,116 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
                 return null;
               },
               builder: (field) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8.w, runSpacing: 10.h,
-                      children: korraVendorCategories.map((c) {
-                        final isSelected = s.categories.contains(c);
-                        return _CategoryChip(
-                          label: c, isSelected: isSelected,
-                          onTap: () {
-                            final next = List<String>.from(s.categories);
-                            if (isSelected) next.remove(c); else if (next.length < 5) next.add(c);
-                            field.didChange(next);
-                            _on(CategoryToggled(c));
+                return StatefulBuilder(
+                  builder: (context, setLocalState) {
+                    
+                    // 🧠 DYNAMIC SORTING & FILTERING LOGIC
+                    // 1. Get selected categories that match the search (keeps user's exact selection sequence)
+                    final selectedMatches = s.categories.where(
+                      (c) => c.toLowerCase().contains(_searchQuery.toLowerCase())
+                    ).toList();
+                    
+                    // 2. Get unselected categories that match the search
+                    final unselectedMatches = korraVendorCategories.where(
+                      (c) => !s.categories.contains(c) && c.toLowerCase().contains(_searchQuery.toLowerCase())
+                    ).toList();
+
+                    // 3. Combine them: Selected on top, unselected below
+                    final List<String> displayCategories = [...selectedMatches, ...unselectedMatches];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 🔍 1. THE SEARCH BAR
+                        TextField(
+                          onChanged: (value) {
+                            setLocalState(() {
+                              _searchQuery = value; 
+                            });
                           },
-                        );
-                      }).toList(),
-                    ),
-                    if (field.hasError) Padding(padding: EdgeInsets.only(top: 8.h, left: 4.w), child: Text(field.errorText!, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.red, fontWeight: FontWeight.w500))),
-                  ],
+                          style: GoogleFonts.inter(fontSize: 14.sp),
+                          decoration: InputDecoration(
+                            hintText: 'Search categories...',
+                            prefixIcon: const Icon(Iconsax.search_normal, size: 18),
+                            contentPadding: EdgeInsets.symmetric(vertical: 12.h),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                              borderSide: BorderSide(color: KorraColors.brand),
+                            ),
+                          ),
+                        ),
+                        
+                        SizedBox(height: 12.h),
+
+                        // 📜 2. THE SCROLLABLE CHIP CONTAINER
+                        Container(
+                          height: 180.h, // Approx 4 rows
+                          width: double.infinity,
+                          padding: EdgeInsets.all(12.w),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          // 🎯 EMPTY STATE VS CHIPS
+                          child: displayCategories.isEmpty 
+                            ? Center(
+                                child: Text(
+                                  'No category found matching "$_searchQuery"',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13.sp,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              )
+                            : SingleChildScrollView(
+                                child: Wrap(
+                                  spacing: 8.w, 
+                                  runSpacing: 10.h,
+                                  children: displayCategories.map((c) {
+                                    final isSelected = s.categories.contains(c);
+                                    return _CategoryChip(
+                                      label: c, 
+                                      isSelected: isSelected,
+                                      onTap: () {
+                                        FocusScope.of(context).unfocus(); 
+                                        
+                                        final next = List<String>.from(s.categories);
+                                        if (isSelected) {
+                                          next.remove(c); 
+                                        } else if (next.length < 5) {
+                                          next.add(c);
+                                        }
+                                        field.didChange(next);
+                                        _on(CategoryToggled(c));
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                        ),
+                        
+                        // 🚨 3. ERROR MESSAGE
+                        if (field.hasError) 
+                          Padding(
+                            padding: EdgeInsets.only(top: 8.h, left: 4.w), 
+                            child: Text(
+                              field.errorText!, 
+                              style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.red, fontWeight: FontWeight.w500)
+                            )
+                          ),
+                      ],
+                    );
+                  }
                 );
               },
             ),
@@ -214,8 +306,6 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
             // SECTION 3: SOCIAL PRESENCE (Gamified)
             // ----------------------------------------------------------
             Text('Digital Presence', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: const Color(0xFF111111))),
-            SizedBox(height: 8.h),
-            Text('Add at least 3 links to verify your business.', style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF666666))),
             SizedBox(height: 16.h),
 
             _RequirementProgress(count: _filledCount, required: 3),
@@ -730,9 +820,38 @@ class _CategoryChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  const _CategoryChip({required this.label, required this.isSelected, required this.onTap});
+  const _CategoryChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(onTap: () { HapticFeedback.selectionClick(); onTap(); }, child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h), decoration: BoxDecoration(color: isSelected ? KorraColors.brand : Colors.white, borderRadius: BorderRadius.circular(20.r), border: Border.all(color: isSelected ? KorraColors.brand : const Color(0xFFE5E5E5), width: 1, ), ), child: Text(label, style: GoogleFonts.inter(fontSize: 12.5.sp, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF111111), ), ), ), );
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+        decoration: BoxDecoration(
+          color: isSelected ? KorraColors.brand : Colors.white,
+          borderRadius: BorderRadius.circular(20.r),
+          // border: Border.all(
+          //   color: isSelected ? KorraColors.brand : const Color(0xFFE5E5E5),
+          //   width: 1,
+          // ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12.5.sp,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? Colors.white : const Color(0xFF111111),
+          ),
+        ),
+      ),
+    );
   }
 }

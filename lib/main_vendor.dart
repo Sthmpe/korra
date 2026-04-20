@@ -11,8 +11,11 @@ import 'logic/core/update/update_cubit.dart';
 import 'logic/services/auth_service.dart';
 
 void main() async {
+  // 🚀 Capture the flag from the terminal command
+  const bool isLive = bool.fromEnvironment('IS_LIVE', defaultValue: false);
+
   // 1. Run Shared Setup
-  await bootstrap();
+  await bootstrap(isLive: isLive);
 
   // 2. Set Identity: VENDOR (MERCHANT)
   AppConfig.init(AppFlavor.vendor);

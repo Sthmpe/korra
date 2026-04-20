@@ -12,7 +12,7 @@ class TransactionModel {
   final double balanceBefore;
   final double balanceAfter;
   final DateTime createdAt;
-  
+  final double convertedAmount;
   // ✅ NEW: Snapshot of the receipt at the moment of transaction
   final Map<String, dynamic>? receiptData;
 
@@ -28,6 +28,7 @@ class TransactionModel {
     required this.balanceBefore,
     required this.balanceAfter,
     required this.createdAt,
+    required this.convertedAmount,
     this.receiptData,
   });
 
@@ -44,6 +45,7 @@ class TransactionModel {
       'balanceBefore': balanceBefore,
       'balanceAfter': balanceAfter,
       'createdAt': FieldValue.serverTimestamp(),
+      'convertedAmount': convertedAmount,
       'receiptData': receiptData, // ✅ Saved to DB
     };
   }
@@ -61,7 +63,7 @@ class TransactionModel {
       balanceBefore: (map['balanceBefore'] ?? 0).toDouble(),
       balanceAfter: (map['balanceAfter'] ?? 0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      
+      convertedAmount:(map['metadata']?['convertedAmount'] != null) ? (map['metadata']?['convertedAmount']).toDouble() : 0,
       // ✅ Parse the Map safely
       receiptData: map['receiptData'] != null 
           ? Map<String, dynamic>.from(map['receiptData']) 

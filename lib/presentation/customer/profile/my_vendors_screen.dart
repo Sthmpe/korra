@@ -11,67 +11,216 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/constants/colors.dart';
 import '../../shared/widgets/korra_header.dart';
 
-class MyVendorsScreen extends StatelessWidget {
+class MyVendorsScreen extends StatefulWidget {
   final String customerUid;
 
   const MyVendorsScreen({super.key, required this.customerUid});
+
+  @override
+  State<MyVendorsScreen> createState() => _MyVendorsScreenState();
+}
+
+class _MyVendorsScreenState extends State<MyVendorsScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ScrollController _scrollController = ScrollController();
+  
+  // Pagination State
+  final List<DocumentSnapshot> _vendors = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  final int _limit = 15; // Load 15 merchants at a time
+  DocumentSnapshot? _lastDocument;
+
+  // Total count for the Top Card
+  int _totalMerchantsCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTotalCount();
+    _loadMoreData();
+
+    // Listen to scroll events to trigger pagination
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50 && !_isLoading && _hasMore) {
+        _loadMoreData();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // 🧮 FETCH AGGREGATE TOTAL (For the Top Card)
+  Future<void> _fetchTotalCount() async {
+    try {
+      final query = _firestore
+          .collection('customers')
+          .doc(widget.customerUid)
+          .collection('my_vendors');
+
+      final countQuery = await query.count().get();
+
+      if (mounted) {
+        setState(() {
+          _totalMerchantsCount = countQuery.count ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching merchant count: $e");
+    }
+  }
+
+  // 🔄 PAGINATION LOGIC (List)
+  Future<void> _loadMoreData() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      Query query = _firestore
+          .collection('customers')
+          .doc(widget.customerUid)
+          .collection('my_vendors')
+          .orderBy('lastInteraction', descending: true) // Most recent first
+          .limit(_limit);
+
+      if (_lastDocument != null) {
+        query = query.startAfterDocument(_lastDocument!);
+      }
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        _lastDocument = snapshot.docs.last;
+        _vendors.addAll(snapshot.docs);
+        
+        if (snapshot.docs.length < _limit) {
+          _hasMore = false; // Reached the end
+        }
+      } else {
+        _hasMore = false;
+      }
+    } catch (e) {
+      debugPrint("Pagination Error: $e");
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: const KorraHeader(title: "My Merchants", showLeadingIcon: true),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('customers')
-            .doc(customerUid)
-            .collection('my_vendors')
-            .orderBy('lastInteraction', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: KorraColors.brand));
-          }
+      body: Column(
+        children: [
+          // --- TOP SUMMARY CARD ---
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.all(24.w),
+            width: double.infinity,
+            child: Column(
+              children: [
+                Text(
+                  'Merchants Interacted With',
+                  style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 13.sp, fontWeight: FontWeight.w600)
+                ),
+                SizedBox(height: 8.h),
+                Text(
+                  '$_totalMerchantsCount',
+                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 36.sp, fontWeight: FontWeight.w900, letterSpacing: -1),
+                ),
+                SizedBox(height: 16.h),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(20.r),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.storefront_outlined, color: const Color(0xFFA54600), size: 16.sp),
+                      SizedBox(width: 8.w),
+                      Text(
+                        'Active Connections',
+                        style: GoogleFonts.inter(color: const Color(0xFFA54600), fontWeight: FontWeight.w700, fontSize: 12.sp)
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-          final docs = snapshot.data?.docs ?? [];
+          // --- LIST HEADER ---
+          Padding(
+            padding: EdgeInsets.fromLTRB(24.w, 24.h, 24.w, 12.h),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text('Merchant Directory', style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontWeight: FontWeight.w700, fontSize: 14.sp)),
+              ],
+            ),
+          ),
 
-          if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Iconsax.shop, size: 48.sp, color: Colors.grey.shade300),
-                  SizedBox(height: 16.h),
-                  Text("No merchants yet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
-                  SizedBox(height: 8.h),
-                  Text("Merchants you transact with will appear here.", style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500)),
-                ],
-              ),
-            );
-          }
+          // --- MERCHANT LIST (PAGINATED) ---
+          Expanded(
+            child: _vendors.isEmpty && !_isLoading
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Iconsax.shop, size: 48.sp, color: Colors.grey.shade300),
+                        SizedBox(height: 16.h),
+                        Text("No merchants yet", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+                        SizedBox(height: 8.h),
+                        Text("Merchants you transact with will appear here.", style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(20.r, 0, 20.r, 20.r),
+                    itemCount: _vendors.length + (_hasMore ? 1 : 0),
+                    separatorBuilder: (_, __) => SizedBox(height: 16.h),
+                    itemBuilder: (context, index) {
+                      
+                      // Show loader at the bottom if fetching more
+                      if (index == _vendors.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator(color: KorraColors.brand)),
+                        );
+                      }
 
-          return ListView.separated(
-            padding: EdgeInsets.all(20.r),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => SizedBox(height: 16.h),
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              final String vendorId = docs[index].id;
-              final double credit = (data['storeCredit'] ?? 0).toDouble();
-              
-              // We pass the local credit data, but fetch the rest from the Vendor Profile
-              return _VendorCard(
-                vendorId: vendorId,
-                storeCredit: credit,
-              );
-            },
-          );
-        },
+                      final data = _vendors[index].data() as Map<String, dynamic>;
+                      final String vendorId = _vendors[index].id;
+                      final double credit = (data['storeCredit'] ?? 0).toDouble();
+
+                      return _VendorCard(
+                        vendorId: vendorId,
+                        storeCredit: credit,
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
 }
 
+// -----------------------------------------------------------------------------
+// _VendorCard & _SocialBtn REMAIN EXACTLY AS BEFORE
+// -----------------------------------------------------------------------------
 class _VendorCard extends StatelessWidget {
   final String vendorId;
   final double storeCredit;
@@ -123,7 +272,6 @@ class _VendorCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         shape: BoxShape.circle,
-                        //border: Border.all(color: Colors.grey.shade300),
                       ),
                       alignment: Alignment.center,
                       child: Text(initial, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
@@ -190,13 +338,6 @@ class _VendorCard extends StatelessWidget {
                       color: const Color(0xFF25D366), 
                       onTap: () => _launchUri("https://wa.me/${phone.replaceAll('+', '')}"), // Fallback to phone if group link missing
                       isVisible: phone.isNotEmpty,
-                    ),
-                    _SocialBtn(
-                      icon: MdiIcons.instagram, // Instagram
-                      label: "Instagram", 
-                      color: const Color(0xFFE1306C), 
-                      onTap: () => _launchUri("https://instagram.com/$instagram"), 
-                      isVisible: instagram != null && instagram.isNotEmpty,
                     ),
                     _SocialBtn(
                       icon: FontAwesomeIcons.x, // Twitter/X

@@ -1,5 +1,11 @@
+
+
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FunctionsClient, FunctionException;
@@ -39,7 +45,9 @@ class CustomerRepository implements INotificationRepository {
   // UTILITY METHODS
   // ---------------------------------------------------------------------------
 
-  @override // 👈 Add override annotation
+  final korraSecret = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
+
+  @override 
   Future<void> updateFcmToken(String uid, String token) async {
     try {
       // We merge it so we don't overwrite other data
@@ -78,8 +86,21 @@ class CustomerRepository implements INotificationRepository {
     String email,
   ) async {
     try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling check_uniqueness with HMAC Signature...");
+
       final res = await fx.invoke(
         'check_uniqueness',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
         body: {'type': 'email', 'value': email, 'collection': collectionName},
       );
       return res.data['exists'] == true;
@@ -113,6 +134,17 @@ class CustomerRepository implements INotificationRepository {
       if (!doc.exists) {
         // If the doc really doesn't exist, we throw a specific error
         throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
+      }
+
+      // 🛡️ ISOLATE FCM LOGIC: Don't let a missing web worker kill the login!
+      try {
+        final String? newToken = await FirebaseMessaging.instance.getToken();
+
+        if (newToken != null) {
+          await updateFcmToken(uid, newToken); 
+        }
+      } catch (fcmError) {
+        debugPrint('⚠️ FCM Token fetch failed: $fcmError');
       }
     } catch (e) {
       // 🛑 STOP! Do NOT delete the account here. 
@@ -163,8 +195,27 @@ class CustomerRepository implements INotificationRepository {
     }
   }
 
-  Future<void> logout() async {
+  Future<void> logout(String uid) async {
     try {
+      // 🛡️ ISOLATE FCM LOGIC: Never let notification errors trap the user!
+      try {
+        // 1. Get the current device's FCM token
+        final String? currentToken = await FirebaseMessaging.instance.getToken();
+
+        // 2. Remove it from the database BEFORE signing out
+        if (currentToken != null) {
+          await FirebaseFirestore.instance.collection('customers').doc(uid).update({
+            'fcmToken': FieldValue.delete(), 
+          });
+        }
+
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (fcmError) {
+        // Web browsers often block this. We just log it and move on to the actual sign out.
+        debugPrint('⚠️ FCM cleanup failed (Common on Web), but continuing logout: $fcmError');
+      }
+
+      // 3. Now it is safe to actually sign out
       await auth.signOut();
     } catch (e) {
       // Throw the clean error
@@ -195,13 +246,32 @@ class CustomerRepository implements INotificationRepository {
         email: email,
         password: state.password,
       );
+
       firebaseUser = authCredential.user;
       uid = firebaseUser!.uid;
       debugPrint('Step 1: Firebase user created: $uid');
 
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await firebaseUser.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling create-reserve-account with Double Lock...");
+
       // --- STEP 2: Call Supabase (Monnify Reservation) ---
       final response = await fx.invoke(
         'create-reserve-account',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+          'firebase-token': 'Bearer $idToken', 
+        },
         body: {
           'uid': uid,
           'email': email,
@@ -524,7 +594,31 @@ class CustomerRepository implements INotificationRepository {
 
   Future<void> recalculateLimit(String uid) async {
     try {
-      final res = await fx.invoke('recalculate-limit', body: {'customerUid': uid});
+      final user = auth.currentUser;
+
+      if (user == null) throw "You must be logged in.";
+
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await user.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling recalculate-limit with Double Lock...");
+
+      final res = await fx.invoke(
+        'recalculate-limit',
+        headers: {
+          'firebase-token': 'Bearer $idToken',
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        }, 
+        body: {'customerUid': uid});
       final data = res.data;
       
       if (data['success'] != true) {

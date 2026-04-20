@@ -4,7 +4,7 @@ import admin from "npm:firebase-admin@11.11.0";
 // 1. DEFINE CORS HEADERS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, firebase-token, x-korra-timestamp, x-korra-signature',
 };
 
 // 2. INITIALIZE FIREBASE ADMIN
@@ -25,8 +25,68 @@ serve(async (req) => {
   }
 
   try {
-    // 🔓 NO AUTH CHECK (Trusted Client)
+    // =======================================================================
+    // 🔐 LOCK 1: HMAC ANTI-FORGERY & ANTI-REPLAY
+    // =======================================================================
+    const clientTimestamp = req.headers.get('x-korra-timestamp');
+    const clientSignature = req.headers.get('x-korra-signature');
+    const KORRA_SECRET = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
+
+    if (!clientTimestamp || !clientSignature) {
+        throw new Error("Unauthorized: Missing security signatures.");
+    }
+
+    // 🛑 1. The Time Check (Anti-Replay)
+    // If the request is older than 2 minutes (120,000 milliseconds), kill it immediately.
+    const now = Date.now();
+    const requestTime = parseInt(clientTimestamp, 10);
+    if (Math.abs(now - requestTime) > 120000) {
+        throw new Error("Unauthorized: Request expired (Replay attack blocked).");
+    }
+
+    // 🛑 2. The Math Check (Anti-Forgery)
+    // The server recalculates the hash using the exact same logic as Flutter
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(KORRA_SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(clientTimestamp));
+    const hashArray = Array.from(new Uint8Array(signatureBuffer));
+    const expectedServerSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (clientSignature !== expectedServerSignature) {
+        throw new Error("Unauthorized: Cryptographic signature mismatch.");
+    }
+
+    // =======================================================================
+    // 🔐 LOCK 2: AUTH TOKEN (Proves WHO the user is)
+    // =======================================================================
+    const authHeader = req.headers.get('firebase-token');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new Error("Unauthorized Access: Missing VIP pass.");
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let secureUid: string;
+
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        secureUid = decodedToken.uid; // The absolute truth of who they are
+    } catch (error) {
+        throw new Error("Unauthorized Access: Token expired or invalid.");
+    }
+
     const { uid, email, firstName, lastName, bvn, nin } = await req.json();
+
+    if (uid !== secureUid) {
+        throw new Error("Security Violation: You cannot perform actions for another user.");
+    }
 
     // 1. MONNIFY AUTH
     const BASE_URL = Deno.env.get("MONNIFY_BASE_URL");
@@ -115,7 +175,7 @@ serve(async (req) => {
       uid: uid,
       activePlansCount: 0,
       completedPlansCount: 0,
-      defaultsCount: 0,
+      expiredPlansCount: 0,
       cancelledPlansCount: 0,
       tier: "Starter",
       lastUpdated: timestamp

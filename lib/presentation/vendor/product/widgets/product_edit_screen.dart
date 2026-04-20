@@ -8,17 +8,27 @@ import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_event.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
+import '../../payout/widgets/contact_support_sheet.dart';
 import 'image_upload_box.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final ProductItem product;
-  const ProductEditScreen({super.key, required this.product});
+  final VendorRepository vendors;
+  final String vendorUid;
+
+  const ProductEditScreen({
+    super.key, 
+    required this.product,
+    required this.vendors,
+    required this.vendorUid
+  });
 
   @override
   State<ProductEditScreen> createState() => _ProductEditScreenState();
@@ -26,6 +36,9 @@ class ProductEditScreen extends StatefulWidget {
 
 class _ProductEditScreenState extends State<ProductEditScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  String _complianceStatus = 'active';
+  String _blockMessage = '';
 
   late TextEditingController nameCtrl;
   late TextEditingController descCtrl;
@@ -76,6 +89,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     categoryCtrl = TextEditingController(text: p.category);
     codeCtrl = TextEditingController(text: p.code);
 
+    
+
     // --- DETERMINE PERMISSIONS ---
     if (p.status == ProductStatus.approved) {
       // ✅ APPROVED: Lock Identity, Allow Price/Stock change
@@ -94,6 +109,23 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       _canEditCommerce = true;
       _helperMessage =
           "This product was rejected. Please fix issues and resubmit.";
+    }
+
+    _fetchComplianceStatus();
+  }
+
+  Future<void> _fetchComplianceStatus() async {
+    try {
+      final compliance = await widget.vendors.getComplianceStatus(widget.vendorUid);
+      if (mounted) {
+        setState(() {
+          _complianceStatus = compliance['status'] ?? 'active';
+          _blockMessage = compliance['message'] ?? '';
+        });
+      }
+    } catch (e) {
+      // If error, keep default (active) or handle error
+      debugPrint("Error fetching status: $e");
     }
   }
 
@@ -172,6 +204,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
                 children: [
+                  _buildRestrictionBanner(_complianceStatus, _blockMessage),
+
                   // 1. LIMIT HEADER (Live Feedback)
                   _buildLimitHeader(state.availableLimit),
 
@@ -349,42 +383,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   SizedBox(height: 40.h),
 
                   // 8. SAVE
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52.h,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () => _saveChanges(imageBloc, productBloc, state),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: KorraColors.brand,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14.r),
-                        ),
-                        disabledBackgroundColor: KorraColors.brand.withOpacity(
-                          0.6,
-                        ),
-                      ),
-                      child: isLoading
-                          ? SizedBox(
-                              width: 24.w,
-                              height: 24.w,
-                              child: const CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              "Save Changes",
-                              style: GoogleFonts.inter(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
+                  _buildSubmitArea(
+                    context, 
+                    status: _complianceStatus, 
+                    isLoading: isLoading, 
+                    onSubmit: () => _saveChanges(imageBloc, productBloc, state),
                   ),
+
                   SizedBox(height: 32.h),
                 ],
               ),
@@ -396,6 +401,222 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   // --- WIDGET HELPERS ---
+  Widget _buildRestrictionBanner(String status, String message) {
+    // Only show the red banner if they are blocked
+    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
+      return Container(
+        margin: EdgeInsets.only(bottom: 20.h),
+        padding: EdgeInsets.all(12.w),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3F2), // Soft error background
+          //border: Border.all(color: const Color(0xFFFEE4E2)), // Subtle red border
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.lock_outline, 
+              color: const Color(0xFFD92D20), 
+              size: 20.sp,
+            ),
+            SizedBox(width: 12.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Product Edit Paused",
+                  style: GoogleFonts.inter(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFB42318), // Darker red for header
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // If active or pending, show nothing at the top to save space
+    return const SizedBox.shrink(); 
+  }
+
+  Widget _buildSubmitArea(BuildContext context, {required String status, required bool isLoading, required VoidCallback onSubmit}) {
+    // 🛑 Case 1: Restricted / Suspended (BLOCK ACTION)
+    // If the account is flagged, we stop them from adding more items.
+    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
+      return Padding(
+        padding: EdgeInsets.only(top: 24.h),
+        child: _buildStatusCard( 
+          context,
+          title: "Edit Paused",
+          message: "Product editing is disabled for your account. Please contact support to resolve your status.",
+          icon: Icons.lock_outline,
+          accentColor: const Color(0xFFD92D20), // Premium Error Red
+          buttonText: "Resolve Issue",
+          onPressed: () => _showContactSheet(
+            context, 
+            title: "Account Support", 
+            subTitle: "Product editing is restricted. Please contact us to resolve this."
+          ),
+        ),
+      );
+    }
+
+     return SizedBox(
+      width: double.infinity,
+      height: 52.h,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onSubmit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: KorraColors.brand,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.r),
+          ),
+          disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: 24.w,
+                height: 24.w,
+                child: const CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                "Save Changes",
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+      ),
+    );
+  }
+
+  // 💎 THE PREMIUM CARD WIDGET
+  Widget _buildStatusCard(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color accentColor,
+    required String buttonText,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(top: 0.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20.r), // Softer corners
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF101828).withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4), // Soft elevation
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(20.w),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Icon with Soft Background
+                Container(
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accentColor, size: 24.sp),
+                ),
+                SizedBox(width: 16.w),
+                
+                // 2. Text Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.inter(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF101828), // Slate 900
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      SizedBox(height: 6.h),
+                      Text(
+                        message,
+                        style: GoogleFonts.inter(
+                          fontSize: 13.sp,
+                          height: 1.5, // Better readability
+                          color: const Color(0xFF667085), // Slate 500
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // 3. Integrated Action Button (Bottom Strip)
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade100)),
+            ),
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(20.r),
+                bottomRight: Radius.circular(20.r),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      buttonText,
+                      style: GoogleFonts.inter(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: accentColor,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    Icon(Icons.arrow_forward_rounded, size: 16.sp, color: accentColor),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true, // Allows it to be taller if needed
+      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
+    );
+  }
+
 
   Widget _buildLimitHeader(double availableLimit) {
     return Container(

@@ -25,7 +25,7 @@ extension CustomerActivityFeed on CustomerRepository {
       for (var tx in transactions) {
         final isCredit = tx.amount >= 0; // Money coming in (Refunds/Deposits)
         final amountValue = tx.amount.abs();
-        final formattedAmount = _currencyFormat.format(amountValue);
+        var formattedAmount = _currencyFormat.format(amountValue);
         
         String amountDisplay = isCredit ? "+ $formattedAmount" : "- $formattedAmount";
 
@@ -69,9 +69,11 @@ extension CustomerActivityFeed on CustomerRepository {
             ];
             break;
 
-          case 'Plan Closed': // Plan Cancelled -> Money moves to Wallet
+          case 'plan_cancelled': // Plan Cancelled -> Money moves to Wallet
             type = ActivityType.autopay; 
-            title = "Funds Secured"; // High Status: Sounds safe and intentional
+            title = "Refund Secured"; // High Status: Sounds safe and intentional
+            formattedAmount = _currencyFormat.format(tx.convertedAmount); // Show full amount (negative)
+            amountDisplay = "+ $formattedAmount"; // Display as credit since it's moving to wallet
             richSubtitle = [
               TextSpan(text: "Value of ", style: _baseStyle),
               TextSpan(text: formattedAmount, style: highlightStyle),

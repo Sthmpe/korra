@@ -15,6 +15,19 @@ class SignupVendorNextPressed extends SignupVendorEvent {}
 class SignupVendorBackPressed extends SignupVendorEvent {}
 class SignupVendorSubmitPressed extends SignupVendorEvent {}
 
+class SignupVendorSendEmailOtpPressed extends SignupVendorEvent {
+  @override
+  List<Object> get props => [];
+}
+
+class SignupVendorVerifyEmailOtpPressed extends SignupVendorEvent {
+  final String code;
+  SignupVendorVerifyEmailOtpPressed(this.code);
+
+  @override
+  List<Object> get props => [code];
+}
+
 // V1 — business type
 class RegisteredToggled extends SignupVendorEvent {
   final bool registered;

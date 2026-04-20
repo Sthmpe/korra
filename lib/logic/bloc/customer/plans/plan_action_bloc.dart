@@ -5,7 +5,7 @@ import '../../../../data/repository/customer/customer_repository.dart';
 
 
 enum PlansTab { active, pending, completed, overdue, cancelled, readyForPickup }
-enum SortBy { nextDue, amount, progress }
+enum SortBy  { recent, nextDue, amount, progress }
 
 // --- EVENTS ---
 abstract class PlanActionEvent extends Equatable {

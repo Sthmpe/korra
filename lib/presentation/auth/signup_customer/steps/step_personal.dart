@@ -11,6 +11,7 @@ import '../../../../../config/validators/validators.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
+import 'email_otp_bottom_sheet.dart';
 
 class StepPersonal extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -347,25 +348,72 @@ class _EmailField extends StatelessWidget {
       buildWhen: (p, c) =>
           p.emailChecking != c.emailChecking ||
           p.emailUnused != c.emailUnused ||
-          p.emailError != c.emailError,
+          p.emailError != c.emailError ||
+          p.emailOtpVerified != c.emailOtpVerified || // 🚀 Added
+          p.sendingEmailOtp != c.sendingEmailOtp,     // 🚀 Added
       builder: (context, s) {
+        
         Widget? suffix;
-        if (s.emailChecking) {
+        
+        if (s.emailChecking || s.sendingEmailOtp) {
+          // 1. Loading State
           suffix = Padding(
             padding: EdgeInsets.all(12.r),
             child: const SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: KorraColors.brand,
-              ),
+              height: 16, width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: KorraColors.brand),
             ),
           );
         } else if (s.emailError != null && !s.emailUnused) {
-          suffix = Icon(Iconsax.close_circle, color: Colors.red, size: 20.sp, weight: 100,);
-        } else if (s.emailUnused) {
-          suffix = Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp, weight: 100,);
+          // 2. Error State
+          suffix = Icon(Iconsax.close_circle, color: Colors.red, size: 20.sp);
+        } else if (s.emailUnused && s.emailOtpVerified) {
+          // 3. Fully Verified State!
+          suffix = Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp);
+        } else if (s.emailUnused && !s.emailOtpVerified) {
+          // 4. 🚀 Unused but NOT verified -> Show "Verify" Button
+          suffix = Padding(
+            padding: EdgeInsets.only(right: 8.w),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    // Send the OTP via BLoC
+                    context.read<SignupCustomerBloc>().add(SignupSendEmailOtpPressed());
+                    
+                    // Open the Bottom Sheet
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      isDismissible: false, // Force them to close it via the button
+                      enableDrag: false, // Prevent swipe down to dismiss
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<SignupCustomerBloc>(),
+                        child: const EmailOtpBottomSheet(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      color: KorraColors.brand.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                    child: Text(
+                      "Verify",
+                      style: GoogleFonts.inter(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w700,
+                        color: KorraColors.brand,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         return Column(
@@ -379,38 +427,34 @@ class _EmailField extends StatelessWidget {
               inputType: TextInputType.emailAddress,
               suffixIcon: suffix,
             ),
-
-            // Below-field message
-            if (s.emailChecking || s.emailError != null || s.emailUnused)
-              Padding(
-                padding: EdgeInsets.only(left: 4.w, top: 6.h),
-                child: Text(
-                  s.emailChecking
-                      ? 'Checking email…'
-                      : s.emailUnused
-                        ? 'Email verified and available'
-                        : s.emailError != null 
-                          ? s.emailError!
-                          : 'Enter your email address' ,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w500,
-                    color: s.emailChecking
-                        ? KorraColors.brand
-                        : s.emailUnused
-                          ? Colors.green
-                          : s.emailError != null
-                            ? Colors.red
-                            : KorraColors.brand,
-                  )
-                )
+            
+            // Below-field helper text
+            Padding(
+              padding: EdgeInsets.only(left: 4.w, top: 6.h),
+              child: Text(
+                s.emailChecking ? 'Checking email…'
+                  : s.emailOtpVerified ? 'Email verified and secure'
+                  : s.emailUnused ? 'Email is available. Please verify it.'
+                  : s.emailError != null ? s.emailError!
+                  : 'Enter your email address',
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w500,
+                  color: s.emailChecking ? KorraColors.brand
+                      : s.emailOtpVerified ? Colors.green
+                      : s.emailUnused ? KorraColors.brand
+                      : s.emailError != null ? Colors.red
+                      : KorraColors.brand,
+                ),
               ),
+            ),
           ],
         );
       },
     );
   }
 }
+
 
 // -----------------------------------------------------------------------------
 // 3. DOB & GENDER ROW (With Validators & Error Styles)

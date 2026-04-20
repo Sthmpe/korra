@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../data/models/vendor/transaction_model.dart';
 import '../../../../data/models/vendor/vendor_stat.dart';
 import 'vendor_home_state.dart';
 
@@ -15,6 +16,11 @@ class VendorHomeStarted extends VendorHomeEvent {
 class VendorStatsUpdated extends VendorHomeEvent {
   final VendorStats stats;
   const VendorStatsUpdated(this.stats);
+}
+
+class VendorLedgerUpdated extends VendorHomeEvent {
+  final List<TransactionModel> transactions;
+  const VendorLedgerUpdated(this.transactions);
 }
 
 class VendorHomeRefresh extends VendorHomeEvent {

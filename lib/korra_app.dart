@@ -142,9 +142,11 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                       child: Image.asset(
                         'assets/images/korra_logo_icon.webp',
                         fit: BoxFit.contain,
+                        height: 80, 
+                        width: 80,
                         errorBuilder: (c, o, s) => const Icon(
                           Icons.wallet_rounded, 
-                          size: 40, 
+                          size: 60, 
                           color: Color(0xFFA54600)
                         ),
                       ),
@@ -238,7 +240,7 @@ class _PremiumDesktopBlocker extends StatelessWidget {
                   Icon(Icons.verified_user_outlined, size: 16, color: Colors.grey.shade400),
                   const SizedBox(width: 8),
                   Text(
-                    "Secured by Korra Financial",
+                    "Secured by Korra",
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,

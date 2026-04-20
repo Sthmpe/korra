@@ -4,13 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../firebase_options.dart';
+
+// Import BOTH files with aliases
+import 'config/firebase_options_dev.dart' as dev;
+import 'config/firebase_options_prod.dart' as prod;
 import '../../logic/services/auth_service.dart';
 
-Future<void> bootstrap() async {
+Future<void> bootstrap({required bool isLive}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. System UI
+  // 1. System UI Setup
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent, 
@@ -23,26 +26,31 @@ Future<void> bootstrap() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // 2. Firebase
+  // 2. Initialize Firebase with the correct Options
   await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+    options: isLive 
+        ? prod.DefaultFirebaseOptions.currentPlatform 
+        : dev.DefaultFirebaseOptions.currentPlatform,
   );
 
-   // Load environment variables
-  await dotenv.load(fileName: ".env");
+  // 3. Load Environment Variables 
+  // You can even have two .env files if you prefer: .env.prod and .env.dev
+  await dotenv.load(fileName: isLive ? ".env.prod" : ".env");
 
+  // 4. Supabase Setup
   final supabaseUrl = dotenv.env['SUPABASE_URL'];
   final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
 
   if (supabaseUrl == null || supabaseAnonKey == null) {
-    throw Exception('Supabase keys not found in .env');
+    throw Exception('Supabase keys not found in environment file');
   }
 
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
-    debug: false, 
+    debug: !isLive, // Disable debug logs in Production
   );
-  // 4. Auth Service
+
+  // 5. Auth Service
   await Get.putAsync(() => AuthService().init());
 }

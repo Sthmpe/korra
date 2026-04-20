@@ -80,9 +80,10 @@ class VendorHomeBody extends StatelessWidget {
                           // Default to bypass=true if loading, so we don't block user prematurely
                           final compliance = complianceSnap.data ?? VendorCompliance.initial();
                           
-                          return VendorWithdrawableCard(
+                         return VendorWithdrawableCard(
                             balanceText: '₦${formatToCurrency(s.withdrawable)}',
-                            totalBalanceText: '₦${formatToCurrency(s.walletBalance)}',
+                            // 🚀 PASS THE PENDING BALANCE HERE
+                            pendingText: '₦${formatToCurrency(s.onHold)}', 
                             loading: s.status == VendorHomeStatus.loading,
                             onPayout: isEnabled ? () {
                               
@@ -99,7 +100,7 @@ class VendorHomeBody extends StatelessWidget {
                                 arguments: {
                                   'uid': vendorUid,
                                   'repo': vendors,
-                                  'withdrawableAmount': s.withdrawable, // Pass the amount for the event
+                                  'withdrawableAmount': s.withdrawable,
                                 }
                               );
                             } : null,

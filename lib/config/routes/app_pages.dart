@@ -41,6 +41,7 @@ import '../../presentation/vendor/product/widgets/Add_product_page.dart';
 import '../../presentation/vendor/product/widgets/product_details_screen.dart';
 import '../../presentation/vendor/product/widgets/product_edit_screen.dart';
 import '../../presentation/vendor/profile/change_password_screen.dart';
+import '../../presentation/vendor/profile/store_balance_screen.dart';
 import '../../presentation/vendor/profile/vendor_receipt_screen.dart';
 import '../../presentation/vendor/profile/vendor_settlement_screen.dart';
 import '../../presentation/vendor/profile/widgets/legal_screen.dart';
@@ -156,9 +157,15 @@ class AppPages {
     // 🧾 Transaction Receipt
     GetPage(
       name: Routes.customerTransactionReceipt,
-      page: () => _guard(
-        (args) => TransactionReceiptScreen(data: args as PaymentReceiptData),
-      ),
+      page: () => _guard((args) {
+        // 🚀 Safely unpack the map we sent from the tile
+        final mapArgs = args as Map<String, dynamic>;
+        return TransactionReceiptScreen(
+          data: mapArgs['data'] as PaymentReceiptData,
+          txType: mapArgs['type'] as String,
+          convertedAmount: mapArgs['convertedAmount'] as double?,
+        );
+      }),
       middlewares: [AuthMiddleware()],
     ),
 
@@ -434,7 +441,11 @@ class AppPages {
         final map = args as Map<String, dynamic>;
         return BlocProvider.value(
           value: map['listBloc'] as VendorProductsBloc,
-          child: ProductDetailsScreen(product: map['product']),
+          child: ProductDetailsScreen(
+            product: map['product'],
+            vendors: map['repo'],
+            vendorUid: map['uid'],
+          ),
         );
       }),
       middlewares: [AuthMiddleware()],
@@ -454,7 +465,11 @@ class AppPages {
               create: (_) => ImageBloc(),
             ),
           ],
-          child: ProductEditScreen(product: map['product']),
+          child: ProductEditScreen(
+            product: map['product'],
+            vendors: map['repo'],
+            vendorUid: map['uid'],
+          ),
         );
       }),
       middlewares: [AuthMiddleware()],
@@ -518,5 +533,17 @@ class AppPages {
     //   )),
     //   middlewares: [AuthMiddleware()],
     // ),
+
+    // 🏦 Vendor Store Balances
+    GetPage(
+  name: Routes.vendorStoreBalances,
+  page: () => _guard((args) {
+    final map = args as Map<String, dynamic>;
+    return StoreBalanceScreen(
+      vendorUid: map['uid'], // Pass the UID directly to the screen
+    );
+  }),
+  middlewares: [AuthMiddleware()],
+),
   ];
 }

@@ -42,8 +42,8 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
           return;
         }
 
-        if (picked.length < 3) {
-          showAppSnackbar("Please select at least 3 images.", SnackbarType.warning);
+        if (picked.length < 1) {
+          showAppSnackbar("Please select at least 1 image.", SnackbarType.warning);
           return;
         }
 

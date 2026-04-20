@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:korra/data/repository/customer/plans_repository.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/routes/app_routes.dart';
@@ -60,6 +61,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   int _currentImageIndex = 0;
   bool _agreedToTerms = false;
   int _selectedGoalDays = 0;
+
+  bool _blockPayments = false;
 
   double userEnteredDownPayment = 0.0;
   double processingFee = 0.0;
@@ -124,6 +127,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
     // 2. Fetch credit (which will trigger a recalc when it arrives)
     _fetchStoreCredit(); // ✅ Fetch on init
+    _fetchMerchantCompliance(); // ✅ Fetch on init
   }
 
   // Helper to fetch credit (You might want to move this to Bloc/Repo properly later)
@@ -143,6 +147,31 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           _storeCredit = credit;
           // Recalculate fees now that we know the credit balance
           _recalculateFees();
+        });
+      }
+    }
+  }
+
+  // Helper to fetch merchant compliance status
+  Future<void> _fetchMerchantCompliance() async {
+    if (!mounted) return;
+
+    final vendorId = widget.product.data['vendorId'];
+    
+    if (vendorId != null) {
+      // 1. Call your clean repository function
+      final compliance = await widget.customerRepo.getComplianceStatus(vendorId);
+
+      if (mounted) {
+        setState(() {
+          // 2. Extract the data from the Map
+          final isExplicitlyBlocked = compliance['blockPayments'] == true ? true : false;
+          final status = compliance['status'];
+
+          // 3. Set your state: Block if toggle is true, OR if severe status/error
+          _blockPayments = isExplicitlyBlocked || 
+                           status == 'suspended' || 
+                           status == 'banned';
         });
       }
     }
@@ -896,7 +925,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           isInsufficient,
                           processingFee,
                           isSlotsFull,
-                          totalDueNow, // Pass raw total for event
                           amountToPayFromWallet, // For UI check
                           creditUsed,
                         ),
@@ -1307,7 +1335,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     bool isInsufficient,
     double processingFee,
     bool isSlotsFull,
-    double totalRawAmount, // For Bloc
     double walletAmount, // For Insufficient Check
     double storeCreditUsed,
   ) {
@@ -1316,6 +1343,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     final bool isFormComplete = isAmountValid && isSchedulePicked;
 
     final bool canProceed = !isSlotsFull && isFormComplete && _agreedToTerms;
+
+    final double totalRawAmount = userEnteredDownPayment + processingFee;
 
     String btnText = "Pay & Start Plan";
     if (storeCreditUsed > 0 && walletAmount == 0) {
@@ -1351,12 +1380,26 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
               return;
             }
 
+            debugPrint("Block Payments Check: $_blockPayments");
+            
+            if (_blockPayments) {
+              showKorraFailureSheetCustomer(
+                context,
+                title: 'Merchant Flagged for Review.',
+                message: "Transactions paused due to a trust and compliance issue. This store is currently flagged for violating Korra's operational terms. All payments to this store are blocked until the merchant resolves the restrictions on their portal.",
+                isDismissible: true,
+                onCancel: () => Get.back(),
+              );
+              return;
+            }
+
             final newPlanRef = widget.customerRepo.db.collection('plans').doc();
             final plan = Plan.create(
               generatedId: newPlanRef.id,
               vendorId: widget.product.data['vendorId'] ?? '',
               customerId: widget.customerUid,
               customerName: "${widget.customer.firstName} ${widget.customer.lastName}",
+              customerEmail: widget.customer.email,
               customerPhone: widget.customer.phone,
               productId: widget.product.id,
               productCode: widget.product.data['code'] ?? '',

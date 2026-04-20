@@ -224,7 +224,7 @@ class ReservationTile extends StatelessWidget {
         fg = Colors.grey.shade700;
         break;
       case ReservationStatus.cancelled:
-        text = "Cancelled";
+        text = "Closed";
         bg = const Color(0xFFFEF3F2); // Error-50
         fg = const Color(0xFFB42318); // Error-700
         break;

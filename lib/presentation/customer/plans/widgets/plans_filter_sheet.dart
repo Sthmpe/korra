@@ -113,6 +113,7 @@ class _FilterSheetContentState extends State<_FilterSheetContent> {
             spacing: 10.w, 
             runSpacing: 10.h, 
             children: [
+              _buildChoiceChip('Most recent', SortBy.recent),
               _buildChoiceChip('Next due', SortBy.nextDue),
               _buildChoiceChip('Total Amount',  SortBy.amount),
               _buildChoiceChip('Progress %', SortBy.progress),

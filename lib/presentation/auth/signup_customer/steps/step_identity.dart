@@ -51,7 +51,7 @@ class _StepIdentityState extends State<StepIdentity> {
       if (s.ninVerified && s.lastVerifiedNin == s.nin) {
         return Icon(Iconsax.tick_circle, color: Colors.green, size: 22.sp);
       }
-      if (s.ninError != null && s.nin.length == 11) {
+      if (s.ninError != null && s.ninError!.isNotEmpty && s.nin.length == 11) {
         return Icon(Iconsax.warning_2, color: Colors.red, size: 22.sp);
       }
       return null;
@@ -61,7 +61,7 @@ class _StepIdentityState extends State<StepIdentity> {
       if (s.bvnVerified && s.lastVerifiedBvn == s.bvn) {
         return Icon(Iconsax.tick_circle, color: Colors.green, size: 22.sp);
       }
-      if (s.bvnError != null && s.bvn.length == 11) {
+      if (s.bvnError != null && s.bvnError!.isNotEmpty && s.bvn.length == 11) {
         return Icon(Iconsax.warning_2, color: Colors.red, size: 22.sp);
       }
       return null;
@@ -87,7 +87,7 @@ class _StepIdentityState extends State<StepIdentity> {
             ),
             SizedBox(height: 8.h),
             Text(
-              'To keep Korra secure, we need to verify your identity using your NIN and BVN.',
+              'We require your NIN and BVN to verify your identity and ensure a korra is secure for everyone.',
               style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF666666), height: 1.4),
             ),
             SizedBox(height: 32.h),
@@ -101,7 +101,9 @@ class _StepIdentityState extends State<StepIdentity> {
               icon: Iconsax.card,
               validator: KorraValidators.nin,
               suffixIcon: ninSuffix(),
-              serverError: (s.ninVerified || s.nin.length != 11) ? null : s.ninError,
+              serverError: (s.ninVerified || s.nin.length != 11 || (s.ninError?.isEmpty ?? true)) 
+                  ? null 
+                  : s.ninError,
             ),
 
             SizedBox(height: 24.h),
@@ -115,7 +117,9 @@ class _StepIdentityState extends State<StepIdentity> {
               icon: Iconsax.finger_scan,
               validator: KorraValidators.bvn,
               suffixIcon: bvnSuffix(),
-              serverError: (s.bvnVerified || s.bvn.length != 11) ? null : s.bvnError,
+              serverError: (s.bvnVerified || s.bvn.length != 11 || (s.bvnError?.isEmpty ?? true)) 
+                  ? null 
+                  : s.bvnError,
             ),
 
             SizedBox(height: 24.h),

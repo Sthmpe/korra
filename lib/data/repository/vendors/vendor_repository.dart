@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FunctionsClient, FunctionException;
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
@@ -17,6 +21,7 @@ import '../../models/vendor/payout/payout_details.dart';
 import '../../models/vendor/transaction_model.dart';
 import '../../models/vendor/vendor_activity_type.dart';
 import '../../models/vendor/vendor_compliance.dart';
+import '../../models/vendor/vendor_monthly_flow.dart';
 import '../../models/vendor/vendor_setting.dart';
 import '../../models/vendor/vendor_stat.dart';
 import '../remote/monnify_functions.dart';
@@ -47,6 +52,7 @@ class VendorRepository implements INotificationRepository {
   VendorSettings? cachedSettings;
 
   final supabase = Supabase.instance.client;
+  final korraSecret = "7f8a9b2d4c6e1f3a5b7c9d0e2f4a6b8c1d3e5f7a9b0c2d4e6f8a1b3c5d7e9f0a";
 
   /// Optional helpers
   void clearProductCache() => productItemCache.clear();
@@ -124,35 +130,33 @@ class VendorRepository implements INotificationRepository {
     }
   }
 
-  // 1. Stream CASH LEDGER (Real Money: Money In, Out, Vault)
-  // path: vendors/{uid}/ledger_transactions
-  Stream<List<TransactionModel>> streamCashLedger(String uid) {
+ // 1. Stream CASH LEDGER
+  Stream<List<TransactionModel>> streamCashLedger(String uid, {int limit = 50}) {
     return firestore
         .collection('vendors')
         .doc(uid)
         .collection('ledger_transactions')
         .orderBy('createdAt', descending: true)
+        .limit(limit) // 🚀 Dynamic Limit
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
-            // Your TransactionModel.fromMap handles the parsing
             return TransactionModel.fromMap(doc.data(), doc.id);
           }).toList();
         });
   }
 
   // 2. Stream LIABILITY LEDGER (Store Credit Owed)
-  // path: vendors/{uid}/liabilities
-  Stream<List<TransactionModel>> streamLiabilityLedger(String uid) {
+  Stream<List<TransactionModel>> streamLiabilityLedger(String uid, {int limit = 50}) {
     return firestore
         .collection('vendors')
         .doc(uid)
         .collection('liabilities')
         .orderBy('createdAt', descending: true)
+        .limit(limit) // 🚀 Dynamic Limit
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
-            // Reusing TransactionModel since structure is identical
             return TransactionModel.fromMap(doc.data(), doc.id);
           }).toList();
         });
@@ -277,13 +281,32 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
         password: state.password,
       );
       firebaseUser = authCredential.user;
+
       uid = firebaseUser!.uid;
       debugPrint('Step 1: Firebase Vendor created: $uid');
+      
+      // 1. Get the User VIP Pass (Who they are)
+      final idToken = await firebaseUser.getIdToken(true);
+
+      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling create-vendor-account with Double Lock...");
 
       // --- STEP 2: Call Supabase (Initialize Ledger) ---
       // No Monnify wallet is created here. Just internal DB setup.
       final response = await fx.invoke(
         'create-vendor-account',
+        headers: {
+          'firebase-token': 'Bearer $idToken',  // 🔐 Lock 2: User Identity
+          'x-korra-timestamp': timestamp,  // 🔐 Lock 1: Time-based Anti-Replay
+          'x-korra-signature': signature,  // 🔐 Lock 1: Cryptographic Anti-Forgery
+        },
         body: {
           'uid': uid,
           'email': email,
@@ -362,6 +385,19 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
       );
 
       debugPrint('Vendor signed in successfully: ${credential.user!.uid}');
+      final String vendorUid = credential.user!.uid;
+
+     // 🛡️ ISOLATE FCM LOGIC: Don't let a missing web worker kill the login!
+      try {
+        final String? newToken = await FirebaseMessaging.instance.getToken();
+
+        if (newToken != null) {
+          await updateFcmToken(vendorUid, newToken); 
+        }
+      } catch (fcmError) {
+        debugPrint('⚠️ FCM Token fetch failed: $fcmError');
+      }
+
       return credential.user!.uid;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
@@ -412,8 +448,27 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
   }
 
   /// Logs out the current vendor.
-  Future<void> logout() async {
+  Future<void> logout(String vendorUid) async {
     try {
+      // 🛡️ ISOLATE FCM LOGIC: Never let notification errors trap the user!
+      try {
+        // 1. Get the current device's FCM token
+        final String? currentToken = await FirebaseMessaging.instance.getToken();
+
+        // 2. Remove it from the database BEFORE signing out
+        if (currentToken != null) {
+          await FirebaseFirestore.instance.collection('vendors').doc(vendorUid).update({
+            'fcmToken': FieldValue.delete(), 
+          });
+        }
+
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (fcmError) {
+        // Web browsers often block this. We just log it and move on to the actual sign out.
+        debugPrint('⚠️ FCM cleanup failed (Common on Web), but continuing logout: $fcmError');
+      }
+
+      // 3. Now it is safe to actually sign out
       await auth.signOut();
     } catch (e) {
       throw Exception('Logout failed: $e');
@@ -431,19 +486,63 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
 
   /// Stream the Ledger for the Vendor
   /// This listens to the 'ledger_transactions' subcollection in real-time.
-  Stream<List<TransactionModel>> streamLedger(String uid) {
+  Stream<List<TransactionModel>> streamLedger(String uid, {int limit = 50}) {
     return firestore
         .collection('vendors')
         .doc(uid)
         .collection('ledger_transactions')
-        .orderBy('createdAt', descending: true) // Newest transactions first
+        .orderBy('createdAt', descending: true) 
+        .limit(limit) // 🚀 Dynamic Limit
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            // Convert Firestore Document to TransactionModel
-            return TransactionModel.fromMap(doc.data(), doc.id);
-          }).toList();
+          return snapshot.docs.map((doc) => TransactionModel.fromMap(doc.data(), doc.id)).toList();
         });
+  }
+
+  // Get the Pending Balance (Locked Vault)
+  Future<double> getPendingBalance(String uid) async {
+    try {
+      final query = firestore.collection('vendors').doc(uid).collection('ledger_transactions')
+          .where('settlementStatus', isEqualTo: 'pending'); // ✅ Ensure '==' is isEqualTo
+          
+      // ✅ FIX: Use the top-level sum() function
+      final agg = await query.aggregate(sum('amount')).get();
+      debugPrint("Pending Balance Aggregate Result: ${agg.getSum('amount')}");
+      return agg.getSum('amount') ?? 0.0;
+    } catch (e) {
+      debugPrint("Error pending balance: $e");
+      return 0.0;
+    }
+  }
+
+  // Get the Available Balance (Withdrawable)
+  Future<double> getAvailableBalance(String uid) async {
+    try {
+      final query = firestore.collection('vendors').doc(uid).collection('ledger_transactions')
+          .where('settlementStatus', isEqualTo: 'cleared'); // ✅ Ensure '==' is isEqualTo
+          
+      // ✅ FIX: Use the top-level sum() function
+      final agg = await query.aggregate(sum('amount')).get();
+      debugPrint("Available Balance Aggregate Result: ${agg.getSum('amount')}");
+      return agg.getSum('amount') ?? 0.0;
+    } catch (e) {
+      debugPrint("Error available balance: $e");
+      return 0.0;
+    }
+  }
+
+  //  Fetch EVERYTHING for the current month in one single read!
+  Stream<VendorMonthlyFlow> streamCurrentMonthStats(String uid) {
+    final now = DateTime.now();
+    final currentMonthStr = DateFormat('yyyy-MM').format(now); // Matches "2026-04"
+
+    return firestore
+        .collection('vendors')
+        .doc(uid)
+        .collection('monthly_stats')
+        .doc(currentMonthStr)
+        .snapshots()
+        .map((doc) => VendorMonthlyFlow.fromMap(doc.data()));
   }
 
   /// Checks if Email exists securely (Works for Vendors OR Customers)
@@ -452,8 +551,22 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
     String email,
   ) async {
     try {
+      // 1. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling check_uniqueness with Lock...");
+
       final res = await fx.invoke(
         'check_uniqueness',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
         body: {'type': 'email', 'value': email, 'collection': collectionName},
       );
       return res.data['exists'] == true;
@@ -498,7 +611,7 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
       final data = doc.data()!;
       return {
         'status': data['status']?.toString() ?? 'verification_pending',
-        'message': data['publicMessage']?.toString() ?? 'Account restricted.'
+        'message': data['publicMessage']?.toString() ?? 'Account verification required.'
       };
     } catch (e) {
       // If error, fail safe (block)
@@ -593,6 +706,7 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
               'accountNumber': details.bankAccountNumber,
               'accountName': details.bankAccountName,
               'bankCode': details.bankCode,
+              'paystackRecipientCode': details.paystackRecipientCode,
               'updatedAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
@@ -608,3 +722,4 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
     }
   }
 }
+

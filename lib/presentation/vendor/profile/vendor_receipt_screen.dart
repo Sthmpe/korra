@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -14,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../data/models/vendor/transaction_model.dart';
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/show_app_snackbar.dart';
 
 class VendorReceiptScreen extends StatefulWidget {
   final TransactionModel transaction;
@@ -320,6 +322,32 @@ class _VendorReceiptScreenState extends State<VendorReceiptScreen> {
     Color? color,
     bool isCopyable = false,
   }) {
+    
+    Widget contentRow = Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Flexible(
+          child: SizedBox(
+            width: 155.w,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
+                color: color ?? const Color(0xFF101828),
+              ),
+            ),
+          ),
+        ),
+        if (isCopyable) ...[
+          SizedBox(width: 8.w),
+          Icon(Icons.copy, size: 14.sp, color: Colors.grey.shade400),
+        ],
+      ],
+    );
+
     return Padding(
       padding: EdgeInsets.only(bottom: 4.h),
       child: Row(
@@ -334,30 +362,20 @@ class _VendorReceiptScreenState extends State<VendorReceiptScreen> {
             ),
           ),
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: SizedBox(
-                    width: 155.w,
-                    child: Text(
-                      value,
-                      textAlign: TextAlign.right,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
-                        color: color ?? const Color(0xFF101828),
-                      ),
-                    ),
+            child: isCopyable 
+              ? InkWell(
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    await Clipboard.setData(ClipboardData(text: value));                    
+                    showAppSnackbar("Copied to clipboard!", SnackbarType.success);
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: contentRow,
                   ),
-                ),
-                if (isCopyable) ...[
-                  SizedBox(width: 8.w),
-                  Icon(Icons.copy, size: 14.sp, color: Colors.grey.shade400),
-                ],
-              ],
-            ),
+                )
+              : contentRow,
           ),
         ],
       ),

@@ -65,7 +65,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
 
                 // A. Apply Filter
                 final filteredList = rawList.where((tx) {
-                  if (_filter == 'Money In') return tx.amount > 0;
+                  if (_filter == 'Money In') return tx.amount >= 0;
                   if (_filter == 'Money Out') return tx.amount < 0;
                   return true;
                 }).toList();
@@ -91,7 +91,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _DateHeader(dateStr: dateKey),
-                        ...transactions.map((tx) => _TransactionTile(transaction: tx)),
+                        ...transactions.map((tx) => _TransactionTile(tx: tx)),
                         SizedBox(height: 12.h), // Spacing between groups
                       ],
                     );
@@ -107,47 +107,104 @@ class _StatementsScreenState extends State<StatementsScreen> {
 }
 
 // --- WIDGETS ---
-
 class _TransactionTile extends StatelessWidget {
-  final TransactionModel transaction;
+  final TransactionModel tx;
 
-  const _TransactionTile({required this.transaction});
+  const _TransactionTile({required this.tx});
 
   @override
   Widget build(BuildContext context) {
-    final isCredit = transaction.amount >= 0;
-    
-    // Premium Styling Logic
-    final color = isCredit ? const Color(0xFF027A48) : const Color(0xFF101828); // Green vs Dark Blue
-    final sign = isCredit ? "+" : ""; 
-    final icon = isCredit ? Iconsax.arrow_circle_down : Iconsax.arrow_circle_up; // In vs Out
-    final iconBg = isCredit ? const Color(0xFFECFDF3) : const Color(0xFFF2F4F7);
-    final iconColor = isCredit ? const Color(0xFF027A48) : const Color(0xFF344054);
+    final currencyFormat = NumberFormat("#,##0.00", "en_US");
+    final isCredit = tx.amount >= 0; 
+    var amountStr = currencyFormat.format(tx.amount.abs());
+    final sign = isCredit ? "+" : "-";
 
-    final amountStr = NumberFormat("#,##0.00", "en_US").format(transaction.amount.abs());
+    // 1. PREMIUM DEFAULT STYLING
+    String displayTitle = "System Transaction";
+    String displaySubtitle = tx.description;
+    
+    // 🚀 NEW ICONS (Material Rounded) & PREMIUM RED
+    IconData icon = isCredit ? Icons.call_received_rounded : Icons.call_made_rounded;
+    Color iconColor = isCredit ? const Color(0xFF027A48) : const Color(0xFF344054);
+    Color iconBg = isCredit ? const Color(0xFFECFDF3) : const Color(0xFFF2F4F7);
+    
+    // 🚀 Premium Red for Money Out
+    Color amountColor = isCredit ? const Color(0xFF027A48) : const Color(0xFF344054); 
+
+    // 2. EXTRACT RECEIPT DATA FOR SPLIT PAYMENTS
+    Map<String, dynamic> receiptMap = tx.receiptData ?? {};
+
+    // 3. 🚀 THE SMART SWITCH: Match Backend Types
+    switch (tx.type) {
+      case 'deposit':
+        displayTitle = "Wallet Funded";
+        displaySubtitle = "Bank Transfer";
+        icon = Icons.account_balance_wallet_outlined;;
+        iconBg = const Color(0xFFE0F2FE); // Light Blue
+        iconColor = const Color(0xFF026AA2); // Dark Blue
+        break;
+
+      case 'plan_creation':
+        displayTitle = "Plan Downpayment";
+        icon = Icons.shopping_bag_outlined;
+        // 🚀 Check for split payment
+        final walletUsed = receiptMap['walletUsed'] ?? 0.0;
+        final creditUsed = receiptMap['creditUsed'] ?? 0.0;
+        if (creditUsed > 0 && walletUsed > 0) {
+          displaySubtitle = "₦${currencyFormat.format(walletUsed)} Wallet + ₦${currencyFormat.format(creditUsed)} Store Credit";
+        } else if (creditUsed > 0) {
+          displaySubtitle = "Paid fully with Store Credit";
+        }
+        break;
+
+      case 'installment':
+        displayTitle = "Plan Payment";
+        icon = Icons.credit_card_outlined;
+        final wUsed = receiptMap['walletUsed'] ?? 0.0;
+        final cUsed = receiptMap['creditUsed'] ?? 0.0;
+        if (cUsed > 0 && wUsed > 0) {
+          displaySubtitle = "₦${currencyFormat.format(wUsed)} Wallet + ₦${currencyFormat.format(cUsed)} Store Credit";
+        } else if (cUsed > 0) {
+          displaySubtitle = "Paid fully with Store Credit";
+        }
+        break;
+
+      case 'plan_cancelled':
+      case 'refund':
+        displayTitle = "Refund Secured";
+        amountStr = currencyFormat.format(tx.convertedAmount); // Show the full refunded amount
+        displaySubtitle = tx.description.isNotEmpty ? tx.description : "Moved to Store Balance";
+        icon = Icons.shield_outlined;
+        iconBg = const Color(0xFFFEF0C7); // Light Orange/Gold
+        iconColor = const Color(0xFFDC6803);
+        amountColor = const Color(0xFFDC6803);
+        break;
+    }
 
     return InkWell(
       onTap: () {
-        // ✅ SMART NAVIGATION LOGIC
         PaymentReceiptData receiptData;
 
-        if (transaction.receiptData != null && transaction.receiptData!.isNotEmpty) {
-          // 1. New System: Use the saved receipt snapshot (Perfect Data)
-          receiptData = PaymentReceiptData.fromJson(transaction.receiptData!);
+        if (tx.receiptData != null && tx.receiptData!.isNotEmpty) {
+          receiptData = PaymentReceiptData.fromJson(tx.receiptData!);
         } else {
-          // 2. Legacy System: Construct a partial receipt (Safe Fallback)
           receiptData = PaymentReceiptData.fromPartial(
-            amount: transaction.amount.abs(),
-            date: transaction.createdAt,
-            title: transaction.description,
-            reference: transaction.reference,
-            status: transaction.status.toUpperCase(),
+            amount: tx.amount.abs(),
+            date: tx.createdAt,
+            title: tx.description,
+            reference: tx.reference,
+            status: tx.status.toUpperCase(),
           );
         }
 
+        // 🚀 WE PASS THE TYPE AS AN ARGUMENT NOW
         Get.toNamed(
           Routes.customerTransactionReceipt, 
-          arguments: receiptData
+          arguments: {
+            'data': receiptData,
+            'type': tx.type,
+            'convertedAmount': tx.convertedAmount, // Pass the converted amount for refunds
+          }
         );
       },
       child: Padding(
@@ -157,10 +214,7 @@ class _TransactionTile extends StatelessWidget {
             // Icon
             Container(
               padding: EdgeInsets.all(10.r),
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
               child: Icon(icon, size: 22.sp, color: iconColor),
             ),
             SizedBox(width: 16.w),
@@ -171,32 +225,36 @@ class _TransactionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    transaction.description.isNotEmpty ? transaction.description : "System Transaction",
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp, 
-                      fontWeight: FontWeight.w600, 
-                      color: const Color(0xFF101828)
-                    ),
+                    displayTitle,
+                    style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF101828)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    DateFormat('h:mm a').format(transaction.createdAt),
+                    displaySubtitle,
                     style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF667085)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
 
-            // Amount (Using Plus Jakarta Sans for premium numbers)
-            Text(
-              "$sign₦$amountStr",
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14.sp, 
-                fontWeight: FontWeight.w700, 
-                color: color
-              ),
+            // Amount 
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  "$sign₦$amountStr",
+                  style: GoogleFonts.plusJakartaSans(fontSize: 14.sp, fontWeight: FontWeight.w700, color: amountColor),
+                ),
+                SizedBox(height: 4.h),
+                Text(
+                  DateFormat('MMM d, h:mm a').format(tx.createdAt),
+                  style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.grey.shade400),
+                ),
+              ],
             ),
           ],
         ),

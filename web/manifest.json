@@ -1,11 +1,11 @@
 {
-    "name": "Korra",
-    "short_name": "Korra",
+    "name": "Korra business",
+    "short_name": "Korra business",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#000000",
-    "description": "Korra - your secure reservation tools",
+    "description": "A better way to accept installment payments",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

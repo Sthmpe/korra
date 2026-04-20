@@ -1,29 +1,30 @@
-<!DOCTYPE html><html><head>
-  <base href="$FLUTTER_BASE_HREF">
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Reserve now — pay in parts, own with ease.">
+  <meta name="description" content="Reserve now pay in parts, own with ease.">
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Korra">
+  <meta name="apple-mobile-web-app-title" content="Korra Business">
   <meta name="theme-color" content="#A54600">
 
   <link rel="apple-touch-icon" href="icons/korra_logo_icon.webp">
   <link rel="icon" type="image/webp" href="korra_logo_icon.webp">
-
-  <title>Korra</title>
+  <title>Korra Business</title>
   <link rel="manifest" href="manifest.json">
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     body {
-      background-color: #A54600; /* Brand Color */
+      background-color: #A54600; /* Beautiful Brand Background */
       margin: 0;
       height: 100vh;
       width: 100vw;
@@ -31,10 +32,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      
-      /* 👇 2. APPLY INTER FONT HERE */
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      
       overflow: hidden;
     }
 
@@ -52,7 +50,7 @@
       width: 100px;
       height: 100px;
       background-color: white;
-      border-radius: 22px; /* Smooth 'Squircle' radius */
+      border-radius: 22px; 
       display: flex;
       align-items: center;
       justify-content: center;
@@ -96,84 +94,8 @@
       40% { transform: scale(1); opacity: 1; }
     }
   </style>
-  <style id="splash-screen-style">
-    html {
-      height: 100%
-    }
-
-    body {
-      margin: 0;
-      min-height: 100%;
-      background-color: #FFFFFF;
-          background-size: 100% 100%;
-    }
-
-    .center {
-      margin: 0;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      -ms-transform: translate(-50%, -50%);
-      transform: translate(-50%, -50%);
-    }
-
-    .contain {
-      display:block;
-      width:100%; height:100%;
-      object-fit: contain;
-    }
-
-    .stretch {
-      display:block;
-      width:100%; height:100%;
-    }
-
-    .cover {
-      display:block;
-      width:100%; height:100%;
-      object-fit: cover;
-    }
-
-    .bottom {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      -ms-transform: translate(-50%, 0);
-      transform: translate(-50%, 0);
-    }
-
-    .bottomLeft {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-    }
-
-    .bottomRight {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body {
-        background-color: #FFFFFF;
-          }
-    }
-  </style>
-  <script id="splash-screen-script">
-    function removeSplashFromWeb() {
-      document.getElementById("splash")?.remove();
-      document.getElementById("splash-branding")?.remove();
-      document.body.style.background = "transparent";
-    }
-  </script>
 </head>
 <body>
-  <picture id="splash">
-      <source srcset="splash/img/light-1x.png 1x, splash/img/light-2x.png 2x, splash/img/light-3x.png 3x, splash/img/light-4x.png 4x" media="(prefers-color-scheme: light)">
-      <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
-      <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
-  </picture>
 
   <div id="loading_indicator" class="splash-container">
     <div class="logo-container">
@@ -198,6 +120,33 @@
     }
   </script>
 
-  <script src="flutter_bootstrap.js" async=""></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.ready.then((registration) => {
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('Korra: New version detected! Updating...');
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+        });
 
-</body></html>
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+      });
+    }
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+
+</body>
+</html>

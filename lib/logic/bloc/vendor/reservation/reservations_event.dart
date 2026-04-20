@@ -29,6 +29,13 @@ class ResChangeFilter extends ReservationsEvent {
   List<Object?> get props => [filter];
 }
 
+class ResLoadMore extends ReservationsEvent {
+  const ResLoadMore();
+  
+  @override
+  List<Object> get props => [];
+}
+
 class ResVerifyPickup extends ReservationsEvent {
   final String planId;
   final String pin;

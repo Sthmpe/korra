@@ -5,6 +5,7 @@ class PayoutDetails {
   final String bankCode;
   final String bankAccountNumber; // Firestore key: 'accountNumber'
   final String bankAccountName;   // Firestore key: 'accountName'
+  final String? paystackRecipientCode; // New field for Paystack recipient code
   final DateTime? updatedAt;
 
   // Note: We do NOT store 'withdrawableBalance' here anymore.
@@ -15,6 +16,7 @@ class PayoutDetails {
     required this.bankCode,
     required this.bankAccountNumber,
     required this.bankAccountName,
+    this.paystackRecipientCode,
     this.updatedAt,
   });
 
@@ -25,6 +27,7 @@ class PayoutDetails {
       bankCode: '',
       bankAccountNumber: '',
       bankAccountName: '',
+      paystackRecipientCode: null,
       updatedAt: null,
     );
   }
@@ -38,6 +41,7 @@ class PayoutDetails {
       bankAccountNumber: data['accountNumber'] ?? '', 
       // Map Firestore 'accountName' to our internal 'bankAccountName'
       bankAccountName: data['accountName'] ?? '',
+      paystackRecipientCode: data['paystackRecipientCode'],
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
@@ -49,6 +53,7 @@ class PayoutDetails {
       'bankCode': bankCode,
       'accountNumber': bankAccountNumber,
       'accountName': bankAccountName,
+      'paystackRecipientCode': paystackRecipientCode,
       'updatedAt': FieldValue.serverTimestamp(), 
     };
   }
@@ -59,6 +64,7 @@ class PayoutDetails {
     String? bankCode,
     String? bankAccountNumber,
     String? bankAccountName,
+    String? paystackRecipientCode,
     DateTime? updatedAt,
   }) {
     return PayoutDetails(
@@ -66,6 +72,7 @@ class PayoutDetails {
       bankCode: bankCode ?? this.bankCode,
       bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
       bankAccountName: bankAccountName ?? this.bankAccountName,
+      paystackRecipientCode: paystackRecipientCode ?? this.paystackRecipientCode,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }

@@ -120,7 +120,9 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                         await Future.delayed(
                           const Duration(milliseconds: 1500),
                         ); // Give user time to see "Success"
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (context.mounted && _kycSheetOpen) {
+                          Navigator.of(context).pop(); 
+                        }
                         _kycSheetOpen = false;
                       }
                       _animateTo(s.pageIndex);
@@ -138,7 +140,9 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                     listener: (context, s) async {
                       if (_kycSheetOpen) {
                         await Future.delayed(const Duration(seconds: 2));
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (context.mounted && _kycSheetOpen) {
+                          Navigator.of(context).pop(); 
+                        }
                         _kycSheetOpen = false;
                       }
                     },
@@ -178,12 +182,12 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
                     StepBusinessType(formKey: _formKeys[0]),
-                    StepStoreDetails(formKey: _formKeys[1]),
+                    StepStoreDetails(formKey: _formKeys[1]),//keeping this 
                     StepLocation(formKey: _formKeys[2]),
-                    StepPersonal(formKey: _formKeys[3]),
+                    StepPersonal(formKey: _formKeys[3]),//keeping this
                     StepIdentity(formKey: _formKeys[4]),
                     StepSecurity(formKey: _formKeys[5]),
-                    StepReviewVendor(formKey: _formKeys[6]),
+                    StepReviewVendor(formKey: _formKeys[6]),//keeping this
                   ],
                 ),
               ),
@@ -201,7 +205,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                   child: _BottomNav(
                   formKey: _formKeys[s.pageIndex],
                   isLast: s.pageIndex == s.totalPages - 1,
-                  loading: s.loading,
+                  loading: s.loading || s.ninVerifying || s.bvnVerifying,
                   pageIndex: s.pageIndex, // pass current step
                   openKycSheet: () {
                     if (!_kycSheetOpen) {
@@ -217,7 +221,10 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                           value: bloc,
                           child: const _KycProgressSheet(),
                         ),
-                      );
+                      ).whenComplete(() {
+                          // 🚀 GUARANTEES THE FLAG RESETS NO MATTER HOW IT CLOSES
+                          _kycSheetOpen = false; 
+                        });
                     }
                   },
                 ),
@@ -418,6 +425,7 @@ class _KycProgressSheet extends StatelessWidget {
         child: BlocBuilder<SignupVendorBloc, SignupVendorState>(
           builder: (_, s) {
             final allVerified = s.ninVerified && s.bvnVerified;
+            final anyVerifying = s.ninVerifying || s.bvnVerifying;
             final anyError = s.ninError != null || s.bvnError != null;
 
             return Column(
@@ -472,23 +480,32 @@ class _KycProgressSheet extends StatelessWidget {
                 SizedBox(height: 24.h),
 
                 // Status Footer
-                if (anyError)
+                if (allVerified && !anyVerifying)
+                  Text(
+                    "Verification successful! Proceeding to the next step.",
+                    style: GoogleFonts.inter(
+                      fontSize: 13.sp,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (anyError && !anyVerifying)
                   Text(
                     "Verification Failed. Please check your details.",
                     style: GoogleFonts.inter(
-                      fontSize: 14.sp,
+                      fontSize: 13.sp,
                       color: Colors.red,
                       fontWeight: FontWeight.w600,
                     ),
                   )
-                else if (!allVerified)
+                else if (!allVerified && anyVerifying)
                   Text(
                     "This usually takes a few seconds...",
                     style: GoogleFonts.inter(
                       fontSize: 13.sp,
                       color: Colors.grey,
                     ),
-                  ),
+                  )
               ],
             );
           },

@@ -4,17 +4,16 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-
 class VendorWithdrawableCard extends StatefulWidget {
   final String balanceText;       
-  final String? totalBalanceText; 
+  final String pendingText; // 🚀 ADDED THIS
   final VoidCallback? onPayout;
   final bool loading;
 
   const VendorWithdrawableCard({
     super.key,
     required this.balanceText,
-    this.totalBalanceText,
+    required this.pendingText, // 🚀 ADDED THIS
     required this.onPayout,
     required this.loading,
   });
@@ -56,7 +55,7 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
           children: [
             // 1. Background Decor (Naira Sign with spacing from right edge)
             Positioned(
-              right: 24.w, // Added positive spacing from the right edge
+              right: 24.w, 
               bottom: -40.h,
               top: 10,
               child: Text(
@@ -78,83 +77,43 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   
-                  // TOP ROW: Icon + Label + Eye + Total Badge
+                  // TOP ROW: Icon + Label + Eye Toggle
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Left: Icon + Label + Toggle
-                      Row(
-                        children: [
-                          // Stacked Coins Icon
-                          Container(
-                            padding: EdgeInsets.all(6.r),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Iconsax.coin, color: Colors.white, size: 16.sp),
-                          ),
-                          SizedBox(width: 8.w),
-                          
-                          Text(
-                            'Available Balance',
-                            style: GoogleFonts.inter(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                          SizedBox(width: 8.w),
-                          
-                          // Eye Toggle
-                          GestureDetector(
-                            onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
-                            behavior: HitTestBehavior.opaque,
-                            child: Padding(
-                              padding: EdgeInsets.all(4.r),
-                              child: Icon(
-                                _isBalanceVisible ? Iconsax.eye : Iconsax.eye_slash,
-                                color: Colors.white.withOpacity(0.7),
-                                size: 18.sp,
-                              ),
-                            ),
-                          ),
-                        ],
+                      // Stacked Coins Icon
+                      Container(
+                        padding: EdgeInsets.all(6.r),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Iconsax.wallet_2, color: Colors.white, size: 16.sp),
                       ),
-
-                      // // Right: Total Ledger Badge (With Overflow Protection)
-                      // if (widget.totalBalanceText != null) ...[
-                      //   SizedBox(width: 12.w),
-                      //   Flexible(
-                      //     child: Container(
-                      //       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-                      //       decoration: BoxDecoration(
-                      //         color: Colors.black.withOpacity(0.25),
-                      //         borderRadius: BorderRadius.circular(20.r),
-                      //         border: Border.all(color: Colors.white.withOpacity(0.1)),
-                      //       ),
-                      //       child: FittedBox(
-                      //         fit: BoxFit.scaleDown,
-                      //         child: Row(
-                      //           children: [
-                      //             Text(
-                      //               'Net Worth: ',
-                      //               style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white70),
-                      //             ),
-                      //             Text(
-                      //               _isBalanceVisible ? widget.totalBalanceText! : '••••',
-                      //               style: GoogleFonts.inter(
-                      //                 fontSize: 10.sp, 
-                      //                 fontWeight: FontWeight.w700, 
-                      //                 color: Colors.white
-                      //               ),
-                      //             ),
-                      //           ],
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   ),
-                      // ]
+                      SizedBox(width: 8.w),
+                      
+                      Text(
+                        'Available Balance',
+                        style: GoogleFonts.inter(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      
+                      // Eye Toggle
+                      GestureDetector(
+                        onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: EdgeInsets.all(4.r),
+                          child: Icon(
+                            _isBalanceVisible ? Iconsax.eye : Iconsax.eye_slash,
+                            color: Colors.white.withOpacity(0.7),
+                            size: 18.sp,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
 
@@ -184,9 +143,12 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
                           ),
                         ),
 
-                  // BOTTOM: Action Button (Withdraw)
+                  // BOTTOM: Pending Badge & Withdraw Button
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // Action Button (Withdraw)
                       Material(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12.r),
@@ -194,16 +156,16 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
                           onTap: widget.onPayout,
                           borderRadius: BorderRadius.circular(12.r),
                           child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Iconsax.export_1, size: 18.sp, color: const Color(0xFFA54600)), 
-                                SizedBox(width: 8.w),
+                                SizedBox(width: 6.w),
                                 Text(
-                                  'Withdraw Funds',
+                                  'Withdraw',
                                   style: GoogleFonts.inter(
-                                    fontSize: 14.sp,
+                                    fontSize: 13.sp,
                                     fontWeight: FontWeight.w700,
                                     color: const Color(0xFFA54600),
                                   ),
@@ -211,6 +173,79 @@ class _VendorWithdrawableCardState extends State<VendorWithdrawableCard> {
                               ],
                             ),
                           ),
+                        ),
+                      ),
+
+                      // Pending Settlement Badge
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 2.h, left: 4.w),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center, // 🚀 Perfectly centers the divider with the text
+                          children: [
+                            // Elegant Thin Divider
+                            Container(
+                              height: 34.h,
+                              width: 1.5.w, // 🚀 Thinner line looks much more premium
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(2.r),
+                              ),
+                            ),
+                            SizedBox(width: 12.w), // 🚀 Slightly more breathing room
+                            
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Label Row
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.timer, 
+                                      size: 13.sp, 
+                                      color: Colors.white.withOpacity(0.85)
+                                    ),
+                                    SizedBox(width: 4.w),
+                                    Text(
+                                      'PENDING SETTLEMENT', // 🚀 Uppercase for micro-labels looks extremely polished
+                                      style: GoogleFonts.inter(
+                                        fontSize: 8.sp, 
+                                        letterSpacing: 0.8, // 🚀 Spacing it out adds elegance
+                                        color: Colors.white.withOpacity(0.85), 
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                SizedBox(height: 2.h),
+                                
+                                // Amount Row
+                                widget.loading 
+                                ? SizedBox(
+                                    height: 18.h, 
+                                    width: 18.w, 
+                                    child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                                  )
+                                : AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200), // Added a slight crossfade
+                                    child: Text(
+                                      _isBalanceVisible ? widget.pendingText : '₦ ••••',
+                                      key: ValueKey(_isBalanceVisible),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16.sp, // 🚀 Slightly bumped up to contrast with the tiny label
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white.withOpacity(0.9),
+                                        letterSpacing: _isBalanceVisible ? -0.5 : 2.0,
+                                        fontFeatures: const [FontFeature.tabularFigures()],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],

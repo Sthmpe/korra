@@ -10,6 +10,7 @@ class TransactionModel {
   final String description;
   final String reference;
   final String status;
+  final String settlementStatus;
   final double balanceBefore;
   final double balanceAfter;
   final DateTime createdAt;
@@ -31,6 +32,7 @@ class TransactionModel {
     required this.description,
     required this.reference,
     required this.status,
+    required this.settlementStatus,
     required this.balanceBefore,
     required this.balanceAfter,
     required this.createdAt,
@@ -41,27 +43,6 @@ class TransactionModel {
     this.feeAmount,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'userId': userId,
-      'amount': amount,
-      'type': type,
-      'description': description,
-      'reference': reference,
-      'status': status,
-      'balanceBefore': balanceBefore,
-      'balanceAfter': balanceAfter,
-      'createdAt': FieldValue.serverTimestamp(),
-      'releaseDate': releaseDate != null ? Timestamp.fromDate(releaseDate!) : null,
-      'orderId': orderId,
-      'planId': planId,
-      // ✅ Save to DB
-      'grossAmount': grossAmount,
-      'feeAmount': feeAmount,
-    };
-  }
-
   factory TransactionModel.fromMap(Map<String, dynamic> map, String id) {
     return TransactionModel(
       id: id,
@@ -71,6 +52,7 @@ class TransactionModel {
       description: map['description'] ?? '',
       reference: map['reference'] ?? '',
       status: map['status'] ?? 'pending',
+      settlementStatus: map['settlementStatus'] ?? 'cleared',
       balanceBefore: (map['balanceBefore'] ?? 0).toDouble(),
       balanceAfter: (map['balanceAfter'] ?? 0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

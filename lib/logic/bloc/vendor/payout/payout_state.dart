@@ -99,12 +99,6 @@ class PayoutState extends Equatable {
   }
 
   // Helper: Check if amount is valid
-  bool get isAmountValid {
-    final amt = double.tryParse(amountInput.replaceAll(',', '')) ?? 0.0;
-    return amt > 0 && amt <= withdrawableBalance;
-  }
-
-  // Helper: Check if ready to submit
   bool get canWithdraw {
     // 1. If loading, disable button
     if (status == PayoutStatus.loading || step == PayoutStep.processing) return false;
@@ -116,8 +110,12 @@ class PayoutState extends Equatable {
     final cleanInput = amountInput.replaceAll(',', '').trim();
     final amount = double.tryParse(cleanInput) ?? 0;
 
-    // 4. Check logic: Must be > 0 AND <= Balance
-    return amount > 0 && amount <= withdrawableBalance;
+    // 4. Calculate EMTL Fee
+    final emtlFee = amount >= 10000 ? 50.0 : 0.0;
+    final totalRequired = amount + emtlFee;
+
+    // 5. Check logic: Must be >= 1000 AND (Amount + Fee) <= Balance
+    return amount >= 1000 && totalRequired <= withdrawableBalance;
   }
 
   @override
