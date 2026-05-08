@@ -21,6 +21,7 @@ import 'widgets/contact_support_sheet.dart';
 import 'widgets/decimal_input_formatter.dart';
 import 'widgets/korra_button.dart';
 import 'widgets/korra_loading_overlay.dart';
+import 'widgets/kyc_verification_sheet.dart';
 import 'widgets/password_verification_sheet.dart';
 import 'widgets/payout_balance_card.dart';
 import 'widgets/transaction_pin_sheet.dart';
@@ -133,8 +134,7 @@ class PayoutScreen extends StatelessWidget {
         }
       },
       builder: (context, state) {
-        final isBlocked = state.complianceStatus != 'active';
-
+        
         bool showLoader = state.status == PayoutStatus.loading &&
                         state.step == PayoutStep.processing;
 
@@ -200,58 +200,69 @@ class PayoutScreen extends StatelessWidget {
   // Inside your build method, listening to PayoutState
 
 Widget _buildActionArea(BuildContext context, PayoutState state) {
-  // Case 1: Active (Clean Button)
-  if (state.complianceStatus == 'active') {
-    return Padding(
-      padding: EdgeInsets.only(top: 12.h),
-      child: KorraButton(
-        text: "Withdraw Funds",
-        isLoading: state.step == PayoutStep.processing,
-        onPressed: state.canWithdraw
-            ? () {
-                FocusManager.instance.primaryFocus?.unfocus();
-                context.read<PayoutBloc>().add(WithdrawClicked());
-              }
-            : null,
-      ),
-    );
-  }
-
-  // Case 2: Verification Pending (Premium Action Card)
-  if (state.complianceStatus == 'verification_pending') {
+  // Case 1: Suspended / Blocked completely (Keep this for real fraud cases)
+  if (state.complianceStatus == 'suspended' || state.complianceStatus == 'restricted') {
     return _buildStatusCard(
       context,
-      title: "Identity Verification Required", // More direct title
+      title: "Withdrawals Restricted",
       message: state.blockMessage.isNotEmpty
           ? state.blockMessage
-          : "To protect your funds, we need to verify your identity before enabling withdrawals.", // Clear security context
-      icon: Icons.shield_outlined,
-      accentColor: const Color(0xFFF79009), // Premium Warning Orange
-      buttonText: "Complete Verification",
+          : "Your payout access has been temporarily paused. Please contact support.",
+      icon: Icons.lock_outline,
+      accentColor: const Color(0xFFD92D20), // Premium Error Red
+      buttonText: "Contact Support",
       onPressed: () => _showContactSheet(
         context, 
-        title: "Verification Support", 
-        subTitle: "Please contact our support team to complete your identity verification and unlock your withdrawals."
+        title: "Account Support", 
+        subTitle: "Your withdrawals are currently restricted. Please contact us to resolve this issue immediately."
       ),
     );
   }
 
-  // Case 3: Suspended (Premium Alert Card)
-  return _buildStatusCard(
-    context,
-    title: "Withdrawals Restricted", // Specific to this screen
-    message: state.blockMessage.isNotEmpty
-        ? state.blockMessage
-        : "Your payout access has been temporarily paused. Please contact our team to resolve this.", // Professional tone
-    icon: Icons.lock_outline,
-    accentColor: const Color(0xFFD92D20), // Premium Error Red
-    buttonText: "Resolve Issue",
-    onPressed: () => _showContactSheet(
-      context, 
-      title: "Account Support", 
-      subTitle: "Your withdrawals are currently restricted. Please contact us to resolve this issue immediately."
+  // 🚀 Case 2: KYC Incomplete (BVN or NIN is missing)
+  if (!state.isBvnVerified || !state.isNinVerified) {
+    return _buildStatusCard(
+      context,
+      title: "Identity Verification Required", 
+      message: "To comply with CBN regulations and secure your withdrawals, please verify your BVN and NIN.", 
+      icon: Icons.shield_outlined,
+      accentColor: const Color(0xFFF79009), // Premium Warning Orange
+      buttonText: "Verify Identity",
+      onPressed: () => _openKycVerificationSheet(context), // 🚀 Routes to new KYC Flow
+    );
+  }
+
+  // Case 3: Active & Fully Verified (Clean Button)
+  return Padding(
+    padding: EdgeInsets.only(top: 12.h),
+    child: KorraButton(
+      text: "Withdraw Funds",
+      isLoading: state.step == PayoutStep.processing,
+      onPressed: state.canWithdraw
+          ? () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              context.read<PayoutBloc>().add(WithdrawClicked());
+            }
+          : null,
     ),
   );
+}
+
+void _openKycVerificationSheet(BuildContext context) {
+    // 🚀 Grab the Bloc from the screen before opening the sheet
+    final payoutBloc = context.read<PayoutBloc>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true, // You can set to false if you want to force them to use a close button
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: payoutBloc, // 🚀 Inject the exact same Bloc into the sheet
+        child: const KycVerificationSheet(),
+      ),
+    );
 }
 
 // 💎 THE PREMIUM CARD WIDGET

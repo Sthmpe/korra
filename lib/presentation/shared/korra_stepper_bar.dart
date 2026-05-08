@@ -5,89 +5,62 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../config/constants/colors.dart';
 
-class StepperBar<B extends StateStreamable<S>, S> extends StatelessWidget {
-  /// Function that extracts the current page index from the Bloc state
-  final int Function(S state) pageIndexSelector;
+class KorraStepperBar extends StatelessWidget {
+  final int pageIndex;
+  final int totalPages;
 
-  /// Function that extracts total pages from the Bloc state
-  final int Function(S state) totalPagesSelector;
-
-  /// Optional: icon to display on the right side
-  final IconData? icon;
-
-  /// Optional: override progress bar color
-  final Color? progressColor;
-
-  /// Optional: override background bar color
-  final Color? backgroundColor;
-
-  const StepperBar({
+  const KorraStepperBar({
     super.key,
-    required this.pageIndexSelector,
-    required this.totalPagesSelector,
-    this.icon,
-    this.progressColor,
-    this.backgroundColor,
+    required this.pageIndex,
+    required this.totalPages,
   });
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<B, S>(
-      buildWhen: (p, c) =>
-          pageIndexSelector(p) != pageIndexSelector(c),
-      builder: (_, s) {
-        final pageIndex = pageIndexSelector(s);
-        final totalPages = totalPagesSelector(s);
-        final progress = (pageIndex + 1) / totalPages;
-
-        return Column(
-          children: [
-            // Progress bar
-            Stack(
-              children: [
-                Container(
-                  height: 6.h,
-                  decoration: BoxDecoration(
-                    color: backgroundColor ?? Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(6.r),
-                  ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: progress,
-                  child: Container(
-                    height: 6.h,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 4.h,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF2F2F7), // Light grey track
+            borderRadius: BorderRadius.circular(2.r),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Prevent division by zero just in case
+              final safeTotalPages = totalPages > 0 ? totalPages : 1; 
+              
+              final stepWidth = constraints.maxWidth / safeTotalPages;
+              final currentWidth = stepWidth * (pageIndex + 1);
+              
+              return Stack(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    width: currentWidth,
                     decoration: BoxDecoration(
-                      color: progressColor ?? KorraColors.brand,
-                      borderRadius: BorderRadius.circular(6.r),
+                      color: KorraColors.brand,
+                      borderRadius: BorderRadius.circular(2.r),
                     ),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: 6.h),
-
-            // Step info row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Step ${pageIndex + 1} of $totalPages',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    color: Colors.black54,
-                  ),
-                ),
-                if (icon != null)
-                  Icon(
-                    icon,
-                    size: 20.sp,
-                    color: progressColor ?? KorraColors.brand,
-                  ),
-              ],
-            ),
-          ],
-        );
-      },
+                ],
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Text(
+          'Step ${pageIndex + 1} of $totalPages',
+          style: GoogleFonts.inter(
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF666666),
+          ),
+        ),
+      ],
     );
   }
 }

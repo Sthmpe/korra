@@ -77,6 +77,8 @@ serve(async (req) => {
     if (type === 'email') {
       // Check nested field: personal.email
       query = db.collection(targetCollection).where('personal.email', '==', value);
+    } else if (type === 'phone') {
+      query = db.collection(targetCollection).where('personal.phone', '==', value);
     } else if (type === 'nin') {
       // Check nested field: kyc.nin
       query = db.collection(targetCollection).where('kyc.nin', '==', value);

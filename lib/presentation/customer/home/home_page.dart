@@ -203,7 +203,10 @@ class _HomePageState extends State<HomePage> {
 
                               Get.toNamed(
                                 Routes.customerBankDetails, 
-                                arguments: customer 
+                                arguments: {
+                                  'customer': customer,
+                                  'repo': widget.customerRepo,
+                                }
                               );
                             },
                           ),

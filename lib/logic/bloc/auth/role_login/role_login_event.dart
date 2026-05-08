@@ -32,3 +32,5 @@ class SubmitPressed extends RoleLoginEvent {}
 class BiometricsPressed extends RoleLoginEvent {}
 
 class FailureAcknowledged extends RoleLoginEvent {}
+
+class GoogleLoginPressed extends RoleLoginEvent {}

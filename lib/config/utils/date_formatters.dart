@@ -11,6 +11,8 @@
 //   • Both functions left-pad day/month to two digits and year to four.
 // -----------------------------------------------------------------------------
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Returns DOB as "DD-MMM-YYYY", e.g., "03-Oct-1993".
 String formatDateOfBirthForBvn(DateTime date) {
   const List<String> monthNames = <String>[
@@ -31,4 +33,11 @@ String formatDateOfBirthIso(DateTime date) {
   final String day   = date.day.toString().padLeft(2, '0');
 
   return '$year-$month-$day';
+}
+
+DateTime? parseSmartDate(dynamic value) {
+  if (value == null) return null;
+  if (value is Timestamp) return value.toDate(); // Handles native Firestore Timestamps
+  if (value is String) return DateTime.tryParse(value); // Handles accidental ISO strings
+  return null;
 }

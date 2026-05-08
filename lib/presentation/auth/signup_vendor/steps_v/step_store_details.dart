@@ -40,9 +40,6 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
 
   // --- Focus Nodes ---
   final _storeFocus = FocusNode();
-  final _addrFocus = FocusNode();
-  final _cityFocus = FocusNode();
-  final _stateFocus = FocusNode();
   
   final _instaFocus = FocusNode();
   final _twitterFocus = FocusNode();
@@ -61,14 +58,10 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
   void initState() {
     super.initState();
     final s = context.read<SignupVendorBloc>().state;
-    
+
     // Store & Location Init
     _storeCtl = TextEditingController(text: s.storeName)..addListener(() => _on(StoreNameChanged(_storeCtl.text)));
-    _addrCtl = TextEditingController(text: s.address)..addListener(() => _on(AddressChanged(_addrCtl.text)));
-    _cityCtl = TextEditingController(text: s.city)..addListener(() => _on(CityChanged(_cityCtl.text)));
-    _stateCtl = TextEditingController(text: s.stateName)..addListener(() => _on(StateChangedVD(_stateCtl.text)));
-    _mapCtl = TextEditingController(text: s.mapsLink)..addListener(() => _on(MapsLinkChanged(_mapCtl.text)));
-
+    
     // Socials Init (With Counter Listener)
     _instaCtl = TextEditingController(text: s.instagram)..addListener(() { _on(InstagramChanged(_instaCtl.text)); _updateCount(); });
     _twitterCtl = TextEditingController(text: s.twitter)..addListener(() { _on(TwitterChanged(_twitterCtl.text)); _updateCount(); });
@@ -103,7 +96,7 @@ class _StepStoreDetailsState extends State<StepStoreDetails> {
     _storeCtl.dispose(); _addrCtl.dispose(); _cityCtl.dispose(); _stateCtl.dispose(); _mapCtl.dispose();
     _instaCtl.dispose(); _twitterCtl.dispose(); _fbCtl.dispose(); _tiktokCtl.dispose(); _webCtl.dispose(); _waCtl.dispose(); _otherCtl.dispose();
     
-    _storeFocus.dispose(); _addrFocus.dispose(); _cityFocus.dispose(); _stateFocus.dispose();
+    _storeFocus.dispose();
     _instaFocus.dispose(); _twitterFocus.dispose(); _fbFocus.dispose(); _tiktokFocus.dispose(); _webFocus.dispose(); _waFocus.dispose(); _otherFocus.dispose();
     super.dispose(); 
   }

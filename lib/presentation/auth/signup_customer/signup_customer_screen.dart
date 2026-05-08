@@ -15,8 +15,6 @@ import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import 'steps/step_personal.dart';
-import 'steps/step_identity.dart';
-import 'steps/step_security.dart';
 import 'steps/step_review.dart';
 
 class SignupCustomerScreen extends StatefulWidget {
@@ -29,8 +27,7 @@ class SignupCustomerScreen extends StatefulWidget {
 
 class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
   final _controller = PageController();
-  final _formKeys = List.generate(4, (_) => GlobalKey<FormState>());
-  bool _kycSheetOpen = false;
+  final _formKeys = List.generate(2, (_) => GlobalKey<FormState>());
 
   void closeAllOverlays() {
     // Safer way to close known overlays without nuking navigation stack
@@ -111,38 +108,11 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                   BlocListener<SignupCustomerBloc, SignupCustomerState>(
                     listenWhen: (p, c) => p.pageIndex != c.pageIndex,
                     listener: (context, s) async {
-                      if (_kycSheetOpen) {
-                        await Future.delayed(
-                          const Duration(milliseconds: 1500),
-                        ); // Give user time to see "Success"
-                        if (context.mounted && _kycSheetOpen) {
-                          Navigator.of(context).pop(); 
-                        }
-                        _kycSheetOpen = false;
-                      }
                       _animateTo(s.pageIndex);
                     },
                   ),
-                  // 2. KYC Failure Handling (Close sheet to show error on UI)
-                  BlocListener<SignupCustomerBloc, SignupCustomerState>(
-                    listenWhen: (p, c) =>
-                        (p.ninVerifying &&
-                            !c.ninVerifying &&
-                            c.ninError != null) ||
-                        (p.bvnVerifying &&
-                            !c.bvnVerifying &&
-                            c.bvnError != null),
-                    listener: (context, s) async {
-                      if (_kycSheetOpen) {
-                        await Future.delayed(const Duration(seconds: 2));
-                        if (context.mounted && _kycSheetOpen) {
-                          Navigator.of(context).pop(); 
-                        }
-                        _kycSheetOpen = false;
-                      }
-                    },
-                  ),
-                  // 3. Signup Completion
+
+                  // 2. Success / failure listener
                   BlocListener<SignupCustomerBloc, SignupCustomerState>(
                     listenWhen: (p, c) => p.status != c.status,
                     listener: (context, s) {
@@ -162,6 +132,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                           },
                         );
                       }
+
                       if (s.status == SignupStatus.success) {
                         showAppSnackbar(
                           'Account created successfully!',
@@ -177,9 +148,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
                     StepPersonal(formKey: _formKeys[0]),
-                    StepIdentity(formKey: _formKeys[1]),
-                    StepSecurity(formKey: _formKeys[2]),
-                    StepReview(formKey: _formKeys[3]),
+                    StepReview(formKey: _formKeys[1]),
                   ],
                 ),
               ),
@@ -188,7 +157,6 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
             // --- BOTTOM NAVIGATION ---
             BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
               builder: (context, state) {
-                debugPrint("debugging: Loading state: ${state.loading}, NIN Verifying: ${state.ninVerifying}, BVN Verifying: ${state.bvnVerifying}");
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     KorraSizes.gutter.w,
@@ -199,28 +167,8 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                   child: _BottomNav(
                     formKey: _formKeys[state.pageIndex],
                     isLast: state.pageIndex == state.totalPages - 1,
-                    loading: state.loading || state.ninVerifying || state.bvnVerifying,
+                    loading: state.loading,
                     pageIndex: state.pageIndex,
-                    openKycSheet: () {
-                      if (!_kycSheetOpen) {
-                        _kycSheetOpen = true;
-                        final bloc = context.read<SignupCustomerBloc>();
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          isDismissible: false,
-                          enableDrag: false,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => BlocProvider.value(
-                            value: bloc, // Pass the captured bloc instance
-                            child: const _KycProgressSheet(),
-                          ),
-                        ).whenComplete(() {
-                          // 🚀 GUARANTEES THE FLAG RESETS NO MATTER HOW IT CLOSES
-                          _kycSheetOpen = false; 
-                        });
-                      }
-                    },
                   ),
                 );
               },
@@ -298,14 +246,12 @@ class _BottomNav extends StatelessWidget {
   final bool isLast;
   final bool loading;
   final int pageIndex;
-  final VoidCallback openKycSheet;
 
   const _BottomNav({
     required this.formKey,
     required this.isLast,
     required this.loading,
     required this.pageIndex,
-    required this.openKycSheet,
   });
 
   @override
@@ -316,29 +262,11 @@ class _BottomNav extends StatelessWidget {
       debugPrint("Debug: Attempting validation for page $pageIndex");
 
       final ok = formKey.currentState?.validate() ?? true;
-      if (!ok) {
-        debugPrint("Debug: Validation failed for page $pageIndex");
-      } else {
-        debugPrint("Debug: Validation succeeded for page $pageIndex");
-      }
       if (!ok) return;
 
       if (isLast) {
         context.read<SignupCustomerBloc>().add(SignupCustomerSubmitPressed());
         return;
-      }
-
-      // Identity Logic (Step 2 -> Index 1)
-      if (pageIndex == 1) {
-        final s = context.read<SignupCustomerBloc>().state;
-        // Only verify if not already verified
-        final needsVerification =
-            !(s.ninVerified && s.lastVerifiedNin == s.nin) ||
-            !(s.bvnVerified && s.lastVerifiedBvn == s.bvn);
-
-        if (needsVerification) {
-          openKycSheet();
-        }
       }
 
       debugPrint("Debug: Moving to next page from page $pageIndex");
@@ -407,193 +335,6 @@ class _BottomNav extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// 3. PREMIUM KYC PROGRESS SHEET
-// -----------------------------------------------------------------------------
-class _KycProgressSheet extends StatelessWidget {
-  const _KycProgressSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 32.h),
-      child: SafeArea(
-        top: false,
-        child: BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
-          builder: (_, s) {
-            final allVerified = s.ninVerified && s.bvnVerified;
-            final anyVerifying = s.ninVerifying || s.bvnVerifying;
-            final anyError = s.ninError != null || s.bvnError != null;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle
-                Container(
-                  width: 40.w,
-                  height: 4.h,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0E0E0),
-                    borderRadius: BorderRadius.circular(4.r),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-
-                // Header
-                Text(
-                  allVerified ? "Identity Verified" : "Verifying Identity",
-                  style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF111111),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-
-                // NIN Line
-                _VerificationLine(
-                  title: "NIN Validation",
-                  isProcessing: s.ninVerifying,
-                  isSuccess: s.ninVerified && s.lastVerifiedNin == s.nin,
-                  hasError: s.ninError != null,
-                ),
-
-                // Connector Line
-                Container(
-                  margin: EdgeInsets.only(left: 11.w), // Align with icon center
-                  height: 16.h,
-                  width: 2.w,
-                  color: const Color(0xFFF2F2F7),
-                ),
-
-                // BVN Line
-                _VerificationLine(
-                  title: "BVN Validation",
-                  isProcessing: s.bvnVerifying,
-                  isSuccess: s.bvnVerified && s.lastVerifiedBvn == s.bvn,
-                  hasError: s.bvnError != null,
-                ),
-
-                SizedBox(height: 24.h),
-
-                // Status Footer
-                // Status Footer
-                if (allVerified && !anyVerifying)
-                  Text(
-                    "Verification successful! Proceeding to the next step.",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else if (anyError && !anyVerifying)
-                  Text(
-                    "Verification Failed. Please check your details.",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else if (!allVerified && anyVerifying)
-                  Text(
-                    "This usually takes a few seconds...",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.grey,
-                    ),
-                  )
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _VerificationLine extends StatelessWidget {
-  final String title;
-  final bool isProcessing;
-  final bool isSuccess;
-  final bool hasError;
-
-  const _VerificationLine({
-    required this.title,
-    required this.isProcessing,
-    required this.isSuccess,
-    required this.hasError,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    IconData icon;
-    Color color;
-    Color bgColor;
-
-    if (isProcessing) {
-      icon = Iconsax.refresh; // Or spinner
-      color = Colors.orange;
-      bgColor = Colors.orange.withOpacity(0.1);
-    } else if (isSuccess) {
-      icon = Iconsax.tick_circle;
-      color = Colors.green;
-      bgColor = Colors.green.withOpacity(0.1);
-    } else if (hasError) {
-      icon = Iconsax.close_circle;
-      color = Colors.red;
-      bgColor = Colors.red.withOpacity(0.1);
-    } else {
-      icon = Iconsax.lock;
-      color = Colors.grey;
-      bgColor = Colors.grey.withOpacity(0.1);
-    }
-
-    return Row(
-      children: [
-        Container(
-          width: 24.w,
-          height: 24.w,
-          decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-          child: isProcessing
-              ? Padding(
-                  padding: EdgeInsets.all(6.r),
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.orange,
-                  ),
-                )
-              : Icon(icon, size: 14.sp, color: color),
-        ),
-        SizedBox(width: 12.w),
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF111111),
-          ),
-        ),
-        const Spacer(),
-        if (isSuccess)
-          Text(
-            "Matched",
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: Colors.green,
-            ),
-          ),
       ],
     );
   }

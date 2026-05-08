@@ -86,20 +86,6 @@ class StepReview extends StatelessWidget {
                   value: s.phone,
                   icon: Iconsax.call,
                 ),
-                const Divider(height: 24, color: Color(0xFFF0F0F0)),
-                _ReviewRow(
-                  label: "Date of Birth",
-                  value: s.dob == null
-                      ? '-'
-                      : KorraValidators.formatDate(s.dob!),
-                  icon: Iconsax.calendar,
-                ),
-                const Divider(height: 24, color: Color(0xFFF0F0F0)),
-                _ReviewRow(
-                  label: "Gender",
-                  value: s.gender.name.titleCase,
-                  icon: Iconsax.profile_2user,
-                ),
               ],
             ),
           ),

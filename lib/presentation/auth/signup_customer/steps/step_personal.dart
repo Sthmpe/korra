@@ -1,17 +1,15 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../../config/constants/colors.dart';
 import '../../../../../config/validators/validators.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
-import '../../../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
-import 'email_otp_bottom_sheet.dart';
 
 class StepPersonal extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -39,15 +37,33 @@ class _StepPersonalState extends State<StepPersonal> {
   void initState() {
     super.initState();
     final s = context.read<SignupCustomerBloc>().state;
-    _firstCtl = TextEditingController(text: s.firstName)
+
+    final user = FirebaseAuth.instance.currentUser;
+    final names = user?.displayName?.split(' ') ?? [];
+    final first = names.isNotEmpty ? names.first : s.firstName;
+    final last = names.length > 1 ? names.sublist(1).join(' ') : s.lastName;
+    final email = user?.email ?? s.email;
+    final phone = user?.phoneNumber ?? s.phone;
+
+    debugPrint('📧 Pre-filling email from FirebaseAuth: $email');
+    debugPrint('📱 Pre-filling phone from FirebaseAuth: $phone');
+    debugPrint('👤 Pre-filling name from FirebaseAuth: $first $last');
+    debugPrint('name parts: ${names.length}, first: $first, last: $last, full: ${user?.displayName}');
+
+    _on(FirstNameChanged(first));
+    _on(LastNameChanged(last));
+    _on(EmailChangedCU(email));
+    _on(PhoneChanged(phone));
+
+    _firstCtl = TextEditingController(text: first)
       ..addListener(() => _on(FirstNameChanged(_firstCtl.text)));
-    _lastCtl = TextEditingController(text: s.lastName)
+    _lastCtl = TextEditingController(text: last)
       ..addListener(() => _on(LastNameChanged(_lastCtl.text)));
     _otherCtl = TextEditingController(text: s.otherName)
       ..addListener(() => _on(OtherNameChanged(_otherCtl.text)));
-    _phoneCtl = TextEditingController(text: s.phone)
+    _phoneCtl = TextEditingController(text: phone)
       ..addListener(() => _on(PhoneChanged(_phoneCtl.text)));
-    _emailCtl = TextEditingController(text: s.email)
+    _emailCtl = TextEditingController(text: email)
       ..addListener(() => _on(EmailChangedCU(_emailCtl.text)));
   }
 
@@ -149,7 +165,7 @@ class _StepPersonalState extends State<StepPersonal> {
                   FocusScope.of(context).requestFocus(_phoneFocus),
             ),
             SizedBox(height: 24.h),
-
+    
             // --- PHONE ---
             _PremiumInput(
               controller: _phoneCtl,
@@ -157,23 +173,24 @@ class _StepPersonalState extends State<StepPersonal> {
               label: 'Phone Number',
               hint: '080...',
               inputType: TextInputType.phone,
-              validator: KorraValidators.phoneNg,
-              onSubmitted: (_) =>
-                  FocusScope.of(context).requestFocus(_emailFocus),
-              suffixIcon: Icon(
-                Iconsax.call,
-                color: Colors.grey.shade400,
-                size: 20.sp,
-              ),
+              suffixIcon: Icon(Iconsax.call, color: Colors.grey.shade400, size: 20.sp),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Required';
+                if (v.trim().length != 11) return 'Enter a valid phone number';
+                return null;
+              },
             ),
             SizedBox(height: 24.h),
-
-            // --- EMAIL (Smart Status) ---
-            _EmailField(controller: _emailCtl, focusNode: _emailFocus),
-            SizedBox(height: 24.h),
-
-            // --- DOB & GENDER ---
-            _DobAndGenderRow(),
+    
+            // --- 🚀 EMAIL (Read-Only) ---
+            _PremiumInput(
+              controller: _emailCtl,
+              focusNode: _emailFocus,
+              label: 'Email Address',
+              hint: 'you@example.com',
+              readOnly: true, // 🚀 Locks it
+              suffixIcon: Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp), // 🚀 Shows verified
+            ),
 
             SizedBox(height: 40.h),
           ],
@@ -196,6 +213,7 @@ class _PremiumInput extends StatefulWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onSubmitted;
   final Widget? suffixIcon;
+  final bool readOnly;
 
   const _PremiumInput({
     required this.controller,
@@ -207,6 +225,7 @@ class _PremiumInput extends StatefulWidget {
     this.validator,
     this.onSubmitted,
     this.suffixIcon,
+    this.readOnly = false,
   });
 
   @override
@@ -252,9 +271,9 @@ class _PremiumInputState extends State<_PremiumInput> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: _isFocused
-                ? Colors.white
-                : const Color(0xFFF7F7F7), // Very subtle grey when inactive
+            color: widget.readOnly 
+                ? const Color(0xFFF0F0F0) 
+                : (_isFocused ? Colors.white : const Color(0xFFF7F7F7)), // Very subtle grey when inactive
             borderRadius: BorderRadius.circular(12.r),
             border: Border.all(
               color: _isFocused
@@ -277,6 +296,7 @@ class _PremiumInputState extends State<_PremiumInput> {
             focusNode: widget.focusNode,
             keyboardType: widget.inputType,
             textCapitalization: widget.textCapitalization,
+            readOnly: widget.readOnly,
             onFieldSubmitted: (v) {
               HapticFeedback.selectionClick();
               widget.onSubmitted?.call(v);
@@ -329,317 +349,6 @@ class _PremiumInputState extends State<_PremiumInput> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// 2. EMAIL FIELD (Uses Premium Input)
-// -----------------------------------------------------------------------------
-class _EmailField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-
-  const _EmailField({required this.controller, required this.focusNode});
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
-      buildWhen: (p, c) =>
-          p.emailChecking != c.emailChecking ||
-          p.emailUnused != c.emailUnused ||
-          p.emailError != c.emailError ||
-          p.emailOtpVerified != c.emailOtpVerified || // 🚀 Added
-          p.sendingEmailOtp != c.sendingEmailOtp,     // 🚀 Added
-      builder: (context, s) {
-        
-        Widget? suffix;
-        
-        if (s.emailChecking || s.sendingEmailOtp) {
-          // 1. Loading State
-          suffix = Padding(
-            padding: EdgeInsets.all(12.r),
-            child: const SizedBox(
-              height: 16, width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: KorraColors.brand),
-            ),
-          );
-        } else if (s.emailError != null && !s.emailUnused) {
-          // 2. Error State
-          suffix = Icon(Iconsax.close_circle, color: Colors.red, size: 20.sp);
-        } else if (s.emailUnused && s.emailOtpVerified) {
-          // 3. Fully Verified State!
-          suffix = Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp);
-        } else if (s.emailUnused && !s.emailOtpVerified) {
-          // 4. 🚀 Unused but NOT verified -> Show "Verify" Button
-          suffix = Padding(
-            padding: EdgeInsets.only(right: 8.w),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    // Send the OTP via BLoC
-                    context.read<SignupCustomerBloc>().add(SignupSendEmailOtpPressed());
-                    
-                    // Open the Bottom Sheet
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      isDismissible: false, // Force them to close it via the button
-                      enableDrag: false, // Prevent swipe down to dismiss
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => BlocProvider.value(
-                        value: context.read<SignupCustomerBloc>(),
-                        child: const EmailOtpBottomSheet(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                    decoration: BoxDecoration(
-                      color: KorraColors.brand.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16.r),
-                    ),
-                    child: Text(
-                      "Verify",
-                      style: GoogleFonts.inter(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w700,
-                        color: KorraColors.brand,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PremiumInput(
-              controller: controller,
-              focusNode: focusNode,
-              label: 'Email Address',
-              hint: 'you@example.com',
-              inputType: TextInputType.emailAddress,
-              suffixIcon: suffix,
-            ),
-            
-            // Below-field helper text
-            Padding(
-              padding: EdgeInsets.only(left: 4.w, top: 6.h),
-              child: Text(
-                s.emailChecking ? 'Checking email…'
-                  : s.emailOtpVerified ? 'Email verified and secure'
-                  : s.emailUnused ? 'Email is available. Please verify it.'
-                  : s.emailError != null ? s.emailError!
-                  : 'Enter your email address',
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w500,
-                  color: s.emailChecking ? KorraColors.brand
-                      : s.emailOtpVerified ? Colors.green
-                      : s.emailUnused ? KorraColors.brand
-                      : s.emailError != null ? Colors.red
-                      : KorraColors.brand,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-
-// -----------------------------------------------------------------------------
-// 3. DOB & GENDER ROW (With Validators & Error Styles)
-// -----------------------------------------------------------------------------
-class _DobAndGenderRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<SignupCustomerBloc, SignupCustomerState>(
-      // Optimization: Only rebuild if dob or gender changes
-      buildWhen: (p, c) => p.dob != c.dob || p.gender != c.gender,
-      builder: (context, s) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- DATE PICKER FORM FIELD ---
-            Expanded(
-              flex: 3,
-              child: FormField<DateTime>(
-                initialValue: s.dob,
-                validator: (value) {
-                  // Validate directly against the Bloc state to ensure accuracy
-                  if (s.dob == null) return "Date required";
-                  // Optional: Age Check
-                  final age = DateTime.now().year - s.dob!.year;
-                  if (age < 18) return "18+ only";
-                  return null;
-                },
-                builder: (FormFieldState<DateTime> field) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Date of Birth',
-                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF111111)),
-                      ),
-                      SizedBox(height: 8.h),
-                      
-                      GestureDetector(
-                        onTap: () async {
-                          final now = DateTime.now();
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: s.dob ?? DateTime(now.year - 20, now.month, now.day),
-                            firstDate: DateTime(now.year - 100),
-                            lastDate: DateTime(now.year - 13),
-                            builder: (ctx, child) => Theme(
-                              data: Theme.of(ctx).copyWith(
-                                colorScheme: const ColorScheme.light(primary: KorraColors.brand),
-                              ),
-                              child: child!,
-                            ),
-                          );
-                          if (picked != null) {
-                            // Update Bloc
-                            context.read<SignupCustomerBloc>().add(DobChanged(picked));
-                            // Tell FormField it changed (removes error if valid)
-                            field.didChange(picked);
-                          }
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          height: 52.h,
-                          padding: EdgeInsets.symmetric(horizontal: 16.w),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF7F7F7),
-                            borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(
-                              // 🔥 RED BORDER ON ERROR
-                              color: field.hasError ?const Color.fromARGB(255, 196, 32, 20) : const Color(0xFFE5E5E5),
-                              width: field.hasError ? 1.0 : 1.0,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                s.dob == null ? 'Select Date' : DateFormat('dd MMM yyyy').format(s.dob!),
-                                style: GoogleFonts.inter(
-                                  fontSize: 15.sp,
-                                  fontWeight: s.dob == null ? FontWeight.w400 : FontWeight.w600,
-                                  color: s.dob == null ? const Color(0xFFAAAAAA) : const Color(0xFF1B1B1B),
-                                ),
-                              ),
-                              Icon(Iconsax.calendar_1, size: 18.sp, color: Colors.grey.shade400),
-                            ],
-                          ),
-                        ),
-                      ),
-                      
-                      // 🔥 STYLED ERROR TEXT
-                      if (field.hasError)
-                        Padding(
-                          padding: EdgeInsets.only(top: 6.h, left: 4.w),
-                          child: Text(
-                            field.errorText!,
-                            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color.fromARGB(255, 196, 32, 20), fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-
-            SizedBox(width: 16.w),
-
-            // --- GENDER DROPDOWN FORM FIELD ---
-            Expanded(
-              flex: 2,
-              child: FormField<Gender>(
-                initialValue: s.gender,
-                validator: (value) {
-                  // Validate against Bloc State
-                  if (s.gender == Gender.undisclosed) return "Required";
-                  return null;
-                },
-                builder: (FormFieldState<Gender> field) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Gender',
-                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF111111)),
-                      ),
-                      SizedBox(height: 8.h),
-                      
-                      Container(
-                        height: 52.h,
-                        padding: EdgeInsets.symmetric(horizontal: 16.w),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F7F7),
-                          borderRadius: BorderRadius.circular(12.r),
-                          border: Border.all(
-                            // 🔥 RED BORDER ON ERROR
-                            color: field.hasError ? const Color.fromARGB(255, 196, 32, 20) : const Color(0xFFE5E5E5)
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<Gender>(
-                            value: s.gender == Gender.undisclosed ? null : s.gender,
-                            hint: Text(
-                              'Select',
-                              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w400, color: const Color(0xFFAAAAAA)),
-                            ),
-                            icon: Icon(Iconsax.arrow_down_1, size: 16.sp, color: Colors.grey.shade400),
-                            isExpanded: true,
-                            dropdownColor: Colors.white,
-                            borderRadius: BorderRadius.circular(12.r),
-                            items: [
-                              DropdownMenuItem(
-                                value: Gender.male,
-                                child: Text('Male', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
-                              ),
-                              DropdownMenuItem(
-                                value: Gender.female,
-                                child: Text('Female', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
-                              ),
-                            ],
-                            onChanged: (g) {
-                              if (g != null) {
-                                context.read<SignupCustomerBloc>().add(GenderChanged(g));
-                                field.didChange(g); // Clear error state
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-
-                      // 🔥 STYLED ERROR TEXT
-                      if (field.hasError)
-                        Padding(
-                          padding: EdgeInsets.only(top: 6.h, left: 4.w),
-                          child: Text(
-                            field.errorText!,
-                            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color.fromARGB(255, 196, 32, 20), fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

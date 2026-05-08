@@ -2,90 +2,18 @@ import 'package:equatable/equatable.dart';
 
 enum Presence { online, physical, both }
 
-enum Gender { male, female, other, undisclosed }
-
 abstract class SignupVendorEvent extends Equatable {
   @override
   List<Object?> get props => [];
 }
 
-// paging
+// --- Navigation ---
 class SignupVendorInit extends SignupVendorEvent {}
 class SignupVendorNextPressed extends SignupVendorEvent {}
 class SignupVendorBackPressed extends SignupVendorEvent {}
 class SignupVendorSubmitPressed extends SignupVendorEvent {}
 
-class SignupVendorSendEmailOtpPressed extends SignupVendorEvent {
-  @override
-  List<Object> get props => [];
-}
-
-class SignupVendorVerifyEmailOtpPressed extends SignupVendorEvent {
-  final String code;
-  SignupVendorVerifyEmailOtpPressed(this.code);
-
-  @override
-  List<Object> get props => [code];
-}
-
-// V1 — business type
-class RegisteredToggled extends SignupVendorEvent {
-  final bool registered;
-  RegisteredToggled(this.registered);
-  @override List<Object?> get props => [registered];
-}
-class CacChanged extends SignupVendorEvent {
-  final String value;
-  CacChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class LegalNameChanged extends SignupVendorEvent {
-  final String value;
-  LegalNameChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class VerifyCacRequested extends SignupVendorEvent {}
-
-// V2 — store details
-class StoreNameChanged extends SignupVendorEvent {
-  final String value;
-  StoreNameChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class PresenceChanged extends SignupVendorEvent {
-  final Presence value;
-  PresenceChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class CategoryToggled extends SignupVendorEvent {
-  final String category;
-  CategoryToggled(this.category);
-  @override List<Object?> get props => [category];
-}
-
-// V3 — location
-class AddressChanged extends SignupVendorEvent {
-  final String value;
-  AddressChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class CityChanged extends SignupVendorEvent {
-  final String value;
-  CityChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class StateChangedVD extends SignupVendorEvent {
-  final String value;
-  StateChangedVD(this.value);
-  @override List<Object?> get props => [value];
-}
-class MapsLinkChanged extends SignupVendorEvent {
-  final String value;
-  MapsLinkChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-
-// V4 — owner & login
+// --- STEP 1: Personal Details ---
 class OwnerFirstChanged extends SignupVendorEvent {
   final String value;
   OwnerFirstChanged(this.value);
@@ -112,91 +40,53 @@ class VendorEmailChanged extends SignupVendorEvent {
   @override List<Object?> get props => [value];
 }
 
-class DobChanged extends SignupVendorEvent {
-  final DateTime? value;
-  DobChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class GenderChanged extends SignupVendorEvent {
-  final Gender value;
-  GenderChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-
-
-class NinChanged extends SignupVendorEvent {
+// --- STEP 2: Store Details & Social ---
+class StoreNameChanged extends SignupVendorEvent {
   final String value;
-  NinChanged(this.value);
+  StoreNameChanged(this.value);
   @override List<Object?> get props => [value];
 }
-class BvnChanged extends SignupVendorEvent {
-  final String value;
-  BvnChanged(this.value);
+class PresenceChanged extends SignupVendorEvent {
+  final Presence value;
+  PresenceChanged(this.value);
   @override List<Object?> get props => [value];
 }
-
-class VendorPasswordChanged extends SignupVendorEvent {
-  final String value;
-  VendorPasswordChanged(this.value);
-  @override List<Object?> get props => [value];
+class CategoryToggled extends SignupVendorEvent {
+  final String category;
+  CategoryToggled(this.category);
+  @override List<Object?> get props => [category];
 }
-class VendorConfirmChanged extends SignupVendorEvent {
-  final String value;
-  VendorConfirmChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class ToggleVendorPassHidden extends SignupVendorEvent {}
-class ToggleVendorConfHidden extends SignupVendorEvent {}
-class TermsAgreementToggled extends SignupVendorEvent {
-  final bool value;
-  TermsAgreementToggled(this.value);
-}
-
-// signup_vendor_event.dart
-class VerifyBvnRequested extends SignupVendorEvent {}
-class VerifyNinRequested extends SignupVendorEvent {}
-class ClearKycError extends SignupVendorEvent {}
-
-// --- Socials Step Events ---
 class InstagramChanged extends SignupVendorEvent {
   final String value;
   InstagramChanged(this.value);
 }
-
 class TwitterChanged extends SignupVendorEvent {
   final String value;
   TwitterChanged(this.value);
 }
-
 class FacebookChanged extends SignupVendorEvent {
   final String value;
   FacebookChanged(this.value);
 }
-
 class TiktokChanged extends SignupVendorEvent {
   final String value;
   TiktokChanged(this.value);
 }
-
 class WebsiteChanged extends SignupVendorEvent {
   final String value;
   WebsiteChanged(this.value);
 }
-
 class WhatsappGroupChanged extends SignupVendorEvent {
   final String value;
   WhatsappGroupChanged(this.value);
 }
-
 class OtherLinkChanged extends SignupVendorEvent {
   final String value;
   OtherLinkChanged(this.value);
 }
 
-class SelfieCaptured extends SignupVendorEvent {
-  final String path;
-  SelfieCaptured(this.path);
-  
-  @override
-  List<Object?> get props => [path];
+// --- STEP 3: Review ---
+class TermsAgreementToggled extends SignupVendorEvent {
+  final bool value;
+  TermsAgreementToggled(this.value);
 }

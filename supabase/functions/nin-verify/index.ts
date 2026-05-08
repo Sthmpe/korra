@@ -10,6 +10,8 @@ const corsHeaders = {
 // 🌍 ENVIRONMENT TOGGLE (Set IS_LIVE=true in Prod, false in Dev)
 const IS_LIVE = Deno.env.get("IS_LIVE") === "true";
 
+console.log(`NIN Verification Function starting up in Is_live values::${Deno.env.get("IS_LIVE")} result:${IS_LIVE ? "LIVE" : "SANDBOX"} mode...`);
+
 const BASE_URL = Deno.env.get("MONNIFY_BASE_URL") || (IS_LIVE ? "https://api.monnify.com" : "https://sandbox.monnify.com");
 const API_KEY = Deno.env.get("MONNIFY_API_KEY") || "";
 const SECRET_KEY = Deno.env.get("MONNIFY_SECRET_KEY") || "";
@@ -74,19 +76,19 @@ async function verifyNIN(nin: string, appFirst: string, appLast: string, appOthe
   
   if (!IS_LIVE) {
     // 🧪 SANDBOX MODE: Mock Monnify API
-    if (nin === "12345678901" || nin === "10987654321") {
+    if (nin === "12345678901" || nin === "10987654321" || nin === "11111111111") {
       data = {
         requestSuccessful: true,
         responseMessage: "success",
         responseCode: "0",
         responseBody: {
           nin: nin,
-          lastName: "WILES",
-          firstName: "BENJAMIN",
-          middleName: "CHUKS",
-          dateOfBirth: "1996-10-08", // Monnify format
+          lastName: appLast, 
+          firstName: appFirst,
+          middleName: appOther || "CHUKS",
+          dateOfBirth: appDob, // Echo exact DOB
           gender: "MALE",
-          mobileNumber: "2348107248890"
+          mobileNumber: appPhone || "2348107248890"
         }
       };
     } else {

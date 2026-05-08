@@ -54,3 +54,40 @@ class NewPinCreated extends PayoutEvent {
 }
 
 class PayoutReset extends PayoutEvent {}
+
+// KYC Events
+class BvnInputChanged extends PayoutEvent {
+  final String bvn;
+  const BvnInputChanged(this.bvn);
+}
+
+class NinInputChanged extends PayoutEvent {
+  final String nin;
+  const NinInputChanged(this.nin);
+}
+
+class VerifyBvnClicked extends PayoutEvent {
+  final String bvn;
+  const VerifyBvnClicked(this.bvn);
+}
+
+class VerifyNinClicked extends PayoutEvent {
+  final String nin;
+  const VerifyNinClicked(this.nin);
+}
+
+class DobChanged extends PayoutEvent {
+  final DateTime dob;
+  const DobChanged(this.dob);
+}
+
+class GenderChanged extends PayoutEvent {
+  final String gender;
+  const GenderChanged(this.gender);
+}
+
+class EditPhoneToggled extends PayoutEvent {}
+class SavePhoneClicked extends PayoutEvent {
+  final String newPhone;
+  const SavePhoneClicked(this.newPhone);
+}

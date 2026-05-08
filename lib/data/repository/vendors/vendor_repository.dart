@@ -7,12 +7,16 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FunctionsClient, FunctionException;
 import 'package:korra/logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 import 'package:korra/data/models/vendor/vendor_model.dart';
 
+import '../../../config/constants/prefs_keys.dart';
 import '../../../config/utils/korra_exception.dart';
 import '../../../logic/bloc/vendor/payout/bank.dart';
 import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
@@ -266,24 +270,22 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
 
   /// Creates a new vendor account securely using Supabase Functions (Ledger Only)
   Future<String> createVendorFromState(SignupVendorState state) async {
-    if (!state.ninVerified || !state.bvnVerified) {
-      throw Exception('NIN and BVN must be verified before account creation.');
-    }
-
     final email = state.email.trim().toLowerCase();
+    
+    // Declare these OUTSIDE the try block so the catch block can see them for rollbacks
     User? firebaseUser;
     String? uid;
 
     try {
-      // --- STEP 1: Create Firebase Auth User ---
-      final authCredential = await auth.createUserWithEmailAndPassword(
-        email: email,
-        password: state.password,
-      );
-      firebaseUser = authCredential.user;
+      // --- STEP 1: Grab the Firebase User (Created during Phone OTP) ---
+      firebaseUser = auth.currentUser;
+      
+      if (firebaseUser == null) {
+        throw Exception("Security Error: Phone number not verified. Please restart signup.");
+      }
 
-      uid = firebaseUser!.uid;
-      debugPrint('Step 1: Firebase Vendor created: $uid');
+      uid = firebaseUser.uid;
+      debugPrint('Step 1: Found Firebase Vendor Identity: $uid');
       
       // 1. Get the User VIP Pass (Who they are)
       final idToken = await firebaseUser.getIdToken(true);
@@ -338,7 +340,9 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
 
       // --- STEP 4: Send Welcome Email ---
       try {
-        await _sendWelcomeEmail(vendor);
+        if (email.isNotEmpty) {
+          await _sendWelcomeEmail(vendor);
+        }
       } catch (e) {
         debugPrint("Email failed but account created: $e");
         // Don't fail the whole signup just because email failed
@@ -449,29 +453,45 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
 
   /// Logs out the current vendor.
   Future<void> logout(String vendorUid) async {
+    // 1. Clear FCM Token (Isolated)
     try {
-      // 🛡️ ISOLATE FCM LOGIC: Never let notification errors trap the user!
-      try {
-        // 1. Get the current device's FCM token
-        final String? currentToken = await FirebaseMessaging.instance.getToken();
-
-        // 2. Remove it from the database BEFORE signing out
-        if (currentToken != null) {
-          await FirebaseFirestore.instance.collection('vendors').doc(vendorUid).update({
-            'fcmToken': FieldValue.delete(), 
-          });
-        }
-
-        await FirebaseMessaging.instance.deleteToken();
-      } catch (fcmError) {
-        // Web browsers often block this. We just log it and move on to the actual sign out.
-        debugPrint('⚠️ FCM cleanup failed (Common on Web), but continuing logout: $fcmError');
+      final String? currentToken = await FirebaseMessaging.instance.getToken();
+      if (currentToken != null) {
+        await FirebaseFirestore.instance.collection('vendors').doc(vendorUid).update({
+          'fcmToken': FieldValue.delete(), 
+        });
       }
-
-      // 3. Now it is safe to actually sign out
-      await auth.signOut();
+      await FirebaseMessaging.instance.deleteToken();
+      debugPrint("✅ FCM Cleared");
     } catch (e) {
-      throw Exception('Logout failed: $e');
+      debugPrint('⚠️ FCM cleanup failed: $e');
+    }
+
+    // 2. Disconnect Google (Isolated)
+    try {
+      await GoogleSignIn.instance.signOut();
+      debugPrint("✅ Google Disconnected");
+    } catch (e) {
+      debugPrint('⚠️ Google disconnect failed: $e');
+    }
+
+    // 3. Wipe SharedPreferences (Isolated)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(PrefsKeys.userUid);
+      await prefs.remove(PrefsKeys.userRole);
+      debugPrint("✅ Local Storage Wiped");
+    } catch (e) {
+      debugPrint('⚠️ SharedPreferences wipe failed: $e');
+    }
+
+    // 4. Sign out of Firebase (Isolated & Critical)
+    try {
+      await FirebaseAuth.instance.signOut();
+      debugPrint("✅ Firebase Signed Out");
+    } catch (e) {
+      debugPrint('❌ Firebase sign-out failed: $e');
+      throw Exception('Logout failed at Firebase level.');
     }
   }
 
@@ -576,6 +596,37 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
     }
   }
 
+  /// Checks if Phone exists securely (Works for Vendors OR Customers)
+  Future<bool> checkCollectionForPhone(
+    String collectionName,
+    String phone,
+  ) async {
+    try {
+      // 1. Get the Device VIP Pass
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Do the Math: Hash the timestamp using the secret key
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling check_uniqueness for phone...");
+
+      final res = await fx.invoke(
+        'check_uniqueness',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+        },
+        body: {'type': 'phone', 'value': phone, 'collection': collectionName},
+      );
+      return res.data['exists'] == true;
+    } catch (e) {
+      debugPrint('Check Phone Failed: $e');
+      return false; // Fail safe
+    }
+  }
+
   /// Saves the vendor data to Firestore with server timestamps.
   Future<void> _saveVendorToFirestore(Vendor vendor) async {
     final map = vendor.toMap();
@@ -615,7 +666,44 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
       };
     } catch (e) {
       // If error, fail safe (block)
+      debugPrint('Error fetching compliance status: $e');
       return {'status': 'error', 'message': 'Could not verify account status.'};
+    }
+  }
+
+  // ===========================================================================
+  // GET KYC & PERSONAL DETAILS (For Withdrawal Gate)
+  // ===========================================================================
+  Future<Map<String, dynamic>> getKycDetails(String vendorUid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('vendors')
+          .doc(vendorUid)
+          .get();
+
+      if (!doc.exists) {
+        // Return empty maps if the document somehow doesn't exist yet
+        return {
+          'kyc': {},
+          'personal': {},
+        };
+      }
+
+      final data = doc.data() ?? {};
+
+      // Return exactly what the PayoutBloc is expecting
+      return {
+        'kyc': data['kyc'] ?? {},
+        'personal': data['personal'] ?? {},
+      };
+      
+    } catch (e) {
+      debugPrint("❌ Error fetching KYC details: $e");
+      // Fallback to prevent app crashes on network errors
+      return {
+        'kyc': {},
+        'personal': {},
+      };
     }
   }
 
@@ -683,6 +771,7 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
       return cachedSettings!;
     } catch (e) {
       // If error, return empty settings so the UI doesn't crash
+      debugPrint('streamVendorSettings error: $e');
       return VendorSettings(
         payoutDetails: PayoutDetails.empty(),
         isPinSet: false,
@@ -721,5 +810,139 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
       throw Exception("Error saving details: $e");
     }
   }
+
+
+
+  // -------------------------------------------------------
+  // FIREBASE PHONE OTP AUTHENTICATION
+  // -------------------------------------------------------
+
+  /// Sends the 6-digit OTP to the provided phone number via Firebase.
+  /// Returns the `verificationId` needed to confirm the code later.
+  Future<String> sendPhoneOtp(String phone) async {
+    final completer = Completer<String>();
+
+    // Firebase requires numbers in strict E.164 format (e.g. +2348012345678)
+    String normalizedPhone = phone.trim();
+    if (normalizedPhone.startsWith('0')) {
+      normalizedPhone = '+234${normalizedPhone.substring(1)}';
+    } else if (!normalizedPhone.startsWith('+')) {
+      normalizedPhone = '+$normalizedPhone';
+    }
+
+    debugPrint("📱 Sending Firebase OTP to: $normalizedPhone");
+    if (kDebugMode) {
+      await auth.setSettings(appVerificationDisabledForTesting: true);
+    }
+
+    await auth.verifyPhoneNumber(
+      phoneNumber: normalizedPhone,
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        // Auto-resolution (Mostly happens on Android where it reads the SMS automatically)
+        // If this fires, Firebase already knows they are legit.
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        debugPrint("❌ Firebase Phone Auth Failed: ${e.code}");
+        if (!completer.isCompleted) {
+          completer.completeError(KorraException(e.message ?? 'Verification failed. Try again.'));
+        }
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        // SUCCESS: Firebase sent the text. Send the ID back to the BLoC.
+        if (!completer.isCompleted) completer.complete(verificationId);
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {},
+    );
+
+    return completer.future;
+  }
+
+  /// Verifies the 6-digit SMS code typed by the user.
+  Future<void> verifyPhoneOtp({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      // 1. Create the credential payload
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+
+      // 2. Sign them in anonymously behind the scenes!
+      // This officially creates their Firebase Auth UID tied to this phone number.
+      await auth.signInWithCredential(credential);
+      
+      debugPrint("✅ Firebase Phone OTP Verified! User UID: ${auth.currentUser?.uid}");
+      
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-verification-code') {
+        throw KorraException("The 6-digit code is incorrect.");
+      }
+      throw KorraException(e.message ?? "Failed to verify code.");
+    }
+  }
+
+  /// Triggers the native Google Sign-In flow and links it to Firebase.
+  /// Returns a UserCredential if successful, or null if the user canceled.
+  Future<UserCredential?> signInWithGoogle() async {
+    try {
+      debugPrint("🚀 Initializing Google Sign-In...");
+
+      if (kIsWeb) {
+        // ---------------------------------------------------------
+        // 🌐 WEB FLOW (Exactly from your Firebase documentation)
+        // ---------------------------------------------------------
+        debugPrint("Running Web Flow...");
+        
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        // You can add scopes here later if you need them, but default is fine for login!
+        
+        // This triggers the browser pop-up window
+        return await FirebaseAuth.instance.signInWithPopup(googleProvider);
+        
+      } else {
+        // ---------------------------------------------------------
+        // 📱 NATIVE ANDROID/IOS FLOW 
+        // ---------------------------------------------------------
+        debugPrint("Running Native Flow...");
+
+        // 1. Get the global instance (This forever fixes the "unnamed constructor" error!)
+        final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+
+        // 2. 🚀 Initialize with your Web Client ID from dotenv
+        await googleSignIn.initialize(
+          serverClientId: dotenv.env['GOOGLE_WEB_CLIENT_ID'], 
+        );
+        
+        // 3. 🚀 Call the new .authenticate() method (replaces .signIn())
+        final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+
+        if (googleUser == null) {
+          debugPrint("🛑 Google Sign-In canceled.");
+          return null; 
+        }
+
+        // 4. Get the Authentication details
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        
+        // 5. Create a Firebase credential using ONLY the idToken
+        final credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+
+        // 6. Sign into Firebase
+        return await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+    } on FirebaseAuthException catch (e) {
+      debugPrint("❌ Firebase Google Auth Error: ${e.code}");
+      throw Exception(e.message ?? "Failed to connect to Firebase. Try again.");
+    } catch (e) {
+      debugPrint("❌ General Google Sign-In Error: $e");
+      throw Exception("Google sign-in failed. Please check your connection and try again.");
+    }
+  }
+
 }
 

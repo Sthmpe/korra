@@ -173,7 +173,13 @@ class AppPages {
     GetPage(
       name: Routes.customerBankDetails,
       page: () =>
-          _guard((args) => BankDetailsScreen(customer: args as Customer)),
+          _guard((args) {
+            final map = args as Map<String, dynamic>;
+            return BankDetailsScreen(
+              customer: map['customer'], 
+              repo: map['repo']
+            );
+          }),
       middlewares: [AuthMiddleware()],
     ),
 

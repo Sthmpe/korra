@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,12 +45,130 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
       (e, emit) => emit(state.copyWith(passwordHidden: !state.passwordHidden)),
     );
 
+    on<GoogleLoginPressed>(_onGoogleLogin);
     on<SubmitPressed>(_onSubmitPressed);
     on<BiometricsPressed>(_onBiometricsPressed);
     on<FailureAcknowledged>(
       (e, emit) =>
           emit(state.copyWith(failure: null, status: LoginStatus.idle)),
     );
+  }
+
+  Future<void> _onGoogleLogin(
+    GoogleLoginPressed e,
+    Emitter<RoleLoginState> emit,
+  ) async {
+    // 1. Set status to submitting
+    emit(
+      state.copyWith(
+        loading: true,
+        status: LoginStatus.submitting,
+        failure: null,
+      ),
+    );
+
+    try {
+      // 2. Trigger Google Sign-In
+      // Note: You can call this from either repo or a shared AuthService
+      final userCred = await _vendorRepo.signInWithGoogle(); 
+      
+      if (userCred == null) {
+        // User canceled the Google pop-up
+        emit(state.copyWith(loading: false, status: LoginStatus.idle));
+        return;
+      }
+
+      final uid = userCred.user!.uid;
+
+      // 3. FLAVOR ROUTING & CROSS-CHECKING
+     if (state.role == KorraRole.vendor) {
+        // --- VENDOR APP FLOW ---
+        final vendorDoc = await FirebaseFirestore.instance.collection('vendors').doc(uid).get();
+        final data = vendorDoc.data();
+        
+        // 🚀 THE CLEAN FIX: This perfectly matches your logic
+        if (vendorDoc.exists && data?['personal']?['first'] != null) {
+          
+          emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: false));
+          await _persistUserSession(uid, 'vendor');
+          
+        } else {
+          emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: true));
+        }
+
+      } else {
+        // --- CUSTOMER APP FLOW ---
+        final customerDoc = await FirebaseFirestore.instance.collection('customers').doc(uid).get();
+        final data = customerDoc.data();
+        
+        // 🚀 THE CLEAN FIX
+        if (customerDoc.exists && data?['personal']?['first'] != null) {
+          
+          emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: false));
+          await _persistUserSession(uid, 'customer');
+          
+        } else {
+          emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: true));
+        }
+      }
+
+    } on FirebaseAuthException catch (ex) {
+      emit(
+        state.copyWith(
+          loading: false,
+          status: LoginStatus.failure,
+          failure: _mapAuthError(ex),
+        ),
+      );
+    } on Exception catch (err) {
+      final msg = err.toString();
+      
+      // Mirroring your exact failure handling logic
+      if (msg.contains('customer')) {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'role_mismatch',
+              title: 'Check app version',
+              message: 'This account is registered as a customer. Please use the Korra Customer app.',
+            ),
+          ),
+        );
+      } else if (msg.contains('vendor')) {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'role_mismatch',
+              title: 'Check app version',
+              message: 'This account is registered as a merchant. Please use the Korra Business app.',
+            ),
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            loading: false,
+            status: LoginStatus.failure,
+            failure: const KorraFailure(
+              code: 'unknown',
+              title: 'We couldn’t sign you in',
+              message: 'Please try again in a moment.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // Your existing persist method remains completely untouched
+  Future<void> _persistUserSession(String uid, String role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(PrefsKeys.userUid, uid);
+    await prefs.setString(PrefsKeys.userRole, role);
   }
 
   Future<void> _onSubmitPressed(
@@ -162,13 +281,6 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         );
       }
     }
-  }
-
-  Future<void> _persistUserSession(String uid, String role) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString(PrefsKeys.userUid, uid);
-    await prefs.setString(PrefsKeys.userRole, role);
   }
 
   Future<void> _onBiometricsPressed(

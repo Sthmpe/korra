@@ -135,7 +135,13 @@ class ProfilePage extends StatelessWidget {
                                     subtitle:
                                         customer.bankDisplay, // 👈 Extension
                                     onTap: () {
-                                      Get.toNamed(Routes.customerBankDetails, arguments: customer);
+                                      Get.toNamed(
+                                        Routes.customerBankDetails, 
+                                        arguments: {
+                                          'customer': customer,
+                                          'repo': customerRepo,
+                                        }
+                                      );
                                     },
                                   ),
                                   _divider(),

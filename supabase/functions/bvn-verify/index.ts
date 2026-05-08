@@ -77,7 +77,7 @@ async function verifyBVN(bvn: string, name: string, dateOfBirth: string, mobileN
 
   if (!IS_LIVE) {
     // 🧪 SANDBOX MODE: Use Mock Logic (Since Monnify BVN is Live-Only)
-    if (bvn === "22222222226" || bvn === "99999999999") {
+    if (bvn === "22222222226" || bvn === "99999999999" || bvn === "11111111111") {
       data = {
         requestSuccessful: true,
         responseMessage: "success",

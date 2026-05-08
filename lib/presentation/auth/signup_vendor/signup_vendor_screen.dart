@@ -14,12 +14,10 @@ import '../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
 import '../../shared/widgets/korra_failure_sheet.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
-import 'steps_v/step_business_type.dart';
-import 'steps_v/step_identity.dart';
+
+// ONLY THE 3 STEPS WE NEED
 import 'steps_v/step_personal.dart';
-import 'steps_v/step_security.dart';
 import 'steps_v/step_store_details.dart';
-import 'steps_v/step_location.dart';
 import 'steps_v/step_review_vendor.dart';
 
 class SignupVendorScreen extends StatefulWidget {
@@ -35,8 +33,8 @@ class SignupVendorScreen extends StatefulWidget {
 
 class _SignupVendorScreenState extends State<SignupVendorScreen> {
   final _controller = PageController();
-  final _formKeys = List.generate(7, (_) => GlobalKey<FormState>());
-  bool _kycSheetOpen = false;
+  // 🚀 CHANGED: From 7 keys to 3
+  final _formKeys = List.generate(3, (_) => GlobalKey<FormState>()); 
 
   void closeAllOverlays() {
     if (Get.isOverlaysOpen) Navigator.of(context).pop();
@@ -115,38 +113,12 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                   // 1. Page Navigation
                   BlocListener<SignupVendorBloc, SignupVendorState>(
                     listenWhen: (p, c) => p.pageIndex != c.pageIndex,
-                    listener: (context, s) async {
-                      if (_kycSheetOpen) {
-                        await Future.delayed(
-                          const Duration(milliseconds: 1500),
-                        ); // Give user time to see "Success"
-                        if (context.mounted && _kycSheetOpen) {
-                          Navigator.of(context).pop(); 
-                        }
-                        _kycSheetOpen = false;
-                      }
+                    listener: (context, s) {
                       _animateTo(s.pageIndex);
                     },
                   ),
-                  // Close sheet on identity failure (stay on Identity page)
-                  BlocListener<SignupVendorBloc, SignupVendorState>(
-                    listenWhen: (p, c) =>
-                        (p.ninVerifying &&
-                            !c.ninVerifying &&
-                            c.ninError != null) ||
-                        (p.bvnVerifying &&
-                            !c.bvnVerifying &&
-                            c.bvnError != null),
-                    listener: (context, s) async {
-                      if (_kycSheetOpen) {
-                        await Future.delayed(const Duration(seconds: 2));
-                        if (context.mounted && _kycSheetOpen) {
-                          Navigator.of(context).pop(); 
-                        }
-                        _kycSheetOpen = false;
-                      }
-                    },
-                  ),
+                  
+                  // 2. Success / Failure Listener
                   BlocListener<SignupVendorBloc, SignupVendorState>(
                     listenWhen: (p, c) => p.status != c.status,
                     listener: (context, s) {
@@ -172,6 +144,7 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                           'Your business account has been created successfully.',
                           SnackbarType.success,
                         );
+                        // Send them straight to the app!
                         Get.offAllNamed(Routes.vendorShell);
                       }
                     },
@@ -181,13 +154,10 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                   controller: _controller,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    StepBusinessType(formKey: _formKeys[0]),
-                    StepStoreDetails(formKey: _formKeys[1]),//keeping this 
-                    StepLocation(formKey: _formKeys[2]),
-                    StepPersonal(formKey: _formKeys[3]),//keeping this
-                    StepIdentity(formKey: _formKeys[4]),
-                    StepSecurity(formKey: _formKeys[5]),
-                    StepReviewVendor(formKey: _formKeys[6]),//keeping this
+                    // 🚀 CHANGED: Only the 3 core steps
+                    StepPersonal(formKey: _formKeys[0]),
+                    StepStoreDetails(formKey: _formKeys[1]),
+                    StepReviewVendor(formKey: _formKeys[2]),
                   ],
                 ),
               ),
@@ -203,31 +173,11 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                     16.h,
                   ),
                   child: _BottomNav(
-                  formKey: _formKeys[s.pageIndex],
-                  isLast: s.pageIndex == s.totalPages - 1,
-                  loading: s.loading || s.ninVerifying || s.bvnVerifying,
-                  pageIndex: s.pageIndex, // pass current step
-                  openKycSheet: () {
-                    if (!_kycSheetOpen) {
-                      _kycSheetOpen = true;
-                      final bloc = context.read<SignupVendorBloc>();
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        isDismissible: false,
-                        enableDrag: false,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => BlocProvider.value(
-                          value: bloc,
-                          child: const _KycProgressSheet(),
-                        ),
-                      ).whenComplete(() {
-                          // 🚀 GUARANTEES THE FLAG RESETS NO MATTER HOW IT CLOSES
-                          _kycSheetOpen = false; 
-                        });
-                    }
-                  },
-                ),
+                    formKey: _formKeys[s.pageIndex],
+                    isLast: s.pageIndex == s.totalPages - 1,
+                    loading: s.loading, // 🚀 Removed KYC loading checks
+                    pageIndex: s.pageIndex,
+                  ),
                 );
               }
             ),
@@ -238,6 +188,9 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
   }
 }
 
+// -----------------------------------------------------------------------------
+// 1. STEPPER BAR
+// -----------------------------------------------------------------------------
 class _StepperBar extends StatelessWidget {
   const _StepperBar();
 
@@ -292,23 +245,20 @@ class _StepperBar extends StatelessWidget {
   }
 }
 
-
 // -----------------------------------------------------------------------------
-// 2. BOTTOM NAVIGATION BAR
+// 2. BOTTOM NAVIGATION BAR (Cleaned up)
 // -----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final bool isLast;
   final bool loading;
   final int pageIndex;
-  final VoidCallback openKycSheet;
 
   const _BottomNav({
     required this.formKey,
     required this.isLast,
     required this.loading,
     required this.pageIndex,
-    required this.openKycSheet,
   });
 
   @override
@@ -323,19 +273,9 @@ class _BottomNav extends StatelessWidget {
           showAppSnackbar("Please agree to the terms to continue.", SnackbarType.warning);
           return;
         }
+        // Fire the final submit!
         context.read<SignupVendorBloc>().add(SignupVendorSubmitPressed());
         return;
-      }
-
-      // Identity step (index 4): open progress sheet; Bloc will run NIN→BVN and navigate on success
-      if (pageIndex == 4) { 
-        final s = context.read<SignupVendorBloc>().state;
-        final ninNeeded = !(s.ninVerified && s.lastVerifiedNin == s.nin);
-        final bvnNeeded = !(s.bvnVerified && s.lastVerifiedBvn == s.bvn);
-
-        if (ninNeeded || bvnNeeded) {
-          openKycSheet(); // only open when we’ll actually verify
-        }
       }
 
       context.read<SignupVendorBloc>().add(SignupVendorNextPressed());
@@ -401,192 +341,6 @@ class _BottomNav extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// 3. PREMIUM KYC PROGRESS SHEET
-// -----------------------------------------------------------------------------
-class _KycProgressSheet extends StatelessWidget {
-  const _KycProgressSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 32.h),
-      child: SafeArea(
-        top: false,
-        child: BlocBuilder<SignupVendorBloc, SignupVendorState>(
-          builder: (_, s) {
-            final allVerified = s.ninVerified && s.bvnVerified;
-            final anyVerifying = s.ninVerifying || s.bvnVerifying;
-            final anyError = s.ninError != null || s.bvnError != null;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle
-                Container(
-                  width: 40.w,
-                  height: 4.h,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0E0E0),
-                    borderRadius: BorderRadius.circular(4.r),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-
-                // Header
-                Text(
-                  allVerified ? "Identity Verified" : "Verifying Identity",
-                  style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF111111),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-
-                // NIN Line
-                _VerificationLine(
-                  title: "NIN Validation",
-                  isProcessing: s.ninVerifying,
-                  isSuccess: s.ninVerified && s.lastVerifiedNin == s.nin,
-                  hasError: s.ninError != null,
-                ),
-
-                // Connector Line
-                Container(
-                  margin: EdgeInsets.only(left: 11.w), // Align with icon center
-                  height: 16.h,
-                  width: 2.w,
-                  color: const Color(0xFFF2F2F7),
-                ),
-
-                // BVN Line
-                _VerificationLine(
-                  title: "BVN Validation",
-                  isProcessing: s.bvnVerifying,
-                  isSuccess: s.bvnVerified && s.lastVerifiedBvn == s.bvn,
-                  hasError: s.bvnError != null,
-                ),
-
-                SizedBox(height: 24.h),
-
-                // Status Footer
-                if (allVerified && !anyVerifying)
-                  Text(
-                    "Verification successful! Proceeding to the next step.",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else if (anyError && !anyVerifying)
-                  Text(
-                    "Verification Failed. Please check your details.",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else if (!allVerified && anyVerifying)
-                  Text(
-                    "This usually takes a few seconds...",
-                    style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      color: Colors.grey,
-                    ),
-                  )
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _VerificationLine extends StatelessWidget {
-  final String title;
-  final bool isProcessing;
-  final bool isSuccess;
-  final bool hasError;
-
-  const _VerificationLine({
-    required this.title,
-    required this.isProcessing,
-    required this.isSuccess,
-    required this.hasError,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    IconData icon;
-    Color color;
-    Color bgColor;
-
-    if (isProcessing) {
-      icon = Iconsax.refresh; // Or spinner
-      color = Colors.orange;
-      bgColor = Colors.orange.withOpacity(0.1);
-    } else if (isSuccess) {
-      icon = Iconsax.tick_circle;
-      color = Colors.green;
-      bgColor = Colors.green.withOpacity(0.1);
-    } else if (hasError) {
-      icon = Iconsax.close_circle;
-      color = Colors.red;
-      bgColor = Colors.red.withOpacity(0.1);
-    } else {
-      icon = Iconsax.lock;
-      color = Colors.grey;
-      bgColor = Colors.grey.withOpacity(0.1);
-    }
-
-    return Row(
-      children: [
-        Container(
-          width: 24.w,
-          height: 24.w,
-          decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-          child: isProcessing
-              ? Padding(
-                  padding: EdgeInsets.all(6.r),
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.orange,
-                  ),
-                )
-              : Icon(icon, size: 14.sp, color: color),
-        ),
-        SizedBox(width: 12.w),
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF111111),
-          ),
-        ),
-        const Spacer(),
-        if (isSuccess)
-          Text(
-            "Matched",
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: Colors.green,
-            ),
-          ),
       ],
     );
   }

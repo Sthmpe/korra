@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart'; 
 import '../../../logic/bloc/auth/signup_customer/signup_customer_state.dart';
 
 class Customer {
@@ -12,7 +11,7 @@ class Customer {
   final String phone;
   final String email;
   final DateTime? dob;
-  final Gender gender;
+  final String? gender;
 
   // Address
   final String address;
@@ -73,17 +72,6 @@ class Customer {
     final kyc = data['kyc'] as Map<String, dynamic>? ?? {};
     final monnify = data['monnify'] as Map<String, dynamic>? ?? {};
 
-    // 2. Parse Gender Enum safely
-    Gender parsedGender = Gender.male; // Default fallback
-    if (personal['gender'] != null) {
-      try {
-        parsedGender = Gender.values.firstWhere(
-          (e) => e.name.toLowerCase() == (personal['gender'] as String).toLowerCase(),
-          orElse: () => Gender.male,
-        );
-      } catch (_) {}
-    }
-
     return Customer(
       uid: data['uid'] ?? '',
       
@@ -94,7 +82,7 @@ class Customer {
       phone: personal['phone'] ?? '',
       email: personal['email'] ?? '',
       dob: (personal['dob'] as Timestamp?)?.toDate(),
-      gender: parsedGender,
+      gender: personal['gender'] ?? '',
 
       // Address
       address: addressMap['address'] ?? '',
@@ -108,10 +96,10 @@ class Customer {
       bvnVerified: kyc['bvnVerified'] ?? false,
 
       //Monnify / Wallet
-      walletReference: monnify['walletReference'],
-      accountNumber: monnify['accountNumber'],
-      accountName: monnify['accountName'],
-      bankName: monnify['bankName'], // Now we can read this!
+      walletReference: monnify['walletReference'] ?? '',
+      accountNumber: monnify['accountNumber'] ?? '',
+      accountName: monnify['accountName'] ?? '',
+      bankName: monnify['bankName'] ?? '', // Now we can read this!
       availableBalance: (monnify['availableBalance'] ?? 0).toDouble(), // Now we can read this!
 
       // Meta
@@ -132,15 +120,16 @@ class Customer {
       otherName: s.otherName.trim(),
       phone: s.phone.trim(),
       email: s.email.trim().toLowerCase(),
-      dob: s.dob,
-      gender: s.gender,
-      address: s.address.trim(),
-      city: s.city.trim(),
-      stateName: s.stateName.trim(),
-      nin: s.nin.trim(),
-      bvn: s.bvn.trim(),
-      ninVerified: s.ninVerified,
-      bvnVerified: s.bvnVerified,
+      dob: null,
+      gender: null,
+      address: '',
+      city: '',
+      stateName: '',
+      nin: '',
+      bvn: '',
+      ninVerified: false,
+      bvnVerified: false,
+
       walletReference: null,
       accountNumber: null,
       accountName: null,
@@ -212,7 +201,7 @@ class Customer {
       'phone': _nn(phone),
       'email': _nn(email),
       'dob': dob == null ? null : Timestamp.fromDate(dob!),
-      'gender': gender.name,
+      'gender': _nn(gender ?? ''),
     });
 
     final addressMap = _omitNulls({

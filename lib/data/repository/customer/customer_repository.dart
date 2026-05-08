@@ -7,10 +7,13 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FunctionsClient, FunctionException;
 
 // --- MODELS ---
+import '../../../config/constants/prefs_keys.dart';
 import '../../../config/utils/korra_exception.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../logic/services/notification_service.dart';
@@ -175,151 +178,84 @@ class CustomerRepository implements INotificationRepository {
   }
 
   // Helper method to isolate Auth sign-in exceptions
-  Future<String> _attemptFirebaseAuthSignIn(String email, String password) async {
-    try {
-      final credential = await auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return credential.user!.uid;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('❌ Auth Sign In Failed (Technical): ${e.code} - ${e.message}');
-      // Translate to KorraException
-      throw KorraException(_translateFirebaseAuthError(e), technicalDetails: e.toString());
-    } catch (e) {
-      debugPrint('❌ Auth Sign In Failed (Generic): $e');
-      throw KorraException(
-        'A network error occurred during sign-in. Please try again.',
-        technicalDetails: e.toString(),
-      );
-    }
-  }
-
   Future<void> logout(String uid) async {
+    // 1. Clear FCM Token (Isolated)
     try {
-      // 🛡️ ISOLATE FCM LOGIC: Never let notification errors trap the user!
-      try {
-        // 1. Get the current device's FCM token
-        final String? currentToken = await FirebaseMessaging.instance.getToken();
-
-        // 2. Remove it from the database BEFORE signing out
-        if (currentToken != null) {
-          await FirebaseFirestore.instance.collection('customers').doc(uid).update({
-            'fcmToken': FieldValue.delete(), 
-          });
-        }
-
-        await FirebaseMessaging.instance.deleteToken();
-      } catch (fcmError) {
-        // Web browsers often block this. We just log it and move on to the actual sign out.
-        debugPrint('⚠️ FCM cleanup failed (Common on Web), but continuing logout: $fcmError');
+      final String? currentToken = await FirebaseMessaging.instance.getToken();
+      if (currentToken != null) {
+        await FirebaseFirestore.instance.collection('customers').doc(uid).update({
+          'fcmToken': FieldValue.delete(), 
+        });
       }
-
-      // 3. Now it is safe to actually sign out
-      await auth.signOut();
+      await FirebaseMessaging.instance.deleteToken();
+      debugPrint("✅ FCM Cleared");
     } catch (e) {
-      // Throw the clean error
-      debugPrint('❌ Logout failed (Technical): $e');
-      throw KorraException(
-        'Logout failed',
-        technicalDetails: e.toString(),
-      );
+      debugPrint('⚠️ FCM cleanup failed: $e');
+    }
+
+    // 2. Disconnect Google (Isolated)
+    try {
+      await GoogleSignIn.instance.signOut();
+      debugPrint("✅ Google Disconnected");
+    } catch (e) {
+      debugPrint('⚠️ Google disconnect failed: $e');
+    }
+
+    // 3. Wipe SharedPreferences (Isolated)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(PrefsKeys.userUid);
+      await prefs.remove(PrefsKeys.userRole);
+      debugPrint("✅ Local Storage Wiped");
+    } catch (e) {
+      debugPrint('⚠️ SharedPreferences wipe failed: $e');
+    }
+
+    // 4. Sign out of Firebase (Isolated & Critical)
+    try {
+      await FirebaseAuth.instance.signOut();
+      debugPrint("✅ Firebase Signed Out");
+    } catch (e) {
+      debugPrint('❌ Firebase sign-out failed: $e');
+      throw Exception('Logout failed at Firebase level.');
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // SIGN UP FLOW (HYBRID ARCHITECTURE)
-  // ---------------------------------------------------------------------------
 
   Future<String> createCustomerFromState(SignupCustomerState state) async {
-    if (!state.ninVerified || !state.bvnVerified) {
-      throw KorraException('NIN and BVN must be verified before account creation.');
-    }
-
-    final email = state.email.trim().toLowerCase();
     User? firebaseUser;
     String? uid;
 
     try {
-      // --- STEP 1: Create Firebase Auth User ---
-      final authCredential = await auth.createUserWithEmailAndPassword(
-        email: email,
-        password: state.password,
-      );
+      // --- STEP 1: Verify Firebase Auth User ---
+      firebaseUser = auth.currentUser;
 
-      firebaseUser = authCredential.user;
-      uid = firebaseUser!.uid;
-      debugPrint('Step 1: Firebase user created: $uid');
-
-      // 1. Get the User VIP Pass (Who they are)
-      final idToken = await firebaseUser.getIdToken(true);
-
-      // 2. Get the Device VIP Pass (Proves it is the real Korra app, not a bot)
-      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // Do the Math: Hash the timestamp using the secret key
-      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
-      final digest = hmacSha256.convert(utf8.encode(timestamp));
-      final signature = digest.toString();
-
-      debugPrint("🔒 Calling create-reserve-account with Double Lock...");
-
-      // --- STEP 2: Call Supabase (Monnify Reservation) ---
-      final response = await fx.invoke(
-        'create-reserve-account',
-        headers: {
-          'x-korra-timestamp': timestamp,
-          'x-korra-signature': signature,
-          'firebase-token': 'Bearer $idToken', 
-        },
-        body: {
-          'uid': uid,
-          'email': email,
-          'firstName': state.firstName,
-          'lastName': state.lastName,
-          'bvn': state.bvn,
-          'nin': state.nin,
-        },
-      );
-
-      final responseData = response.data;
-
-      if (responseData['success'] != true) {
-        throw KorraException(
-          'Banking Setup Failed: ${responseData['error'] ?? "Unknown"}',
-        );
+      if (firebaseUser == null) {
+        throw Exception("Security Error: Phone number not verified. Please restart signup.");
       }
 
-      final bankData = responseData['data'];
-      debugPrint('Step 2: Reserve Account Created: ${bankData['accountNumber']}');
+      uid = firebaseUser.uid;
+      debugPrint('Step 1: Firebase user verified: $uid');
 
-      // --- STEP 3: Construct & Save to Firestore ---
+      // --- STEP 2: Construct & Save Base Profile to Firestore ---
 
       // A. Create Base Customer Object
+      // Bank details will default to empty/null based on your model.
       var customer = Customer.fromState(state, uid, status: 'active');
 
-      // B. Update Object with known Monnify Details
-      customer = customer.copyWithMonnify(
-        walletReference: bankData['accountReference'],
-        accountNumber: bankData['accountNumber'],
-        accountName: bankData['accountName'],
-        status: 'active',
-      );
+      // B. Save Profile 
+      // Passing an empty string for bankName since it hasn't been generated yet.
+      await _saveCustomerToFirestore(customer, "");
 
-      // C. Save Profile
-      await _saveCustomerToFirestore(customer, bankData['bankName']);
-
-      // F. Send Welcome Email
+      // C. Send Welcome Email
       await _sendWelcomeEmail(customer);
+      
+      debugPrint('Step 2: Customer saved successfully. Bank setup deferred.');
 
       return uid;
+      
     } on FirebaseAuthException catch (e) {
       debugPrint('❌ Auth Create Failed (Technical): ${e.code} - ${e.message}');
       throw KorraException(_translateFirebaseAuthCreateError(e), technicalDetails: e.toString());
-    } on FunctionException catch (e) {
-      debugPrint('❌ Supabase Bank Setup Failed (Technical): $e');
-      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Unknown server error.';
-      throw KorraException(serverError.toString(), technicalDetails: e.toString()); 
     } catch (err) {
       // --- ROLLBACK LOGIC ---
       debugPrint('CRITICAL ERROR: Signup failed. Initiating Rollback... Technical: $err');
@@ -337,12 +273,102 @@ class CustomerRepository implements INotificationRepository {
         } catch (_) {}
       }
       
-      // If the error is already a KorraException (from Step 2), rethrow it cleanly.
       if (err is KorraException) {
         rethrow;
       }
       
       // Generic fallback for network or unknown errors (e.g., Firestore failure)
+      throw KorraException(
+        'Account setup failed due to a critical error. Please contact support.',
+        technicalDetails: err.toString(),
+      );
+    }
+  }
+
+  Future<void> createReserveAccount({
+    required String uid,
+    required String email,
+    required String firstName,
+    required String lastName,
+    required String bvn,
+    required String nin,
+  }) async {
+    try {
+      // --- STEP 1: Verify Firebase Auth User ---
+      final firebaseUser = auth.currentUser;
+      if (firebaseUser == null || firebaseUser.uid != uid) {
+        throw Exception("Security Error: Unauthorized request. Please log in again.");
+      }
+
+      debugPrint('Step 1: Firebase user verified: $uid');
+
+      // 1. Get the User VIP Pass
+      final idToken = await firebaseUser.getIdToken(true);
+
+      // 2. Get the Device VIP Pass
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling create-reserve-account with Double Lock & KYC...");
+
+      // --- STEP 2: Call Supabase (Monnify Reservation) ---
+      final response = await fx.invoke(
+        'create-reserve-account',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+          'firebase-token': 'Bearer $idToken', 
+        },
+        body: {
+          'uid': uid,
+          'email': email,
+          'firstName': firstName,
+          'lastName': lastName,
+          'bvn': bvn,
+          'nin': nin,
+        },
+      );
+
+      final responseData = response.data;
+
+      if (responseData['success'] != true) {
+        throw KorraException(
+          'Banking Setup Failed: ${responseData['error'] ?? "Unknown"}',
+        );
+      }
+
+      final bankData = responseData['data'];
+      debugPrint('✅ Step 2: Reserve Account Created: ${bankData['accountNumber']}');
+
+      // --- STEP 3: Update Firestore ---
+      // We update the specific 'monnify' map fields to match your structure
+      await db.collection('customers').doc(uid).update({
+        'monnify.walletReference': bankData['accountReference'],
+        'monnify.accountNumber': bankData['accountNumber'],
+        'monnify.accountName': bankData['accountName'],
+        'monnify.bankName': bankData['bankName'],
+        'monnify.availableBalance': 0.00,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      debugPrint('✅ Customer profile updated with bank details.');
+
+    } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Auth Error: ${e.code} - ${e.message}');
+      throw KorraException("Authentication error. Please log in again.", technicalDetails: e.toString());
+    } on FunctionException catch (e) {
+      debugPrint('❌ Supabase Bank Setup Failed (Technical): $e');
+      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Unknown server error.';
+      throw KorraException(serverError.toString(), technicalDetails: e.toString()); 
+    } catch (err) {
+      // NOTE: We don't rollback/delete the user here like in sign-up, 
+      // because they already have a valid account, just the wallet creation failed.
+      debugPrint('CRITICAL ERROR: Wallet creation failed: $err');
+      if (err is KorraException) {
+        rethrow;
+      }
       throw KorraException(
         'Account setup failed due to a critical error. Please contact support.',
         technicalDetails: err.toString(),
@@ -672,4 +698,5 @@ class CustomerRepository implements INotificationRepository {
       return 0.0; // Fail safe to 0
     }
   }
+
 }

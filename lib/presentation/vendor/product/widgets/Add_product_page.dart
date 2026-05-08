@@ -961,50 +961,13 @@ class _AddProductPageState extends State<AddProductPage> {
         // 1. Info Card
         _buildInfoBox(
           "Strict Model",
-          "Best for high-demand items. Payments are collected by Korra. You are protected from cancellations.",
+          "Automated Plan. Korra automatically requires a 30% down payment from the customer. Any cancellations are refunded purely as Store Balance to protect your inventory.",
           Iconsax.shield_tick,
         ),
-        SizedBox(height: 20.h),
 
-        // 2. Fixed Policy Display (No Dropdown)
-        Text("Cancellation Policy", style: _labelStyle()),
-        SizedBox(height: 8.h),
+        SizedBox(height: 16.h),
 
-        Container(
-          padding: EdgeInsets.all(12.r),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(12.r),
-            //border: Border.all(color: const Color(0xFFEAECF0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Standard Strict Policy", // Or "50% Refund"
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF101828),
-                ),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                "If a customer ever cancels, they receive their refund ito their Store Balance. This protects your cash flow.",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF667085),
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        SizedBox(height: 12.h),
-
-        // 3. Extension Info
+        // 2. Extension Info
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1036,22 +999,21 @@ class _AddProductPageState extends State<AddProductPage> {
         Container(
           padding: EdgeInsets.all(12.r),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF4ED),
+            color: const Color(0xFFFFF4ED), // Light Orange for Manual Control
             borderRadius: BorderRadius.circular(8.r),
-            //border: Border.all(color: const Color(0xFFFFE0D0)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Iconsax.warning_2,
+                Iconsax.setting_2, // Swapped to settings icon to imply control
                 size: 20.sp,
                 color: const Color(0xFFA54600),
               ),
               SizedBox(width: 10.w),
               Expanded(
                 child: Text(
-                  "Flexible Plan. Refunds are strictly converted to 'Store Balance' to protect you from cancellations.",
+                  "Flexible Plan. You control the required down payment and extensions. Cancellations are still refunded as Store Balance.",
                   style: GoogleFonts.inter(
                     fontSize: 12.sp,
                     color: const Color(0xFF344054),

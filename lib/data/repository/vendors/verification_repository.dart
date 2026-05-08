@@ -252,6 +252,8 @@ extension VerificationRepository on VendorRepository {
         });
       final data = res.data;
 
+      debugPrint("NIN Verification Response: $data");
+
       if (data['ok'] != true) {
         // The edge function sends exactly what went wrong (e.g., "The NIN number you entered does not exist.")
         throw KorraException(data['message'] ?? 'NIN verification failed.');

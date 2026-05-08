@@ -4,130 +4,66 @@ import 'signup_vendor_event.dart';
 enum SignupStatus { initial, loading, success, failure }
 
 class SignupVendorState extends Equatable {
-  final int pageIndex; // 0..4
-  final int totalPages; // 5
+  // --- 1. META & NAVIGATION ---
+  final int pageIndex; // 0..2
+  final int totalPages; // 3
   final bool loading;
+  final SignupStatus status;
+  final String? signUpError;
+  final bool toggled; // Terms & Conditions
+  final String uid;
 
-  // V1
-  final bool registered;
-  final String cac;
-  final String legalName;
-
-  // V2
-  final String storeName;
-  final Presence presence;
-  final List<String> categories;
-
-  // V3
-  final String address;
-  final String city;
-  final String stateName;
-  final String mapsLink;
-
-  // V4
+  // --- 2. STEP 1: PERSONAL ---
   final String firstName;
   final String lastName;
   final String otherName;
   final String phone;
-
-  // New-V4
   final String email;
-  final DateTime? dob;
-  final Gender gender;  
-  final bool emailChecking;
-  final bool emailUnused;
-  final String? emailError;
 
-  // New-V5
-  final String nin;
-  final String bvn;
-
-  // final String email;
-  final String password;
-  final String confirm;
-  final bool hidePass;
-  final bool hideConf;
-
-  // KYC flags
-  final bool bvnVerifying;
-  final bool ninVerifying;
-  final bool bvnVerified;
-  final bool ninVerified;
-
-  // NEW: remember which exact values passed verification
-  final String? lastVerifiedNin;
-  final String? lastVerifiedBvn;
-
-  // NEW: per-field server errors (to show next to inputs)
-  final String? ninError;
-  final String? bvnError;
-  final String? kycError;
-  final String? signUpError;
-  final SignupStatus status;
-  final bool toggled;
-
-  final String uid; // Added to hold the UID after successful signup
+  // Phone Verification State
+  final bool phoneChecking; // True when checking database
+  final bool phoneUnused;   // True if the number is safe to use
+  final String? phoneError; 
+  
+  // --- 3. STEP 2: STORE DETAILS ---
+  final String storeName;
+  final Presence presence;
+  final List<String> categories;
 
   // Social
- final String instagram;
-final String twitter;
-final String facebook;
-final String tiktok;
-final String website;
-final String whatsappGroup;
-final String otherLink;
-
-final bool cacVerifying;
-final bool cacVerified;
-final String? cacError;
-final String? lastVerifiedCac; // To prevent verifying same number twice
-final String? selfiePath;
-
-final bool emailOtpVerified;
-final bool sendingEmailOtp;
-final String lastVerifiedEmail;
+  final String instagram;
+  final String twitter;
+  final String facebook;
+  final String tiktok;
+  final String website;
+  final String whatsappGroup;
+  final String otherLink;
 
   const SignupVendorState({
     this.pageIndex = 0,
-    this.totalPages = 7,
+    this.totalPages = 3,
     this.loading = false,
-    this.registered = false,
-    this.cac = '',
-    this.legalName = '',
-    this.storeName = '',
-    this.presence = Presence.online,
-    this.categories = const [],
-    this.address = '',
-    this.city = '',
-    this.stateName = '',
-    this.mapsLink = '',
+    this.status = SignupStatus.initial,
+    this.signUpError,
+    this.toggled = false,
+    this.uid = '',
+
+    // Personal
     this.firstName = '',
     this.lastName = '',
     this.otherName = '',
     this.phone = '',
-    this.dob,
-    this.gender = Gender.undisclosed,   
-    this.emailChecking = false,
-    this.emailUnused = false,
-    this.emailError,
-    this.nin = '',
-    this.bvn = '',
     this.email = '',
-    this.password = '',
-    this.confirm = '',
-    this.hidePass = true,
-    this.hideConf = true,
-    this.bvnVerifying = false,
-    this.ninVerifying = false,
-    this.bvnVerified = false,
-    this.ninVerified = false,
-    this.lastVerifiedNin,
-    this.lastVerifiedBvn,
-    this.ninError,
-    this.bvnError,
-    this.kycError,
-    this.signUpError,
-    this.status = SignupStatus.initial,
+
+    // Phone State
+    this.phoneChecking = false,
+    this.phoneUnused = false,
+    this.phoneError,
+
+    // Store Details
+    this.storeName = '',
+    this.presence = Presence.online,
+    this.categories = const [],
     this.instagram = '',
     this.twitter = '',
     this.facebook = '',
@@ -135,58 +71,26 @@ final String lastVerifiedEmail;
     this.website = '',
     this.whatsappGroup = '',
     this.otherLink = '',
-    this.toggled = false,
-    this.uid = '',
-    this.cacVerifying = false,
-    this.cacVerified = false,
-    this.cacError,
-    this.lastVerifiedCac,
-    this.selfiePath,
-    this.emailOtpVerified = false,
-    this.sendingEmailOtp = false,
-    this.lastVerifiedEmail = '',
   });
 
   SignupVendorState copyWith({
     int? pageIndex,
     bool? loading,
-    bool? registered,
-    String? cac,
-    String? legalName,
+    SignupStatus? status,
+    String? signUpError,
+    bool? toggled,
+    String? uid,
+    String? firstName,
+    String? lastName,
+    String? otherName,
+    String? phone,
+    String? email,
+    bool? phoneChecking,
+    bool? phoneUnused,
+    String? phoneError,
     String? storeName,
     Presence? presence,
     List<String>? categories,
-    String? address,
-    String? city,
-    String? stateName,
-    String? mapsLink,
-    String? firstName,
-    String? lastName,
-    String? phone,
-    String? otherName,
-    String? email,
-    DateTime? dob,
-    Gender? gender,
-    bool? emailChecking,
-    bool? emailUnused,
-    String? emailError,
-    String? nin,
-    String? bvn,
-    String? password,
-    String? confirm,
-    bool? hidePass,
-    bool? hideConf,
-    bool? bvnVerifying,
-    bool? ninVerifying,
-    bool? bvnVerified,
-    bool? ninVerified,
-    String? lastVerifiedNin, 
-    String? lastVerifiedBvn,
-    String? ninError, 
-    String? bvnError,
-    String? kycError,
-    String? signUpError,
-    SignupStatus? status,
     String? instagram,
     String? twitter,
     String? facebook,
@@ -194,58 +98,26 @@ final String lastVerifiedEmail;
     String? website,
     String? whatsappGroup,
     String? otherLink,
-    bool? toggled,
-    String? uid,
-    bool? cacVerifying,
-    bool? cacVerified,
-    String? cacError,
-    String? lastVerifiedCac,
-    String? selfiePath,
-    bool? emailOtpVerified,
-    bool? sendingEmailOtp,
-    String? lastVerifiedEmail,
   }) {
     return SignupVendorState(
       pageIndex: pageIndex ?? this.pageIndex,
       totalPages: totalPages,
       loading: loading ?? this.loading,
-      registered: registered ?? this.registered,
-      cac: cac ?? this.cac,
-      legalName: legalName ?? this.legalName,
+      status: status ?? this.status,
+      signUpError: signUpError ?? this.signUpError,
+      toggled: toggled ?? this.toggled,
+      uid: uid ?? this.uid,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      otherName: otherName ?? this.otherName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      phoneChecking: phoneChecking ?? this.phoneChecking,
+      phoneUnused: phoneUnused ?? this.phoneUnused,
+      phoneError: phoneError ?? this.phoneError,
       storeName: storeName ?? this.storeName,
       presence: presence ?? this.presence,
       categories: categories ?? this.categories,
-      address: address ?? this.address,
-      city: city ?? this.city,
-      stateName: stateName ?? this.stateName,
-      mapsLink: mapsLink ?? this.mapsLink,
-      email: email ?? this.email,
-      dob: dob ?? this.dob,
-      gender: gender ?? this.gender, 
-      emailChecking: emailChecking ?? this.emailChecking,
-      emailUnused: emailUnused ?? this.emailUnused,
-      emailError: emailError ?? this.emailError,
-      nin: nin ?? this.nin,
-      bvn: bvn ?? this.bvn,
-      firstName: firstName ?? this.firstName,
-      lastName: lastName ?? this.lastName,
-      phone: phone ?? this.phone,
-      otherName: otherName ?? this.otherName,
-      password: password ?? this.password,
-      confirm: confirm ?? this.confirm,
-      hidePass: hidePass ?? this.hidePass,
-      hideConf: hideConf ?? this.hideConf,
-      bvnVerifying: bvnVerifying ?? this.bvnVerifying,
-      ninVerifying: ninVerifying ?? this.ninVerifying,
-      bvnVerified: bvnVerified ?? this.bvnVerified,
-      ninVerified: ninVerified ?? this.ninVerified,
-      lastVerifiedNin: lastVerifiedNin ?? this.lastVerifiedNin,
-      lastVerifiedBvn: lastVerifiedBvn ?? this.lastVerifiedBvn,
-      ninError: ninError ?? this.ninError,
-      bvnError: bvnError ?? this.bvnError,
-      kycError: kycError ?? this.kycError,
-      signUpError: signUpError ?? this.signUpError,
-      status: status ?? this.status,
       instagram: instagram ?? this.instagram,
       twitter: twitter ?? this.twitter,
       facebook: facebook ?? this.facebook,
@@ -253,74 +125,34 @@ final String lastVerifiedEmail;
       website: website ?? this.website,
       whatsappGroup: whatsappGroup ?? this.whatsappGroup,
       otherLink: otherLink ?? this.otherLink,
-      toggled: toggled ?? this.toggled,
-      uid: uid ?? this.uid,
-      cacVerifying: cacVerifying ?? this.cacVerifying,
-      cacVerified: cacVerified ?? this.cacVerified,
-      cacError: cacError ?? this.cacError,
-      lastVerifiedCac: lastVerifiedCac ?? this.lastVerifiedCac,
-      selfiePath: selfiePath ?? this.selfiePath,
-      emailOtpVerified: emailOtpVerified ?? this.emailOtpVerified,
-      sendingEmailOtp: sendingEmailOtp ?? this.sendingEmailOtp,
-      lastVerifiedEmail: lastVerifiedEmail ?? this.lastVerifiedEmail,
     );
   }
 
   @override
   List<Object?> get props => [
-    toggled,
     pageIndex,
     totalPages,
     loading,
-    registered,
-    cac,
-    legalName,
-    storeName,
-    presence,
-    categories,
-    address,
-    city,
-    stateName,
-    mapsLink,
+    status,
+    signUpError,
+    toggled,
+    uid,
     firstName,
     lastName,
     otherName,
     phone,
     email,
-    dob,
-    gender,
-    emailChecking, emailUnused, emailError,
-    nin,
-    bvn,
-    password,
-    confirm,
-    hidePass,
-    hideConf,
-    bvnVerifying,
-    ninVerifying,
-    bvnVerified,
-    ninVerified,
-    lastVerifiedNin,
-    lastVerifiedBvn,
-    ninError,
-    bvnError,
-    kycError,
-    signUpError,
-    status,
+    phoneChecking,
+    phoneUnused,
+    phoneError,
+    storeName,
+    presence,
+    categories,
     whatsappGroup,
     instagram,
     facebook,
     twitter,
     otherLink,
     website,
-    uid,
-    cacVerifying,
-    cacVerified,
-    cacError,
-    lastVerifiedCac,
-    selfiePath,
-    emailOtpVerified,
-    sendingEmailOtp,
-    lastVerifiedEmail,
   ];
 }

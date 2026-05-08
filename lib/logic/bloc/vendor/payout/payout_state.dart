@@ -31,6 +31,23 @@ class PayoutState extends Equatable {
 
   final List<Bank> bankList;
 
+  // Kyc 
+  final String? bvnInput;
+  final String? ninInput;
+  final bool isBvnVerified;
+  final bool isNinVerified;
+  final String? lastVerifiedBvn;
+  final String? lastVerifiedNin;
+  final String? bvnVerificationError;
+  final String? ninVerificationError;
+  final bool bvnVerificationInProgress;
+  final bool ninVerificationInProgress;
+  final DateTime? dob;
+  final String? gender;
+  final String phone;
+  final bool isEditingPhone;
+  final bool isUpdatingPhone;
+
   const PayoutState({
     required this.status,
     required this.step,
@@ -47,6 +64,21 @@ class PayoutState extends Equatable {
     required this.bankList,
     this.complianceStatus = 'verification_pending', // Default to safe/blocked
     this.blockMessage = '',
+    this.bvnInput,
+    this.ninInput,
+    this.isBvnVerified = false,
+    this.isNinVerified = false,
+    this.lastVerifiedBvn,
+    this.lastVerifiedNin,
+    this.bvnVerificationError,
+    this.ninVerificationError,
+    this.bvnVerificationInProgress = false,
+    this.ninVerificationInProgress = false,
+    this.dob,
+    this.gender,
+    this.phone = '',
+    this.isEditingPhone = false,
+    this.isUpdatingPhone = false
   });
 
   factory PayoutState.initial() => const PayoutState(
@@ -60,6 +92,21 @@ class PayoutState extends Equatable {
     bankCode: '',
     hasPinSet: false, 
     bankList: [],
+    bvnInput: null,
+    ninInput: null,
+    isBvnVerified: false,
+    isNinVerified: false,
+    lastVerifiedBvn: null,
+    lastVerifiedNin: null,
+    bvnVerificationError: null,
+    ninVerificationError: null,
+    bvnVerificationInProgress: false,
+    ninVerificationInProgress: false,
+    dob: null,
+    gender: null,
+    phone: '',
+    isEditingPhone: false,
+    isUpdatingPhone: false
   );
 
   PayoutState copyWith({
@@ -78,6 +125,21 @@ class PayoutState extends Equatable {
     List<Bank>? bankList,
     String? complianceStatus,
     String? blockMessage,
+    String? bvnInput,
+    String? ninInput,
+    bool? isBvnVerified,
+    bool? isNinVerified,
+    String? lastVerifiedBvn,
+    String? lastVerifiedNin,
+    String? bvnVerificationError,
+    String? ninVerificationError,
+    bool? bvnVerificationInProgress,
+    bool? ninVerificationInProgress,
+    DateTime? dob,
+    String? gender,
+    String? phone,
+    bool? isEditingPhone,
+    bool? isUpdatingPhone
   }) {
     return PayoutState(
       status: status ?? this.status,
@@ -95,6 +157,21 @@ class PayoutState extends Equatable {
       bankList: bankList ?? this.bankList,
       complianceStatus: complianceStatus ?? this.complianceStatus,
       blockMessage: blockMessage ?? this.blockMessage,
+      bvnInput: bvnInput ?? this.bvnInput,
+      ninInput: ninInput ?? this.ninInput,
+      isBvnVerified: isBvnVerified ?? this.isBvnVerified,
+      isNinVerified: isNinVerified ?? this.isNinVerified,
+      lastVerifiedBvn: lastVerifiedBvn ?? this.lastVerifiedBvn,
+      lastVerifiedNin: lastVerifiedNin ?? this.lastVerifiedNin,
+      bvnVerificationError: bvnVerificationError ?? this.bvnVerificationError,
+      ninVerificationError: ninVerificationError ?? this.ninVerificationError,
+      bvnVerificationInProgress: bvnVerificationInProgress ?? this.bvnVerificationInProgress,
+      ninVerificationInProgress: ninVerificationInProgress ?? this.ninVerificationInProgress,
+      dob: dob ?? this.dob,
+      gender: gender ?? this.gender,
+      phone: phone ?? this.phone,
+      isEditingPhone: isEditingPhone ?? this.isEditingPhone,
+      isUpdatingPhone: isUpdatingPhone ?? this.isUpdatingPhone
     );
   }
 
@@ -121,6 +198,9 @@ class PayoutState extends Equatable {
   @override
   List<Object?> get props => [
     status, step, errorMessage, withdrawableBalance, amountInput,
-    bankName, accountNumber, hasPinSet, transactionRef, bankList
+    bankName, accountNumber, hasPinSet, transactionRef, bankList,
+    complianceStatus, blockMessage, isBvnVerified, isNinVerified,
+    lastVerifiedBvn, lastVerifiedNin, bvnVerificationError, ninVerificationError,
+    bvnVerificationInProgress, ninVerificationInProgress, bvnInput, ninInput, dob, gender, phone, isEditingPhone, isUpdatingPhone
   ];
 }

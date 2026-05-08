@@ -61,21 +61,25 @@ android {
         multiDexEnabled = true
     }
 
-    // ✅ FLAVOR CONFIGURATION (Kotlin DSL)
-    flavorDimensions += "app_type"
+   flavorDimensions += "app_type"
+
+    // Create a dynamic suffix based on your existing 'isLive' variable
+    val appSuffix = if (isLive) ".live" else ""
 
     productFlavors {
         // 🛍️ Customer App
         create("customer") {
             dimension = "app_type"
-            applicationId = "com.korra.shop"
+            // Becomes "com.korra.shop" in dev, and "com.korra.shop.live" in live
+            applicationId = "com.korra.shop$appSuffix"
             resValue("string", "app_name", "Korra")
         }
 
         // 🏢 Merchant App
         create("merchant") {
             dimension = "app_type"
-            applicationId = "com.korra.business"
+            // Becomes "com.korra.business" in dev, and "com.korra.business.live" in live
+            applicationId = "com.korra.business$appSuffix"
             resValue("string", "app_name", "Korra Biz")
         }
     }
@@ -125,4 +129,7 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-appcheck")
     implementation("com.google.firebase:firebase-ai")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../config/utils/date_formatters.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_event.dart';
 import '../../../logic/bloc/auth/signup_vendor/signup_vendor_state.dart';
 
@@ -29,7 +30,7 @@ class Vendor {
   final String phone;
   final String email;
   final DateTime? dob;
-  final Gender gender;
+  final String gender;
 
   // --- KYC ---
   final String nin;
@@ -97,37 +98,38 @@ class Vendor {
   }) {
     return Vendor(
       uid: uid,
-      registered: s.registered,
-      cac: s.cac.trim(),
-      legalName: s.legalName.trim(),
+      registered: false,
+      cac: '',
+      legalName: '',
       logoUrl: '',
+      address: '',
+      city: '',
+      stateName: '',
+      mapsLink: '',
+      dob: null,
+      gender: '',
+      nin: '',
+      bvn: '',
+      ninVerified: false,
+      bvnVerified: false,
+      
       storeName: s.storeName.trim(),
       presence: s.presence,
       categories: List<String>.from(s.categories),
-      address: s.address.trim(),
-      city: s.city.trim(),
-      stateName: s.stateName.trim(),
-      mapsLink: s.mapsLink.trim(),
       firstName: s.firstName.trim(),
       lastName: s.lastName.trim(),
       otherName: s.otherName.trim(),
       phone: s.phone.trim(),
       email: s.email.trim().toLowerCase(),
-      dob: s.dob,
-      gender: s.gender,
-      nin: s.nin.trim(),
-      bvn: s.bvn.trim(),
-      ninVerified: s.ninVerified,
-      bvnVerified: s.bvnVerified,
-      
-      // Socials start empty during signup
-      whatsappGroup: s.whatsappGroup,
-      instagram: s.instagram,
-      website: s.website,
-      tiktok: s.tiktok,
-      facebook: s.facebook,
-      twitter: s.twitter,
-      otherLink: s.otherLink,
+
+      // ✅ Map the optional socials here
+      whatsappGroup: s.whatsappGroup.trim(),
+      instagram: s.instagram.trim(),
+      website: s.website.trim(),
+      tiktok: s.tiktok.trim(),
+      facebook: s.facebook.trim(),
+      twitter: s.twitter.trim(),
+      otherLink: s.otherLink.trim(),
 
       status: status,
       createdAt: DateTime.now(),
@@ -218,11 +220,8 @@ class Vendor {
       otherName: personal['other']?.toString() ?? '',
       phone: personal['phone']?.toString() ?? '',
       email: personal['email']?.toString() ?? '',
-      dob: personal['dob'] != null ? (personal['dob'] as Timestamp).toDate() : null,
-      gender: Gender.values.firstWhere(
-        (e) => e.name == (personal['gender'] ?? 'male'),
-        orElse: () => Gender.male,
-      ),
+      dob: parseSmartDate(personal['dob']),
+      gender: personal['gender'] ?? '',
 
       // KYC
       nin: kyc['nin']?.toString() ?? '',
@@ -292,7 +291,7 @@ class Vendor {
         'phone': phone,
         'email': email,
         'dob': dob == null ? null : Timestamp.fromDate(dob!),
-        'gender': gender.name,
+        'gender': gender,
       }),
       'kyc': omitNulls({
         'nin': nin,

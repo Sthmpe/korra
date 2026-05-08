@@ -17,10 +17,8 @@ class StepReviewVendor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Watch the state so the widget rebuilds when 'agreedToTerms' changes
+    // Watch the state so the widget rebuilds when 'agreedToTerms' changes
     final s = context.watch<SignupVendorBloc>().state;
-    
-    // Use the value from the Bloc, not local state
     final isAgreed = s.toggled; 
 
     String _fullName() {
@@ -53,7 +51,7 @@ class StepReviewVendor extends StatelessWidget {
           ),
           SizedBox(height: 8.h),
           Text(
-            'Please confirm your business details before submission.',
+            'Please confirm your basic details before creating your account.',
             style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF666666), height: 1.4),
           ),
           SizedBox(height: 32.h),
@@ -64,7 +62,6 @@ class StepReviewVendor extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.r),
-              //border: Border.all(color: const Color(0xFFE5E5E5)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.03),
@@ -75,14 +72,23 @@ class StepReviewVendor extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _SectionHeader(title: "Business Info", icon: Iconsax.shop),
+                // --- 1. PERSONAL DETAILS ---
+                _SectionHeader(title: "Owner Details", icon: Iconsax.user),
+                SizedBox(height: 16.h),
+                _ReviewRow(label: "Full Name", value: _fullName()),
+                _ReviewRow(label: "Phone", value: s.phone),
+                _ReviewRow(label: "Email", value: s.email.isEmpty ? "Not provided" : s.email),
+
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.h),
+                  child: const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                ),
+
+                // --- 2. STORE DETAILS ---
+                _SectionHeader(title: "Store Details", icon: Iconsax.shop),
                 SizedBox(height: 16.h),
                 _ReviewRow(label: "Store Name", value: s.storeName.titleCase),
-                _ReviewRow(label: "Registration", value: s.registered ? "Registered (CAC)" : "Unregistered"),
-                if (s.registered) ...[
-                  _ReviewRow(label: "CAC Number", value: s.cac),
-                  _ReviewRow(label: "Legal Name", value: s.legalName.titleCase),
-                ],
+                _ReviewRow(label: "Presence", value: presenceLabel()),
                 _ReviewRow(label: "Categories", value: s.categories.join(', ')),
                 
                 Padding(
@@ -90,39 +96,26 @@ class StepReviewVendor extends StatelessWidget {
                   child: const Divider(height: 1, color: Color(0xFFF0F0F0)),
                 ),
 
+                // --- 3. SOCIAL PRESENCE ---
                 _SectionHeader(title: "Social Presence", icon: Iconsax.global),
                 SizedBox(height: 16.h),
-                if (s.instagram.isEmpty && s.twitter.isEmpty && s.facebook.isEmpty && s.tiktok.isEmpty)
-                  Text("No social links provided", style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey, fontStyle: FontStyle.italic))
+                if (s.instagram.isEmpty && s.twitter.isEmpty && s.facebook.isEmpty && 
+                    s.tiktok.isEmpty && s.website.isEmpty && s.whatsappGroup.isEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "No links provided", 
+                      style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey, fontStyle: FontStyle.italic)
+                    ),
+                  )
                 else ...[
                   if (s.instagram.isNotEmpty) _ReviewRow(label: "Instagram", value: "@${s.instagram}"),
                   if (s.twitter.isNotEmpty) _ReviewRow(label: "Twitter", value: "@${s.twitter}"),
-                  // Add other social checks here if needed
+                  if (s.facebook.isNotEmpty) _ReviewRow(label: "Facebook", value: s.facebook),
+                  if (s.tiktok.isNotEmpty) _ReviewRow(label: "TikTok", value: "@${s.tiktok}"),
+                  if (s.whatsappGroup.isNotEmpty) _ReviewRow(label: "WhatsApp", value: "Linked"),
+                  if (s.website.isNotEmpty) _ReviewRow(label: "Website", value: s.website),
                 ],
-
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  child: const Divider(height: 1, color: Color(0xFFF0F0F0)),
-                ),
-
-                _SectionHeader(title: "Location", icon: Iconsax.map),
-                SizedBox(height: 16.h),
-                _ReviewRow(label: "Presence", value: presenceLabel()),
-                if (s.presence != Presence.online) ...[
-                  _ReviewRow(label: "Address", value: s.address),
-                  _ReviewRow(label: "City / State", value: '${s.city.titleCase}, ${s.stateName.titleCase}'),
-                ],
-
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  child: const Divider(height: 1, color: Color(0xFFF0F0F0)),
-                ),
-
-                _SectionHeader(title: "Owner", icon: Iconsax.user),
-                SizedBox(height: 16.h),
-                _ReviewRow(label: "Full Name", value: _fullName()),
-                _ReviewRow(label: "Phone", value: s.phone),
-                _ReviewRow(label: "Email", value: s.email),
               ],
             ),
           ),
@@ -132,19 +125,13 @@ class StepReviewVendor extends StatelessWidget {
           // --- LEGAL CHECKBOX ---
           GestureDetector(
             onTap: () {
-              // 2. Dispatch event to Bloc instead of setState
-              // Toggle the current value
               context.read<SignupVendorBloc>().add(TermsAgreementToggled(!isAgreed)); 
             },
             child: Container(
               padding: EdgeInsets.all(16.r),
               decoration: BoxDecoration(
-                // 3. UI now reacts to 'isAgreed' from Bloc
                 color: isAgreed ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB), 
                 borderRadius: BorderRadius.circular(12.r),
-                // border: Border.all(
-                //   color: isAgreed ? const Color(0xFFBBF7D0) : const Color(0xFFF3F4F6)
-                // ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

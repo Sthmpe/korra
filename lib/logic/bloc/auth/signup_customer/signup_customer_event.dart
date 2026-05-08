@@ -1,7 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-enum Gender { male, female, other, undisclosed }
-
 abstract class SignupCustomerEvent extends Equatable {
   @override
   List<Object?> get props => [];
@@ -12,12 +10,6 @@ class SignupCustomerInit extends SignupCustomerEvent {}
 class SignupCustomerNextPressed extends SignupCustomerEvent {}
 class SignupCustomerBackPressed extends SignupCustomerEvent {}
 class SignupCustomerSubmitPressed extends SignupCustomerEvent {}
-
-class SignupSendEmailOtpPressed extends SignupCustomerEvent {}
-class SignupVerifyEmailOtpPressed extends SignupCustomerEvent {
-  final String code;
-  SignupVerifyEmailOtpPressed(this.code);
-}
 
 // field changes — step 1
 class FirstNameChanged extends SignupCustomerEvent {
@@ -45,44 +37,4 @@ class EmailChangedCU extends SignupCustomerEvent {
   EmailChangedCU(this.value);
   @override List<Object?> get props => [value];
 }
-class DobChanged extends SignupCustomerEvent {
-  final DateTime? value;
-  DobChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class GenderChanged extends SignupCustomerEvent {
-  final Gender value;
-  GenderChanged(this.value);
-  @override List<Object?> get props => [value];
-}
 
-// step 2
-class NinChanged extends SignupCustomerEvent {
-  final String value;
-  NinChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-class BvnChanged extends SignupCustomerEvent {
-  final String value;
-  BvnChanged(this.value);
-  @override List<Object?> get props => [value];
-}
-
-// step 3
-class PasswordChangedCU extends SignupCustomerEvent {
-  final String value;
-  PasswordChangedCU(this.value);
-  @override List<Object?> get props => [value];
-}
-class ConfirmPasswordChangedCU extends SignupCustomerEvent {
-  final String value;
-  ConfirmPasswordChangedCU(this.value);
-  @override List<Object?> get props => [value];
-}
-class TogglePasswordVisibilityCU extends SignupCustomerEvent {}
-class ToggleConfirmVisibilityCU extends SignupCustomerEvent {}
-
-// signup_vendor_event.dart
-class VerifyBvnRequested extends SignupCustomerEvent {}
-class VerifyNinRequested extends SignupCustomerEvent {}
-class ClearKycError extends SignupCustomerEvent {}
