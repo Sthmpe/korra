@@ -4,7 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../../config/constants/colors.dart'; // Ensure this is imported
+import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/sizes.dart';
 
 class SectionHeader extends StatelessWidget {
   final String title;
@@ -34,10 +35,10 @@ class SectionHeader extends StatelessWidget {
           Text(
             title,
             style: GoogleFonts.inter(
-              fontSize: 18.sp, // Slightly bigger for hierarchy
-              fontWeight: FontWeight.w700, // Bold
+              fontSize: KorraSizes.fontXl.sp,
+              fontWeight: KorraSizes.weightBold,
               color: KorraColors.black,
-              letterSpacing: -0.5, // Modern tight tracking
+              letterSpacing: KorraSizes.trackingSnug,
             ),
           ),
 
@@ -51,15 +52,15 @@ class SectionHeader extends StatelessWidget {
                   Text(
                     actionText!,
                     style: GoogleFonts.inter(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
+                      fontSize: KorraSizes.fontSmPlus.sp,
+                      fontWeight: KorraSizes.weightSemiBold,
                       color: KorraColors.brand,
                     ),
                   ),
                   SizedBox(width: 4.w),
                   Icon(
                     Iconsax.arrow_right_3, // Clean chevron style
-                    size: 16.sp,
+                    size: KorraSizes.iconSm.sp,
                     color: KorraColors.brand,
                   ),
                 ],

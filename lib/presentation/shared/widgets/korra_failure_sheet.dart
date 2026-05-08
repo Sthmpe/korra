@@ -5,7 +5,9 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/constants/buttons.dart';
 import '../../../config/constants/colors.dart';
+import '../../../config/constants/sizes.dart';
 
 void showKorraFailureSheet(
   BuildContext context, {
@@ -14,7 +16,7 @@ void showKorraFailureSheet(
   VoidCallback? onRetry,
   VoidCallback? onCancel,
 }) {
-  HapticFeedback.lightImpact(); // le haptic on error
+  HapticFeedback.lightImpact();
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -48,10 +50,10 @@ class _KorraFailureSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(KorraSizes.sheetRadius.r)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             spreadRadius: 2,
           )
@@ -69,8 +71,8 @@ class _KorraFailureSheet extends StatelessWidget {
                 width: 40.w,
                 height: 4.h,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE0E0E0),
-                  borderRadius: BorderRadius.circular(4.r),
+                  color: KorraColors.border,
+                  borderRadius: BorderRadius.circular(KorraSizes.xs.r),
                 ),
               ),
             ),
@@ -80,15 +82,15 @@ class _KorraFailureSheet extends StatelessWidget {
             Container(
               width: 64.w,
               height: 64.w,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2), // Soft Red Background
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF2F2),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: Icon(
                 Iconsax.warning_2,
-                size: 32.sp,
-                color: const Color(0xFFDC2626), // Deep Red
+                size: KorraSizes.iconXl.sp,
+                color: KorraColors.debtRed,
               ),
             ),
             SizedBox(height: 24.h),
@@ -98,10 +100,10 @@ class _KorraFailureSheet extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
-                fontSize: 20.sp,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF111111), // Almost Black
-                letterSpacing: -0.5,
+                fontSize: KorraSizes.font2xl.sp,
+                fontWeight: KorraSizes.weightBold,
+                color: KorraColors.nearBlack,
+                letterSpacing: KorraSizes.trackingSnug,
               ),
             ),
             SizedBox(height: 12.h),
@@ -111,9 +113,9 @@ class _KorraFailureSheet extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
-                fontSize: 15.sp,
-                height: 1.5,
-                color: const Color(0xFF666666), // Modern Grey
+                fontSize: KorraSizes.fontMdPlus.sp,
+                height: KorraSizes.lineHeightNormal,
+                color: const Color(0xFF666666),
               ),
             ),
             SizedBox(height: 32.h),
@@ -125,53 +127,40 @@ class _KorraFailureSheet extends StatelessWidget {
                   // Cancel (Soft Grey Button - iOS Style)
                   Expanded(
                     child: SizedBox(
-                      height: 56.h,
+                      height: KorraButtons.heightLg.h,
                       child: TextButton(
                         onPressed: () {
                           Get.back();
                           onCancel?.call();
                         },
-                        style: TextButton.styleFrom(
-                          backgroundColor: const Color(0xFFF2F2F7), // iOS Secondary Fill
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16.r),
-                          ),
-                        ),
+                        style: KorraButtons.cancelStyle(),
                         child: Text(
                           'Cancel',
                           style: GoogleFonts.inter(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w600,
+                            fontSize: KorraSizes.fontLg.sp,
+                            fontWeight: KorraSizes.weightSemiBold,
                             color: Colors.black87,
                           ),
                         ),
                       ),
                     ),
                   ),
-                  
                   SizedBox(width: 16.w),
-
                   // Retry (Brand Primary)
                   Expanded(
                     child: SizedBox(
-                      height: 56.h,
+                      height: KorraButtons.heightLg.h,
                       child: ElevatedButton(
                         onPressed: () {
                           Get.back();
                           onRetry?.call();
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: KorraColors.brand,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16.r),
-                          ),
-                        ),
+                        style: KorraButtons.primaryStyle(),
                         child: Text(
-                          "Try Again",
+                          'Try Again',
                           style: GoogleFonts.inter(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w700,
+                            fontSize: KorraSizes.fontLg.sp,
+                            fontWeight: KorraSizes.weightBold,
                             color: Colors.white,
                           ),
                         ),
@@ -184,32 +173,25 @@ class _KorraFailureSheet extends StatelessWidget {
               // Dismiss Only (Full Width)
               SizedBox(
                 width: double.infinity,
-                height: 56.h,
+                height: KorraButtons.heightLg.h,
                 child: ElevatedButton(
                   onPressed: () {
                     Get.back();
                     onCancel?.call();
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF2F2F7), // Soft Grey
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16.r),
-                    ),
-                  ),
+                  style: KorraButtons.softGreyStyle(),
                   child: Text(
-                    "Dismiss",
+                    'Dismiss',
                     style: GoogleFonts.inter(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w700,
+                      fontSize: KorraSizes.fontLg.sp,
+                      fontWeight: KorraSizes.weightBold,
                       color: Colors.black87,
                     ),
                   ),
                 ),
               ),
             ],
-            
-            SizedBox(height: 12.h), // Bottom padding
+            SizedBox(height: 12.h),
           ],
         ),
       ),

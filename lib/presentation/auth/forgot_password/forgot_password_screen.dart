@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/constants/buttons.dart';
+import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_bloc.dart';

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/constants/buttons.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../config/routes/app_routes.dart';
 

@@ -4,17 +4,18 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../config/constants/buttons.dart';
 import '../../config/constants/colors.dart';
+import '../../config/constants/sizes.dart';
 
-/// Shows the elegant failure bottom sheet, adapted from your proven design.
-
+/// Failure bottom sheet shown during signup flows.
 class SignupFailureSheet extends StatelessWidget {
   final String title;
   final String message;
   final VoidCallback? retryCallback;
 
   const SignupFailureSheet({
-    super.key, 
+    super.key,
     required this.title,
     required this.message,
     this.retryCallback,
@@ -26,7 +27,7 @@ class SignupFailureSheet extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 20.h),
       decoration: BoxDecoration(
         color: KorraColors.bg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(KorraSizes.sheetRadius.r)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -37,13 +38,13 @@ class SignupFailureSheet extends StatelessWidget {
             height: 4.h,
             decoration: BoxDecoration(
               color: KorraColors.border,
-              borderRadius: BorderRadius.circular(2.r),
+              borderRadius: BorderRadius.circular(KorraSizes.xs.r),
             ),
           ),
           SizedBox(height: 24.h),
 
           // --- Warning Icon ---
-          Icon(Iconsax.warning_2, size: 36.sp, color: KorraColors.danger),
+          Icon(Iconsax.warning_2, size: KorraSizes.font6xl.sp, color: KorraColors.danger),
           SizedBox(height: 16.h),
 
           // --- Title ---
@@ -51,8 +52,8 @@ class SignupFailureSheet extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 18.sp,
-              fontWeight: FontWeight.w700,
+              fontSize: KorraSizes.fontXl.sp,
+              fontWeight: KorraSizes.weightBold,
             ),
           ),
           SizedBox(height: 8.h),
@@ -62,9 +63,9 @@ class SignupFailureSheet extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 14.sp,
+              fontSize: KorraSizes.fontMd.sp,
               color: KorraColors.textMuted,
-              height: 1.5,
+              height: KorraSizes.lineHeightNormal,
             ),
           ),
           SizedBox(height: 24.h),
@@ -75,20 +76,15 @@ class SignupFailureSheet extends StatelessWidget {
               // Cancel
               Expanded(
                 child: SizedBox(
-                  height: 52.h,
+                  height: KorraButtons.heightSm.h,
                   child: OutlinedButton(
                     onPressed: () => Get.back(),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14.r),
-                      ),
-                      side: BorderSide(color: KorraColors.border),
-                    ),
+                    style: KorraButtons.outlinedBorderStyle(radius: KorraButtons.radiusSm),
                     child: Text(
                       'Cancel',
                       style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w600,
+                        fontSize: KorraSizes.fontLg.sp,
+                        fontWeight: KorraSizes.weightSemiBold,
                         color: KorraColors.textMuted,
                       ),
                     ),
@@ -100,23 +96,18 @@ class SignupFailureSheet extends StatelessWidget {
               // Try Again
               Expanded(
                 child: SizedBox(
-                  height: 52.h,
+                  height: KorraButtons.heightSm.h,
                   child: ElevatedButton(
                     onPressed: () {
                       Get.back();
                       retryCallback?.call();
                     },
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14.r),
-                      ),
-                      backgroundColor: KorraColors.brand,
-                    ),
+                    style: KorraButtons.primaryStyle(radius: KorraButtons.radiusSm),
                     child: Text(
                       'Try Again',
                       style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
+                        fontSize: KorraSizes.fontLg.sp,
+                        fontWeight: KorraSizes.weightBold,
                         color: Colors.white,
                       ),
                     ),

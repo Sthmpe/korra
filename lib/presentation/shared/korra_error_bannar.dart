@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../config/constants/sizes.dart';
+
 class ErrorBanner extends StatelessWidget {
   const ErrorBanner({super.key, required this.message});
   final String message;
@@ -15,13 +17,13 @@ class ErrorBanner extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       decoration: BoxDecoration(
         // Using a dark, semi-transparent color for a sophisticated, modern feel.
-        color: const Color(0xFF262626).withOpacity(0.9),
+        color: const Color(0xFF262626).withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(
           100,
         ), // A pill shape is modern and clean.
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -35,7 +37,7 @@ class ErrorBanner extends StatelessWidget {
           Icon(
             Icons.cloud_off_outlined,
             color: const Color(0xFFAAAAAA),
-            size: 16.sp,
+            size: KorraSizes.iconSm.sp,
           ),
           SizedBox(width: 4.w),
           // Typography is key: clean font, readable size, and soft color.
@@ -47,8 +49,8 @@ class ErrorBanner extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   color: const Color(0xFFE0E0E0),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12.sp,
+                  fontWeight: KorraSizes.weightMedium,
+                  fontSize: KorraSizes.fontSm.sp,
                 ),
               ),
             ),

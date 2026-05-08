@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
+import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
@@ -43,12 +44,12 @@ class RoleSelector extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10.r),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12), // Apple-style shadow
+                        color: Colors.black.withValues(alpha: 0.12), // Apple-style shadow
                         blurRadius: 3, // Tight blur
                         offset: const Offset(0, 1), // Slight drop
                       ),
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 1,
                         offset: const Offset(0, 3),
                       ),
@@ -127,7 +128,7 @@ class _RoleTab extends StatelessWidget {
                 isActive ? activeIcon : icon,
                 key: ValueKey(isActive),
                 size: 18.sp,
-                color: isActive ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
+                color: isActive ? const Color(0xFF1C1C1E) : KorraColors.textSecondary,
               ),
             ),
             SizedBox(width: 6.w),
@@ -135,10 +136,10 @@ class _RoleTab extends StatelessWidget {
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: GoogleFonts.inter(
-                fontSize: 13.5.sp,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
-                letterSpacing: -0.3,
+                fontSize: KorraSizes.fontSmPlusH.sp,
+                fontWeight: isActive ? KorraSizes.weightSemiBold : KorraSizes.weightMedium,
+                color: isActive ? const Color(0xFF1C1C1E) : KorraColors.textSecondary,
+                letterSpacing: KorraSizes.trackingMinus3,
               ),
               child: Text(title),
             ),

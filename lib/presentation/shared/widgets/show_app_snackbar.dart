@@ -5,10 +5,12 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../config/constants/sizes.dart';
+import '../../../config/constants/snackbars.dart';
+
 enum SnackbarType { success, warning, error, info }
 
 void showAppSnackbar(String message, SnackbarType type, {VoidCallback? onTap}) {
-  // 1. Haptic Feedback (Immediate physical response)
   if (type == SnackbarType.error) {
     HapticFeedback.mediumImpact();
   } else {
@@ -19,101 +21,90 @@ void showAppSnackbar(String message, SnackbarType type, {VoidCallback? onTap}) {
   Color primaryColor;
   Color backgroundColor;
 
-  // 2. Define "Soft" Palette
   switch (type) {
     case SnackbarType.success:
       icon = Iconsax.tick_circle;
-      primaryColor = const Color(0xFF10B981); // Emerald Green
-      backgroundColor = const Color(0xFFECFDF5); // Soft Green Bg
+      primaryColor = KorraSnackbars.successPrimary;
+      backgroundColor = KorraSnackbars.successBg;
       break;
     case SnackbarType.warning:
       icon = Iconsax.info_circle;
-      primaryColor = const Color(0xFFF59E0B); // Amber
-      backgroundColor = const Color(0xFFFFFBEB); // Soft Amber Bg
+      primaryColor = KorraSnackbars.warningPrimary;
+      backgroundColor = KorraSnackbars.warningBg;
       break;
     case SnackbarType.error:
       icon = Iconsax.warning_2;
-      primaryColor = const Color(0xFFEF4444); // Red
-      backgroundColor = const Color(0xFFFEF2F2); // Soft Red Bg
+      primaryColor = KorraSnackbars.errorPrimary;
+      backgroundColor = KorraSnackbars.errorBg;
       break;
     case SnackbarType.info:
       icon = Iconsax.info_circle;
-      primaryColor = const Color(0xFF3B82F6); // Blue
-      backgroundColor = const Color(0xFFEFF6FF); // Soft Blue Bg
+      primaryColor = KorraSnackbars.infoPrimary;
+      backgroundColor = KorraSnackbars.infoBg;
       break;
   }
 
   Get.snackbar(
-    '', // Title hidden
-    '', // Message hidden (we use custom titleText)
+    '',
+    '',
     onTap: onTap != null ? (_) => onTap() : null,
     snackPosition: SnackPosition.TOP,
-    duration: const Duration(seconds: 4), // 4s is standard. 12s is too long.
-    animationDuration: const Duration(milliseconds: 400),
-    
-    // Remove default GetX styling
+    duration: KorraSnackbars.durationNormal,
+    animationDuration: KorraSnackbars.animationDuration,
     backgroundColor: Colors.transparent,
     barBlur: 0,
     overlayBlur: 0,
     snackStyle: SnackStyle.FLOATING,
-    
-    // Position & Margin
-    margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 0), // Top padding handled by GetX usually
+    margin: EdgeInsets.fromLTRB(KorraSnackbars.marginH.w, 0, KorraSnackbars.marginH.w, 0),
     padding: EdgeInsets.zero,
-    
-    // --- THE CUSTOM CARD ---
     titleText: Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+      padding: EdgeInsets.symmetric(
+        horizontal: KorraSnackbars.paddingH.w,
+        vertical: KorraSnackbars.paddingVPill.h,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r), // iOS-style pill
+        borderRadius: BorderRadius.circular(KorraSnackbars.radiusPill.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08), // Very diffuse shadow
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: KorraSnackbars.shadowColor,
+            blurRadius: KorraSnackbars.shadowBlurPill,
+            offset: KorraSnackbars.shadowOffsetPill,
             spreadRadius: 0,
           ),
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center, // Align top for long text
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 1. Status Icon Pill
           Container(
-            height: 36.w,
-            width: 36.w,
+            height: KorraSnackbars.iconContainerSize.w,
+            width: KorraSnackbars.iconContainerSize.w,
             decoration: BoxDecoration(
               color: backgroundColor,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: primaryColor, size: 20.sp),
+            child: Icon(icon, color: primaryColor, size: KorraSnackbars.iconSize.sp),
           ),
-          
           SizedBox(width: 12.w),
-
-          // 2. Message Content
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(top: 2.h), // Center visually with icon
+              padding: EdgeInsets.only(top: 2.h),
               child: Text(
                 message,
                 style: GoogleFonts.inter(
-                  fontSize: 13.5.sp,
-                  fontWeight: FontWeight.w600, // Semi-bold for readability
-                  color: const Color(0xFF1F2937), // Grey-900 (Softer than black)
-                  height: 1.4, // Breathable line height
+                  fontSize: KorraSizes.fontSmPlusH.sp,
+                  fontWeight: KorraSizes.weightSemiBold,
+                  color: const Color(0xFF1F2937),
+                  height: KorraSizes.lineHeightMd,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
-
           SizedBox(width: 8.w),
-
-          // 3. Close Action
           GestureDetector(
             onTap: () => Get.closeCurrentSnackbar(),
             child: Padding(
@@ -121,7 +112,7 @@ void showAppSnackbar(String message, SnackbarType type, {VoidCallback? onTap}) {
               child: Icon(
                 Iconsax.close_circle,
                 color: Colors.grey.shade400,
-                size: 20.sp,
+                size: KorraSnackbars.closeSize.sp,
               ),
             ),
           ),
