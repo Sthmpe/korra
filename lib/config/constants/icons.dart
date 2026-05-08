@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class KorraIcons {
@@ -77,7 +79,7 @@ class KorraIcons {
   static  IconData wallet            = MdiIcons.wallet;
   static  IconData walletOutline     = MdiIcons.walletOutline;
   static  IconData walletPlus        = MdiIcons.walletPlus;
-  static  IconData walletMinus       = MdiIcons.walletMinus;
+  static  IconData walletMinus       = Iconsax.wallet_minus;
   static  IconData walletCheck       = MdiIcons.walletGiftcard;
   static  IconData walletMoney       = MdiIcons.cash;
   static  IconData bank              = MdiIcons.bank;
@@ -111,7 +113,7 @@ class KorraIcons {
   static  IconData fingerprint    = MdiIcons.fingerprint;
   static  IconData crown          = MdiIcons.crown;
   static  IconData verified       = MdiIcons.checkDecagram;
-  static  IconData verifiedBad    = MdiIcons.cancelBoxOutline;
+  static  IconData verifiedBad    = MdiIcons.closeBoxOutline;
 
   // -- Security / visibility --------------------------------------------
   static  IconData lock            = MdiIcons.lock;
@@ -131,7 +133,7 @@ class KorraIcons {
   static  IconData sms                 = MdiIcons.messageText;
   static  IconData notification        = MdiIcons.bell;
   static  IconData notificationOutline = MdiIcons.bellOutline;
-  static  IconData message             = MdiIcons.chatBubbleOutline;
+  static  IconData message             = MdiIcons.chatOutline;
   static  IconData messageFavorite     = MdiIcons.messageStar;
   static  IconData whatsapp            = MdiIcons.whatsapp;
 
@@ -173,8 +175,8 @@ class KorraIcons {
   static  IconData instagram = MdiIcons.instagram;
   static  IconData twitter   = MdiIcons.twitter;
   static  IconData facebook  = MdiIcons.facebook;
-  static  IconData socialX   = MdiIcons.x; // TODO: find MdiIcons equivalent for X brand
-  static  IconData tiktok    = MdiIcons.tiktok; // TODO: find MdiIcons equivalent for TikTok
+  static  IconData socialX   = FontAwesomeIcons.xTwitter; // TODO: find MdiIcons equivalent for X brand
+  static  IconData tiktok    = FontAwesomeIcons.tiktok; // TODO: find MdiIcons equivalent for TikTok
   static  IconData qrCode    = MdiIcons.qrcode;
   static  IconData link      = MdiIcons.link;
   static  IconData linkVariant = MdiIcons.linkVariant;
