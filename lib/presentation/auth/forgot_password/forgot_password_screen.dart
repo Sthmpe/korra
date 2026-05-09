@@ -24,7 +24,7 @@ class ForgotPasswordScreen extends StatelessWidget {
         appBar: AppBar(
           centerTitle: false,
           title: Text(
-            ‘Forgot password?’,
+            'Forgot password?',
             style: GoogleFonts.inter(
               fontSize: KorraSizes.fontLg.sp,
               fontWeight: KorraSizes.weightBold,
@@ -38,7 +38,7 @@ class ForgotPasswordScreen extends StatelessWidget {
             children: [
               Gaps.h8,
               Text(
-                ‘No worries. Enter your email and we’ll send a reset link.’,
+                'No worries. Enter your email and we’ll send a reset link.',
                 style: GoogleFonts.inter(
                   fontSize: KorraSizes.fontMd.sp,
                   fontWeight: KorraSizes.weightMedium,
@@ -58,7 +58,7 @@ class ForgotPasswordScreen extends StatelessWidget {
                     Get.back();
                   },
                   child: Text(
-                    ‘Back to sign in’,
+                    'Back to sign in',
                     style: GoogleFonts.inter(
                       fontSize: KorraSizes.fontMd.sp,
                       color: Theme.of(context).colorScheme.primary,
