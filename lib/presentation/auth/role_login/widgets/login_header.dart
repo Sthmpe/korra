@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
+import '../../../../config/theme/gaps.dart';
 
 class LoginHeader extends StatelessWidget {
   const LoginHeader({super.key});
@@ -20,7 +21,7 @@ class LoginHeader extends StatelessWidget {
             Container(
               height: 100.h,
               width: 100.h,
-              padding: EdgeInsets.all(2.r),
+              padding: EdgeInsets.all(KorraSizes.s2.r),
               decoration: BoxDecoration(
                 color: KorraColors.brand,
                 borderRadius: BorderRadius.circular(20.r),
@@ -42,7 +43,7 @@ class LoginHeader extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 20.h),
+            Gaps.h20,
 
             // --- BRAND NAME ---
             Text(
@@ -55,7 +56,7 @@ class LoginHeader extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 8.h),
+            Gaps.h8,
 
             // --- SUBTITLE ---
             Padding(
@@ -65,7 +66,7 @@ class LoginHeader extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: KorraSizes.fontMdHalf.sp,
-                  color: const Color(0xFF666666),
+                  color: KorraColors.labelGrey,
                   height: KorraSizes.lineHeightMd,
                   fontWeight: KorraSizes.weightMedium,
                 ),

@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../config/constants/buttons.dart';
+import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
@@ -82,7 +83,7 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
                           width: KorraButtons.spinnerLg.w,
                           height: KorraButtons.spinnerLg.w,
                           child: const CircularProgressIndicator(
-                            color: Colors.white,
+                            color: KorraColors.white,
                             strokeWidth: KorraButtons.spinnerStroke,
                           ),
                         )

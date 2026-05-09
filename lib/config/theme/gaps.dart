@@ -19,8 +19,11 @@ class Gaps {
   static SizedBox h40 = SizedBox(height: 40.h);
   static SizedBox h48 = SizedBox(height: 48.h);
   static SizedBox h50 = SizedBox(height: 50.h); // legacy
+  static SizedBox h54 = SizedBox(height: 54.h);
   static SizedBox h56 = SizedBox(height: 56.h);
+  static SizedBox h60 = SizedBox(height: 60.h);
   static SizedBox h64 = SizedBox(height: 64.h);
+  static SizedBox h80 = SizedBox(height: 80.h);
 
   // -- Horizontal -------------------------------------------------------
   static SizedBox w4  = SizedBox(width: 4.w);

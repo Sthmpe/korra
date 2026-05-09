@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
-
 import '../../../config/constants/buttons.dart';
+import '../../../config/constants/icons.dart';
 import '../../../config/constants/sizes.dart';
+import '../../../config/theme/gaps.dart';
 import '../../../config/routes/app_routes.dart';
 
 class ResetLinkSentScreen extends StatelessWidget {
@@ -30,31 +30,31 @@ class ResetLinkSentScreen extends StatelessWidget {
         child: Column(
           children: [
             SizedBox(height: 80.h),
-            const Icon(Iconsax.message_favorite, size: 88),
-            SizedBox(height: 24.h),
+            Icon(KorraIcons.messageFavorite, size: 88),
+            Gaps.h24,
             Text(
               'Check your email',
               style: GoogleFonts.inter(
-                fontSize: 32.sp,
-                fontWeight: FontWeight.w700,
+                fontSize: KorraSizes.font5xl.sp,
+                fontWeight: KorraSizes.weightBold,
               ),
             ),
-            SizedBox(height: 20.h),
+            Gaps.h20,
             Text(
               'We sent a password reset link to ${_mask(email)}.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w500,
+                fontSize: KorraSizes.fontXl.sp,
+                fontWeight: KorraSizes.weightMedium,
               ),
             ),
             SizedBox(height: 60.h),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {}, // later: open mail app
+                onPressed: () {},
                 style: FilledButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 14.h),
+                  padding: EdgeInsets.symmetric(vertical: KorraSizes.s14.h),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
                   ),
@@ -62,20 +62,20 @@ class ResetLinkSentScreen extends StatelessWidget {
                 child: Text(
                   'Open mail app',
                   style: GoogleFonts.inter(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w700,
+                    fontSize: KorraSizes.fontLg.sp,
+                    fontWeight: KorraSizes.weightBold,
                   ),
                 ),
               ),
             ),
-            SizedBox(height: 20.h),
+            Gaps.h20,
             TextButton(
               onPressed: () => Get.back(),
               child: Text(
                 'Use a different email',
                 style: GoogleFonts.inter(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
+                  fontSize: KorraSizes.fontLg.sp,
+                  fontWeight: KorraSizes.weightBold,
                 ),
               ),
             ),
@@ -84,8 +84,8 @@ class ResetLinkSentScreen extends StatelessWidget {
               child: Text(
                 'Back to sign in',
                 style: GoogleFonts.inter(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
+                  fontSize: KorraSizes.fontLg.sp,
+                  fontWeight: KorraSizes.weightBold,
                 ),
               ),
             ),

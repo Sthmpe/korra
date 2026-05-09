@@ -80,4 +80,24 @@ class KorraPaddings {
   // -- Only sides -------------------------------------------------------
   static EdgeInsets get bottomNav => EdgeInsets.only(bottom: KorraSizes.s8.h);
   static EdgeInsets get topBar    => EdgeInsets.only(top: KorraSizes.s12.h);
+  static EdgeInsets get top2      => EdgeInsets.only(top: KorraSizes.s2.h);
+  static EdgeInsets get top20     => EdgeInsets.only(top: KorraSizes.s20.h);
+  static EdgeInsets get bottom8   => EdgeInsets.only(bottom: KorraSizes.s8.h);
+  static EdgeInsets get right12   => EdgeInsets.only(right: KorraSizes.s12.w);
+
+  // -- Auth-specific compound padding -----------------------------------
+  static EdgeInsets get v10 =>
+      EdgeInsets.symmetric(vertical: KorraSizes.s10.h);
+  static EdgeInsets get h35 =>
+      EdgeInsets.symmetric(horizontal: KorraSizes.s35.w);
+  static EdgeInsets get headerBar =>
+      EdgeInsets.symmetric(horizontal: KorraSizes.s20.w, vertical: KorraSizes.s16.h);
+  static EdgeInsets get chipContent =>
+      EdgeInsets.symmetric(horizontal: KorraSizes.s16.w, vertical: KorraSizes.s10.h);
+  static EdgeInsets get sheetFailure =>
+      EdgeInsets.fromLTRB(KorraSizes.s20.w, KorraSizes.s16.h, KorraSizes.s20.w, KorraSizes.s20.h);
+  static EdgeInsets get legalContent =>
+      EdgeInsets.fromLTRB(KorraSizes.s20.w, KorraSizes.s20.h, KorraSizes.s20.w, KorraSizes.s40.h);
+  static EdgeInsets get bulletMargin =>
+      EdgeInsets.only(top: KorraSizes.s7.h, right: KorraSizes.s10.w);
 }

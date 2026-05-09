@@ -3,18 +3,22 @@ import 'package:flutter/material.dart';
 /// Raw numeric constants. Apply screenutil extensions in widgets (.r / .h / .w / .sp).
 class KorraSizes {
   // -- Radius -----------------------------------------------------------
-  static const xs          =  4.0; // tiny badge / pill corner
-  static const sm          =  8.0; // small chip / tag
-  static const chipRadius  = 10.0; // filter chips
-  static const fieldRadius = 12.0; // input fields
-  static const cardRadius  = 16.0; // cards
-  static const sheetRadius = 24.0; // bottom sheets
-  static const pillRadius  = 999.0; // fully rounded pill button / badge
+  static const xs           =  4.0; // tiny badge / pill corner
+  static const sm           =  8.0; // small chip / tag
+  static const chipRadius   = 10.0; // filter chips
+  static const fieldRadius  = 12.0; // input fields
+  static const cardRadius   = 16.0; // cards
+  static const sheetRadius  = 24.0; // bottom sheets
+  static const segmentRadius = 14.0; // segment control outer bg
+  static const logoRadius   = 18.0; // logo / avatar corner
+  static const pillRadius   = 999.0; // fully rounded pill button / badge
 
   // -- Spacing scale (raw numbers for padding and Gaps) -----------------
   static const s2  =  2.0;
   static const s4  =  4.0;
+  static const s5  =  5.0;
   static const s6  =  6.0;
+  static const s7  =  7.0;
   static const s8  =  8.0;
   static const s10 = 10.0;
   static const s12 = 12.0;
@@ -24,6 +28,7 @@ class KorraSizes {
   static const s24 = 24.0;
   static const s28 = 28.0;
   static const s32 = 32.0;
+  static const s35 = 35.0;
   static const s36 = 36.0;
   static const s40 = 40.0;
   static const s48 = 48.0;

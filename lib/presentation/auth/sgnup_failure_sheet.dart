@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
-
 import '../../config/constants/buttons.dart';
 import '../../config/constants/colors.dart';
+import '../../config/constants/icons.dart';
+import '../../config/constants/paddings.dart';
 import '../../config/constants/sizes.dart';
+import '../../config/theme/gaps.dart';
 
 /// Failure bottom sheet shown during signup flows.
 class SignupFailureSheet extends StatelessWidget {
@@ -24,7 +25,7 @@ class SignupFailureSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 20.h),
+      padding: KorraPaddings.sheetFailure,
       decoration: BoxDecoration(
         color: KorraColors.bg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(KorraSizes.sheetRadius.r)),
@@ -34,18 +35,18 @@ class SignupFailureSheet extends StatelessWidget {
         children: [
           // --- Handle bar ---
           Container(
-            width: 40.w,
-            height: 4.h,
+            width: KorraSizes.s40.w,
+            height: KorraSizes.s4.h,
             decoration: BoxDecoration(
               color: KorraColors.border,
               borderRadius: BorderRadius.circular(KorraSizes.xs.r),
             ),
           ),
-          SizedBox(height: 24.h),
+          Gaps.h24,
 
           // --- Warning Icon ---
-          Icon(Iconsax.warning_2, size: KorraSizes.font6xl.sp, color: KorraColors.danger),
-          SizedBox(height: 16.h),
+          Icon(KorraIcons.warning, size: KorraSizes.font6xl.sp, color: KorraColors.danger),
+          Gaps.h16,
 
           // --- Title ---
           Text(
@@ -56,7 +57,7 @@ class SignupFailureSheet extends StatelessWidget {
               fontWeight: KorraSizes.weightBold,
             ),
           ),
-          SizedBox(height: 8.h),
+          Gaps.h8,
 
           // --- Message ---
           Text(
@@ -68,7 +69,7 @@ class SignupFailureSheet extends StatelessWidget {
               height: KorraSizes.lineHeightNormal,
             ),
           ),
-          SizedBox(height: 24.h),
+          Gaps.h24,
 
           // --- Try Again & Cancel Row ---
           Row(
@@ -91,7 +92,7 @@ class SignupFailureSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(width: 12.w),
+              Gaps.w12,
 
               // Try Again
               Expanded(
@@ -108,7 +109,7 @@ class SignupFailureSheet extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: KorraSizes.fontLg.sp,
                         fontWeight: KorraSizes.weightBold,
-                        color: Colors.white,
+                        color: KorraColors.white,
                       ),
                     ),
                   ),
@@ -116,7 +117,7 @@ class SignupFailureSheet extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 16.h),
+          Gaps.h16,
         ],
       ),
     );

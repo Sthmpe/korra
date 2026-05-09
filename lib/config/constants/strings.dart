@@ -186,4 +186,129 @@ class KorraStrings {
   static const productStockPrefix = 'Stock: ';
   static const productPaidPct     = '% Paid';
   static const productOf          = 'of ';
+
+  // -- Auth / Login -----------------------------------------------------
+  static const roleCustomer         = 'Customer';
+  static const roleVendor           = 'Vendor';
+  static const labelBiometricOr     = ' Or use biometric authentication ';
+  static const signInAsCustomer     = 'Sign in as Customer';
+  static const signInAsMerchant     = 'Sign in as Merchant';
+  static const forgotPasswordLabel  = 'Forgot password?';
+  static const actionCreateAccountLink = 'Create account';
+
+  // -- Forgot password / Reset link ------------------------------------
+  static const forgotPasswordHint      = "No worries. Enter your email and we'll send a reset link.";
+  static const labelEmailLower         = 'Email address';
+  static const actionSendResetLink     = 'Send reset link';
+  static const actionBackToSignIn      = 'Back to sign in';
+  static const resetLinkSentTitle      = 'Check your email';
+  static const actionOpenMailApp       = 'Open mail app';
+  static const actionUseDifferentEmail = 'Use a different email';
+
+  // -- Signup screens --------------------------------------------------
+  static const createCustomerAccountTitle   = 'Create Customer Account';
+  static const createBusinessAccountTitle   = 'Create Business Account';
+  static const actionCreateAccount          = 'Create Account';
+  static const actionContinue               = 'Continue';
+  static const snackAccountCreated          = 'Account created successfully!';
+  static const snackBusinessAccountCreated  = 'Your business account has been created successfully.';
+  static const signupFailedTitle            = 'Signup Failed';
+  static const signupFailedDefault          = 'An unknown error occurred during signup.';
+  static const snackAgreeToTerms            = 'Please agree to the terms to continue.';
+
+  // -- Signup step titles / hints --------------------------------------
+  static const stepPersonalTitle       = 'Personal Details';
+  static const stepPersonalHint        = 'We need this to verify your identity later.';
+  static const stepStoreTitle          = 'Store Details';
+  static const stepStoreHint           = 'Tell us about your shop and where customers can find you.';
+  static const stepDigitalTitle        = 'Digital Presence';
+  static const stepDigitalHint         = 'Where can customers verify your business? Please provide at least 3 distinct links.';
+  static const stepReviewCustomerTitle = 'Review & Consent';
+  static const stepReviewCustomerHint  = 'Please double check your details before creating your account.';
+  static const stepReviewVendorTitle   = 'Review Application';
+  static const stepReviewVendorHint    = 'Please confirm your basic details before creating your account.';
+
+  // -- Form labels -----------------------------------------------------
+  static const labelFirstName    = 'First Name';
+  static const labelLastName     = 'Last Name';
+  static const labelOtherName    = 'Other Name';
+  static const labelPhoneNumber  = 'Phone Number';
+  static const labelEmailAddress = 'Email Address';
+  static const labelPassword     = 'Password';
+
+  // -- Form hints ------------------------------------------------------
+  static const hintFirstName   = 'e.g. John';
+  static const hintLastName    = 'e.g. Doe';
+  static const hintOptional    = 'Optional';
+  static const hintPhoneNumber = '080...';
+  static const hintEmail       = 'you@example.com';
+
+  // -- Store / categories ----------------------------------------------
+  static const labelStoreName        = 'Store Name';
+  static const hintStoreName         = 'e.g. Amazing Gadgets';
+  static const labelCategories       = 'Categories';
+  static const labelCategoryLimit    = 'Select 1-5';
+  static const hintSearchCategories  = 'Search categories...';
+  static const errorSelectCategory   = 'Select at least one category';
+  static const errorMaxCategories    = 'Maximum 5 categories allowed';
+  static const labelWhereSell        = 'Where do you sell?';
+  static const presenceOnline        = 'Online';
+  static const presencePhysical      = 'Physical';
+  static const presenceBoth          = 'Both';
+
+  // -- Social links ----------------------------------------------------
+  static const labelInstagram         = 'Instagram';
+  static const labelTwitterX          = 'Twitter / X';
+  static const labelWhatsAppGroup     = 'WhatsApp Group';
+  static const labelWebsite           = 'Website';
+  static const labelWebsiteStore      = 'Website / Store Link';
+  static const labelFacebook          = 'Facebook';
+  static const labelTikTok            = 'TikTok';
+  static const labelOtherLinktree     = 'Other (Linktree)';
+  static const labelOtherLinktreeEtc  = 'Other (Linktree, etc)';
+
+  // -- Review card labels ----------------------------------------------
+  static const reviewLabelFullName    = 'Full Name';
+  static const reviewLabelEmailAddress = 'Email Address';
+  static const reviewLabelPhoneNumber = 'Phone Number';
+  static const reviewLabelPhone       = 'Phone';
+  static const reviewLabelStoreName   = 'Store Name';
+  static const reviewLabelPresence    = 'Presence';
+  static const reviewLabelCategories  = 'Categories';
+  static const reviewSectionOwner     = 'Owner Details';
+  static const reviewSectionStore     = 'Store Details';
+  static const reviewSectionSocial    = 'Social Presence';
+  static const reviewNoLinks          = 'No links provided';
+
+  // -- Legal consent ---------------------------------------------------
+  static const legalTermsOfService      = 'Terms of Service';
+  static const legalPrivacyPolicy       = 'Privacy Policy';
+  static const legalVendorPartnership   = 'Vendor Partnership Agreement';
+  static const legalConsentCustomerPrefix = "By creating an account, you confirm that you have read and agree to Korra's ";
+  static const legalConsentVendorPrefix = "By checking this box, I agree to Korra's ";
+  static const legalConsentAnd          = ' and ';
+  static const legalConsentComma        = ', ';
+
+  // -- Legal PDF screen ------------------------------------------------
+  static const legalMerchantTermsTitle   = 'Merchant Terms of Service';
+  static const legalPartnershipTitle     = 'Partnership & Integrity Policy';
+  static const legalMerchantPrivacyTitle = 'Merchant Privacy Policy';
+  static const legalCustomerTermsTitle   = 'Customer Terms of Service';
+  static const legalCustomerPrivacyTitle = 'Privacy Policy';
+  static const documentLoadingPrefix     = 'Loading Document... ';
+  static const documentLoadError         = 'Failed to load document.\nPlease check your connection.';
+
+  // -- Progress bar ----------------------------------------------------
+  static const progressRequirementMet = 'Requirement Met';
+  static const progressLinksAdded     = ' Links Added';
+  static const progressAddMoreSuffix  = ' more to continue.';
+
+  // -- Validation messages ---------------------------------------------
+  static const validationEmailRequired    = 'Email is required';
+  static const validationEmailInvalid     = 'Enter a valid email';
+  static const validationPasswordRequired = 'Password is required';
+  static const validationPasswordMin      = 'Minimum 6 characters';
+  static const validationRequired         = 'Required';
+  static const validationPhoneInvalid     = 'Enter a valid phone number';
+  static const validationAddMoreLinks     = 'Add more links';
 }

@@ -7,6 +7,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
+import '../../../../config/theme/gaps.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -25,8 +26,8 @@ class RoleSelector extends StatelessWidget {
           height: 52.h, // Compact, standard mobile height
           padding: EdgeInsets.all(4.r), // The gap between edge and pill
           decoration: BoxDecoration(
-            color: const Color(0xFFF2F2F7), // The specific "iOS System Grey"
-            borderRadius: BorderRadius.circular(14.r), // Slightly tighter radius
+            color: KorraColors.surfaceCool,
+            borderRadius: BorderRadius.circular(KorraSizes.segmentRadius.r),
           ),
           child: Stack(
             children: [
@@ -41,7 +42,7 @@ class RoleSelector extends StatelessWidget {
                   height: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10.r),
+                    borderRadius: BorderRadius.circular(KorraSizes.chipRadius.r),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.12), // Apple-style shadow
@@ -127,18 +128,18 @@ class _RoleTab extends StatelessWidget {
               child: Icon(
                 isActive ? activeIcon : icon,
                 key: ValueKey(isActive),
-                size: 18.sp,
-                color: isActive ? const Color(0xFF1C1C1E) : KorraColors.textSecondary,
+                size: KorraSizes.fontXl.sp,
+                color: isActive ? KorraColors.iosBlack : KorraColors.textSecondary,
               ),
             ),
-            SizedBox(width: 6.w),
+            Gaps.w6,
             // Animated Text Style
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: GoogleFonts.inter(
                 fontSize: KorraSizes.fontSmPlusH.sp,
                 fontWeight: isActive ? KorraSizes.weightSemiBold : KorraSizes.weightMedium,
-                color: isActive ? const Color(0xFF1C1C1E) : KorraColors.textSecondary,
+                color: isActive ? KorraColors.iosBlack : KorraColors.textSecondary,
                 letterSpacing: KorraSizes.trackingMinus3,
               ),
               child: Text(title),

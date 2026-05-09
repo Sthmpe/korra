@@ -4,9 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 
 import '../../../../../config/constants/colors.dart';
+import '../../../../../config/constants/icons.dart';
+import '../../../../../config/constants/paddings.dart';
+import '../../../../../config/constants/sizes.dart';
+import '../../../../../config/theme/gaps.dart';
 import '../../../../../config/validators/validators.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
 import '../../../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
@@ -26,7 +29,6 @@ class _StepPersonalState extends State<StepPersonal> {
   late final TextEditingController _phoneCtl;
   late final TextEditingController _emailCtl;
 
-  // Focus Nodes
   final _firstFocus = FocusNode();
   final _lastFocus = FocusNode();
   final _otherFocus = FocusNode();
@@ -88,7 +90,7 @@ class _StepPersonalState extends State<StepPersonal> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.symmetric(horizontal: 20.w),
+      padding: KorraPaddings.pageH,
       child: Form(
         key: widget.formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -98,22 +100,22 @@ class _StepPersonalState extends State<StepPersonal> {
             Text(
               'Personal Details',
               style: GoogleFonts.inter(
-                fontSize: 24.sp,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF111111),
-                letterSpacing: -0.8,
+                fontSize: KorraSizes.font3xl.sp,
+                fontWeight: KorraSizes.weightExtraBold,
+                color: KorraColors.nearBlack,
+                letterSpacing: KorraSizes.trackingTight,
               ),
             ),
-            SizedBox(height: 8.h),
+            Gaps.h8,
             Text(
               'We need this to verify your identity later.',
               style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                color: const Color(0xFF666666),
-                height: 1.4,
+                fontSize: KorraSizes.fontMd.sp,
+                color: KorraColors.labelGrey,
+                height: KorraSizes.lineHeightMd,
               ),
             ),
-            SizedBox(height: 32.h),
+            Gaps.h32,
 
             // --- ROW: FIRST & LAST NAME ---
             Row(
@@ -133,7 +135,7 @@ class _StepPersonalState extends State<StepPersonal> {
                         FocusScope.of(context).requestFocus(_lastFocus),
                   ),
                 ),
-                SizedBox(width: 16.w),
+                Gaps.w16,
                 Expanded(
                   child: _PremiumInput(
                     controller: _lastCtl,
@@ -150,7 +152,7 @@ class _StepPersonalState extends State<StepPersonal> {
                 ),
               ],
             ),
-            SizedBox(height: 24.h),
+            Gaps.h24,
 
             // --- OTHER NAME ---
             _PremiumInput(
@@ -164,8 +166,8 @@ class _StepPersonalState extends State<StepPersonal> {
               onSubmitted: (_) =>
                   FocusScope.of(context).requestFocus(_phoneFocus),
             ),
-            SizedBox(height: 24.h),
-    
+            Gaps.h24,
+
             // --- PHONE ---
             _PremiumInput(
               controller: _phoneCtl,
@@ -173,26 +175,26 @@ class _StepPersonalState extends State<StepPersonal> {
               label: 'Phone Number',
               hint: '080...',
               inputType: TextInputType.phone,
-              suffixIcon: Icon(Iconsax.call, color: Colors.grey.shade400, size: 20.sp),
+              suffixIcon: Icon(KorraIcons.phone, color: KorraColors.greyShade400, size: KorraSizes.iconMd.sp),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Required';
                 if (v.trim().length != 11) return 'Enter a valid phone number';
                 return null;
               },
             ),
-            SizedBox(height: 24.h),
-    
-            // --- 🚀 EMAIL (Read-Only) ---
+            Gaps.h24,
+
+            // --- EMAIL (Read-Only) ---
             _PremiumInput(
               controller: _emailCtl,
               focusNode: _emailFocus,
               label: 'Email Address',
               hint: 'you@example.com',
-              readOnly: true, // 🚀 Locks it
-              suffixIcon: Icon(Iconsax.tick_circle, color: Colors.green, size: 20.sp), // 🚀 Shows verified
+              readOnly: true,
+              suffixIcon: Icon(KorraIcons.successOutline, color: KorraColors.receiptCredit, size: KorraSizes.iconMd.sp),
             ),
 
-            SizedBox(height: 40.h),
+            Gaps.h40,
           ],
         ),
       ),
@@ -256,29 +258,27 @@ class _PremiumInputState extends State<_PremiumInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. THE LABEL (Outside)
         Text(
           widget.label,
           style: GoogleFonts.inter(
             fontSize: 13.sp,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFF111111), // Solid black for label
+            color: KorraColors.nearBlack,
           ),
         ),
-        SizedBox(height: 8.h),
+        Gaps.h8,
 
-        // 2. THE INPUT BOX
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: widget.readOnly 
-                ? const Color(0xFFF0F0F0) 
-                : (_isFocused ? Colors.white : const Color(0xFFF7F7F7)), // Very subtle grey when inactive
-            borderRadius: BorderRadius.circular(12.r),
+            color: widget.readOnly
+                ? KorraColors.readOnlyBg
+                : (_isFocused ? KorraColors.white : KorraColors.inputBgInactive),
+            borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
             border: Border.all(
               color: _isFocused
                   ? KorraColors.brand
-                  : const Color(0xFFE5E5E5), // Brand or light grey
+                  : KorraColors.inputBorderInactive,
               width: 1,
             ),
             boxShadow: _isFocused
@@ -302,47 +302,43 @@ class _PremiumInputState extends State<_PremiumInput> {
               widget.onSubmitted?.call(v);
             },
             style: GoogleFonts.inter(
-              fontSize: 15.sp,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF1B1B1B),
+              fontSize: KorraSizes.fontMdPlus.sp,
+              fontWeight: KorraSizes.weightSemiBold,
+              color: KorraColors.black,
             ),
             cursorColor: KorraColors.brand,
             decoration: InputDecoration(
               hintText: widget.hint,
               hintStyle: GoogleFonts.inter(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w400,
-                color: const Color(0xFFAAAAAA), // Softer placeholder
+                fontSize: KorraSizes.fontMd.sp,
+                fontWeight: KorraSizes.weightRegular,
+                color: KorraColors.inputPlaceholder,
               ),
               suffixIcon: widget.suffixIcon,
               border: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(12.r),
+                borderSide: const BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
               enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(12.r), 
+                borderSide: const BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(12.r),
+                borderSide: const BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
               errorBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(12.r),
+                borderSide: const BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
               focusedErrorBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(12.r),
+                borderSide: const BorderSide(color: Colors.transparent),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16.w,
-                vertical: 14.h,
-              ),
-              // Hide error here, we can show it below if needed, or keep it simple
+              contentPadding: KorraPaddings.inputContent,
               errorStyle: GoogleFonts.inter(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w500,
+                fontSize: KorraSizes.fontSm.sp,
+                fontWeight: KorraSizes.weightMedium,
               ),
             ),
             validator: widget.validator,

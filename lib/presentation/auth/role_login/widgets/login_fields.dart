@@ -4,10 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/icons.dart';
+import '../../../../config/constants/paddings.dart';
+import '../../../../config/constants/sizes.dart';
 import '../../../../config/routes/app_routes.dart';
+import '../../../../config/theme/gaps.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -83,7 +86,7 @@ class _LoginFieldsState extends State<LoginFields> {
             controller: _emailCtl,
             focusNode: _emailFocus,
             hint: 'Email address',
-            icon: Iconsax.sms,
+            icon: KorraIcons.email,
             inputType: TextInputType.emailAddress,
             autofill: const [AutofillHints.email],
             validator: _validateEmail,
@@ -91,8 +94,8 @@ class _LoginFieldsState extends State<LoginFields> {
               FocusScope.of(context).requestFocus(_passFocus);
             },
           ),
-          
-          SizedBox(height: 16.h),
+
+          Gaps.h16,
 
           // --- PASSWORD FIELD ---
           BlocBuilder<RoleLoginBloc, RoleLoginState>(
@@ -102,7 +105,7 @@ class _LoginFieldsState extends State<LoginFields> {
                 controller: _passCtl,
                 focusNode: _passFocus,
                 hint: 'Password',
-                icon: Iconsax.lock,
+                icon: KorraIcons.lock,
                 isPassword: true,
                 obscureText: state.passwordHidden,
                 autofill: const [AutofillHints.password],
@@ -110,13 +113,12 @@ class _LoginFieldsState extends State<LoginFields> {
                 onTogglePass: () => context.read<RoleLoginBloc>().add(TogglePasswordVisibility()),
                 onSubmitted: (_) {
                   FocusScope.of(context).unfocus();
-                  // Trigger login submit here if you want "Enter" to log in
                 },
               );
             },
           ),
 
-          SizedBox(height: 24.h),
+          Gaps.h24,
 
           // --- BOTTOM LINKS ---
           Row(
@@ -130,21 +132,20 @@ class _LoginFieldsState extends State<LoginFields> {
                 child: Text(
                   'Forgot password?',
                   style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13.5.sp,
-                    color: KorraColors.textMuted, // Muted for secondary action
+                    fontWeight: KorraSizes.weightSemiBold,
+                    fontSize: KorraSizes.fontSmPlusH.sp,
+                    color: KorraColors.textMuted,
                   ),
                 ),
               ),
-              
               GestureDetector(
                 onTap: () => _goToCreateAccount(context),
                 child: Text(
                   'Create account',
                   style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5.sp,
-                    color: KorraColors.brand, // Brand color for primary call
+                    fontWeight: KorraSizes.weightBold,
+                    fontSize: KorraSizes.fontSmPlusH.sp,
+                    color: KorraColors.brand,
                   ),
                 ),
               ),
@@ -217,9 +218,8 @@ class _PremiumInputState extends State<_PremiumInput> {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        // iOS Style: Grey fill normally, White fill when active
-        color: _isFocused ? Colors.white : const Color(0xFFF2F2F7),
-        borderRadius: BorderRadius.circular(16.r),
+        color: _isFocused ? KorraColors.white : KorraColors.surfaceCool,
+        borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
         border: Border.all(
           color: _isFocused ? KorraColors.brand : Colors.transparent,
           width: 1,
@@ -245,26 +245,25 @@ class _PremiumInputState extends State<_PremiumInput> {
           widget.onSubmitted?.call(v);
         },
         style: GoogleFonts.inter(
-          fontSize: 15.sp,
-          fontWeight: FontWeight.w600, // Slightly bold input
-          color: const Color(0xFF1B1B1B),
+          fontSize: KorraSizes.fontMdPlus.sp,
+          fontWeight: KorraSizes.weightSemiBold,
+          color: KorraColors.black,
         ),
         cursorColor: KorraColors.brand,
         decoration: InputDecoration(
           isDense: true,
           hintText: widget.hint,
           hintStyle: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF9CA3AF), // Cool Grey
+            fontSize: KorraSizes.fontMd.sp,
+            fontWeight: KorraSizes.weightMedium,
+            color: KorraColors.inputIconGrey,
           ),
           prefixIcon: Icon(
             widget.icon,
-            size: 20.sp,
-            color: _isFocused ? KorraColors.brand : const Color(0xFF9CA3AF),
+            size: KorraSizes.iconMd.sp,
+            color: _isFocused ? KorraColors.brand : KorraColors.inputIconGrey,
           ),
-          prefixIconConstraints: BoxConstraints(minWidth: 48.w),
-          
+          prefixIconConstraints: BoxConstraints(minWidth: KorraSizes.s48.w),
           suffixIcon: widget.isPassword
               ? IconButton(
                   splashRadius: 20,
@@ -272,46 +271,39 @@ class _PremiumInputState extends State<_PremiumInput> {
                   icon: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child: Icon(
-                      widget.obscureText ? Iconsax.eye : Iconsax.eye_slash,
+                      widget.obscureText ? KorraIcons.eye : KorraIcons.eyeOff,
                       key: ValueKey(widget.obscureText),
-                      size: 20.sp,
-                      color: const Color(0xFF9CA3AF),
+                      size: KorraSizes.iconMd.sp,
+                      color: KorraColors.inputIconGrey,
                     ),
                   ),
                 )
               : null,
-          
           border: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(16.r), 
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.transparent),
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16.w,
-                vertical: 14.h,
-              ),
-
-          
-          // Handle error state visually inside the container
+            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+          ),
+          contentPadding: KorraPaddings.inputContent,
           errorStyle: GoogleFonts.inter(
-            fontSize: 12.sp,
-            color: Colors.red.shade600,
-            fontWeight: FontWeight.w500,
+            fontSize: KorraSizes.fontSm.sp,
+            color: KorraColors.error,
+            fontWeight: KorraSizes.weightMedium,
           ),
         ),
         validator: widget.validator,

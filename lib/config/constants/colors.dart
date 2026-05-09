@@ -110,4 +110,26 @@ class KorraColors {
 
   // -- External services ------------------------------------------------
   static const whatsappGreen = Color(0xFF25D366);
+  static const instagram     = Color(0xFFE1306C);
+  static const facebook      = Color(0xFF1877F2);
+
+  // -- Auth / Input tokens ----------------------------------------------
+  static const surfaceCool        = Color(0xFFF2F2F7);
+  static const labelGrey          = Color(0xFF666666);
+  static const inputIconGrey      = Color(0xFF9CA3AF);
+  static const inputPlaceholder   = Color(0xFFAAAAAA);
+  static const inputBgInactive    = Color(0xFFF7F7F7);
+  static const inputBorderInactive = Color(0xFFE5E5E5);
+  static const dividerSubtle      = Color(0xFFF0F0F0);
+  static const legalBorder        = Color(0xFFF3F4F6);
+  static const borderCool         = Color(0xFFE5E7EB);
+  static const textBodyCool       = Color(0xFF4B5563);
+  static const iosBlack           = Color(0xFF1C1C1E);
+  static const successText        = Color(0xFF15803D);
+  static const warningText        = Color(0xFFC2410C);
+  static const progressSuccessBg  = Color(0xFFF0FDF4);
+  static const progressSuccessBorder = Color(0xFFBBF7D0);
+  static const black54            = Color(0x8A000000);
+  static const errorIconLight     = Color(0xFFE57373);
+  static const readOnlyBg         = Color(0xFFF0F0F0);
 }
