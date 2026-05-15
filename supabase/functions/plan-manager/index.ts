@@ -333,69 +333,60 @@ serve(async (req) => {
                 const price = to2DP(product.price);
                 const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
 
-                // 1. 🧹 THE MANDATORY SWEEP
-                // Rule: "Store Credit First. Always." 
-                // We take all available credit, capped only by the product price.
+                // 1. 🔮 PREDICT THE EXACT "PAY IN FULL" PAYLOAD (Gross)
+                // The UI sends amount = (Target Principal + Processing Fee)
+                const maxPossibleCreditSweep = (availableStoreCredit >= price) ? price : availableStoreCredit;
+                const maxPossibleCashPortion = to2DP(price - maxPossibleCreditSweep);
+                
+                let possibleFeeCash = maxPossibleCashPortion > 0 ? calculateZoneFee(maxPossibleCashPortion) : 0;
+                let possibleFeeCredit = maxPossibleCreditSweep > 0 ? Math.max(calculateZoneFee(maxPossibleCreditSweep) * 0.10, 100) : 0;
+                const expectedFullPaymentFee = to2DP(possibleFeeCash + possibleFeeCredit);
+                
+                const expectedFullPaymentPayload = to2DP(price + expectedFullPaymentFee);
+
+                // 2. 🕵️‍♂️ DETECT PAYMENT INTENT
+                // If the `amount` from the UI matches the Full Payment Payload, they clicked the toggle!
+                const isFullPayment = amount >= (expectedFullPaymentPayload - 0.01);
+
+                // 3. 🧹 THE SWEEP (Strictly Enforced)
                 let creditSweep = 0;
-                if (availableStoreCredit > 0) {
-                    creditSweep = (availableStoreCredit >= price) ? price : availableStoreCredit;
+                if (isFullPayment) {
+                    creditSweep = maxPossibleCreditSweep; // Unlocked!
+                } else {
+                    creditSweep = 0; // Strictly Locked for installments
                 }
 
-                // 2. 🧮 CALCULATE FEE (The Split)
-                const cashPortionOfPrice = price - creditSweep;
-
-                // Fee on Cash Part (Standard Zone Logic)
-                let feeCashPart = 0;
-                if (cashPortionOfPrice > 0) {
-                    feeCashPart = calculateZoneFee(cashPortionOfPrice);
-                }
-
-                // Fee on Credit Part (10% Rule)
-                let feeCreditPart = 0;
-                if (creditSweep > 0) {
-                    const standard = calculateZoneFee(creditSweep);
-                    // Apply 10% logic, ensure min N100
-                    feeCreditPart = Math.max(standard * 0.10, 100); 
-                }
-
+                // 4. 🧮 CALCULATE ACTUAL FEES FOR THIS TRANSACTION
+                const unadjustedCashPortionOfPrice = to2DP(price - creditSweep);
+                let feeCashPart = unadjustedCashPortionOfPrice > 0 ? calculateZoneFee(unadjustedCashPortionOfPrice) : 0;
+                let feeCreditPart = creditSweep > 0 ? Math.max(calculateZoneFee(creditSweep) * 0.10, 100) : 0;
+                
                 const processingFee = to2DP(feeCashPart + feeCreditPart);
                 
-                // 3. 🔍 DETERMINE USER PAYMENT
-                // The 'amount' from UI is treated as 'User Desired Principal'
-                let userDesiredPrincipal = amount - processingFee;
+                // 5. 🔍 DETERMINE EXACT PAYMENTS
+                let userDesiredPrincipal = to2DP(amount - processingFee);
 
-                // Cap the Principal at the Product Price (Overpayment Protection)
+                // Overpayment Protection
                 if (userDesiredPrincipal > price) {
                     userDesiredPrincipal = price;
                 }
 
-                // 4. 🧱 VALIDATE MINIMUMS
-                // The absolute minimum Principal is max(RiskMin, CreditSweep).
-                const effectiveMinDown = Math.max(requiredPrincipal, creditSweep);
-
-                // if (userDesiredPrincipal < effectiveMinDown) {
-                //     const gap = to2DP(effectiveMinDown - userDesiredPrincipal);
-                //     throw `Payment too low. Min Required: ₦${effectiveMinDown.toLocaleString()}.`;
-                // }
-
                 const userRequiredDownPayment = to2DP(requiredPrincipal);
-                // const minRequiredPrincipal = to2DP(userRequiredDownPayment + processingFee);
 
-                // if (amount < minRequiredPrincipal) throw `Payment too low. Min: ${minRequiredPrincipal}`;
-
-               
-                // 5. 🧮 CALCULATE WHO PAYS WHAT (The Split)
-                let creditUsed = creditSweep; // We always use the full sweep
-
+                // Split the payment between Credit and Cash Wallet
+                let creditUsed = creditSweep;
                 let cashPrincipalNeeded = to2DP(userDesiredPrincipal - creditUsed);
                 if (cashPrincipalNeeded < 0) cashPrincipalNeeded = 0;
 
-                console.log(` - Cash Principal Needed: ₦${cashPrincipalNeeded.toLocaleString()}`);
-
-
-                // Calculate Total Wallet Deduction (Cash Principal + Fee)
+                // How much actually leaves their wallet (Cash Principal + Fee)
                 let walletUsed = to2DP(cashPrincipalNeeded + processingFee);
                 let userPrincipalPayment = to2DP(creditUsed + cashPrincipalNeeded);
+
+                console.log(` - Payment Mode: ${isFullPayment ? "FULL" : "INSTALLMENT"}`);
+                console.log(` - Payload Amount Received: ₦${amount.toLocaleString()}`);
+                console.log(` - Cash Principal Needed: ₦${cashPrincipalNeeded.toLocaleString()}`);
+                console.log(` - Credit Used: ₦${creditUsed.toLocaleString()}`);
+                console.log(` - Total Wallet Deducted: ₦${walletUsed.toLocaleString()}`);
 
                 // 6. 💳 CHECK WALLET BALANCE
                 if (walletBalance < walletUsed) {

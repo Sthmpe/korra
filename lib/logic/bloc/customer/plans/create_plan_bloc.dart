@@ -31,41 +31,44 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
           productId: event.productId,
         );
 
-        // 2. Calculate Tier Logic Locally (Based on Price Table)
         int duration = 14;
         int notice = 3; 
         int extension = 0;
         bool allowExtension = false;
         final price = event.productPrice;
 
-        // --- GRANULAR TIER LOGIC (UPDATED FOR 3M CAP) ---
-        if (price <= 20000) {
-          duration = 14; notice = 3; extension = 0; allowExtension = false;
-        } else if (price <= 120000) {
-            duration = 30; notice = 3; extension = 5; allowExtension = true;
-        } else if (price <= 350000) {
-            duration = 60; notice = 3; extension = 7; allowExtension = true;
-        } else if (price <= 950000) {
-            duration = 90; notice = 3; extension = 7; allowExtension = true;
+        // Check if Merchant provided custom settings
+        if (event.merchantDurationDays != null && event.merchantDurationDays! > 0) {
+            duration = event.merchantDurationDays!;
+            allowExtension = event.allowExtension ?? false;
+            extension = event.extensionDays ?? 0;
+            notice = event.noticeDays ?? 3;
         } else {
-            duration = 120; notice = 3; extension = 7; allowExtension = true;
+            // --- GRANULAR TIER LOGIC (FALLBACK) ---
+            if (price <= 20000) {
+              duration = 14; notice = 3; extension = 0; allowExtension = false;
+            } else if (price <= 120000) {
+                duration = 30; notice = 3; extension = 5; allowExtension = true;
+            } else if (price <= 350000) {
+                duration = 60; notice = 3; extension = 7; allowExtension = true;
+            } else if (price <= 950000) {
+                duration = 90; notice = 3; extension = 7; allowExtension = true;
+            } else {
+                duration = 120; notice = 3; extension = 7; allowExtension = true;
+            }
         }
-
-
 
         emit(
           state.copyWith(
             status: CreatePlanStatus.previewLoaded,
             
-            // Financials from Server
             riskEngineUpfront: (result['minDownPayment'] as num).toDouble(),
-            secureToken: result['secureToken'] as String?, // ✅ Store the key!
+            secureToken: result['secureToken'] as String?, 
             
-            // Computed Display Values
             loanAmount: (price - (result['minDownPayment'] as num)).toDouble(),
             dpPercentage: ((result['minDownPayment'] as num) / price) * 100,
 
-            // Local Tiers
+            // ✅ Write the final calculated days to the state
             baseDurationDays: duration,
             noticeDays: notice,
             extensionDays: extension,
