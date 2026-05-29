@@ -34,7 +34,11 @@ class _ImageUploadBoxState extends State<ImageUploadBox> {
     final bloc = context.read<ImageBloc>();
 
     try {
-      final picked = await picker.pickMultiImage();
+      final picked = await picker.pickMultiImage(
+        maxWidth: 1080,  // Full HD width (Same as Instagram's maximum)
+        maxHeight: 1080, // Full HD height
+        imageQuality: 95, // 👈 95% is visually lossless, but strips out heavy background metadata
+      );
 
       if (picked.isNotEmpty) {
         if (picked.length > 5) {

@@ -47,7 +47,23 @@ serve(async (req) => {
     // =========================================================================
     if (eventType === "SUCCESSFUL_TRANSACTION") {
       const transactionId = eventData.paymentReference;
-      const uid = eventData.product.reference; 
+      let uid = "";
+      
+      // 1. Try to get it from SDK MetaData (Instant Top-Up)
+      if (eventData.metaData && eventData.metaData.customerUid) {
+          uid = eventData.metaData.customerUid;
+      } 
+      // 2. Fallback to Product Reference (Permanent Virtual Account Transfer)
+      else if (eventData.product && eventData.product.reference) {
+          uid = eventData.product.reference; 
+      }
+
+      // Safety check to prevent crashing
+      if (!uid) {
+          console.error("CRITICAL: No UID found in webhook payload:", eventData);
+          return new Response(JSON.stringify({ error: "Missing UID in payload" }), { status: 400 });
+      }
+
       const amountPaid = Number(eventData.amountPaid);
       const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountPaid);
 

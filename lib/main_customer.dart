@@ -39,6 +39,7 @@ void main() async {
       child: KorraApp(
         initialRoute: initialRoute,
         appPages: AppPages.customerRoutes, // 👈 Only Customer + Common routes
+        isMerchant: false,
       ),
     ),
   );

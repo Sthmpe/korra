@@ -1,64 +1,58 @@
+import 'package:flutter/foundation.dart'; // 👈 IMPORT THIS for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:get/get.dart'; // ✅ Import GetX
+import 'package:get/get.dart'; 
 import 'package:google_fonts/google_fonts.dart';
-//import 'config/routes/app_pages.dart'; // ✅ Import AppPages
-// import 'config/routes/app_routes.dart'; // Optional, if needed for unknownRoute
 
 import 'config/theme/app_theme.dart';
 import 'logic/core/net/global_offline_banner.dart';
 import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
 import 'presentation/shared/not_found_screen.dart';
+import 'presentation/shared/pwa/global_install_button.dart';
+
 
 class KorraApp extends StatelessWidget {
-  // 🔄 CHANGED: Now accepts a String Route Name
   const KorraApp({
     super.key, 
     required this.initialRoute,
-    required this.appPages
+    required this.appPages,
+    required this.isMerchant, 
   });
+  
   final String initialRoute;
   final List<GetPage> appPages;
+  final bool isMerchant; 
 
-  // 🔒 Threshold: Any screen wider than this gets the "Blocker"
   static const double kMaxMobileWidth = 600.0;
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp( // ✅ Use GetMaterialApp
+    return GetMaterialApp( 
       debugShowCheckedModeBanner: false,
-      title: 'Korra',
+      title: isMerchant ? 'Korra Business' : 'Korra',
       theme: AppTheme.light(),
-      
-      // 🚀 NAVIGATION SETUP
-      initialRoute: initialRoute, // 1. Set the start route
-      getPages: appPages,  // 2. Load the route map
-      
-      // Fallback for bad URLs
+      initialRoute: initialRoute, 
+      getPages: appPages,  
       unknownRoute: GetPage(
         name: '/not-found', 
         page: () => const NotFoundScreen(),
       ),
 
-      // 🏗️ THE LAYOUT MANAGER
       builder: (context, navigatorChild) {
         final size = MediaQuery.of(context).size;
 
-        // 🛑 1. CHECK: IS IT A DESKTOP/TABLET?
         if (size.width > kMaxMobileWidth) {
           return const _PremiumDesktopBlocker();
         }
 
-        // ✅ 2. IS IT MOBILE?
         return ScreenUtilInit(
           designSize: const Size(430, 932),
           minTextAdapt: true,
           splitScreenMode: true,
           builder: (context, child) {
-            
-            // Text Scaling Safety
             final mediaQuery = MediaQuery.of(context);
+            
             return MediaQuery(
               data: mediaQuery.copyWith(
                 textScaler: mediaQuery.textScaler.clamp(
@@ -68,21 +62,34 @@ class KorraApp extends StatelessWidget {
               ),
               child: Scaffold(
                 resizeToAvoidBottomInset: false,
-                body: Column(
+                // 🚀 3. WRAP YOUR COLUMN IN A STACK
+                body: Stack(
                   children: [
-                    const GlobalOfflineBanner(),
-                    Expanded(
-                      child: KorraOfflineGate(
-                        child: KorraUpdateGate(
-                          child: GestureDetector(
-                            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                            behavior: HitTestBehavior.translucent,
-                            // navigatorChild is the page GetX is showing
-                            child: navigatorChild, 
+                    // Your original app layout
+                    Column(
+                      children: [
+                        const GlobalOfflineBanner(),
+                        Expanded(
+                          child: KorraOfflineGate(
+                            child: KorraUpdateGate(
+                              child: GestureDetector(
+                                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                                behavior: HitTestBehavior.translucent,
+                                child: navigatorChild, 
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
+                    
+                    // 🚀 4. INJECT THE BANNER (ONLY ON WEB)
+                    if (kIsWeb)
+                      GlobalInstallButton(
+                        variant: isMerchant 
+                            ? KorraAppVariant.merchant 
+                            : KorraAppVariant.customer,
+                      ),
                   ],
                 ),
               ),
@@ -90,7 +97,6 @@ class KorraApp extends StatelessWidget {
           },
         );
       },
-      // ❌ REMOVED: home: startScreen (conflicts with initialRoute)
     );
   }
 }

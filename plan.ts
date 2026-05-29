@@ -117,7 +117,7 @@ async function sendFcm(uid: string, title: string, body: string, data: any, coll
 
 // CONSTANTS
 const PLATFORM_FEE_PERCENTAGE = 0.0; // Vendor side fee — currently 0
- 
+
 // ✅ CUSTOMER SIDE FEE CONSTANTS
 const CUSTOMER_FEE_RATE = 0.035;           // 3.5% on cash payments
 const STORE_FEE_RATE = 0.035 * 0.10;      // 0.35% on store balance usage  

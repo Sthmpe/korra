@@ -221,58 +221,75 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   // 2. The Master Calculator
   void _recalculateFees() {
     final double totalProductPrice = widget.product.data['price']?.toDouble() ?? 0.0;
+    final bool isAbove30k = totalProductPrice > 30000;
 
     if (_isPayInFull) {
-      // SCENARIO B: User explicitly clicked "Pay in Full"
-      // Force the down payment to equal the product price
+      // ─── PAY IN FULL ───────────────────────────────────────────────────────
+      // Store balance allowed. Applied first, cash covers the rest.
       userEnteredDownPayment = totalProductPrice;
-      
-      if (_useStoreCredit && _storeCredit > 0) {
+
+      if (_storeCredit > 0) {
         _creditSweepAmount = math.min(_storeCredit, totalProductPrice);
       } else {
         _creditSweepAmount = 0.0;
       }
+
+      final double cashPortionOfPrice = totalProductPrice - _creditSweepAmount;
+
+      // Cash fee: 3.5% of cash portion — added on top, no minimum
+      double feeCashPart = cashPortionOfPrice > 0
+          ? _calculateStandardFee(cashPortionOfPrice)
+          : 0.0;
+
+      // Store balance fee: 0.35% of store portion — added on top, minimum ₦100
+      double feeCreditPart = 0.0;
+      if (_creditSweepAmount > 0) {
+        final double rawStoreFee = _creditSweepAmount * 0.035 * 0.10;
+        feeCreditPart = math.max(rawStoreFee, 100.0);
+      }
+
+      setState(() {
+        processingFee = _roundUpAmount(feeCashPart + feeCreditPart);
+        // Wallet pays: cash portion + all fees (fee is added on top, not deducted)
+        totalDueNow = _roundUpAmount(cashPortionOfPrice + processingFee);
+        _amountCoveredByCredit = _creditSweepAmount;
+        _amountCoveredByCash = cashPortionOfPrice;
+      });
+
     } else {
-      // SCENARIO A: Installment Plan. Store Credit is strictly locked out.
+      // ─── INSTALLMENT PLAN ─────────────────────────────────────────────────
+      // Store balance BLOCKED — fresh cash only for deposit
       _creditSweepAmount = 0.0;
-    }
+      _amountCoveredByCredit = 0.0;
+      _amountCoveredByCash = userEnteredDownPayment;
 
-    // --- CALCULATE FEES ON THE SPLIT ---
-    // Fee Bucket A: The Credit Portion (Pays 10% rate)
-    // Fee Bucket B: The Cash Portion (Pays Standard rate)
-    
-    double cashPortionOfPrice = totalProductPrice - _creditSweepAmount;
-    
-    // Calculate Fee on Cash Portion
-    double feeCashPart = 0.0;
-    if (cashPortionOfPrice > 0) {
-      feeCashPart = _calculateStandardFee(cashPortionOfPrice);
-    }
+      double fee = 0.0;
 
-    // Calculate Fee on Credit Portion
-    double feeCreditPart = 0.0;
-    if (_creditSweepAmount > 0) {
-      double standard = _calculateStandardFee(_creditSweepAmount);
-      feeCreditPart = math.max(standard * 0.10, 100.0); // Min N100 covers server costs
-    }
+      if (!isAbove30k) {
+        // Items ≤ ₦30k: fee = 3.5% of TOTAL PRODUCT PRICE — collected upfront once
+        fee = _calculateStandardFee(totalProductPrice);
+      } else {
+        // Items > ₦30k: fee = 3.5% of INITIAL DEPOSIT AMOUNT — added on top
+        fee = userEnteredDownPayment > 0
+            ? _roundUpAmount(userEnteredDownPayment * 0.035)
+            : 0.0;
+      }
 
-    setState(() {
-      processingFee = _roundUpAmount(feeCashPart + feeCreditPart);
-      
-      // Calculate how much cash they actually need to pull from their wallet right now
-      double effectivePrincipalUserPays = math.max(0.0, userEnteredDownPayment - _creditSweepAmount);
-      totalDueNow = _roundUpAmount(effectivePrincipalUserPays + processingFee);
-      
-      _amountCoveredByCredit = _creditSweepAmount;
-      _amountCoveredByCash = cashPortionOfPrice;
-    });
+      setState(() {
+        processingFee = fee;
+        // Wallet pays: deposit + fee (fee is added on top)
+        totalDueNow = _roundUpAmount(userEnteredDownPayment + processingFee);
+      });
+    }
 
     if (kDebugMode) {
-      print("--- MANDATORY SWEEP LOGIC ---");
-      print("Product Price: $totalProductPrice");
-      print("Credit Sweep: $_creditSweepAmount | Fee: $feeCreditPart");
-      print("Cash Remainder: $cashPortionOfPrice | Fee: $feeCashPart");
-      print("Total Fee: $processingFee");
+      print("--- FEE CALC ---");
+      print("Product Price: $totalProductPrice | Above 30k: $isAbove30k");
+      print("Pay in Full: $_isPayInFull");
+      print("Credit Sweep: $_creditSweepAmount");
+      print("Deposit: $userEnteredDownPayment");
+      print("Processing Fee: $processingFee");
+      print("Total Due Now: $totalDueNow");
     }
   }
 
@@ -288,11 +305,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
     setState(() {
       userEnteredDownPayment = _roundUpAmount(val);
-      
-      // Logic: User Amount - Credit Sweep + Fee
-      double cashPrincipalNeeded = math.max(0, userEnteredDownPayment - _creditSweepAmount);
-      totalDueNow = _roundUpAmount(cashPrincipalNeeded + processingFee);
     });
+
+    // Recalculate fees — needed for above ₦30k installment where fee is on deposit amount
+    _recalculateFees();
   }
 
   debugPrintAmountCalculations() {
@@ -2079,7 +2095,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           _buildReasonRow(
             icon: Iconsax.refresh_circle,
             title: "Flexible Usage",
-            desc: "Your Store Balance is available immediately. You can use it to purchase or reserve any other item from this merchant.",
+            desc: "Your Store Balance is available immediately. You can use it to purchase any other item from this merchant.",
           ),
           
           SizedBox(height: 32.h),
@@ -2146,4 +2162,3 @@ class _PenaltyExplainerSheet extends StatelessWidget {
     );
   }
 }
-

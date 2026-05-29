@@ -45,16 +45,16 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
             notice = event.noticeDays ?? 3;
         } else {
             // --- GRANULAR TIER LOGIC (FALLBACK) ---
-            if (price <= 20000) {
+            if (price <= 50000) {
               duration = 14; notice = 3; extension = 0; allowExtension = false;
-            } else if (price <= 120000) {
-                duration = 30; notice = 3; extension = 5; allowExtension = true;
-            } else if (price <= 350000) {
+            } else if (price <= 200000) {
+                duration = 21; notice = 3; extension = 5; allowExtension = true;
+            } else if (price <= 500000) {
+                duration = 30; notice = 3; extension = 7; allowExtension = true;
+            } else if (price <= 750000) {
                 duration = 60; notice = 3; extension = 7; allowExtension = true;
-            } else if (price <= 950000) {
-                duration = 90; notice = 3; extension = 7; allowExtension = true;
             } else {
-                duration = 120; notice = 3; extension = 7; allowExtension = true;
+                duration = 90; notice = 3; extension = 7; allowExtension = true;
             }
         }
 

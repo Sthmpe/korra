@@ -77,6 +77,72 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
 
   double get _currentAmount => double.tryParse(_inputString) ?? 0.0;
 
+  // ✅ FEE HELPERS
+  static const double _feeRate = 0.035;
+  static const double _storeFeeRate = 0.035 * 0.10; // 10% of 3.5% = 0.35%
+  static const double _minStoreFee = 100.0;
+
+  // Only charge per payment fee if item is above ₦30,000
+  // Items ₦30,000 and below already had fee charged upfront at plan creation
+  bool get _isPerPaymentFee => widget.plan.totalAmount > 30000;
+
+  // Store balance portion used (always prioritized first)
+  double _storeCreditPortion(double storeCredit) {
+    if (_currentAmount <= 0 || storeCredit <= 0) return 0;
+    return _currentAmount <= storeCredit ? _currentAmount : storeCredit;
+  }
+
+  // Cash portion after store balance is used
+  double _cashPortion(double storeCredit) {
+    final storePortion = _storeCreditPortion(storeCredit);
+    final cash = _currentAmount - storePortion;
+    return cash < 0 ? 0 : double.parse(cash.toStringAsFixed(2));
+  }
+
+  // Store balance fee — charged from wallet, minimum ₦100
+  // Only on items above ₦30,000
+  double _storeFee(double storeCredit) {
+    if (!_isPerPaymentFee) return 0;
+    final storePortion = _storeCreditPortion(storeCredit);
+    if (storePortion <= 0) return 0;
+    final calculated = double.parse((storePortion * _storeFeeRate).toStringAsFixed(2));
+    return calculated < _minStoreFee ? _minStoreFee : calculated;
+  }
+
+  // Cash fee — no minimum, just 3.5% of cash portion
+  // Only on items above ₦30,000
+  double _cashFee(double storeCredit) {
+    if (!_isPerPaymentFee) return 0;
+    final cash = _cashPortion(storeCredit);
+    if (cash <= 0) return 0;
+    return double.parse((cash * _feeRate).toStringAsFixed(2));
+  }
+
+  // Total applied to plan = store portion (full) + cash portion minus cash fee
+  double _appliedToItemFull(double storeCredit) {
+    if (_currentAmount <= 0) return 0;
+    final storePortion = _storeCreditPortion(storeCredit);
+    final cash = _cashPortion(storeCredit);
+    final cashAfterFee = cash - _cashFee(storeCredit);
+    return double.parse((storePortion + cashAfterFee).toStringAsFixed(2));
+  }
+
+  // Total wallet deducted = cash portion + store balance fee
+  double _totalWalletDeducted(double storeCredit) {
+    final cash = _cashPortion(storeCredit);
+    final storeFeeAmount = _storeFee(storeCredit);
+    return double.parse((cash + storeFeeAmount).toStringAsFixed(2));
+  }
+
+  // Amount customer needs to pay to clear remaining balance including fee
+  // Only relevant for per-payment fee plans with no store balance
+  double get _completionGrossAmount {
+    final remaining = _roundUpAmount(widget.plan.amountRemaining);
+    if (remaining <= 0) return 0;
+    if (!_isPerPaymentFee) return remaining;
+    return double.parse((remaining / (1 - _feeRate)).toStringAsFixed(2));
+  }
+
   // --- KEYPAD LOGIC (Unchanged) ---
   void _onKeyTap(String value) {
     HapticFeedback.lightImpact(); 
@@ -225,14 +291,20 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                 showLeadingIcon: true,
                 title: "Paying for ${widget.plan.title}"
               ),
-              body: Column(
-                children: [
+              body: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top - 88,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
                   
                   _buildImageCarousel(widget.plan.imageUrls ?? []),
 
-                  // ✅ SPACING: Give the image some room to breathe before the numbers
-                  // SizedBox(height: 24.h),
-                  Spacer(),
+                  SizedBox(height: 8.h),
 
                   // --- BIG DISPLAY ---
                   FittedBox(
@@ -241,7 +313,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                       padding: EdgeInsets.symmetric(horizontal: 40.w),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Text("₦", style: GoogleFonts.inter(fontSize: 32.sp, fontWeight: FontWeight.w500, color: Colors.grey.shade400)),
@@ -262,7 +334,90 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
 
                   // ✅ SPACING: Increased from 12.h to 24.h to separate Value from Status
                   // SizedBox(height: 24.h),
-                  Spacer(),
+                  SizedBox(height: 8.h),
+
+                  // ✅ FEE PREVIEW — only show when amount > 0 and plan is above ₦30,000
+                  if (_currentAmount > 0 && _isPerPaymentFee) ...[
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 28.w),
+                      child: Builder(
+                        builder: (context) {
+                          final sc = snapshotCredit.data ?? 0.0;
+                          final storePortion = _storeCreditPortion(sc);
+                          final cashPortion = _cashPortion(sc);
+                          final storeFeeAmt = _storeFee(sc);
+                          final cashFeeAmt = _cashFee(sc);
+                          final applied = _appliedToItemFull(sc);
+                          final walletDeducted = _totalWalletDeducted(sc);
+
+                          return Container(
+                            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(12.r),
+                              border: Border.all(color: const Color(0xFFEAECF0), width: 0.5.w),
+                            ),
+                            child: Column(
+                              children: [
+                                // Store balance row
+                                if (storePortion > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Store balance used", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
+                                      Text("₦${_moneyFormat.format(storePortion)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF027A48))),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4.h),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Store balance fee (0.35%)", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade400)),
+                                      Text("₦${_moneyFormat.format(storeFeeAmt)} from wallet", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500)),
+                                    ],
+                                  ),
+                                  SizedBox(height: 6.h),
+                                ],
+                                // Cash fee row
+                                if (cashPortion > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Processing fee (3.5%)", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
+                                      Text("- ₦${_moneyFormat.format(cashFeeAmt)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                                    ],
+                                  ),
+                                  SizedBox(height: 6.h),
+                                ],
+                                Divider(height: 1, color: Colors.grey.shade200),
+                                SizedBox(height: 6.h),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("Applied to your plan", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
+                                    Text("₦${_moneyFormat.format(applied)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: KorraColors.brand)),
+                                  ],
+                                ),
+                                if (storePortion > 0) ...[
+                                  SizedBox(height: 4.h),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Wallet deducted", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade400)),
+                                      Text("₦${_moneyFormat.format(walletDeducted)}", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500)),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                  ],
+
+                  SizedBox(height: 8.h),
 
                   // --- ✅ SMART STATUS PILLS ---
                   if (isOverBalance)
@@ -297,9 +452,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                       ],
                     ),
 
-                  // ✅ SPACING: Distinct separation between Status Info and Suggestion Chips
-                  // SizedBox(height: 24.h),
-                  Spacer(),
+                  SizedBox(height: 10.h),
 
                   // CHIPS (With Date Logic)
                   Padding(
@@ -312,24 +465,17 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                           _roundUpAmount(_smartTargetAmount) 
                         ),
                         SizedBox(width: 12.w),
-                        _buildChip("Full Balance", _roundUpAmount(widget.plan.amountRemaining)),
+                        _buildChip("Pay to Complete", _completionGrossAmount),
                       ],
                     ),
                   ),
 
-                  // ✅ SPACING: Major break before the Keypad. 
-                  // This pushes the keypad down, giving the top section "Hero" status.
-                  // Increased from 24.h to 40.h
-                  // SizedBox(height: 40.h),
-                  Spacer(),
+                  SizedBox(height: 12.h),
 
                   // KEYPAD
                   _buildKeypad(),
 
-                  // ✅ SPACING: Give the finger room between Keypad and Button.
-                  // Increased from 16.h to 32.h
-                  Spacer(),
-                  //SizedBox(height: 32.h),
+                  SizedBox(height: 12.h),
 
                   // ACTION BUTTON
                   Padding(
@@ -347,7 +493,10 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                             }
                             Get.toNamed(
                               Routes.customerBankDetails, 
-                              arguments: customerData 
+                              arguments: {
+                                'customer': customerData,
+                                'repo': widget.repo,
+                              }
                             );
                           } else if (isValid) {
                             context.read<PayPlanBloc>().add(PayInstallmentConfirmed(
@@ -370,10 +519,11 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                     ),
                   ),
                   
-                  // ✅ SPACING: Bottom Safe Area padding so it doesn't look crushed.
-                  // Increased from 20.h to 32.h
-                  SizedBox(height: 32.h),
+                  SizedBox(height: 16.h),
                 ],
+              ),
+                  ),
+                ),
               ),
             );
           }
@@ -566,4 +716,3 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     );
   }
 }
-

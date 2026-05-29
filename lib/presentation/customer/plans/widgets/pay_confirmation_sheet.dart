@@ -48,8 +48,18 @@ class PayConfirmationSheet extends StatelessWidget {
         stream: customerRepo.streamCustomer(customerUid), // Listen to Wallet Balance
         builder: (context, snapshot) {
           final walletBalance = snapshot.data?.availableBalance ?? 0.0;
-          final amountToPay = plan.nextAmount; 
+          final amountToPay = plan.nextAmount;
           final bool canPay = walletBalance >= amountToPay;
+
+          // ✅ FEE CALCULATION
+          const double feeRate = 0.035;
+          final bool chargePerPayment = plan.totalAmount > 30000;
+          final double feeAmount = chargePerPayment
+              ? double.parse((amountToPay * feeRate).toStringAsFixed(2))
+              : 0.0;
+          final double appliedToItem = chargePerPayment
+              ? double.parse((amountToPay - feeAmount).toStringAsFixed(2))
+              : amountToPay;
       
           return Container(
             padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 32.h),
@@ -84,7 +94,13 @@ class PayConfirmationSheet extends StatelessWidget {
                       SizedBox(height: 12.h),
                       Divider(height: 1, color: Colors.grey.shade300),
                       SizedBox(height: 12.h),
-                      _row("Amount Paid", formatToCurrency(amountToPay)),
+                      _row("You are paying", formatToCurrency(amountToPay)),
+                      if (chargePerPayment) ...[
+                        SizedBox(height: 8.h),
+                        _row("Processing fee (3.5%)", "- ${formatToCurrency(feeAmount)}", color: Colors.grey),
+                        SizedBox(height: 8.h),
+                        _row("Applied to your plan", formatToCurrency(appliedToItem), isBold: true, color: const Color(0xFFA54600)),
+                      ],
                       SizedBox(height: 8.h),
                       _row("Wallet Balance", formatToCurrency(walletBalance), color: canPay ? Colors.green : Colors.red),
                     ],

@@ -63,7 +63,15 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
       // ✅ INSTALLMENT SUCCESS
       lottieUrl = 'https://assets7.lottiefiles.com/packages/lf20_jbrw3hcz.json';
       title = "Payment Successful";
-      subtitle = "We've received ₦${NumberFormat("#,##0").format(widget.amount)} towards your goal.";
+      // ✅ Read directly from receipt — no manual recalculation
+      // fullReceiptData already has the correct feeAmount and appliedToItem
+      // from the backend, respecting the ₦30k rule properly
+      final _fee = widget.fullReceiptData.feeAmount;
+      final _applied = widget.fullReceiptData.appliedToItem;
+      final _showFee = _fee > 0;
+      subtitle = _showFee
+          ? "₦${NumberFormat("#,##0").format(_applied)} applied to your plan after ₦${NumberFormat("#,##0").format(_fee)} processing fee."
+          : "We've received ₦${NumberFormat("#,##0").format(widget.amount)} towards your goal.";
       btnColor = KorraColors.brand;
       bgPillColor = const Color(0xFFFFF4ED); // Brand Orange Light
       textPillColor = KorraColors.brand;

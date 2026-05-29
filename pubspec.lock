@@ -928,6 +928,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
+  monnify_payment_sdk:
+    dependency: "direct main"
+    description:
+      name: monnify_payment_sdk
+      sha256: ab19528260e3d466dc8aabfd5802b0ea42465d075d57ca5e71e8109d99463972
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.8"
   nested:
     dependency: transitive
     description:
@@ -1534,7 +1542,7 @@ packages:
     source: hosted
     version: "15.0.0"
   web:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: web
       sha256: "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"

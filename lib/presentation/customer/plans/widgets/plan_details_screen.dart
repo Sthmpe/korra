@@ -1422,12 +1422,12 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
             "Created On",
             DateFormat('MMM dd, yyyy').format(p.createdAt),
           ),
-          _infoRow("Cadence", p.cadenceType?.capitalizeFirst ?? "Flexible"),
-          _infoRow(
-            "Service Fee",
-            currencyFormat.format(p.processingFee),
-            isLast: true,
-          ),
+          _infoRow("Cadence", p.cadenceType?.capitalizeFirst ?? "Flexible", isLast: true),
+          // _infoRow(
+          //   "Service Fee",
+          //   currencyFormat.format(p.processingFee),
+          //   isLast: true,
+          // ),
         ],
       ),
     );

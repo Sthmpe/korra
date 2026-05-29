@@ -37,6 +37,7 @@ void main() async {
       child: KorraApp(
         initialRoute: initialRoute,
         appPages: AppPages.vendorRoutes, // 👈 Only Vendor + Common routes
+        isMerchant: true, // 👈 3. PASS THIS FLAG
       ),
     ),
   );

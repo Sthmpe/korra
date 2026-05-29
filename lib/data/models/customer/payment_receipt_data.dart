@@ -8,15 +8,20 @@ class PaymentReceiptData {
   final double totalValue;
   final double amountPaidSoFar;
   final double amountPaidNow;
-  final String paymentMethod; // e.g., "Store Credit" or "Wallet"
+  final String paymentMethod;
   final double balanceRemaining;
   final String status;
   final bool isFinished;
-  
-  // ✅ NEW FIELDS
   final double creditUsed;
   final double walletUsed;
-  final DateTime? nextDueDate; // Nullable (doesn't exist if plan is finished)
+  final DateTime? nextDueDate;
+
+  // ✅ FEE FIELDS
+  final double feeAmount;           // Total fee (cash fee + store fee)
+  final double cashFeeAmount;       // 3.5% of cash portion only
+  final double storeFeeAmount;      // 0.35% of store balance used, min ₦100
+  final double appliedToItem;       // Amount that actually went to plan
+  final double totalWalletDeducted; // Cash + store fee from wallet
 
   PaymentReceiptData({
     required this.reference,
@@ -35,6 +40,11 @@ class PaymentReceiptData {
     required this.creditUsed,
     required this.walletUsed,
     this.nextDueDate,
+    this.feeAmount = 0.0,
+    this.cashFeeAmount = 0.0,
+    this.storeFeeAmount = 0.0,
+    this.appliedToItem = 0.0,
+    this.totalWalletDeducted = 0.0,
   });
 
   factory PaymentReceiptData.fromJson(Map<String, dynamic> json) {
@@ -52,31 +62,39 @@ class PaymentReceiptData {
       balanceRemaining: (json['balanceRemaining'] ?? 0).toDouble(),
       status: json['status'] ?? 'IN PROGRESS',
       isFinished: json['isFinished'] ?? false,
-      
-      // ✅ Map new fields safely
       creditUsed: (json['creditUsed'] ?? 0).toDouble(),
       walletUsed: (json['walletUsed'] ?? 0).toDouble(),
-      nextDueDate: json['nextDueDate'] != null ? DateTime.tryParse(json['nextDueDate']) : null,
+      nextDueDate: json['nextDueDate'] != null
+          ? DateTime.tryParse(json['nextDueDate'])
+          : null,
+      // ✅ Map new fee fields safely
+      feeAmount: (json['feeAmount'] ?? 0).toDouble(),
+      cashFeeAmount: (json['cashFeeAmount'] ?? 0).toDouble(),
+      storeFeeAmount: (json['storeFeeAmount'] ?? 0).toDouble(),
+      appliedToItem: (json['appliedToItem'] ?? 0).toDouble(),
+      totalWalletDeducted: (json['totalWalletDeducted'] ?? 0).toDouble(),
     );
   }
 
   factory PaymentReceiptData.fromPartial({
     required double amount,
     required DateTime date,
-    required String title, // Used as Product Name
+    required String title,
     String? reference,
     String status = 'SUCCESSFUL',
     String vendorName = 'Korra Partner',
     String customerName = 'Me',
   }) {
+    final cashFee = double.parse((amount * 0.035).toStringAsFixed(2));
+    final applied = double.parse((amount - cashFee).toStringAsFixed(2));
     return PaymentReceiptData(
-      reference: reference ?? 'TX-${date.millisecondsSinceEpoch}',
+      reference: reference ?? 'TX-\${date.millisecondsSinceEpoch}',
       date: date,
       vendorName: vendorName,
       customerName: customerName,
       productName: title,
       productCode: '',
-      totalValue: amount, // Assume total = amount for simple views
+      totalValue: amount,
       amountPaidSoFar: amount,
       amountPaidNow: amount,
       paymentMethod: 'Wallet/Card',
@@ -85,6 +103,11 @@ class PaymentReceiptData {
       isFinished: false,
       creditUsed: 0,
       walletUsed: amount,
+      feeAmount: cashFee,
+      cashFeeAmount: cashFee,
+      storeFeeAmount: 0.0,
+      appliedToItem: applied,
+      totalWalletDeducted: amount,
     );
   }
 }

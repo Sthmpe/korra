@@ -1,53 +1,37 @@
 {
   "project_info": {
-    "project_number": "618221423421",
-    "project_id": "korra-9ab95",
-    "storage_bucket": "korra-9ab95.firebasestorage.app"
+    "project_number": "761341878280",
+    "project_id": "korra-prod-63687",
+    "storage_bucket": "korra-prod-63687.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:618221423421:android:d5f8f0ff64d406e2961354",
+        "mobilesdk_app_id": "1:761341878280:android:8ee7f32e0fad0feabcf1bd",
         "android_client_info": {
           "package_name": "com.example.korra"
         }
       },
       "oauth_client": [
         {
-          "client_id": "618221423421-6gher8da0g8odk3l0tnbdiokdv6c12f3.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.korra",
-            "certificate_hash": "29ca4aff112665fd298baf1e80040c199c215f59"
-          }
-        },
-        {
-          "client_id": "618221423421-o255n4tcrq95vblq6kiamjtae7i9f0sd.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.korra",
-            "certificate_hash": "44d4f252d6f202ee40d62a639612a10dccf4d5c0"
-          }
-        },
-        {
-          "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+          "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAkHDolChc2tgbBR6mL102FG4nSw0i7vy8"
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+              "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "618221423421-nv88p82bjip4cf97s4a1s2vor52l4eom.apps.googleusercontent.com",
+              "client_id": "761341878280-dl2l1refuf74rqva4du13jemou45v1rb.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.korra"
@@ -59,47 +43,39 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:618221423421:android:5b444f9c527108ef961354",
+        "mobilesdk_app_id": "1:761341878280:android:55e7344b4fc129fabcf1bd",
         "android_client_info": {
-          "package_name": "com.korra.business"
+          "package_name": "com.korra.business.live"
         }
       },
       "oauth_client": [
         {
-          "client_id": "618221423421-mkblc80u9vac10nnr16hdb3k6qe4hej7.apps.googleusercontent.com",
+          "client_id": "761341878280-lpvj3ffv8k69qlq0n1ouoqak40uao9lp.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.korra.business",
-            "certificate_hash": "29ca4aff112665fd298baf1e80040c199c215f59"
-          }
-        },
-        {
-          "client_id": "618221423421-nj9ggk5vf5hrcgojimepvggb21il3kra.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.korra.business",
+            "package_name": "com.korra.business.live",
             "certificate_hash": "44d4f252d6f202ee40d62a639612a10dccf4d5c0"
           }
         },
         {
-          "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+          "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAkHDolChc2tgbBR6mL102FG4nSw0i7vy8"
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+              "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "618221423421-nv88p82bjip4cf97s4a1s2vor52l4eom.apps.googleusercontent.com",
+              "client_id": "761341878280-dl2l1refuf74rqva4du13jemou45v1rb.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.korra"
@@ -111,31 +87,31 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:618221423421:android:da492784da602b94961354",
+        "mobilesdk_app_id": "1:761341878280:android:1a5a8f805ae0a9b1bcf1bd",
         "android_client_info": {
-          "package_name": "com.korra.shop"
+          "package_name": "com.korra.shop.live"
         }
       },
       "oauth_client": [
         {
-          "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+          "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAkHDolChc2tgbBR6mL102FG4nSw0i7vy8"
+          "current_key": "AIzaSyCfVVSU2Kj2oxeVWavJ93mUwnzEdtNePNM"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com",
+              "client_id": "761341878280-lo48183tmbcl7ckt16jt89tl2l4d44n5.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "618221423421-nv88p82bjip4cf97s4a1s2vor52l4eom.apps.googleusercontent.com",
+              "client_id": "761341878280-dl2l1refuf74rqva4du13jemou45v1rb.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.korra"

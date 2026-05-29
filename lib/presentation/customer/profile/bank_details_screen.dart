@@ -1,10 +1,14 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/data/models/customer/customer_ui_extentsion.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:monnify_payment_sdk/monnify_payment_sdk.dart'; // 🚀 MONNIFY SDK
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../data/models/customer/customer_model.dart';
@@ -13,14 +17,118 @@ import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/kyc_verification_sheet.dart';
 
-class BankDetailsScreen extends StatelessWidget {
+class BankDetailsScreen extends StatefulWidget {
   final Customer customer;
   final CustomerRepository repo;
 
   const BankDetailsScreen({super.key, required this.customer, required this.repo});
 
+  @override
+  State<BankDetailsScreen> createState() => _BankDetailsScreenState();
+}
+
+class _BankDetailsScreenState extends State<BankDetailsScreen> {
   static const _brand = Color(0xFFA54600);
   static const _stroke = Color(0xFFEAE6E2);
+
+  final TextEditingController _amountController = TextEditingController();
+  Monnify? monnify;
+  bool _isInitializingSDK = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initMonnify();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  // 🚀 INITIALIZE MONNIFY SDK
+  void _initMonnify() async {
+    // 1. Read IS_LIVE securely from the terminal command (--dart-define)
+    // It defaults to false if you forget to pass the flag.
+    const bool isLive = bool.fromEnvironment('IS_LIVE', defaultValue: false);
+
+    // 2. Dynamically fetch the correct keys from the .env file
+    final String? apiKey = isLive 
+        ? dotenv.env['MONNIFY_API_KEY_LIVE'] 
+        : dotenv.env['MONNIFY_API_KEY_TEST'];
+        
+    final String? contractCode = isLive 
+        ? dotenv.env['MONNIFY_CONTRACT_CODE_LIVE'] 
+        : dotenv.env['MONNIFY_CONTRACT_CODE_TEST'];
+
+    // 3. Safety Check
+    if (apiKey == null || contractCode == null || apiKey.isEmpty || contractCode.isEmpty) {
+      log("CRITICAL ERROR: Monnify keys not found in .env file.");
+      setState(() => _isInitializingSDK = false);
+      return;
+    }
+
+    // 4. Initialize the SDK
+    try {
+      monnify = await Monnify.initialize(
+        applicationMode: isLive ? ApplicationMode.LIVE : ApplicationMode.TEST,
+        apiKey: apiKey,
+        contractCode: contractCode,
+      );
+      setState(() => _isInitializingSDK = false);
+    } catch (e) {
+      log("Monnify Init Error: $e");
+      setState(() => _isInitializingSDK = false);
+    }
+  }
+
+  // 🚀 TRIGGER ONE-TIME FUNDING VIA SDK
+  void _processInstantTopUp() async {
+    final amountText = _amountController.text.replaceAll(',', '');
+    final amount = double.tryParse(amountText) ?? 0;
+
+    if (amount < 100) {
+      showAppSnackbar("Minimum deposit is ₦100", SnackbarType.error);
+      return;
+    }
+
+    if (monnify == null) {
+      showAppSnackbar("Payment system not ready. Please try again.", SnackbarType.error);
+      return;
+    }
+
+    FocusScope.of(context).unfocus(); // Close keyboard
+
+    final shortUid = widget.customer.uid.substring(0, 4).toUpperCase();
+    final paymentReference = 'KORRA-FUND-$shortUid-${DateTime.now().millisecondsSinceEpoch}';
+
+    final transaction = TransactionDetails().copyWith(
+      amount: amount,
+      currencyCode: 'NGN',
+      customerName: widget.customer.displayName.isNotEmpty ? widget.customer.displayName : 'Korra Guest',
+      customerEmail: widget.customer.email.isNotEmpty ? widget.customer.email : 'hello@korra.com.ng',
+      paymentReference: paymentReference,
+      metaData: {
+        "customerUid": widget.customer.uid 
+      },
+    );
+
+    try {
+      final response = await monnify?.initializePayment(transaction: transaction);
+      
+      if (response != null && (response.transactionStatus == 'PAID' || response.transactionStatus == 'SUCCESS')) {
+        showAppSnackbar("Deposit Successful! Your wallet will be updated shortly.", SnackbarType.success);
+        _amountController.clear();
+        // Note: Your backend webhook will catch this and update the Firebase wallet balance
+      } else {
+        showAppSnackbar("Transaction was not completed.", SnackbarType.info);
+      }
+    } catch (e) {
+      log('Monnify Error: $e');
+      showAppSnackbar("Payment failed: $e", SnackbarType.error);
+    }
+  }
 
   void _copyToClipboard(BuildContext context, String value, String label) {
     Clipboard.setData(ClipboardData(text: value));
@@ -31,9 +139,9 @@ class BankDetailsScreen extends StatelessWidget {
   void _shareDetails() {
     final text = 
       "Here are my Korra Wallet details:\n\n"
-      "Bank: ${customer.bankName}\n"
-      "Account Number: ${customer.accountNumber}\n"
-      "Name: ${customer.accountName}\n\n"
+      "Bank: ${widget.customer.bankName}\n"
+      "Account Number: ${widget.customer.accountNumber}\n"
+      "Name: ${widget.customer.accountName}\n\n"
       "Transfers to this account instantly top up my Korra wallet.";
     
     Share.share(text);
@@ -46,35 +154,26 @@ class BankDetailsScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => BlocProvider(
         create: (context) => CustomerKycBloc(
-          // Grab your verification repo from the main app context
-          repo: repo, 
-          customerUid: customer.uid,
+          repo: widget.repo, 
+          customerUid: widget.customer.uid,
         ),
         child: KycVerificationSheet(
           onVerificationComplete: (String verifiedBvn, String verifiedNin) async {
-            // 1. CAPTURE THE NAVIGATOR BEFORE DOING ANYTHING ASYNC
             final navigator = Navigator.of(context, rootNavigator: true);
 
-            // 2. Show a loading spinner so they know magic is happening
             showDialog(
               context: context, 
               barrierDismissible: false,
               builder: (dialogContext) => Center(
                 child: Container(
                   padding: EdgeInsets.all(24.r),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16.r),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.r)),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(color: _brand),
+                      const CircularProgressIndicator(color: _brand),
                       SizedBox(height: 16.h),
-                      Text(
-                        "Generating Wallet...",
-                        style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600),
-                      )
+                      Text("Generating Wallet...", style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600))
                     ],
                   ),
                 ),
@@ -82,27 +181,18 @@ class BankDetailsScreen extends StatelessWidget {
             );
         
             try {
-              // Send EVERYTHING to the repo
-              await repo.createReserveAccount(
-                uid: customer.uid,
-                email: customer.email,
-                firstName: customer.firstName,
-                lastName: customer.lastName,
+              await widget.repo.createReserveAccount(
+                uid: widget.customer.uid,
+                email: widget.customer.email,
+                firstName: widget.customer.firstName,
+                lastName: widget.customer.lastName,
                 bvn: verifiedBvn,
                 nin: verifiedNin,
               );
-        
-              // 🚀 3. USE THE SAVED NAVIGATOR TO POP (Ignores context.mounted issues)
               navigator.pop(); 
-        
-              // Show success message
               showAppSnackbar("Wallet activated successfully!", SnackbarType.success);
-        
             } catch (e) {
-              // 🚀 4. USE THE SAVED NAVIGATOR TO POP ON ERROR TOO
               navigator.pop(); 
-              
-              // Clean up the error message if it's a KorraException
               final errorMsg = e.toString().replaceAll('Exception:', '').trim();
               showAppSnackbar("Failed to create wallet: $errorMsg", SnackbarType.error);
             }
@@ -114,8 +204,7 @@ class BankDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🚀 THE CHECK: Does the user have a permanent account?
-    final bool hasAccount = customer.accountNumber != null && customer.accountNumber!.isNotEmpty;
+    final bool hasAccount = widget.customer.accountNumber != null && widget.customer.accountNumber!.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -128,41 +217,57 @@ class BankDetailsScreen extends StatelessWidget {
             // 1. CURRENT BALANCE HEADER
             Text(
               "CURRENT BALANCE",
-              style: GoogleFonts.inter(
-                fontSize: 11.sp, 
-                fontWeight: FontWeight.w700, 
-                color: Colors.grey.shade500,
-                letterSpacing: 1.0
-              ),
+              style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 1.0),
             ),
             SizedBox(height: 8.h),
             Text(
-              customer.formattedBalance,
-              style: GoogleFonts.inter(
-                fontSize: 32.sp, 
-                fontWeight: FontWeight.w800, 
-                color: const Color(0xFF101828),
-                letterSpacing: -1.0
-              ),
+              widget.customer.formattedBalance,
+              style: GoogleFonts.inter(fontSize: 32.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -1.0),
             ),
 
             SizedBox(height: 32.h),
 
-            // 2. DYNAMIC CONTENT AREA
-            if (hasAccount) 
-              _buildActiveAccountCard(context)
-            else 
+            if (!hasAccount) ...[
+              _buildInstantTopUpCard(),
+
+              SizedBox(height: 32.h),
+
+              Row(
+                children: [
+                  Expanded(child: Divider(color: _stroke.withOpacity(0.5))),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12.w),
+                    child: Text("OR", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade400)),
+                  ),
+                  Expanded(child: Divider(color: _stroke.withOpacity(0.5))),
+                ],
+              ),
+
+              SizedBox(height: 32.h),
+
+              Text(
+                "PERMANENT ACCOUNT",
+                style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 1.0),
+              ),
+              SizedBox(height: 12.h),
               _buildSetupAccountCard(context),
+
+            ] else ...[
+              // --- PERMANENT USER VIEW (Clean, Bank-Only UI) ---
+              Text(
+                "YOUR ACCOUNT DETAILS",
+                style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 1.0),
+              ),
+              SizedBox(height: 12.h),
+              _buildActiveAccountCard(context),
+            ],
 
             SizedBox(height: 24.h),
 
-            // 3. INFO BOX
+            // INFO BOX
             Container(
               padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED), 
-                borderRadius: BorderRadius.circular(12.r),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(12.r)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -171,8 +276,8 @@ class BankDetailsScreen extends StatelessWidget {
                   Expanded(
                     child: Text(
                       hasAccount 
-                        ? "This account is unique to you. Any money transferred here will automatically appear in your Wallet Balance instantly."
-                        : "You need a dedicated Korra account to fund your wallet. This ensures your money is always safe and instantly credited.",
+                        ? "Transfers to your dedicated account are automatically credited to your Korra Wallet instantly."
+                        : "You need a dedicated Korra account to fund your wallet via regular bank transfer. Verify your identity to unlock it.",
                       style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF7C2D12), height: 1.4),
                     ),
                   )
@@ -185,7 +290,81 @@ class BankDetailsScreen extends StatelessWidget {
     );
   }
 
-  // --- THE "NO ACCOUNT" UI ---
+  // 🚀 THE NEW MONNIFY SDK CARD
+  Widget _buildInstantTopUpCard() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(24.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: _stroke.withOpacity(0.25)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8.r),
+                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8.r)),
+                child: Icon(Icons.flash_on_rounded, color: Colors.green.shade600, size: 20.sp),
+              ),
+              SizedBox(width: 12.w),
+              Text("Instant Top-Up", style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            "Fund your wallet instantly using your debit card or a temporary bank transfer.",
+            style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4),
+          ),
+          SizedBox(height: 24.h),
+          
+          // Amount Input
+          TextFormField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: GoogleFonts.plusJakartaSans(fontSize: 24.sp, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              prefixText: "₦ ",
+              prefixStyle: GoogleFonts.plusJakartaSans(fontSize: 24.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade400),
+              hintText: "0.00",
+              hintStyle: GoogleFonts.plusJakartaSans(fontSize: 24.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade300),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFB),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: _stroke.withOpacity(0.5))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: _brand)),
+            ),
+          ),
+          
+          SizedBox(height: 16.h),
+          
+          // Trigger Button
+          SizedBox(
+            width: double.infinity,
+            height: 52.h,
+            child: FilledButton(
+              onPressed: _isInitializingSDK ? null : _processInstantTopUp,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF101828), // Dark button to contrast with brand color
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+              ),
+              child: _isInitializingSDK
+                ? SizedBox(height: 20.h, width: 20.h, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text("Pay with Card / Transfer", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- EXISTING SETUP ACCOUNT CARD ---
   Widget _buildSetupAccountCard(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -194,9 +373,7 @@ class BankDetailsScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
         border: Border.all(color: _stroke.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Column(
         children: [
@@ -206,10 +383,7 @@ class BankDetailsScreen extends StatelessWidget {
             child: Icon(Icons.shield_rounded, color: _brand, size: 32.sp),
           ),
           SizedBox(height: 16.h),
-          Text(
-            "Activate Wallet Account",
-            style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828)),
-          ),
+          Text("Activate Wallet Account", style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
           SizedBox(height: 8.h),
           Text(
             "To unlock your permanent funding account, we need to verify your identity to comply with CBN regulations.",
@@ -217,23 +391,13 @@ class BankDetailsScreen extends StatelessWidget {
             style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey.shade600, height: 1.5),
           ),
           SizedBox(height: 32.h),
-          
-          // TRIGGER THE KYC SHEET
           SizedBox(
             width: double.infinity,
             height: 50.h,
             child: ElevatedButton(
               onPressed: () => _openKycSheet(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _brand,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-              ),
-              child: Text(
-                "Verify Identity",
-                style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w700),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+              child: Text("Verify Identity", style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -241,7 +405,7 @@ class BankDetailsScreen extends StatelessWidget {
     );
   }
 
-  // --- THE EXISTING ACCOUNT DETAILS UI ---
+  // --- EXISTING ACTIVE ACCOUNT CARD ---
   Widget _buildActiveAccountCard(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -250,9 +414,7 @@ class BankDetailsScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
         border: Border.all(color: _stroke.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Column(
         children: [
@@ -262,37 +424,26 @@ class BankDetailsScreen extends StatelessWidget {
             child: Icon(Icons.account_balance_rounded, color: Colors.blue.shade700, size: 28.sp),
           ),
           SizedBox(height: 16.h),
-          Text(
-            "Your Korra Account",
-            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
-          ),
+          Text("Your Korra Account", style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
           SizedBox(height: 8.h),
-          
           GestureDetector(
-            onTap: () => _copyToClipboard(context, customer.accountNumber ?? "", "Account Number"),
+            onTap: () => _copyToClipboard(context, widget.customer.accountNumber ?? "", "Account Number"),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  customer.accountNumber!,
-                  style: GoogleFonts.inter(fontSize: 28.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: 2.0),
-                ),
+                Text(widget.customer.accountNumber!, style: GoogleFonts.inter(fontSize: 28.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: 2.0)),
                 SizedBox(width: 12.w),
                 Icon(Icons.copy_rounded, size: 20.sp, color: _brand),
               ],
             ),
           ),
-
           SizedBox(height: 24.h),
           const Divider(height: 1, color: _stroke),
           SizedBox(height: 24.h),
-
-          _detailRow("Bank Name", customer.bankName ?? "Monnify"),
+          _detailRow("Bank Name", widget.customer.bankName ?? "Monnify"),
           SizedBox(height: 16.h),
-          _detailRow("Account Name", customer.accountName ?? customer.displayName),
-          
+          _detailRow("Account Name", widget.customer.accountName ?? widget.customer.displayName),
           SizedBox(height: 32.h),
-
           SizedBox(
             width: double.infinity,
             height: 48.h,
