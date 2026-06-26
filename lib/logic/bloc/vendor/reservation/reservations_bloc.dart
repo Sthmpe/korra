@@ -28,7 +28,46 @@ class ReservationsBloc extends Bloc<ReservationsEvent, ReservationsState> {
     // Wire Prompt Actions
     on<ResOpen>((e, _) {});
     on<ResArrangeDelivery>((e, _) {});
-    on<ResVerifyPickup>(_onVerifyPickup);
+    on<ResMarkFulfilled>(_onMarkFulfilled);
+    on<ResToggleSelection>(_onToggleSelection);
+    on<ResClearSelection>((e, emit) => emit(state.copyWith(selectedIds: {})));
+    on<ResSelectAll>((e, emit) => emit(state.copyWith(selectedIds: Set.from(e.allIds))));
+  }
+
+  Future<void> _onMarkFulfilled(ResMarkFulfilled event, Emitter<ReservationsState> emit) async {
+    emit(state.copyWith(verificationStatus: VerificationStatus.loading));
+    
+    try {
+      // ✅ Direct Firestore Batch Call
+      await repo.markReservationsFulfilled(vendorId, event.planIds);
+      
+      emit(state.copyWith(
+        verificationStatus: VerificationStatus.success,
+        selectedIds: {}, // Clear the checkboxes
+      ));
+      
+      await Future.delayed(const Duration(seconds: 1));
+      emit(state.copyWith(verificationStatus: VerificationStatus.initial));
+      
+      add(const ResRefresh()); // Refresh the UI
+    } catch (e) {
+      emit(state.copyWith(
+        verificationStatus: VerificationStatus.failure,
+        errorMessage: e.toString() 
+      ));
+      await Future.delayed(const Duration(seconds: 1));
+      emit(state.copyWith(verificationStatus: VerificationStatus.initial));
+    }
+  }
+
+  void _onToggleSelection(ResToggleSelection event, Emitter<ReservationsState> emit) {
+    final currentSelection = Set<String>.from(state.selectedIds);
+    if (currentSelection.contains(event.id)) {
+      currentSelection.remove(event.id);
+    } else {
+      currentSelection.add(event.id);
+    }
+    emit(state.copyWith(selectedIds: currentSelection));
   }
 
   Future<void> _onStarted(ResStarted event, Emitter<ReservationsState> emit) async {
@@ -77,6 +116,7 @@ class ReservationsBloc extends Bloc<ReservationsEvent, ReservationsState> {
       filter: e.filter, 
       visible: [], 
       loading: true,
+      selectedIds: {},
       query: '' // Clear search on tab change
     ));
     
@@ -154,34 +194,5 @@ class ReservationsBloc extends Bloc<ReservationsEvent, ReservationsState> {
 
   void _onSearchChanged(ResSearchChanged e, Emitter<ReservationsState> emit) {
     emit(state.copyWith(query: e.query));
-  }
-
-  Future<void> _onVerifyPickup(ResVerifyPickup event, Emitter<ReservationsState> emit) async {
-    emit(state.copyWith(verificationStatus: VerificationStatus.loading));
-    
-    try {
-      await repo.verifyPickup(
-        planId: event.planId, 
-        pin: event.pin, 
-        customerUid: event.customerId,
-        vendorUid: vendorId 
-      );
-      
-      emit(state.copyWith(verificationStatus: VerificationStatus.success));
-      
-      await Future.delayed(const Duration(seconds: 1));
-      emit(state.copyWith(verificationStatus: VerificationStatus.initial));
-      
-      add(const ResRefresh()); 
-
-    } catch (e) {
-      emit(state.copyWith(
-        verificationStatus: VerificationStatus.failure,
-        errorMessage: e.toString() 
-      ));
-      
-      await Future.delayed(const Duration(seconds: 1));
-      emit(state.copyWith(verificationStatus: VerificationStatus.initial));
-    }
   }
 }

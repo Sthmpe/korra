@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/vendors/bank_repository.dart';
@@ -197,7 +198,23 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
         transactionRef: response['reference'],
         transactionDate: DateTime.now(),
       ));
+
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'payout_initiated',
+        parameters: {
+          'amount': amount,
+          'vendor_id': vendorUid,
+          'bank_code': state.bankCode,
+        },
+      );
     } catch (e) {
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'payout_failed',
+        parameters: {
+          'amount': double.tryParse(state.amountInput.replaceAll(',', '')) ?? 0,
+          'error_message': e.toString().replaceAll('Exception:', '').trim(),
+        },
+      );
       emit(state.copyWith(
         status: PayoutStatus.failure,
         step: PayoutStep.input, 

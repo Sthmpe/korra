@@ -449,11 +449,12 @@ extension CustomerPlans on CustomerRepository {
     return ProductFetchResult(data: doc.data(), id: doc.id);
   }
 
-  Stream<List<Plan>> streamCustomerPlans(String customerId) {
+ Stream<List<Plan>> streamCustomerPlans(String customerId, {int limit = 15}) {
     return firestore
         .collection("plans")
         .where("customerId", isEqualTo: customerId)
         .orderBy("updatedAt", descending: true)
+        .limit(limit) // 👈 Use the dynamic limit here
         .snapshots()
         .map(
           (snap) =>

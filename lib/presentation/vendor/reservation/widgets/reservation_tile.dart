@@ -10,23 +10,34 @@ import '../../../../data/models/vendor/reservation.dart';
 class ReservationTile extends StatelessWidget {
   final Reservation reservation;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress; 
+  final bool isSelected;           
+  final bool isSelectionMode;      
 
   const ReservationTile({
     super.key,
     required this.reservation,
     required this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isSelectionMode = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         margin: EdgeInsets.only(bottom: 12.h, left: 16.w, right: 16.w),
         padding: EdgeInsets.all(12.r),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
           borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF1DB954) : const Color(0xFFF2F4F7),
+            width: isSelected ? 0.001 : 1.0,
+          ),
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF101828).withOpacity(0.04),
@@ -34,7 +45,6 @@ class ReservationTile extends StatelessWidget {
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(color: const Color(0xFFF2F4F7)),
         ),
         child: Column(
           children: [
@@ -65,7 +75,37 @@ class ReservationTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                          _buildStatusBadge(),
+                          if (isSelectionMode) ...[
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutCubic,
+                              // If selection mode is off, take up 0 space. If on, take up exact space.
+                              width: isSelectionMode ? 34.w : 0, 
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      margin: EdgeInsets.only(right: 12.w),
+                                      width: 22.w,
+                                      height: 22.w,
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? const Color(0xFF1DB954) : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12.r),
+                                        border: Border.all(
+                                          color: isSelected ? const Color(0xFF1DB954) : Colors.grey.shade300,
+                                          width: isSelectionMode ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: isSelected ? Icon(Icons.check, size: 16.sp, color: Colors.white) : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ] else
+                              _buildStatusBadge(),
                         ],
                       ),
                       SizedBox(height: 4.h),
@@ -214,12 +254,12 @@ class ReservationTile extends StatelessWidget {
         fg = const Color(0xFF027A48); // Success-700
         break;
       case ReservationStatus.readyForPickup:
-        text = "Ready";
+        text = "Completed"; // Ready changed to Completed
         bg = const Color(0xFFFFF7ED); // Orange/Cream
         fg = const Color(0xFFB95000);
         break;
       case ReservationStatus.completed:
-        text = "Completed";
+        text = "Fulfilled"; // Completed changed to Fulfilled
         bg = Colors.grey.shade100;
         fg = Colors.grey.shade700;
         break;

@@ -14,20 +14,25 @@
 <head>
   <base href="/">
 
+  <!-- Cache control — forces browser to always check for new version -->
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
 
-  <!-- [MERCHANT] <meta name="description" content="A better way to accept installment payments."> -->
-  <!-- [CUSTOMER] --> <meta name="description" content="Reserve now, pay in parts, own with ease.">
+  <!-- [MERCHANT] --> <meta name="description" content="A better way to accept installment payments.">
+  <!-- [CUSTOMER] <meta name="description" content="Reserve now, pay in parts, own with ease."> -->
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- [MERCHANT] <meta name="apple-mobile-web-app-title" content="Korra Business"> -->
-  <!-- [CUSTOMER] --> <meta name="apple-mobile-web-app-title" content="Korra">
+  <!-- [MERCHANT] --> <meta name="apple-mobile-web-app-title" content="Korra Business">
+  <!-- [CUSTOMER] <meta name="apple-mobile-web-app-title" content="Korra"> -->
 
-  <!-- [MERCHANT] <meta name="theme-color" content="#000000"> -->
-  <!-- [CUSTOMER] --> <meta name="theme-color" content="#A54600">
+  <!-- [MERCHANT] --> <meta name="theme-color" content="#000000"> 
+  <!-- [CUSTOMER] <meta name="theme-color" content="#A54600"> -->
 
 
   <!-- for development, replace with actual client ID in production -->
@@ -39,8 +44,8 @@
   <link rel="apple-touch-icon" href="icons/korra_logo_icon.webp">
   <link rel="icon" type="image/webp" href="korra_logo_icon.webp">
 
-  <!-- [MERCHANT] <title>Korra Business</title> -->
-  <!-- [CUSTOMER] --> <title>Korra</title> 
+  <!-- [MERCHANT] --> <title>Korra Business</title> 
+  <!-- [CUSTOMER] <title>Korra</title> -->
 
   <link rel="manifest" href="manifest.json">
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
@@ -48,6 +53,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
 
   <style>
     body {

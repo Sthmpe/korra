@@ -42,10 +42,10 @@ async function getMonnifyToken(): Promise<string> {
 
 // ---------------------------------------------------------------------------
 // HELPER: SETTLEMENT EMAIL TEMPLATES
-// Two variants:
-// Variant A — below threshold or no bank account → funds in Korra wallet
-// Variant B — above threshold AND bank account set up → funds sent to bank
+// Two variants depending on whether auto-payout is set up or not.
 // ---------------------------------------------------------------------------
+
+// Variant A: No auto-payout account → funds sitting in Korra wallet
 const getSettlementWalletTemplate = (storeName: string, amountStr: string, txCount: number) => `
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -111,6 +111,7 @@ const getSettlementWalletTemplate = (storeName: string, amountStr: string, txCou
   </div>
 </div></div></body></html>`;
 
+// Variant B: Auto-payout is set up → funds are being sent to their bank
 const getSettlementAutoPayoutTemplate = (
   storeName: string,
   amountStr: string,
@@ -180,6 +181,7 @@ const getSettlementAutoPayoutTemplate = (
   </div>
 </div></div></body></html>`;
 
+// Sends the correct settlement email based on whether auto-payout is configured
 async function sendSettlementEmail(
   email: string,
   storeName: string,
@@ -194,7 +196,13 @@ async function sendSettlementEmail(
       ? `Funds Settled & Auto-Payout Triggered: ${amountStr} 💸`
       : `Funds Settled: ${amountStr} is in your Korra Wallet 🏦`;
     const html = hasAutoPayout
-      ? getSettlementAutoPayoutTemplate(storeName, amountStr, txCount, autoPayoutAccount!.bankName, autoPayoutAccount!.maskedAccount)
+      ? getSettlementAutoPayoutTemplate(
+          storeName,
+          amountStr,
+          txCount,
+          autoPayoutAccount!.bankName,
+          autoPayoutAccount!.maskedAccount,
+        )
       : getSettlementWalletTemplate(storeName, amountStr, txCount);
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -285,7 +293,7 @@ async function sendAutoPayoutEmail(
 }
 
 // ---------------------------------------------------------------------------
-// HELPER: PUSH NOTIFICATION
+// HELPER: PUSH NOTIFICATION (unchanged)
 // ---------------------------------------------------------------------------
 async function sendPushNotification(fcmToken: any, title: string, body: string) {
   if (!fcmToken) return;
@@ -306,21 +314,23 @@ async function sendPushNotification(fcmToken: any, title: string, body: string) 
 
 // ---------------------------------------------------------------------------
 // HELPER: AUTO-PAYOUT FOR ONE VENDOR
+// Called after settlement is committed, only if balance >= 10,000
+// and vendor has an auto_payout_details account saved.
 // ---------------------------------------------------------------------------
 async function runAutoPayoutForVendor(
   vendorId: string,
   storeName: string,
   vendorEmail: string | undefined,
   fcmToken: any,
-  settledAmount: number,
 ) {
   try {
+    // 1. Load auto-payout account from the dedicated subcollection
     const autoDoc = await db
       .collection('vendors').doc(vendorId)
       .collection('settings').doc('auto_payout_details')
       .get();
 
-    if (!autoDoc.exists) return;
+    if (!autoDoc.exists) return; // No auto-payout account set — skip silently
 
     const auto = autoDoc.data()!;
     const bankCode      = auto['bankCode']      as string | undefined;
@@ -328,45 +338,58 @@ async function runAutoPayoutForVendor(
     const accountName   = auto['accountName']   as string | undefined;
     const bankName      = auto['bankName']      as string | undefined;
 
-    if (!bankCode || !accountNumber || !accountName) return;
+    if (!bankCode || !accountNumber || !accountName) return; // Incomplete — skip
 
-    const balance = settledAmount;
+    // 2. Read walletBalance directly — the single source of truth for the Flutter dashboard
+    const statsDoc = await db.collection('vendor_stats').doc(vendorId).get();
+    if (!statsDoc.exists) return;
 
-    // Threshold check — only auto-payout if settled amount >= ₦10,000
+    const stats   = statsDoc.data()!;
+    const balance = stats['walletBalance'] || 0;
+
+    // 3. Threshold check — only auto-payout if balance >= ₦10,000
     if (balance < AUTO_PAYOUT_THRESHOLD) return;
 
+    // 4. CORRECTED MATH: fee comes OUT of balance, not on top.
+    //    e.g. balance=10000 → fee=50 → payoutAmount=9950 (merchant receives)
+    //                                 → totalDeduction=10000 (leaves Korra wallet)
     const fee            = balance >= EMTL_THRESHOLD ? GOVT_LEVY : 0;
     const payoutAmount   = balance - fee;
     const totalDeduction = balance;
 
+    // 5. Build reference ID
     const timeStr   = Date.now().toString(36).toUpperCase();
     const userSlice = vendorId.slice(-4).toUpperCase();
     const payoutRef = `AUTOPAYOUT-${timeStr}-${userSlice}`;
 
+    // 6. Atomic ledger deduction (same pattern as transfer in vendor-transaction-ops)
     await db.runTransaction(async (t) => {
       const statsRef  = db.collection('vendor_stats').doc(vendorId);
       const freshSnap = await t.get(statsRef);
+      const fresh     = freshSnap.data()!;
 
-      const freshBalance = settledAmount;
+      // Re-check inside transaction to prevent race conditions
+      const freshBalance = fresh['walletBalance'] || 0;
 
       if (freshBalance < AUTO_PAYOUT_THRESHOLD) {
-        throw new Error('Settled amount below threshold inside transaction — skip');
+        throw new Error('Balance dropped below threshold inside transaction — skip');
       }
 
+      // Main payout ledger entry
       const ledgerRef = db
         .collection('vendors').doc(vendorId)
         .collection('ledger_transactions').doc();
 
       t.set(ledgerRef, {
-        amount:           -payoutAmount,
-        type:             'auto_payout',
-        status:           'pending_monnify',
-        settlementStatus: 'cleared',
-        reference:         payoutRef,
-        description:      `Auto-payout to ${accountName}`,
-        createdAt:         admin.firestore.FieldValue.serverTimestamp(),
-        balanceBefore:     freshBalance,
-        balanceAfter:      freshBalance - payoutAmount,
+        amount:          -payoutAmount,
+        type:            'auto_payout',
+        status:          'pending_monnify',
+        settlementStatus:'cleared',
+        reference:        payoutRef,
+        description:     `Auto-payout to ${accountName}`,
+        createdAt:        admin.firestore.FieldValue.serverTimestamp(),
+        balanceBefore:    freshBalance,
+        balanceAfter:     freshBalance - payoutAmount,
         metadata: {
           destinationBank:    bankCode,
           destinationAccount: accountNumber,
@@ -374,27 +397,31 @@ async function runAutoPayoutForVendor(
         }
       });
 
+      // EMTL fee ledger entry (if applicable)
       if (fee > 0) {
         const feeRef = db
           .collection('vendors').doc(vendorId)
           .collection('ledger_transactions').doc();
 
         t.set(feeRef, {
-          amount:       -fee,
-          type:         'fee',
-          status:       'success',
-          reference:    `FEE-${payoutRef}`,
-          description:  'EMTL Government Levy (Auto-Payout)',
-          createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+          amount:      -fee,
+          type:        'fee',
+          status:      'success',
+          reference:   `FEE-${payoutRef}`,
+          description: 'EMTL Government Levy (Auto-Payout)',
+          createdAt:   admin.firestore.FieldValue.serverTimestamp(),
           balanceBefore: freshBalance - payoutAmount,
           balanceAfter:  freshBalance - totalDeduction,
         });
       }
 
+      // Deduct from stats — update both totalPayouts and walletBalance
       t.update(statsRef, {
-        totalPayouts: admin.firestore.FieldValue.increment(totalDeduction),
+        totalPayouts:  admin.firestore.FieldValue.increment(totalDeduction),
+        walletBalance: admin.firestore.FieldValue.increment(-totalDeduction),
       });
 
+      // Monnify mapping for webhook lookups
       const mappingRef = db.collection('monnify_mappings').doc(payoutRef);
       t.set(mappingRef, {
         vendorUid: vendorId,
@@ -403,29 +430,37 @@ async function runAutoPayoutForVendor(
       });
     });
 
+    // 7. Call Monnify disbursement
     const token = await getMonnifyToken();
     const monnifyRes = await fetch(`${MONNIFY_BASE_URL}/api/v2/disbursements/single`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type':  'application/json',
+        'Authorization':  `Bearer ${token}`,
+        'Content-Type':   'application/json',
       },
       body: JSON.stringify({
-        amount:                   payoutAmount,
-        reference:                payoutRef,
-        narration:                'Korra Auto-Payout',
-        destinationBankCode:      bankCode,
-        destinationAccountNumber: accountNumber,
-        destinationAccountName:   accountName,
-        currency:                 'NGN',
-        sourceAccountNumber:      MONNIFY_WALLET_ACCOUNT,
-        async:                    false,
+        amount:                  payoutAmount,
+        reference:               payoutRef,
+        narration:               'Korra Auto-Payout',
+        destinationBankCode:     bankCode,
+        destinationAccountNumber:accountNumber,
+        destinationAccountName:  accountName,
+        currency:                'NGN',
+        sourceAccountNumber:     MONNIFY_WALLET_ACCOUNT,
+        async:                   false,
       }),
     });
 
     const monnifyData = await monnifyRes.json();
+    // Log only — no action taken on this response.
+    // The webhook (monnify-webhook) is the single source of truth.
+    // SUCCESSFUL_DISBURSEMENT → webhook marks ledger 'success'
+    // FAILED_DISBURSEMENT     → webhook runs the refund saga
+    // The ledger stays at 'pending_monnify' until webhook fires.
     console.log(`📤 Auto-payout submitted ${payoutRef} → Monnify raw status: ${monnifyData.responseBody?.status ?? 'unknown'}`);
 
+    // 8. Notify merchant that payout is in progress (not yet confirmed).
+    //    The webhook will send the final success/failure push.
     const amountStr     = `₦${payoutAmount.toLocaleString('en-US')}`;
     const maskedAccount = `•••• ${accountNumber.slice(-4)}`;
 
@@ -450,12 +485,20 @@ async function runAutoPayoutForVendor(
     );
 
     if (vendorEmail) {
-      await sendAutoPayoutEmail(vendorEmail, storeName, amountStr, bankName ?? '', maskedAccount, payoutRef);
+      await sendAutoPayoutEmail(
+        vendorEmail,
+        storeName,
+        amountStr,
+        bankName ?? '',
+        maskedAccount,
+        payoutRef,
+      );
     }
 
     console.log(`✅ Auto-payout ${payoutRef} submitted → ${vendorId} → ${amountStr}`);
 
   } catch (err: any) {
+    // Log per-vendor errors but don't crash the whole cron
     if (!err.message?.includes('threshold')) {
       console.error(`❌ Auto-payout failed for vendor ${vendorId}:`, err.message);
     }
@@ -482,7 +525,7 @@ serve(async (req) => {
       const vendorEmail = vendorData.personal?.email as string | undefined;
       const fcmToken    = vendorData.fcmToken || vendorData.fcmTokens;
 
-      // ── STEP 1: SETTLEMENT ────────────────────────────────────────────────
+      // ── STEP 1: SETTLEMENT (your existing logic, unchanged) ────────────────
       const salesSnap = await db
         .collection('vendors').doc(vendorId)
         .collection('ledger_transactions')
@@ -518,6 +561,7 @@ serve(async (req) => {
       if (vendorClearedCount > 0) {
         const amountDisplay = `₦${vendorTotalCleared.toLocaleString('en-US')}`;
 
+        // Activity feed entry for settlement
         const activityRef = db
           .collection('vendors').doc(vendorId)
           .collection('activity_feed').doc();
@@ -540,17 +584,17 @@ serve(async (req) => {
           `${amountDisplay} from ${vendorClearedCount} recent transaction(s) has cleared! You can now request a payout.`,
         );
 
-        // ── STEP 2: AUTO-PAYOUT ───────────────────────────────────────────────
+        // ── STEP 2: AUTO-PAYOUT (fires after settlement is committed) ────────
+        // Only runs if vendor has set up an auto-payout account AND
+        // their balance is >= ₦10,000 after this settlement.
         const autoPayoutDoc = await db
           .collection('vendors').doc(vendorId)
           .collection('settings').doc('auto_payout_details')
           .get();
 
-        // ✅ BUG FIX: Only set autoPayoutInfo if amount meets threshold
-        // Below ₦10,000 → wallet email (no bank transfer, regardless of account setup)
-        // At or above ₦10,000 with bank account → auto-payout email + bank transfer
+        // Build auto-payout info for the settlement email (null if not set up)
         let autoPayoutInfo: { bankName: string; maskedAccount: string } | null = null;
-        if (autoPayoutDoc.exists && vendorTotalCleared >= AUTO_PAYOUT_THRESHOLD) {
+        if (autoPayoutDoc.exists) {
           const autoData = autoPayoutDoc.data()!;
           const accNum   = autoData['accountNumber'] as string ?? '';
           autoPayoutInfo = {
@@ -559,25 +603,32 @@ serve(async (req) => {
           };
         }
 
+        // Send settlement email — variant depends on whether auto-payout is set
         if (vendorEmail) {
-          await sendSettlementEmail(vendorEmail, storeName, amountDisplay, vendorClearedCount, autoPayoutInfo);
+          await sendSettlementEmail(
+            vendorEmail,
+            storeName,
+            amountDisplay,
+            vendorClearedCount,
+            autoPayoutInfo, // null → wallet email, object → auto-payout email
+          );
         }
 
         totalVendorsProcessed++;
         totalTransactionsSettled += vendorClearedCount;
 
-        if (autoPayoutDoc.exists && vendorTotalCleared >= AUTO_PAYOUT_THRESHOLD) {
-          await runAutoPayoutForVendor(vendorId, storeName, vendorEmail, fcmToken, vendorTotalCleared);
+        if (autoPayoutDoc.exists) {
+          await runAutoPayoutForVendor(vendorId, storeName, vendorEmail, fcmToken);
           totalAutoPayoutsTriggered++;
         }
       }
     }
 
     return new Response(JSON.stringify({
-      message:               "Settlement + auto-payout process complete.",
-      vendorsProcessed:       totalVendorsProcessed,
-      transactionsSettled:    totalTransactionsSettled,
-      autoPayoutsTriggered:   totalAutoPayoutsTriggered,
+      message:                "Settlement + auto-payout process complete.",
+      vendorsProcessed:        totalVendorsProcessed,
+      transactionsSettled:     totalTransactionsSettled,
+      autoPayoutsTriggered:    totalAutoPayoutsTriggered,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error: any) {

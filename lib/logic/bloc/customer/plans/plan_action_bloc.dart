@@ -1,10 +1,11 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
 
-enum PlansTab { active, pending, completed, overdue, cancelled, readyForPickup }
+enum PlansTab { active, pending, completed, overdue, cancelled }
 enum SortBy  { recent, nextDue, amount, progress }
 
 // --- EVENTS ---
@@ -55,6 +56,13 @@ class PlanActionBloc extends Bloc<PlanActionEvent, PlanActionState> {
           customerUid: event.uid,
           amount: event.amount
         );
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'installment_paid',
+          parameters: {
+            'plan_id': event.planId,
+            'amount': event.amount,
+          },
+        );
         emit(const PlanActionState(status: PlanActionStatus.success, message: "Payment Successful"));
       } catch (e) {
         emit(PlanActionState(status: PlanActionStatus.error, message: e.toString()));
@@ -69,6 +77,13 @@ class PlanActionBloc extends Bloc<PlanActionEvent, PlanActionState> {
           planId: event.planId,
           customerUid: event.uid,
           reason: event.reason
+        );
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'plan_cancelled',
+          parameters: {
+            'plan_id': event.planId,
+            'reason': event.reason,
+          },
         );
         emit(const PlanActionState(status: PlanActionStatus.success, message: "Plan closed. Funds credited to Store Balance."));
       } catch (e) {

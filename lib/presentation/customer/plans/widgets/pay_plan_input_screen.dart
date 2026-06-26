@@ -115,7 +115,9 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     if (!_isPerPaymentFee) return 0;
     final cash = _cashPortion(storeCredit);
     if (cash <= 0) return 0;
-    return double.parse((cash * _feeRate).toStringAsFixed(2));
+    
+    final double calculatedFee = double.parse((cash * _feeRate).toStringAsFixed(2));
+    return calculatedFee > 7500.0 ? 7500.0 : calculatedFee; // 🛡️ Enforce Max Cap
   }
 
   // Total applied to plan = store portion (full) + cash portion minus cash fee
@@ -140,7 +142,14 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
     final remaining = _roundUpAmount(widget.plan.amountRemaining);
     if (remaining <= 0) return 0;
     if (!_isPerPaymentFee) return remaining;
-    return double.parse((remaining / (1 - _feeRate)).toStringAsFixed(2));
+    
+    // 🛡️ Apply the cap logic to the "Pay to Complete" button
+    final double uncappedGross = remaining / (1 - _feeRate);
+    if ((uncappedGross - remaining) > 7500.0) {
+      return double.parse((remaining + 7500.0).toStringAsFixed(2));
+    }
+    
+    return double.parse(uncappedGross.toStringAsFixed(2));
   }
 
   // --- KEYPAD LOGIC (Unchanged) ---
@@ -281,7 +290,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
             final totalAvailable = walletBal + storeCredit;
 
             final bool isOverBalance = _currentAmount > totalAvailable;
-            final bool isOverRemaining = _currentAmount > _roundUpAmount(widget.plan.amountRemaining);
+            final bool isOverRemaining = _currentAmount > (_completionGrossAmount + 0.01);
             // Allow 0.001 tolerance for floating point math
             final bool isValid = _currentAmount > 0 && !isOverBalance && !isOverRemaining; 
 
@@ -429,7 +438,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                       width: 300.w 
                     )
                   else if (isOverRemaining)
-                    _buildStatusPill(Icons.warning_amber, "Exceeds remaining balance", Colors.orange.shade50, Colors.orange.shade800, width: 300.w)
+                    _buildStatusPill(Icons.warning_amber, "Exceeds total needed to complete plan", Colors.orange.shade50, Colors.orange.shade800, width: 300.w)
                   else
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

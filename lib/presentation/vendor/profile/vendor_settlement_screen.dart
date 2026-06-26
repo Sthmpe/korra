@@ -11,7 +11,6 @@ import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../data/models/vendor/transaction_model.dart';
 import '../../../data/models/vendor/vendor_monthly_flow.dart';
-import '../../../data/models/vendor/vendor_stat.dart';
 import '../../shared/widgets/korra_header.dart';
 
 class VendorSettlementScreen extends StatefulWidget {

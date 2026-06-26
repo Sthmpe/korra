@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
@@ -46,6 +42,14 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
 
   static const _brand = KorraColors.brand;
   static const _stroke = Color(0xFFF2F4F7);
+
+  late Stream<Plan?> _singlePlanStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _singlePlanStream = widget.customerRepo.streamSinglePlan(widget.plan.id);
+  }
 
   double get _smartTargetAmount {
     // 1. If backend has a valid specific target, use it.
@@ -92,7 +96,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
           }
         },
         child: StreamBuilder<Plan?>(
-          stream: widget.customerRepo.streamSinglePlan(widget.plan.id),
+          stream: _singlePlanStream,
           initialData: widget.plan,
           builder: (context, snapshot) {
             final currentPlan = snapshot.data ?? widget.plan;
@@ -100,7 +104,6 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
             // 2. DETERMINE STATE
             final bool isCompleted = currentPlan.status == 'completed';
             final bool isCancelled = currentPlan.status == 'cancelled';
-            final bool isFulfilled = currentPlan.fulfilledAt != null;
 
             // 🛡️ UI PROTECTION: If deadline passed, treat as terminated immediately
             final bool isTerminated = currentPlan.isEffectivelyTerminated;
@@ -242,299 +245,47 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   }
 
   // =========================================================
-  // ✅ NEW: PICKUP / FULFILLMENT SECTION
+  // ✅ PAYMENT COMPLETED SECTION (Clean & Simple)
   // =========================================================
   Widget _buildPickupSection(BuildContext context, Plan p) {
-    final bool isFulfilled = p.fulfilledAt != null;
-
-    if (isFulfilled) {
-      // -----------------------------------------------------
-      // 1. FULFILLED STATE (Clean Success Card)
-      // -----------------------------------------------------
-      return Container(
-        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
-        padding: EdgeInsets.all(24.r),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          // Subtle, high-end shadow
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF101828).withOpacity(0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          //border: Border.all(color: const Color(0xFFEAECF0)),
-        ),
-        child: Column(
-          children: [
-            // Success Icon with Ripple effect visual
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Iconsax.verify5,
-                size: 32.sp,
-                color: Colors.green.shade700,
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              "Order Collected",
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF101828),
-              ),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              "You successfully picked up this item on\n${DateFormat('MMM d, yyyy • h:mm a').format(p.fulfilledAt!)}",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 13.sp,
-                color: const Color(0xFF667085),
-                height: 1.5,
-              ),
-            ),
-            SizedBox(height: 24.h),
-
-            // Share Button
-            SizedBox(
-              width: double.infinity,
-              height: 48.h,
-              child: OutlinedButton.icon(
-                onPressed: () => _shareProductAchievement(context),
-                icon: Icon(Iconsax.share, size: 18.sp),
-                label: const Text("Share Achievement"),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF344054),
-                  side: BorderSide(color: Color(0xFFD0D5DD).withOpacity(0.5)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10.r),
-                  ),
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
+      padding: EdgeInsets.all(24.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF3), // Soft Success Green
+        borderRadius: BorderRadius.circular(16.r),
+        //border: Border.all(color: const Color(0xFFD1FADF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle, color: const Color(0xFF027A48), size: 24.sp),
+              SizedBox(width: 12.w),
+              Text(
+                "Payment Complete!",
+                style: GoogleFonts.inter(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF027A48),
                 ),
               ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Text(
+            "You have fully paid for this item. Please contact ${p.storeName} directly to arrange for collection or delivery.",
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              color: const Color(0xFF027A48).withOpacity(0.9),
+              height: 1.5,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
-      );
-    } else {
-      // -----------------------------------------------------
-      // 2. READY FOR COLLECTION (The Secure Ticket)
-      // -----------------------------------------------------
-      return Container(
-        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF101828).withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-          //border: Border.all(color: const Color(0xFFEAECF0)),
-        ),
-        child: Column(
-          children: [
-            // A. Header Section
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 20.w),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB), // Very light grey header
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFEAECF0).withOpacity(0.5)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8.r),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      //border: Border.all(color: const Color(0xFFEAECF0)),
-                    ),
-                    child: const Icon(
-                      Iconsax.box_tick,
-                      size: 18,
-                      color: KorraColors.brand,
-                    ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Ready for Pickup",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF101828),
-                        ),
-                      ),
-                      Text(
-                        "Present this code at the store",
-                        style: GoogleFonts.inter(
-                          fontSize: 12.sp,
-                          color: const Color(0xFF667085),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // B. The PIN Code (Focal Point)
-            Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 32.h, 20.w, 24.h),
-              child: Column(
-                children: [
-                  Text(
-                    "PICKUP PIN",
-                    style: GoogleFonts.inter(
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
-                      color: const Color(0xFF98A2B3),
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: 20.h),
-                    decoration: BoxDecoration(
-                      color: const Color(
-                        0xFFFFF7ED,
-                      ), // Very light brand tint (Cream/Orange)
-                      borderRadius: BorderRadius.circular(12.r),
-                      // border: Border.all(
-                      //   color: KorraColors.brand.withOpacity(0.2),
-                      // ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        // Format: "4 9 2 1"
-                        (p.pickupCode ?? "----").split('').join('  '),
-                        style: GoogleFonts.spaceMono(
-                          // Or generic mono if spaceMono not added
-                          fontSize: 36.sp,
-                          fontWeight: FontWeight.w700,
-                          color: KorraColors.brand, // Brand Color
-                          letterSpacing: 2.0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // C. Divider with "Ticket Teeth" visual (Optional, simplified to dashed line here)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.w),
-              child: Row(
-                children: List.generate(
-                  150 ~/ 5,
-                  (index) => Expanded(
-                    child: Container(
-                      color: index % 2 == 0
-                          ? Colors.transparent
-                          : Colors.grey.shade300,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // D. Security Warning
-            Padding(
-              padding: EdgeInsets.all(20.w),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Iconsax.info_circle,
-                    size: 18.sp,
-                    color: const Color(0xFFB54708),
-                  ),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: Text(
-                      "Security Warning: Do not share this code until you have physically inspected your item.",
-                      style: GoogleFonts.inter(
-                        fontSize: 12.sp,
-                        color: const Color(0xFF344054),
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  // =========================================================
-  // 1. HEADER & HERO
-  // =========================================================
-  Future<void> _shareProductAchievement(BuildContext context) async {
-    // 1. Define the High-Status Text
-    final String text = 
-        "Just secured my ${widget.plan.title} on Korra.\n"
-        "Paid at my pace. 100% Owned. 🚀\n\n"
-        "Start your journey: https://korra.com.ng";
-
-    try {
-      // 2. Check if we have an image to share
-      final String? imageUrl = (widget.plan.imageUrls != null && widget.plan.imageUrls!.isNotEmpty)
-          ? widget.plan.imageUrls!.first
-          : null;
-
-      if (imageUrl != null) {
-        // --- IMAGE SHARE PATH ---
-        
-        // A. Download the image bytes (Using built-in NetworkAssetBundle to avoid extra packages)
-        final ByteData bytes = await NetworkAssetBundle(Uri.parse(imageUrl)).load("");
-        final Uint8List list = bytes.buffer.asUint8List();
-
-        // B. Save to Temp Directory
-        final tempDir = await getTemporaryDirectory();
-        final file = await File('${tempDir.path}/korra_share.png').create();
-        await file.writeAsBytes(list);
-
-        // C. Share File + Text
-        if (context.mounted) {
-           await Share.shareXFiles(
-            [XFile(file.path)],
-            text: text,
-            subject: "My New ${widget.plan.title}",
-          );
-        }
-      } else {
-        // --- FALLBACK: TEXT ONLY (If no image exists) ---
-        await Share.share(text, subject: "My New ${widget.plan.title}");
-      }
-
-    } catch (e) {
-      debugPrint("Error sharing image: $e");
-      // --- FALLBACK: TEXT ONLY (If download fails) ---
-      await Share.share(text, subject: "My New ${widget.plan.title}");
-    }
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildImageCarousel(List<dynamic> images) {
@@ -671,7 +422,6 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   // =========================================================
   // 2. FINANCIAL CARD (Smart Logic)
   // =========================================================
-
   Widget _buildFinancialCard(Plan p) {
     final double percent = p.totalAmount == 0
         ? 0
@@ -763,7 +513,6 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   // =========================================================
   // 3. TIMELINE CARD (Grace Period Logic)
   // =========================================================
-
   Widget _buildTimelineCard(Plan p) {
     // Logic handles normal expiry + extension logic if active
     final DateTime deadline = p.effectiveDeadline;
@@ -846,7 +595,6 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   // =========================================================
   // 4. ACTION BAR & LOGIC
   // =========================================================
-
   Widget _buildStickyAction(BuildContext context, Plan p, {bool isLoading = false}) {
     final bool isOverdue = p.isOverdue;
 
@@ -1019,7 +767,6 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   // =========================================================
   // 5. HELPER WIDGETS
   // =========================================================
-
   void _showConversionSheet(BuildContext context, Plan p) {
     final cubit = context.read<PlanActionCubit>();
 
@@ -1409,6 +1156,8 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   }
 
   Widget _buildInfoGrid(Plan p) {
+    final bool isCompleted = p.status == 'completed';
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1418,16 +1167,17 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
       child: Column(
         children: [
           _infoRow("Plan ID", p.id.substring(0, 8), isCopyable: true),
+          _infoRow("Cadence", p.cadenceType?.capitalizeFirst ?? "Flexible"),
           _infoRow(
             "Created On",
             DateFormat('MMM dd, yyyy').format(p.createdAt),
           ),
-          _infoRow("Cadence", p.cadenceType?.capitalizeFirst ?? "Flexible", isLast: true),
-          // _infoRow(
-          //   "Service Fee",
-          //   currencyFormat.format(p.processingFee),
-          //   isLast: true,
-          // ),
+          if (isCompleted)
+            _infoRow(
+              "Completed On",
+              DateFormat('MMM dd, yyyy').format(p.completedAt ?? p.updatedAt),
+              isLast: true,
+            ),
         ],
       ),
     );

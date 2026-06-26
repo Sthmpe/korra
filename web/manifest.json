@@ -17,27 +17,27 @@
     "background_color": "#A54600"
   },
 
-  "_active_note": "Currently set to MERCHANT. Swap the values above into the fields below when deploying to customer.",
-
-  "name": "Korra",
-  "short_name": "Korra",
+  "name": "Korra Business",
+  "short_name": "Korra Biz",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#FFFFFF",
-  "theme_color": "#A54600",
-  "description": "Reserve now, pay in parts, own with ease.",
+  "theme_color": "#000000",
+  "description": "A better way to accept installment payments",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icons/korra_logo_icon.webp",
-      "sizes": "192x192",
-      "type": "image/webp"
+        "src": "icons/korra_logo_icon.webp",
+        "sizes": "192x192",
+        "type": "image/webp",
+        "purpose": "any maskable"
     },
     {
-      "src": "icons/korra_logo_icon.webp",
-      "sizes": "512x512",
-      "type": "image/webp"
+        "src": "icons/korra_logo_icon.webp",
+        "sizes": "512x512",
+        "type": "image/webp",
+        "purpose": "any maskable"
     }
   ]
 }

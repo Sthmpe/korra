@@ -5,15 +5,17 @@ import 'package:google_fonts/google_fonts.dart';
 const _brand = Color(0xFFA54600);
 
 class RowWithChevron extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconWidget;
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
 
   const RowWithChevron({
     super.key,
-    required this.icon,
     required this.title,
+    this.icon,
+    this.iconWidget,
     this.subtitle,
     this.onTap,
   });
@@ -35,7 +37,7 @@ class RowWithChevron extends StatelessWidget {
                 //border: Border.all(color: const Color(0xFFEAE6E2)),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 18.sp, color: _brand),
+              child: iconWidget ?? Icon(icon, size: 18.sp, color: _brand),
             ),
             SizedBox(width: 10.w),
             Expanded(

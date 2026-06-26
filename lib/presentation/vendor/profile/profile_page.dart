@@ -153,7 +153,13 @@ class VendorProfilePage extends StatelessWidget {
                             subtitle: 'Manage bank account',
                             onTap: () {
                               // Future: Navigate to Payout Settings
-                              showAppSnackbar("Payout settings coming soon!", SnackbarType.info);
+                              Get.toNamed(
+                                  Routes.vendorPayoutSettings,
+                                  arguments: {
+                                    'repo': vendors,
+                                    'uid': vendorUid,
+                                  },
+                                );
                             },
                           ),
                         ],
@@ -300,11 +306,11 @@ class VendorProfilePage extends StatelessWidget {
                             _sectionTitle('Social Media'),
                             SizedBox(height: 12.h),
                             if (vendor.whatsappGroup != null) 
-                              RowWithChevron(icon: FontAwesomeIcons.whatsapp, title: 'WhatsApp', onTap: (){}),
+                              RowWithChevron(iconWidget: FaIcon(FontAwesomeIcons.whatsapp, size: 18.sp, color: const Color(0xFF25D366)), title: 'WhatsApp', onTap: (){}),
                             if (vendor.instagram != null) 
-                              RowWithChevron(icon: FontAwesomeIcons.instagram, title: 'Instagram', onTap: (){}),
+                              RowWithChevron(iconWidget: FaIcon(FontAwesomeIcons.instagram, size: 18.sp, color: const Color(0xFFE1306C)), title: 'Instagram', onTap: (){}),
                             if (vendor.website != null) 
-                              RowWithChevron(icon: FontAwesomeIcons.globe, title: 'Website', onTap: (){}),
+                              RowWithChevron(iconWidget: FaIcon(FontAwesomeIcons.globe, size: 18.sp, color: const Color(0xFF000000)), title: 'Website', onTap: (){}),
                           ],
                         ),
                       ),
@@ -470,8 +476,7 @@ class _StaticInfoRow extends StatelessWidget {
     required this.value,
     this.subtitle,
     this.valueColor,
-    this.trailingIcon,
-  });
+  }) : trailingIcon = null;
 
   @override
   Widget build(BuildContext context) {

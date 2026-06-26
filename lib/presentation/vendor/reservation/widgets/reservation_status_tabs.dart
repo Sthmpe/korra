@@ -32,9 +32,9 @@ class ReservationStatusTabs extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          // 1. READY (High Priority - Green)
+          // 1. Completed Formerly 'Ready' (High Priority - Green)
           _Tab(
-            label: "Ready",
+            label: "Completed",
             count: readyCount,
             isActive: current == ReservationStatus.readyForPickup,
             onTap: () => onChanged(ReservationStatus.readyForPickup),
@@ -58,9 +58,9 @@ class ReservationStatusTabs extends StatelessWidget {
             onTap: () => onChanged(ReservationStatus.ongoing),
           ),
 
-          // 4. COMPLETED
+          // 4. FULFILLED (Formerly "Completed")
           _Tab(
-            label: "Completed",
+            label: "Fulfilled",
             count: completedCount,
             isActive: current == ReservationStatus.completed,
             onTap: () => onChanged(ReservationStatus.completed),

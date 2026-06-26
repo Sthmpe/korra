@@ -56,14 +56,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  late Stream<Customer?> _customerStream;
+  late Stream<int> _unreadStream;
+  late Stream<List<Plan>> _plansStream;
+  late Stream<List<ActivityItem>> _activityStream;
   
   @override
   void initState() {
     super.initState();
-    // 1. ENGINEERING: Initialize Push Notifications (One-time setup)
-    // This asks for permission (iOS) and saves the token to Firestore.
     NotificationService(widget.customerRepo).initialize(widget.customerUid);
+
+    _customerStream = widget.customerRepo.streamCustomer(widget.customerUid);
+    _unreadStream = widget.customerRepo.streamUnreadCount(widget.customerUid);
+    _plansStream = widget.customerRepo.streamCustomerPlans(widget.customerUid);
+    _activityStream = widget.customerRepo.streamActivityFeed(widget.customerUid);
   }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +91,7 @@ class _HomePageState extends State<HomePage> {
       
       // 2. Single Source of Truth (Stream)
       child: StreamBuilder<Customer?>(
-        stream: widget.customerRepo.streamCustomer(widget.customerUid),
+        stream: _customerStream,
         builder: (context, snapshot) {
           final customer = snapshot.data;
           final currentBalance = customer?.availableBalance ?? 0.00;
@@ -130,7 +138,7 @@ class _HomePageState extends State<HomePage> {
                 title: 'Home',
                 trailingActions: [
                   StreamBuilder<int>(
-                    stream: widget.customerRepo.streamUnreadCount(widget.customerUid),
+                    stream: _unreadStream,
                     initialData: 0,
                     builder: (context, notifSnap) {
                       final count = notifSnap.data ?? 0;
@@ -213,7 +221,7 @@ class _HomePageState extends State<HomePage> {
 
                           // B. ACTIVE PLANS (Filtered Stream)
                           StreamBuilder<List<Plan>>(
-                            stream: widget.customerRepo.streamCustomerPlans(widget.customerUid),
+                            stream: _plansStream,
                             builder: (context, planSnap) {
                               // Loading
                               if (planSnap.connectionState == ConnectionState.waiting) {
@@ -324,7 +332,7 @@ class _HomePageState extends State<HomePage> {
                           // E. RECENT ACTIVITY
                           SectionHeader(title: 'Recent Activity', actionText: ''),
                           StreamBuilder<List<ActivityItem>>(
-                            stream: widget.customerRepo.streamActivityFeed(widget.customerUid),
+                            stream: _activityStream,
                             builder: (context, feedSnap) {
                               if (feedSnap.connectionState == ConnectionState.waiting) {
                                 return Padding(

@@ -1,3 +1,4 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,6 +59,16 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
             }
         }
 
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'plan_preview_loaded',
+          parameters: {
+            'product_id': event.productId,
+            'product_price': event.productPrice,
+            'min_downpayment': (result['minDownPayment'] as num).toDouble(),
+            'has_active_plans': hasPlans ? 1 : 0,
+          },
+        );
+
         emit(
           state.copyWith(
             status: CreatePlanStatus.previewLoaded,
@@ -109,7 +120,19 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
           totalDebitAmount: event.downPayment, // (Principal + Fee)
           secureToken: state.secureToken!      // ✅ Handshake
         );
-        
+
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'plan_created',
+          parameters: {
+            'product_id': event.planModel.productId,
+            'value': event.planModel.totalAmount,      // product price
+            'vendor_id': event.planModel.vendorId,
+            'downpayment': event.downPayment,          // upfront amount paid
+            'loan_amount': state.loanAmount,
+            'duration_days': state.baseDurationDays,
+          },
+        );
+
         emit(state.copyWith(status: CreatePlanStatus.success));
       } catch (e) {
         String userMessage = "An unexpected error occurred.";
@@ -127,6 +150,13 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
         } else {
           userMessage = e.toString().replaceAll("Exception: ", "");
         }
+
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'plan_creation_failed',
+          parameters: {
+            'error_message': userMessage,
+          },
+        );
 
         emit(
           state.copyWith(

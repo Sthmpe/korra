@@ -16,6 +16,7 @@ class ReservationsState {
   final int countCompleted;
   final int countCancelled;
   final VerificationStatus verificationStatus;
+  final Set<String> selectedIds;
 
   ReservationsState({
     this.loading = false,
@@ -29,6 +30,7 @@ class ReservationsState {
     this.countCompleted = 0,
     this.countCancelled = 0,
     this.verificationStatus = VerificationStatus.initial,
+    this.selectedIds = const {},
   });
 
   factory ReservationsState.initial(ReservationStatus initialFilter) {
@@ -47,6 +49,7 @@ class ReservationsState {
     int? countCompleted,
     int? countCancelled,
     VerificationStatus? verificationStatus,
+    Set<String>? selectedIds,
   }) {
     return ReservationsState(
       loading: loading ?? this.loading,
@@ -60,6 +63,7 @@ class ReservationsState {
       countCompleted: countCompleted ?? this.countCompleted,
       countCancelled: countCancelled ?? this.countCancelled,
       verificationStatus: verificationStatus ?? VerificationStatus.initial,
+      selectedIds: selectedIds ?? this.selectedIds,
     );
   }
 }

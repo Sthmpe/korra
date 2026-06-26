@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
@@ -48,6 +49,11 @@ class SignupCustomerBloc
     try {
       final uid = await _customerRepo.createCustomerFromState(state);
 
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'sign_up',
+        parameters: {'method': 'email', 'role': 'customer'},
+      );
+
       emit(
         state.copyWith(loading: false, status: SignupStatus.success, uid: uid),
       );
@@ -59,6 +65,11 @@ class SignupCustomerBloc
       if (error is KorraException) {
         userMessage = error.message;
       }
+
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'signup_failed',
+        parameters: {'role': 'customer', 'error_message': userMessage},
+      );
 
       emit(
         state.copyWith(

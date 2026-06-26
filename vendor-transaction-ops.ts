@@ -364,27 +364,96 @@ serve(async (req) => {
 
 
 
-        // --- STEP D: SUBMIT ONLY ---
-        // Webhook (monnify-webhook) is the single source of truth for everything.
-        // SUCCESSFUL_DISBURSEMENT → webhook marks success + notifies merchant
-        // FAILED_DISBURSEMENT     → webhook runs refund saga + notifies merchant
-        // We just log what Monnify returned and return pending to Flutter.
-        console.log(`📤 Payout submitted ${payoutRef} → Monnify status: ${result.responseBody?.status ?? 'unknown'}`);
+        // --- STEP D: HANDLE RESULT & NOTIFY ---
+        let finalStatus = 'failed';
+        let note = 'Transaction failed';
 
-        await sendNotification(
-          uid,
-          "Payout In Progress ⏳",
-          `Your withdrawal of ₦${amount.toLocaleString()} to ${destination.accountName} is being processed.`,
-          "payout_pending",
-          `-₦${amount.toLocaleString()}`,
-          payoutRef
-        );
+        // 1. SUCCESS CASE
+        if (result.requestSuccessful && result.responseBody?.status === 'SUCCESS') {
+          finalStatus = 'success';
+          note = 'Payout successful';
+
+          await sendNotification(
+            uid,
+            "Payout Successful 💸",
+            `Your withdrawal of ₦${amount.toLocaleString()} to ${destination.accountName} was successful.`,
+            "payout_success",                 // type
+            `-₦${amount.toLocaleString()}`,   // amountDisplay (Negative, money left)
+            payoutRef                         // refId
+          );
+        }
+        // 2. PENDING CASE
+        else if (result.requestSuccessful && result.responseBody?.status === 'PENDING') {
+          finalStatus = 'pending';
+          note = 'Processing by bank';
+          
+          await sendNotification(
+            uid,
+            "Payout Processing ⏳",
+            `Your withdrawal of ₦${amount.toLocaleString()} is being processed by the bank.`,
+            "payout_pending",                 // type
+            `-₦${amount.toLocaleString()}`,   // amountDisplay (Negative, money locked)
+            payoutRef                         // refId
+          );
+        }
+        // 3. FAILURE CASE (REFUND)
+        else {
+          finalStatus = 'failed';
+          note = result.responseMessage || 'Gateway error';
+          
+          // Refund the Ledger
+          await db.runTransaction(async (t) => {
+             // Refund main amount
+             const ledgerRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
+             t.set(ledgerRef, {
+               amount: amount, // Positive
+               type: 'refund',
+               status: 'success',
+               reference: `REFUND-${payoutRef}`,
+               description: `Refund for failed payout`,
+               createdAt: admin.firestore.FieldValue.serverTimestamp()
+             });
+
+             // Refund the fee
+             if (fee > 0) {
+               const feeRef = db.collection('vendors').doc(uid).collection('ledger_transactions').doc();
+               t.set(feeRef, {
+                 amount: fee,
+                 type: 'refund',
+                 status: 'success',
+                 reference: `REFUND-FEE-${payoutRef}`,
+                 description: `Refund for failed EMTL Levy`,
+                 createdAt: admin.firestore.FieldValue.serverTimestamp()
+               });
+             }
+
+             // Give the money back to their balance stat
+             t.update(db.collection('vendor_stats').doc(uid), {
+                totalPayouts: admin.firestore.FieldValue.increment(-totalDeduction)
+             });
+          });
+
+          await sendNotification(
+            uid,
+            "Payout Failed ❌",
+            `Your withdrawal of ₦${amount.toLocaleString()} failed. The funds have been returned to your wallet.`,
+            "payout_failed",                  // type
+            `+₦${amount.toLocaleString()}`,   // amountDisplay (Positive! Money came back)
+            payoutRef                         // refId
+          );
+        }
+
+        // Update Original Ledger Status
+        const q = await db.collection('vendors').doc(uid).collection('ledger_transactions').where('reference', '==', payoutRef).get();
+        if (!q.empty) {
+          await q.docs[0].ref.update({ status: finalStatus, gatewayResponse: note });
+        }
 
         return new Response(JSON.stringify({ 
-          success: true,
-          status: 'pending',
+          success: finalStatus !== 'failed',
+          status: finalStatus,
           reference: payoutRef,
-          message: 'Payout submitted. You will be notified once confirmed.',
+          message: note
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       } catch (gatewayError) {

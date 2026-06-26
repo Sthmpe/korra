@@ -29,7 +29,6 @@ class PlansPage extends StatefulWidget {
   final String customerUid;
   final VoidCallback onJumpToHome;
   final VoidCallback onJumpToPlan;
-  
 
   const PlansPage({
     super.key,
@@ -46,13 +45,75 @@ class PlansPage extends StatefulWidget {
 class _PlansPageState extends State<PlansPage> {
   // Filters State
   PlansTab _currentTab = PlansTab.active;
-
-  SortBy _sortBy = SortBy.recent; // Default sort
+  SortBy _sortBy = SortBy.recent;
   bool _autopayOnly = false;
   bool _overdueOnly = false;
   bool _highValueOnly = false;
 
+  // 1. 👇 Add a single stream variable here
+  int _currentLimit = 15;
+  late Stream<List<Plan>> _plansStream;
+  late Stream<Customer?> _customerStream;
+  final ScrollController _scrollController = ScrollController();
+  List<Plan> _cachedPlans = [];
+  bool _isLoadingMore = false;
+  int _lastLoadedLimit = 0;
+  DateTime? _lastScrollLoadTime;
+
   static const _brand = Color(0xFFA54600);
+
+  @override
+  @override
+  void initState() {
+    super.initState();
+    _customerStream = widget.customerRepo.streamCustomer(widget.customerUid);
+    _loadPlansStream();
+    
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore) return;
+    if (!_scrollController.hasClients) return;
+
+    final pos = _scrollController.position;
+    if (!pos.hasContentDimensions) return; // guard against rebuild mid-layout
+
+    // Debounce: ignore if we loaded more less than 1.5 seconds ago
+    final now = DateTime.now();
+    if (_lastScrollLoadTime != null &&
+        now.difference(_lastScrollLoadTime!) < const Duration(milliseconds: 1500)) {
+      return;
+    }
+
+    if (pos.maxScrollExtent > 0 && pos.pixels >= pos.maxScrollExtent - 200) {
+      _isLoadingMore = true;
+      _lastScrollLoadTime = now;
+      setState(() {
+        _currentLimit += 15;
+        _loadPlansStream();
+      });
+
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) setState(() => _isLoadingMore = false);
+      });
+    }
+  }
+
+  void _loadPlansStream() {
+    if (_currentLimit == _lastLoadedLimit) return; // no-op if limit didn't change
+    _lastLoadedLimit = _currentLimit;
+    _plansStream = widget.customerRepo.streamCustomerPlans(
+      widget.customerUid,
+      limit: _currentLimit,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +123,7 @@ class _PlansPageState extends State<PlansPage> {
         customerUid: widget.customerUid,
       ),
       child: StreamBuilder<Customer?>(
-        stream: widget.customerRepo.streamCustomer(widget.customerUid),
+        stream: _customerStream,
         builder: (context, snapshot) {
           final customer = snapshot.data;
           final currentBalance = customer?.availableBalance ?? 0.00;
@@ -85,14 +146,15 @@ class _PlansPageState extends State<PlansPage> {
                     'customerRepo': widget.customerRepo,
                     'customerUid': widget.customerUid,
                     'walletBalance': currentBalance,
-                  }
+                  },
                 );
 
                 // 🦘 JUMP LOGIC: Check the result sent back from Create Screen
                 if (result == 'jump_to_home') {
                   widget.onJumpToHome();
                 } else if (result == 'jump_to_plans') {
-                  widget.onJumpToPlan(); // (Even though we are already on Plans, this might refresh or reset tab)
+                  widget
+                      .onJumpToPlan(); // (Even though we are already on Plans, this might refresh or reset tab)
                 }
               }
             },
@@ -107,9 +169,7 @@ class _PlansPageState extends State<PlansPage> {
                     // just use the builder below. For cleaner UI, we usually access the stream
                     // inside the SearchDelegate, or pass the current list if we have it.
                     // Here, we'll wait for the body stream to load.
-                    stream: widget.customerRepo.streamCustomerPlans(
-                      widget.customerUid,
-                    ),
+                    stream: _plansStream,
                     builder: (context, snapshot) {
                       final plans = snapshot.data ?? [];
                       return IconButton(
@@ -210,31 +270,30 @@ class _PlansPageState extends State<PlansPage> {
 
               // THE CORE: Real-Time Data Stream
               body: StreamBuilder<List<Plan>>(
-                stream: widget.customerRepo.streamCustomerPlans(
-                  widget.customerUid,
-                ),
+                stream: _plansStream,
                 builder: (context, snapshot) {
-                  // 1. Loading State
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+
+                  // 1. Cache the data so the screen doesn't flicker when loading more
+                  if (snapshot.hasData) {
+                    _cachedPlans = snapshot.data!;
+                  }
+
+                  // 2. Only show loading skeleton if we have NO data cached at all
+                  if (snapshot.connectionState == ConnectionState.waiting && _cachedPlans.isEmpty) {
                     return _buildLoadingSkeleton();
                   }
 
-                  // 2. Error State
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        "Something went wrong",
-                        style: GoogleFonts.inter(),
-                      ),
-                    );
+                  if (snapshot.hasError && _cachedPlans.isEmpty) {
+                    return Center(child: Text("Something went wrong", style: GoogleFonts.inter()));
                   }
 
-                  final allPlans = snapshot.data ?? [];
-
-                  // 3. Client-Side Filtering
+                  // 3. Use the cached plans while waiting for the new chunk
+                  final allPlans = snapshot.hasData ? snapshot.data! : _cachedPlans;
                   final visiblePlans = _processPlans(allPlans);
 
                   return CustomScrollView(
+                    controller: _scrollController,
+                    key: const PageStorageKey('korra_plans_list_key'),
                     physics: const BouncingScrollPhysics(),
                     slivers: [
                       // Sticky Tab Header
@@ -268,15 +327,22 @@ class _PlansPageState extends State<PlansPage> {
                               onPayNow: () {
                                 Get.toNamed(
                                   Routes.customerPayPlan,
-                                  arguments: {'plan': plan, 'repo': widget.customerRepo}
-                                );  
+                                  arguments: {
+                                    'plan': plan,
+                                    'repo': widget.customerRepo,
+                                  },
+                                );
                               },
-                              
+
                               // 🔄 CHANGE: Named Route
                               onView: () {
                                 Get.toNamed(
                                   Routes.customerPlanDetails,
-                                  arguments: {'plan': plan, 'customerRepo': widget.customerRepo}
+                                  preventDuplicates: true,
+                                  arguments: {
+                                    'plan': plan,
+                                    'customerRepo': widget.customerRepo,
+                                  },
                                 );
                               },
                               onMenu: () {},
@@ -305,26 +371,20 @@ class _PlansPageState extends State<PlansPage> {
         // Active = Status Active AND Not Overdue
         return p.status == 'active' && !p.isOverdue;
       }
-      
-      // ✅ NEW: Ready for Pickup
-      if (_currentTab == PlansTab.readyForPickup) {
-        // Status Completed AND Not yet fulfilled (Not picked up)
-        return p.status == 'completed' && p.fulfilledAt == null;
-      }
 
       if (_currentTab == PlansTab.pending) return p.status == 'pending';
-      
+
       // Completed Tab Logic Change:
       // Should "Completed" show EVERYTHING finished, or only Picked Up ones?
-      // Usually "History" implies fully done. 
+      // Usually "History" implies fully done.
       // Let's make "Completed" show ONLY fulfilled items so it doesn't duplicate "Ready".
       if (_currentTab == PlansTab.completed) {
-        return p.status == 'completed' && p.fulfilledAt != null;
+        return p.status == 'completed';
       }
 
       if (_currentTab == PlansTab.overdue) return p.isOverdue;
       if (_currentTab == PlansTab.cancelled) return p.status == 'cancelled';
-      
+
       return true;
     }).toList();
 
@@ -360,8 +420,6 @@ class _PlansPageState extends State<PlansPage> {
     switch (t) {
       case PlansTab.active:
         return 'No active plans yet.\nStart a plan to build ownership.';
-      case PlansTab.readyForPickup: // ✅ NEW MESSAGE
-        return 'No items ready.\nComplete a plan to claim your item.';
       case PlansTab.completed:
         return 'No completed plans yet.';
       case PlansTab.overdue:

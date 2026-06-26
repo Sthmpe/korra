@@ -1,3 +1,4 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -43,6 +44,10 @@ class PlanActionCubit extends Cubit<PlanActionState> {
         customerUid: customerUid,
         reason: "User converted to Store Credit",
       );
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'plan_converted_to_store_credit',
+        parameters: {'plan_id': planId},
+      );
       emit(PlanActionSuccess("Your funds have been moved to Store Balance."));
     } catch (e, stackTrace) {
       _handleError("conversion", e, stackTrace);
@@ -54,6 +59,10 @@ class PlanActionCubit extends Cubit<PlanActionState> {
     emit(PlanActionLoading());
     try {
       await repo.extendPlan(planId);
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'plan_extended',
+        parameters: {'plan_id': planId},
+      );
       emit(PlanActionSuccess("Plan extended. New deadline confirmed."));
     } catch (e, stackTrace) {
       _handleError("extension", e, stackTrace);

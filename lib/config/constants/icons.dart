@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class KorraIcons {
   // -- Navigation (outline = inactive, filled = active) -----------------
@@ -175,8 +175,8 @@ class KorraIcons {
   static  IconData instagram = MdiIcons.instagram;
   static  IconData twitter   = MdiIcons.twitter;
   static  IconData facebook  = MdiIcons.facebook;
-  static  IconData socialX   = FontAwesomeIcons.xTwitter; // TODO: find MdiIcons equivalent for X brand
-  static  IconData tiktok    = FontAwesomeIcons.tiktok; // TODO: find MdiIcons equivalent for TikTok
+  static  FaIconData socialX   = FontAwesomeIcons.x; // TODO: find MdiIcons equivalent for X brand
+  static  FaIconData tiktok    = FontAwesomeIcons.tiktok; // TODO: find MdiIcons equivalent for TikTok
   static  IconData qrCode    = MdiIcons.qrcode;
   static  IconData link      = MdiIcons.link;
   static  IconData linkVariant = MdiIcons.linkVariant;
