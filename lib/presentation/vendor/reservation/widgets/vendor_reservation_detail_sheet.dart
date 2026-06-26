@@ -28,16 +28,8 @@ class VendorReservationDetailSheet extends StatefulWidget {
       _VendorReservationDetailSheetState();
 }
 
-class _VendorReservationDetailSheetState
-    extends State<VendorReservationDetailSheet> {
+class _VendorReservationDetailSheetState extends State<VendorReservationDetailSheet> {
   
-  // Controller for the hidden input
-  final TextEditingController _pinController = TextEditingController();
-  
-  // State to drive the visual PIN boxes
-  String _currentPin = "";
-
-  // ✅ ADDED: Specific launcher for regular phone calls
   Future<void> _launchCall(String phone) async {
     final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     final Uri uri = Uri(scheme: 'tel', path: cleanPhone);
@@ -51,7 +43,6 @@ class _VendorReservationDetailSheetState
     }
   }
 
-  // ✅ ADDED: Specific launcher for WhatsApp
   Future<void> _launchWhatsapp(String phone) async {
     final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
     final Uri uri = Uri.parse("https://wa.me/$cleanPhone");
@@ -65,212 +56,6 @@ class _VendorReservationDetailSheetState
     }
   }
 
-  // ✅ THE MISSING METHOD
-  void _processVerification() {
-    // 1. Basic Validation
-    if (_pinController.text.length != 4) return;
-
-    // 2. Trigger BLoC Event
-    // We don't need setState(_isLoading) here because the BLoC state handles loading UI
-    context.read<ReservationsBloc>().add(
-          ResVerifyPickup(
-            planId: widget.data.id,
-            pin: _pinController.text,
-            customerId: widget.data.customerId ?? '',
-          ),
-        );
-  }
-
-  // ✅ PREMIUM PIN DIALOG (Live Update)
-  void _showPinDialog() {
-    _pinController.clear();
-    // Reset the visual state
-    setState(() => _currentPin = ""); 
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Dismiss",
-      pageBuilder: (ctx, anim1, anim2) => const SizedBox(),
-      transitionDuration: const Duration(milliseconds: 0),
-      transitionBuilder: (ctx, anim1, anim2, child) {
-        // Use StatefulBuilder to ensure the dialog rebuilds when typing
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
-              backgroundColor: Colors.white,
-              elevation: 10,
-              child: Padding(
-                padding: EdgeInsets.all(24.r),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon
-                    Container(
-                      padding: EdgeInsets.all(12.r),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFF2F4F7)),
-                      ),
-                      child: const Icon(Iconsax.shield_tick, size: 28, color: KorraColors.brand),
-                    ),
-                    SizedBox(height: 16.h),
-        
-                    // Title
-                    Text(
-                      "Vendor Verification",
-                      style: GoogleFonts.plusJakartaSans(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF101828)),
-                    ),
-                    SizedBox(height: 8.h),
-                    Text(
-                      "Enter the 4-digit code from the customer's app to release this item.",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          color: const Color(0xFF667085),
-                          height: 1.4),
-                    ),
-        
-                    SizedBox(height: 24.h),
-        
-                    // ✨ PREMIUM PIN INPUT STACK
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // 1. The Visible Custom Boxes
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(4, (index) {
-                            return _buildPinBox(index, _currentPin);
-                          }),
-                        ),
-        
-                        // 2. The Invisible Native TextField
-                        Opacity(
-                          opacity: 0,
-                          child: TextField(
-                            controller: _pinController,
-                            autofocus: true,
-                            keyboardType: TextInputType.number,
-                            maxLength: 4,
-                            onChanged: (val) {
-                              // Update the dialog's local state
-                              setDialogState(() {
-                                _currentPin = val;
-                              });
-                              // Auto-submit when 4 digits entered
-                              if (val.length == 4) {
-                                Navigator.pop(ctx);
-                                _processVerification();
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-        
-                    SizedBox(height: 24.h),
-
-                    Row(
-                      children: [
-                        Expanded(
-                              child: TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(vertical: 14.h),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                                ),
-                                child: Text("Cancel",
-                                    style: GoogleFonts.inter(
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF667085))),
-                              ),
-                            ),
-                      ],
-                    ),
-        
-                    // Actions
-                    // Row(
-                    //   children: [
-                        
-                    //     SizedBox(width: 12.w),
-                    //     Expanded(
-                    //       child: FilledButton(
-                    //         onPressed: () {
-                    //           Navigator.pop(ctx);
-                    //           _processVerification();
-                    //         },
-                    //         style: FilledButton.styleFrom(
-                    //           backgroundColor: const Color(0xFF101828),
-                    //           padding: EdgeInsets.symmetric(vertical: 14.h),
-                    //           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                    //           elevation: 0,
-                    //         ),
-                    //         child: Text("Verify",
-                    //             style: GoogleFonts.inter(
-                    //                 fontWeight: FontWeight.w700)),
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Helper for the individual Pin Boxes
-  // Note: We pass 'currentPin' into it so it renders the correct state
-  Widget _buildPinBox(int index, String currentPin) {
-    final bool isFilled = currentPin.length > index;
-    final bool isFocused = currentPin.length == index;
-
-    final borderColor = isFocused
-        ? KorraColors.brand
-        : (isFilled ? const Color(0xFFD0D5DD) : const Color(0xFFF2F4F7));
-
-    final bgColor = isFilled ? Colors.white : const Color(0xFFF9FAFB);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 0), // Smooth transition
-      margin: EdgeInsets.symmetric(horizontal: 6.w),
-      height: 56.w,
-      width: 48.w,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: borderColor, width: isFocused ? 1.5 : 1.0),
-        boxShadow: isFocused
-            ? [
-                BoxShadow(
-                    color: KorraColors.brand.withOpacity(0.1),
-                    blurRadius: 8,
-                    spreadRadius: 0)
-              ]
-            : [],
-      ),
-      child: Center(
-        child: Text(
-          isFilled ? currentPin[index] : "", // Show the number immediately
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 24.sp,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF101828),
-          ),
-        ),
-      ),
-    );
-  }
-  
   @override
   Widget build(BuildContext context) {
     final d = widget.data;
@@ -281,7 +66,7 @@ class _VendorReservationDetailSheetState
       listener: (context, state) {
         if (state.verificationStatus == VerificationStatus.success) {
           Get.back();
-          showAppSnackbar("Handover Verified! Inventory Updated. ✅", SnackbarType.success);;
+          showAppSnackbar("Item Marked as Fulfilled! ✅", SnackbarType.success);
         } else if (state.verificationStatus == VerificationStatus.failure) {
           Get.back();
           showAppSnackbar(state.errorMessage, SnackbarType.error);
@@ -289,8 +74,7 @@ class _VendorReservationDetailSheetState
       },
       child: BlocBuilder<ReservationsBloc, ReservationsState>(
         builder: (context, state) {
-          final bool isLoading =
-              state.verificationStatus == VerificationStatus.loading;
+          final bool isLoading = state.verificationStatus == VerificationStatus.loading;
 
           return Container(
             decoration: BoxDecoration(
@@ -376,8 +160,8 @@ class _VendorReservationDetailSheetState
                                 SizedBox(height: 12.h),
                                 Text(
                                   isFulfilled
-                                      ? "Item Handed Over"
-                                      : "Ready for Handover",
+                                      ? "Item Fulfilled"
+                                      : "Ready to Fulfill",
                                   style: GoogleFonts.plusJakartaSans(
                                       fontSize: 16.sp,
                                       fontWeight: FontWeight.w700),
@@ -385,7 +169,7 @@ class _VendorReservationDetailSheetState
                                 SizedBox(height: 8.h),
                                 if (isFulfilled)
                                   Text(
-                                    "Collected on ${DateFormat('MMM d, h:mm a').format(d.fulfilledAt!)}",
+                                    "Completed on ${DateFormat('MMM d, h:mm a').format(d.fulfilledAt ?? DateTime.now())}",
                                     style: GoogleFonts.inter(
                                         fontSize: 12.sp,
                                         color: Colors.grey.shade600),
@@ -396,7 +180,10 @@ class _VendorReservationDetailSheetState
                                     child: FilledButton(
                                       onPressed: isLoading
                                           ? null
-                                          : _showPinDialog,
+                                          : () {
+                                              // ✅ DIRECT BATCH CALL
+                                              context.read<ReservationsBloc>().add(ResMarkFulfilled([d.id]));
+                                            },
                                       style: FilledButton.styleFrom(
                                         backgroundColor:
                                             const Color(0xFF101828),
@@ -412,7 +199,7 @@ class _VendorReservationDetailSheetState
                                                   color: Colors.white,
                                                   strokeWidth: 2))
                                           : Text(
-                                              "Verify Pickup PIN",
+                                              "Mark as Fulfilled",
                                               style: GoogleFonts.inter(
                                                 fontSize: 14.sp,
                                                 fontWeight: FontWeight.w700
@@ -439,8 +226,6 @@ class _VendorReservationDetailSheetState
                           decoration: BoxDecoration(
                             color: const Color(0xFFF9FAFB),
                             borderRadius: BorderRadius.circular(16.r),
-                            // border:
-                            //     Border.all(color: const Color(0xFFF3F4F6)),
                           ),
                           child: Row(
                             children: [
@@ -474,7 +259,6 @@ class _VendorReservationDetailSheetState
                               if (d.customerPhone.isNotEmpty && (isReady || isFulfilled))
                                 Row(
                                   children: [
-                                    // 1. Call Button (Blue)
                                     _ActionBtn(
                                       icon: Iconsax.call,
                                       bgColor: Colors.blue.shade50,
@@ -482,9 +266,8 @@ class _VendorReservationDetailSheetState
                                       onTap: () => _launchCall(d.customerPhone),
                                     ),
                                     SizedBox(width: 8.w),
-                                    // 2. WhatsApp Button (Green)
                                     _ActionBtn(
-                                      icon: FontAwesomeIcons.whatsapp,
+                                      iconWidget: FaIcon(FontAwesomeIcons.whatsapp, size: 18.sp, color: const Color(0xFF25D366)),
                                       bgColor: const Color(0xFFE8FDF0),
                                       iconColor: const Color(0xFF25D366),
                                       onTap: () => _launchWhatsapp(d.customerPhone),
@@ -505,21 +288,64 @@ class _VendorReservationDetailSheetState
                                 color: Colors.grey.shade400,
                                 letterSpacing: 1.2)),
                         SizedBox(height: 12.h),
-                        _FinanceRow(
-                            label: "Product Price", value: d.totalText),
+                        _InfoRow(label: "Product Price", value: d.totalText),
                         SizedBox(height: 8.h),
-                        _FinanceRow(
+                        _InfoRow(
                             label: "Amount Paid",
                             value: d.paidText,
                             valueColor: Colors.green.shade700,
                             isBold: true),
                         SizedBox(height: 8.h),
-                        _FinanceRow(
+                        _InfoRow(
                             label: "Outstanding Balance",
                             value: d.remainingText,
                             valueColor: d.isCompleted
                                 ? Colors.grey
                                 : const Color(0xFFA54600)),
+
+                        SizedBox(height: 24.h),
+
+                        // --- TIMELINE ---
+                        Text("TIMELINE",
+                            style: GoogleFonts.inter(
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade400,
+                                letterSpacing: 1.2)),
+                        SizedBox(height: 12.h),
+                        
+                        _InfoRow(
+                          label: "Started On", 
+                          value: DateFormat('MMM d, yyyy - h:mm a').format(d.createdAt)
+                        ),
+                        
+                        // Show when it was marked "Completed" (fully paid)
+                        if (isReady || isFulfilled) ...[
+                          SizedBox(height: 8.h),
+                          _InfoRow(
+                            label: "Completed On", 
+                            value: DateFormat('MMM d, yyyy - h:mm a').format(d.fulfilledAt ?? d.finalFulfilledAt ?? DateTime.now()), // Use fulfilledAt if available, else fallback to now (shouldn't happen)
+                          ),
+                        ],
+                        
+                        // ✅ Show when the vendor physically handed it over
+                        if (isFulfilled && d.finalFulfilledAt != null) ...[ // Ensure model uses finalFulfilledAt
+                          SizedBox(height: 8.h),
+                          _InfoRow(
+                            label: "Fulfilled On", 
+                            value: DateFormat('MMM d, yyyy - h:mm a').format(d.finalFulfilledAt ?? d.fulfilledAt ?? DateTime.now()), // Use finalFulfilledAt if available, else fallback to now (shouldn't happen)
+                          ),
+                        ],
+
+                        // ✅ Show when it was cancelled
+                        if (d.status == ReservationStatus.cancelled && d.cancelledAt != null) ...[ // Ensure model has cancelledAt
+                          SizedBox(height: 8.h),
+                          _InfoRow(
+                            label: "Cancelled On", 
+                            value: DateFormat('MMM d, yyyy - h:mm a').format(d.cancelledAt!), // Use cancelledAt if available, else fallback to now (shouldn't happen)
+                            valueColor: const Color(0xFFD92D20), // Red text for cancellation
+                          ),
+                        ],
 
                         SizedBox(height: 40.h),
                       ],
@@ -553,8 +379,8 @@ class _StatusPill extends StatelessWidget {
         return _buildPill("NEW", Colors.orange.shade50, Colors.orange);
       case ReservationStatus.ongoing:
         return _buildPill("ACTIVE", Colors.blue.shade50, Colors.blue);
-      case ReservationStatus.readyForPickup: // ✅ Matches Enum
-        return _buildPill("READY TO PICKUP", const Color(0xFFFFF7ED),
+      case ReservationStatus.readyForPickup: 
+        return _buildPill("READY TO FULFILL", const Color(0xFFFFF7ED),
             const Color(0xFFB95000));
       case ReservationStatus.completed:
         return _buildPill(
@@ -577,13 +403,13 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _FinanceRow extends StatelessWidget {
+class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
   final bool isBold;
 
-  const _FinanceRow(
+  const _InfoRow(
       {required this.label,
       required this.value,
       this.valueColor,
@@ -610,13 +436,15 @@ class _FinanceRow extends StatelessWidget {
 }
 
 class _ActionBtn extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final VoidCallback onTap;
   final Color bgColor;    
   final Color iconColor; 
+  final Widget? iconWidget; 
 
   const _ActionBtn({
-    required this.icon, 
+    this.icon, 
+    this.iconWidget,
     required this.onTap,
     required this.bgColor,
     required this.iconColor,
@@ -627,15 +455,15 @@ class _ActionBtn extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(10.r), // Slightly larger tap target
+        padding: EdgeInsets.all(10.r), 
         decoration: BoxDecoration(
-            color: bgColor, // Uses the passed color
+            color: bgColor, 
             shape: BoxShape.circle,
         ),
-        child: Icon(
+        child: iconWidget ?? Icon(
           icon, 
           size: 18.sp, 
-          color: iconColor, // Uses the passed color
+          color: iconColor, 
         ),
       ),
     );

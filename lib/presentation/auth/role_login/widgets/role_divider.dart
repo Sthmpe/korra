@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-// import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
-// import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/paddings.dart';
+import '../../../../config/constants/sizes.dart';
 
 class RoleDivider extends StatelessWidget {
   const RoleDivider({super.key});
@@ -11,16 +12,16 @@ class RoleDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.0.w),
+      padding: KorraPaddings.pageH,
       child: Row(
         children: [
           const Expanded(child: Divider(thickness: 1)),
           Text(
             '  Or use biometric authentication  ',
             style: TextStyle(
-              fontSize: 13.sp,
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w600,
+              fontSize: KorraSizes.fontSmPlus.sp,
+              color: KorraColors.greyCancel,
+              fontWeight: KorraSizes.weightSemiBold,
               fontFamily: GoogleFonts.inter().fontFamily,
             ),
           ),

@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:math' as math;
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
@@ -157,6 +155,16 @@ class VendorProductsBloc
       };
 
       await vendors.addProductSecure(newProductMap);
+
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'product_added',
+        parameters: {
+          'vendor_id': vendorUid,
+          'product_name': event.name,
+          'price': event.price,
+          'category': event.category,
+        },
+      );
 
       emit(state.copyWith(isSubmitting: false, success: true));
 
@@ -332,6 +340,14 @@ class VendorProductsBloc
     try {
       await vendors.deleteProductSecure(vendorUid, event.productId, 'single-delete');
 
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'product_deleted',
+        parameters: {
+          'vendor_id': vendorUid,
+          'product_id': event.productId,
+        },
+      );
+
       final newTabCounts = await vendors.fetchProductTabCounts(vendorUid);
       
       emit(state.copyWith(
@@ -386,6 +402,14 @@ class VendorProductsBloc
       // 🚀 Call repo with a LIST of IDs (We will create this next)
       await vendors.deleteMultipleProductsSecure(vendorUid, state.selectedIds.toList());
       
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'products_deleted_bulk',
+        parameters: {
+          'vendor_id': vendorUid,
+          'count': state.selectedIds.length,
+        },
+      );
+
       final newTabCounts = await vendors.fetchProductTabCounts(vendorUid);
       
       emit(state.copyWith(

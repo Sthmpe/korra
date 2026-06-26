@@ -3,7 +3,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../config/constants/buttons.dart';
 import '../../../config/constants/colors.dart';
+import '../../../config/constants/sizes.dart';
 
 class BottomNav<B extends StateStreamable<S>, S> extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -60,17 +62,17 @@ class BottomNav<B extends StateStreamable<S>, S> extends StatelessWidget {
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
               minimumSize: Size.fromHeight(48.h),
-              side: BorderSide(color: Colors.grey.shade300),
+              side: BorderSide(color: KorraColors.greyShade300),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
+                borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
             ),
             onPressed: onBackPressed,
             child: Text(
               'Back',
               style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
+                fontSize: KorraSizes.fontMd.sp,
+                fontWeight: KorraSizes.weightSemiBold,
               ),
             ),
           ),
@@ -85,15 +87,15 @@ class BottomNav<B extends StateStreamable<S>, S> extends StatelessWidget {
                   minimumSize: Size.fromHeight(48.h),
                   backgroundColor: KorraColors.brand,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
+                    borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
                   ),
                 ),
                 onPressed: loading ? null : handleNext,
                 child: Text(
                   isLast ? 'Create account' : 'Next',
                   style: GoogleFonts.inter(
-                    fontSize: 14.5.sp,
-                    fontWeight: FontWeight.w700,
+                    fontSize: KorraSizes.fontMdHalf.sp,
+                    fontWeight: KorraSizes.weightBold,
                     color: Colors.white,
                   ),
                 ),

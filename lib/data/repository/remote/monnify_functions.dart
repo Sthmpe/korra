@@ -203,6 +203,7 @@ class MonnifyFunctions {
     if (data == null || data['ok'] != true) {
       throw Exception(data?['message'] ?? "Bank account validation failed");
     }
+    debugPrint("🔒 ending validate-bank-account with Double Lock...");
     return Map<String, dynamic>.from(data);
   }
 

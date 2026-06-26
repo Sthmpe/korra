@@ -41,6 +41,7 @@ import '../../presentation/vendor/product/widgets/Add_product_page.dart';
 import '../../presentation/vendor/product/widgets/product_details_screen.dart';
 import '../../presentation/vendor/product/widgets/product_edit_screen.dart';
 import '../../presentation/vendor/profile/change_password_screen.dart';
+import '../../presentation/vendor/profile/payout_settings_screen.dart';
 import '../../presentation/vendor/profile/store_balance_screen.dart';
 import '../../presentation/vendor/profile/vendor_receipt_screen.dart';
 import '../../presentation/vendor/profile/vendor_settlement_screen.dart';
@@ -487,6 +488,19 @@ class AppPages {
       page: () => _guard((args) {
         final map = args as Map<String, dynamic>;
         return VendorSettlementScreen(
+          repo: map['repo'],
+          vendorUid: map['uid'],
+        );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // 🏦 Payout Settings (Vault)
+    GetPage(
+      name: Routes.vendorPayoutSettings,
+      page: () => _guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PayoutSettingsScreen(
           repo: map['repo'],
           vendorUid: map['uid'],
         );

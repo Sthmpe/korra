@@ -68,9 +68,6 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     if (widget.txType == 'plan_cancelled' || widget.txType == 'refund') headerStatusText = "REFUND PROCESSED";
     if (isCompleted && (widget.txType == 'installment' || widget.txType == 'plan_creation')) headerStatusText = "PLAN COMPLETED";
 
-    final statusColor = isCompleted ? Colors.green : const Color(0xFFF79009);
-    final statusBg = isCompleted ? const Color(0xFFECFDF3) : const Color(0xFFFFFAEB);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
       appBar: KorraHeader(title: 'Transaction Receipt', showLeadingIcon: true),

@@ -25,6 +25,8 @@ class Reservation {
   
   // ✅ NEW FIELD
   final DateTime? fulfilledAt; 
+  final DateTime? cancelledAt; // Optional: Track when it was cancelled
+  final DateTime? finalFulfilledAt; // Optional: Track when it was fulfilled
 
   Reservation({
     required this.id,
@@ -38,6 +40,8 @@ class Reservation {
     required this.createdAt,
     required this.statusRaw,
     this.fulfilledAt,
+    this.cancelledAt,
+    this.finalFulfilledAt,
     this.customerId,
   });
 
@@ -46,8 +50,8 @@ class Reservation {
   bool get isCancelled => statusRaw == 'cancelled' || statusRaw == 'defaulted';
   
   // ✅ The Logic
-  bool get isReadyForPickup => isCompleted && fulfilledAt == null;
-  bool get isFulfilled => fulfilledAt != null;
+  bool get isReadyForPickup => isCompleted && finalFulfilledAt == null;
+  bool get isFulfilled => finalFulfilledAt != null;
 
   // Formatting
   String get totalText => "₦${(totalAmount).toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}";
@@ -63,7 +67,7 @@ class Reservation {
     
     if (statusRaw == 'completed') {
       // If completed but not fulfilled -> Ready for Pickup
-      if (fulfilledAt == null) return ReservationStatus.readyForPickup;
+      if (finalFulfilledAt == null) return ReservationStatus.readyForPickup;
       // If fulfilled -> Completed (History)
       return ReservationStatus.completed;
     }
@@ -92,6 +96,12 @@ class Reservation {
       totalAmount: (data['totalAmount'] ?? 0).toDouble(),
       amountPaid: (data['amountPaid'] ?? 0).toDouble(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      cancelledAt: data['cancelledAt'] != null 
+          ? (data['cancelledAt'] as Timestamp).toDate() 
+          : null,
+      finalFulfilledAt: data['finalFulfilledAt'] != null 
+          ? (data['finalFulfilledAt'] as Timestamp).toDate() 
+          : null,
       statusRaw: data['status'] ?? 'active',
       
       // ✅ Parse Date

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
+import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
+import '../../../../config/theme/gaps.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -24,8 +26,8 @@ class RoleSelector extends StatelessWidget {
           height: 52.h, // Compact, standard mobile height
           padding: EdgeInsets.all(4.r), // The gap between edge and pill
           decoration: BoxDecoration(
-            color: const Color(0xFFF2F2F7), // The specific "iOS System Grey"
-            borderRadius: BorderRadius.circular(14.r), // Slightly tighter radius
+            color: KorraColors.surfaceCool,
+            borderRadius: BorderRadius.circular(KorraSizes.segmentRadius.r),
           ),
           child: Stack(
             children: [
@@ -40,15 +42,15 @@ class RoleSelector extends StatelessWidget {
                   height: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10.r),
+                    borderRadius: BorderRadius.circular(KorraSizes.chipRadius.r),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12), // Apple-style shadow
+                        color: Colors.black.withValues(alpha: 0.12), // Apple-style shadow
                         blurRadius: 3, // Tight blur
                         offset: const Offset(0, 1), // Slight drop
                       ),
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 1,
                         offset: const Offset(0, 3),
                       ),
@@ -126,19 +128,19 @@ class _RoleTab extends StatelessWidget {
               child: Icon(
                 isActive ? activeIcon : icon,
                 key: ValueKey(isActive),
-                size: 18.sp,
-                color: isActive ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
+                size: KorraSizes.fontXl.sp,
+                color: isActive ? KorraColors.iosBlack : KorraColors.textSecondary,
               ),
             ),
-            SizedBox(width: 6.w),
+            Gaps.w6,
             // Animated Text Style
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: GoogleFonts.inter(
-                fontSize: 13.5.sp,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
-                letterSpacing: -0.3,
+                fontSize: KorraSizes.fontSmPlusH.sp,
+                fontWeight: isActive ? KorraSizes.weightSemiBold : KorraSizes.weightMedium,
+                color: isActive ? KorraColors.iosBlack : KorraColors.textSecondary,
+                letterSpacing: KorraSizes.trackingMinus3,
               ),
               child: Text(title),
             ),

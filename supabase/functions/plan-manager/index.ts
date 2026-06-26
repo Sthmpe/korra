@@ -116,7 +116,14 @@ async function sendFcm(uid: string, title: string, body: string, data: any, coll
 }
 
 // CONSTANTS
-const PLATFORM_FEE_PERCENTAGE = 0.0; // 3.5%
+const PLATFORM_FEE_PERCENTAGE = 0.0; // Vendor side fee — currently 0
+ 
+// ✅ CUSTOMER SIDE FEE CONSTANTS
+const CUSTOMER_FEE_RATE = 0.035;           // 3.5% on cash payments
+const STORE_FEE_RATE = 0.035 * 0.10;      // 0.35% on store balance usage  
+const MIN_STORE_FEE = 100;                 // Minimum ₦100 for store balance fee
+const PER_PAYMENT_THRESHOLD = 30000;       // Items above ₦30k charge per payment
+const MAX_FEE = 7500;
 
 // 3. MAIN HANDLER
 serve(async (req) => {
@@ -185,24 +192,12 @@ serve(async (req) => {
 
         const {
             action, customerUid, productId, planData, secureToken,
-            planId, amount, pin, vendorUid, reason, category, adminPassword
+            planId, planIds, amount, pin, vendorUid, reason, category, adminPassword
         } = await req.json();
 
         // =======================================================================
         // 🚨 2. CONDITIONAL IDENTITY ROUTING (The Multi-Role Bouncer)
-        // =======================================================================
-        
-        if (action === 'VERIFY_PICKUP') {
-            // 🛡️ VENDOR CHECK: Ensure the caller is the actual vendor
-            if (secureUid !== vendorUid) {
-                throw new Error("Security Violation: Only the assigned vendor can verify this pickup.");
-            }
-        } else {
-            // 🛡️ CUSTOMER CHECK: Default fallback for creating plans, paying installments, etc.
-            if (secureUid !== customerUid) {
-                throw new Error("Security Violation: You cannot perform actions for another customer's plan.");
-            }
-        }
+        // ======================================================================
 
         const secretKey = new TextEncoder().encode(HMAC_SECRET);
 
@@ -332,89 +327,197 @@ serve(async (req) => {
                 // --- FINANCIALS ---
                 const price = to2DP(product.price);
                 const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
+                const isAbove30k = price > PER_PAYMENT_THRESHOLD;
 
-                // 1. 🧹 THE MANDATORY SWEEP
-                // Rule: "Store Credit First. Always." 
-                // We take all available credit, capped only by the product price.
+                // ─── DETECT PAYMENT INTENT ────────────────────────────────────────────
+                // UI sends: for installment → deposit + fee
+                //           for pay in full → full price + all fees
+                // We detect by checking if amount covers the full price + expected full fee
+
+                const maxPossibleCreditSweep = (availableStoreCredit >= price) ? price : availableStoreCredit;
+                const maxPossibleCashPortion = to2DP(price - maxPossibleCreditSweep);
+
+                // Expected full payment fee
+                const expectedFeeCash = maxPossibleCashPortion > 0 ? to2DP(maxPossibleCashPortion * CUSTOMER_FEE_RATE) : 0;
+                const expectedFeeCredit = maxPossibleCreditSweep > 0
+                    ? Math.max(to2DP(maxPossibleCreditSweep * STORE_FEE_RATE), MIN_STORE_FEE)
+                    : 0;
+                const expectedFullPaymentFee = to2DP(expectedFeeCash + expectedFeeCredit);
+                const expectedFullPaymentPayload = to2DP(price + expectedFullPaymentFee);
+
+                const isFullPayment = amount >= (expectedFullPaymentPayload - 0.01);
+
+                // ─── CREDIT SWEEP ─────────────────────────────────────────────────────
+                // Store balance ONLY allowed for Pay in Full
+                // Installment deposits must be fresh cash
                 let creditSweep = 0;
-                if (availableStoreCredit > 0) {
-                    creditSweep = (availableStoreCredit >= price) ? price : availableStoreCredit;
+                if (isFullPayment && availableStoreCredit > 0) {
+                    creditSweep = maxPossibleCreditSweep;
                 }
 
-                // 2. 🧮 CALCULATE FEE (The Split)
-                const cashPortionOfPrice = price - creditSweep;
-
-                // Fee on Cash Part (Standard Zone Logic)
+                // ─── FEE CALCULATION (WITH ₦7500 CAP) ─────────────────────────────────
+                let processingFee = 0;
                 let feeCashPart = 0;
-                if (cashPortionOfPrice > 0) {
-                    feeCashPart = calculateZoneFee(cashPortionOfPrice);
-                }
-
-                // Fee on Credit Part (10% Rule)
                 let feeCreditPart = 0;
-                if (creditSweep > 0) {
-                    const standard = calculateZoneFee(creditSweep);
-                    // Apply 10% logic, ensure min N100
-                    feeCreditPart = Math.max(standard * 0.10, 100); 
+                let cashPrincipalNeeded = 0;
+                let creditUsed = creditSweep;
+
+                if (isFullPayment) {
+                    const cashPortion = to2DP(price - creditSweep);
+                    if (cashPortion > 0) {
+                        const rawFee = to2DP(cashPortion * CUSTOMER_FEE_RATE);
+                        feeCashPart = rawFee > MAX_FEE ? MAX_FEE : rawFee;
+                    }
+                    
+                    feeCreditPart = creditSweep > 0
+                        ? Math.max(to2DP(creditSweep * STORE_FEE_RATE), MIN_STORE_FEE)
+                        : 0;
+                        
+                    processingFee = to2DP(feeCashPart + feeCreditPart);
+                    cashPrincipalNeeded = cashPortion;
+                } else {
+                    if (!isAbove30k) {
+                        const rawFee = to2DP(price * CUSTOMER_FEE_RATE);
+                        feeCashPart = rawFee > MAX_FEE ? MAX_FEE : rawFee;
+                        processingFee = feeCashPart;
+                        cashPrincipalNeeded = to2DP(amount - processingFee);
+                    } else {
+                        // UI sent: deposit + fee. 
+                        // We check if the amount sent is large enough that the fee was capped at 7500.
+                        // (7500 / 0.035 = 214285.71 principal. So total amount > 221785.71)
+                        const capThreshold = (MAX_FEE / CUSTOMER_FEE_RATE) + MAX_FEE;
+                        
+                        if (amount > capThreshold) {
+                            feeCashPart = MAX_FEE;
+                            cashPrincipalNeeded = to2DP(amount - MAX_FEE);
+                        } else {
+                            cashPrincipalNeeded = to2DP(amount / (1 + CUSTOMER_FEE_RATE));
+                            feeCashPart = to2DP(cashPrincipalNeeded * CUSTOMER_FEE_RATE);
+                            
+                            // Final safety clamp
+                            if (feeCashPart > MAX_FEE) {
+                                feeCashPart = MAX_FEE;
+                                cashPrincipalNeeded = to2DP(amount - MAX_FEE);
+                            }
+                        }
+                        processingFee = feeCashPart;
+                    }
+
+                    // Overpayment protection with capped fee recalculation
+                    if (cashPrincipalNeeded > price) {
+                        cashPrincipalNeeded = price;
+                        if (isAbove30k) {
+                            const rawRecalculatedFee = to2DP(cashPrincipalNeeded * CUSTOMER_FEE_RATE);
+                            processingFee = rawRecalculatedFee > MAX_FEE ? MAX_FEE : rawRecalculatedFee;
+                            feeCashPart = processingFee;
+                        }
+                    }
                 }
 
-                const processingFee = to2DP(feeCashPart + feeCreditPart);
-                
-                // 3. 🔍 DETERMINE USER PAYMENT
-                // The 'amount' from UI is treated as 'User Desired Principal'
-                let userDesiredPrincipal = amount - processingFee;
-
-                // Cap the Principal at the Product Price (Overpayment Protection)
-                if (userDesiredPrincipal > price) {
-                    userDesiredPrincipal = price;
-                }
-
-                // 4. 🧱 VALIDATE MINIMUMS
-                // The absolute minimum Principal is max(RiskMin, CreditSweep).
-                const effectiveMinDown = Math.max(requiredPrincipal, creditSweep);
-
-                // if (userDesiredPrincipal < effectiveMinDown) {
-                //     const gap = to2DP(effectiveMinDown - userDesiredPrincipal);
-                //     throw `Payment too low. Min Required: ₦${effectiveMinDown.toLocaleString()}.`;
-                // }
-
-                const userRequiredDownPayment = to2DP(requiredPrincipal);
-                // const minRequiredPrincipal = to2DP(userRequiredDownPayment + processingFee);
-
-                // if (amount < minRequiredPrincipal) throw `Payment too low. Min: ${minRequiredPrincipal}`;
-
-               
-                // 5. 🧮 CALCULATE WHO PAYS WHAT (The Split)
-                let creditUsed = creditSweep; // We always use the full sweep
-
-                let cashPrincipalNeeded = to2DP(userDesiredPrincipal - creditUsed);
-                if (cashPrincipalNeeded < 0) cashPrincipalNeeded = 0;
-
-                console.log(` - Cash Principal Needed: ₦${cashPrincipalNeeded.toLocaleString()}`);
-
-
-                // Calculate Total Wallet Deduction (Cash Principal + Fee)
-                let walletUsed = to2DP(cashPrincipalNeeded + processingFee);
+                // ─── WALLET VALIDATION ────────────────────────────────────────────────
+                // Wallet deduction = cash principal + all fees
+                // (Store balance covers its portion directly, not from wallet)
                 let userPrincipalPayment = to2DP(creditUsed + cashPrincipalNeeded);
 
-                // 6. 💳 CHECK WALLET BALANCE
-                if (walletBalance < walletUsed) {
-                    const shortBy = to2DP(walletUsed - walletBalance);
-                    throw `Insufficient wallet balance.\nFee: ₦${processingFee.toLocaleString()}.\nCash Initial Deposit: ₦${cashPrincipalNeeded.toLocaleString()}.\nTotal needed: ₦${walletUsed.toLocaleString()}.`;
+                // =======================================================================
+                // 🎁 THE AUTO-PROMO INTERCEPTOR
+                // =======================================================================
+                let promoAppliedAmount = 0;
+                const promoRef = db.collection('promos').doc(vendorId);
+                const promoDoc = await t.get(promoRef);
+
+                if (promoDoc.exists) {
+                    const promo = promoDoc.data();
+                
+                    const durationDays = planData.baseDurationDays;
+                    
+                    const usedUids = promo.usedByUids || [];
+                    
+                    // 🔎 DEBUG LOGS
+                    console.log(`🔎 PROMO CHECK [${vendorId}]:`);
+                    console.log(`- isActive: ${promo.isActive}`);
+                    console.log(`- Price Check: ${price} >= ${promo.minItemPrice} (${price >= promo.minItemPrice})`);
+                    console.log(`- Duration Check: ${durationDays.toFixed(1)} <= ${promo.maxDurationDays} (${durationDays <= promo.maxDurationDays})`);
+                    console.log(`- Usage Check: ${usedUids.length} < ${promo.maxUses} (${usedUids.length < promo.maxUses})`);
+                    console.log(`- New User Check: ${!usedUids.includes(customerUid)}`);
+
+                    if (
+                        promo.isActive === true &&
+                        price >= promo.minItemPrice &&
+                        durationDays <= promo.maxDurationDays &&
+                        usedUids.length < promo.maxUses &&
+                        !usedUids.includes(customerUid)
+                    ) {
+                        promoAppliedAmount = promo.promoValue;
+                        const isFinalUse = (usedUids.length + 1) >= promo.maxUses;
+
+                        t.update(promoRef, {
+                            currentUses: admin.firestore.FieldValue.increment(1),
+                            usedByUids: admin.firestore.FieldValue.arrayUnion(customerUid),
+                            isActive: !isFinalUse
+                        });
+                        
+                        console.log(`🎉 PROMO APPLIED: ₦${promoAppliedAmount} for user ${customerUid}`);
+                    } else {
+                        console.log("❌ PROMO SKIPPED: One or more conditions failed (see logs above).");
+                    }
+                } else {
+                    console.log(`⚠️ No promo document found for vendor: ${vendorId}`);
                 }
+                // =======================================================================
+
+                // 🚨 PREVENT OVERCHARGING ON FULL OR HIGH DEPOSITS
+                if (userPrincipalPayment + promoAppliedAmount > price) {
+                    // Calculate exactly how much extra money there is
+                    const excess = to2DP((userPrincipalPayment + promoAppliedAmount) - price);
+                    
+                    // Deduct the excess from the cash they are paying today
+                    if (cashPrincipalNeeded >= excess) {
+                        cashPrincipalNeeded = to2DP(cashPrincipalNeeded - excess);
+                    } else {
+                        // Edge case: if excess is somehow more than the cash they are paying (e.g. using mostly store credit)
+                        const remainingExcess = to2DP(excess - cashPrincipalNeeded);
+                        cashPrincipalNeeded = 0;
+                        creditUsed = to2DP(creditUsed - remainingExcess);
+                    }
+                    
+                    // Recalculate their final deductions so we don't overcharge their wallet
+                    userPrincipalPayment = to2DP(creditUsed + cashPrincipalNeeded);
+                }
+
+                const walletUsed = to2DP(cashPrincipalNeeded + processingFee);
+                const userRequiredDownPayment = to2DP(requiredPrincipal);
+
+                // Minimum Deposit Guard (Allows them to pass if the promo covered the gap)
+                if (userPrincipalPayment < userRequiredDownPayment) {
+                     if (userPrincipalPayment + promoAppliedAmount < userRequiredDownPayment) {
+                        throw `Security Violation: Your down payment of ₦${userPrincipalPayment.toLocaleString()} is below the required minimum of ₦${userRequiredDownPayment.toLocaleString()}.`;
+                     }
+                }
+
+                if (walletBalance < walletUsed) {
+                    throw `Insufficient wallet balance. Fee: ₦${processingFee.toLocaleString()}. Deposit: ₦${cashPrincipalNeeded.toLocaleString()}. Total needed: ₦${walletUsed.toLocaleString()}.`;
+                }
+
+                console.log(` - Payment Mode: ${isFullPayment ? "FULL" : isAbove30k ? "INSTALLMENT >30k" : "INSTALLMENT ≤30k"}`);
+                console.log(` - Price: ₦${price.toLocaleString()} | Above 30k: ${isAbove30k}`);
+                console.log(` - Amount Received: ₦${amount.toLocaleString()}`);
+                console.log(` - Cash Principal: ₦${cashPrincipalNeeded.toLocaleString()}`);
+                console.log(` - Credit Used: ₦${creditUsed.toLocaleString()}`);
+                console.log(` - Processing Fee: ₦${processingFee.toLocaleString()}`);
+                console.log(` - Wallet Deducted: ₦${walletUsed.toLocaleString()}`);
 
                 const newPlanRef = db.collection('plans').doc();
                 const planId = newPlanRef.id;
 
                 // ✅ FIX: Dust Tolerance for Immediate Completion
-                let remainingOnCreate = to2DP(price - userPrincipalPayment);
+                let remainingOnCreate = to2DP(price - userPrincipalPayment - promoAppliedAmount);
                 let isFinished = false;
                 let pickupCode = null;
 
                 // If remaining is less than 1 Naira, treat as fully paid immediately
                 if (remainingOnCreate < 1.0) {
                     isFinished = true;
-                    userPrincipalPayment = price; // Auto-fill the dust
                     remainingOnCreate = 0;
                     // Generate PIN immediately if paid in full at start
                     pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -470,20 +573,24 @@ serve(async (req) => {
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     modelType: planData.modelType || 'direct',
                     totalAmount: price,
-                    amountPaid: userPrincipalPayment,
+                    amountPaid: userPrincipalPayment + promoAppliedAmount,
                     processingFee: processingFee,
                     initialDownPayment: userRequiredDownPayment,
                     loanAmount: remainingOnCreate,
                     outstandingLoanAmount: remainingOnCreate,
-                    pickupCode: pickupCode, // Saves null or code
+                    promoApplied: promoAppliedAmount,
+                    pickupCode: pickupCode,
                     nextDueDate: isFinished ? null : admin.firestore.Timestamp.fromDate(newNextDueDate),
-                    completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null
+                    completedAt: isFinished ? admin.firestore.FieldValue.serverTimestamp() : null,
+                    // ✅ Fee mode — tells PAY_INSTALLMENT how to charge future payments
+                    feeMode: isFullPayment ? 'completed' : (isAbove30k ? 'per_payment' : 'upfront'),
                 });
 
                 // 2. Ledger
                 const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
                 
                 // ✅ CONSTRUCT RECEIPT DATA FOR CREATE
+                const appliedToItemCreate = to2DP(userPrincipalPayment + promoAppliedAmount); // Full principal goes to plan
                 const receiptPayload = {
                     reference: ledgerRef.id,
                     date: new Date().toISOString(),
@@ -492,7 +599,7 @@ serve(async (req) => {
                     productName: product.name,
                     productCode: product.productCode || "",
                     totalValue: price,
-                    amountPaidSoFar: userPrincipalPayment,
+                    amountPaidSoFar: appliedToItemCreate,
                     amountPaidNow: userPrincipalPayment,
                     paymentMethod: creditUsed > 0 ? (walletUsed > 0 ? "Mixed (Store Balance + Wallet)" : "Store Balance") : "Wallet Transfer",
                     balanceRemaining: remainingOnCreate,
@@ -500,7 +607,12 @@ serve(async (req) => {
                     isFinished: isFinished,
                     creditUsed: creditUsed,
                     walletUsed: walletUsed,
-                    // ✅ SAFE DATE HELPER
+                    // ✅ FEE BREAKDOWN
+                    feeAmount: processingFee,
+                    cashFeeAmount: feeCashPart,
+                    storeFeeAmount: feeCreditPart,
+                    appliedToItem: appliedToItemCreate,
+                    totalWalletDeducted: walletUsed,
                     nextDueDate: !isFinished ? newNextDueDate.toISOString() : null
                 };
 
@@ -520,52 +632,82 @@ serve(async (req) => {
                     receiptData: receiptPayload 
                 });
 
+                // ---------------------------------------------------------
+                // 🧾 2b. SEPARATE PROMO LEDGER & RECEIPT
+                // ---------------------------------------------------------
+                if (promoAppliedAmount > 0) {
+                    const promoLedgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
+                    
+                    // Format a secondary receipt strictly for the bonus so the UI parses it cleanly
+                    const promoReceiptPayload = {
+                        reference: `PROMO-${planId.substring(0, 5)}`,
+                        date: new Date().toISOString(),
+                        vendorName: planData.storeName || 'Store',
+                        customerName: planData.customerName,
+                        productName: product.name,
+                        productCode: product.productCode || "",
+                        totalValue: price,
+                        amountPaidSoFar: to2DP(userPrincipalPayment + promoAppliedAmount),
+                        amountPaidNow: promoAppliedAmount,
+                        paymentMethod: "Korra Sponsored Bonus", // Appears on receipt UI
+                        balanceRemaining: remainingOnCreate,
+                        status: "COMPLETED", 
+                        isFinished: isFinished,
+                        creditUsed: 0,
+                        walletUsed: 0,
+                        feeAmount: 0,
+                        cashFeeAmount: 0,
+                        storeFeeAmount: 0,
+                        appliedToItem: promoAppliedAmount,
+                        totalWalletDeducted: 0,
+                        nextDueDate: !isFinished ? newNextDueDate.toISOString() : null
+                    };
+
+                    t.set(promoLedgerRef, {
+                        id: promoLedgerRef.id,
+                        customerId: customerUid,
+                        amount: promoAppliedAmount, 
+                        type: 'promo_credit', // UI will default to "System Transaction"
+                        description: `Sponsored Bonus applied to ${product.name}`,
+                        planId: planId,
+                        reference: `PROMO-${planId.substring(0, 5)}`,
+                        status: 'success',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        metadata: { isPromo: true, promoValue: promoAppliedAmount },
+                        receiptData: promoReceiptPayload 
+                    });
+                }
+
                 // 3. Update Balance
                 t.update(userRef, {
                     "monnify.availableBalance": admin.firestore.FieldValue.increment(-walletUsed)
                 });
                 
                 // 4. Update Plan Count
-                if (isFinished) {
-                    // ---------------------------------------------------------
-                    // 📝 USER STATS (If Finished) & ANALYTICS
-                    // ---------------------------------------------------------
+                 if (isFinished) {
                     let upgradedTier = null;
-
-                    // 1. Calculate the new completed count
                     const currentCompleted = statsData.completedPlansCount || 0;
                     const newCompletedCount = currentCompleted + 1;
                     
-                    // 2. Determine the new Tier (Auto-Upgrade Logic)
                     const currentTier = statsData.tier || 'Starter';
                     let newTier = currentTier;
 
-                    if (newCompletedCount >= 25) {
-                        newTier = 'VIP';
-                    } else if (newCompletedCount >= 10) {
-                        newTier = 'Collector';
-                    } else if (newCompletedCount >= 3) {
-                        newTier = 'Keeper';
-                    }
-                    // Else: It stays as whatever it currently is
-
+                    if (newCompletedCount >= 25) newTier = 'VIP';
+                    else if (newCompletedCount >= 10) newTier = 'Collector';
+                    else if (newCompletedCount >= 3) newTier = 'Keeper';
                     
-                    if (newTier !== currentTier) {
-                        upgradedTier = newTier;
-                    }
+                    if (newTier !== currentTier) upgradedTier = newTier;
 
-                    // 3. Save Stats & New Tier to Database
                     t.set(statsRef, {
                         activePlansCount: admin.firestore.FieldValue.increment(-1),
                         completedPlansCount: admin.firestore.FieldValue.increment(1),
-                        tier: newTier, // ✅ Auto-upgrade applied here
+                        tier: newTier, 
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
 
                     const now = new Date();
                     const currentMonth = now.toISOString().slice(0, 7);
-                    const custMonthlyRef = db.collection('customers').doc(customerUid)
-                                                .collection('monthly_stats').doc(currentMonth);
+                    const custMonthlyRef = db.collection('customers').doc(customerUid).collection('monthly_stats').doc(currentMonth);
                     
                     t.set(custMonthlyRef, {
                         month: currentMonth,
@@ -573,12 +715,76 @@ serve(async (req) => {
                         completedCount: admin.firestore.FieldValue.increment(1),
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
+
                 } else {
                     t.set(statsRef, {
                         activePlansCount: admin.firestore.FieldValue.increment(1),
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 }
+
+                // =======================================================================
+                // 💸 VENDOR PAYOUT & LEDGER VISIBILITY (Escrow & Settlement Flow)
+                // =======================================================================
+                if (promoAppliedAmount > 0) {
+                    const vendorPromoLedgerRef = db.collection('vendors').doc(vendorId).collection('ledger_transactions').doc();
+                    const vendorStatsRef = db.collection('vendor_stats').doc(vendorId);
+
+                    if (isFinished) {
+                        // Plan is paid in full Day 1. Money is secured, but waits for settlement cron.
+                        t.set(vendorPromoLedgerRef, {
+                            id: vendorPromoLedgerRef.id, 
+                            userId: vendorId, 
+                            amount: promoAppliedAmount,
+                            type: 'promo_credit', 
+                            description: `Korra Sponsored Bonus: Completion reward for ${product.name}`,
+                            reference: `PROMO-${planId.substring(0, 5)}`, 
+                            planId: planId, 
+                            status: 'success',           // 👈 Secured
+                            settlementStatus: 'pending', // 👈 UI shows amber badge, Cron will pick it up
+                            createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+
+                        // Deduct from company, add to vendor earnings (but not liquid yet)
+                        const companyWalletRef = db.collection('company_wallet').doc('main');
+                        t.update(companyWalletRef, { availableBalance: admin.firestore.FieldValue.increment(-promoAppliedAmount) });
+                        t.update(vendorStatsRef, { totalEarnings: admin.firestore.FieldValue.increment(promoAppliedAmount) });
+                        t.update(promoRef, { completedUses: admin.firestore.FieldValue.increment(1) });
+                    } else {
+                        // Plan is incomplete. Money is NOT secured yet.
+                        t.set(vendorPromoLedgerRef, {
+                            id: vendorPromoLedgerRef.id, 
+                            userId: vendorId, 
+                            amount: promoAppliedAmount,
+                            type: 'promo_credit', 
+                            description: `Pending Bonus for ${product.name} (Unlocks when customer completes plan)`,
+                            reference: `PROMO-${planId.substring(0, 5)}`, 
+                            planId: planId, 
+                            status: 'pending',           // 👈 Not secured yet, Cron ignores it
+                            settlementStatus: 'pending', // 👈 UI still shows the amber badge so they know it's coming
+                            createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                }
+
+                // =======================================================================
+                // 🎁 PROMO ACTIVITY LOGS (Vendor)
+                // =======================================================================
+                if (promoAppliedAmount > 0) {
+                    // 1. Vendor Activity Feed
+                    const vendorActivityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
+                    t.set(vendorActivityRef, {
+                        id: vendorActivityRef.id,
+                        type: 'system',
+                        title: 'Promo Claimed 🏷️',
+                        body: `${planData.customerName} applied your flash sale for ${product.name}. Korra covered ₦${promoAppliedAmount.toLocaleString()}.`,
+                        ref_id: planId,
+                        amount_display: `+₦${promoAppliedAmount.toLocaleString()}`,
+                        date: admin.firestore.FieldValue.serverTimestamp(),
+                        is_read: false
+                    });
+                }
+
 
                 // 5. UPDATE ANALYTICS
                 const now = new Date();
@@ -762,39 +968,67 @@ serve(async (req) => {
                     downPayment: userPrincipalPayment,
                     planIdStr: planId,
                     feeDeducted: feeDeducted,
-                    pickupCode: pickupCode // Return code if exists
+                    price: price,
+                    pickupCode: pickupCode, // Return code if exists
+                    promoAppliedAmount: promoAppliedAmount
                 };
             });
 
             // NOTIFICATIONS
+            // Calculate percentage and remaining from result
+            const createPercent = Math.round((result.downPayment / result.price) * 100);
+            const createRemaining = to2DP(result.price - result.downPayment);
+
+            // 1. Notify Customer
             await sendFcm(
-                customerUid, 
-                "Reservation Confirmed 🔒", 
-                `Plan for ${result.productName} is active!`, 
-                { type: "plan_detail", planId: result.planIdStr, image: result.productImage }, // Added to data
-                'customers', // Assuming default role is customers
+                customerUid,
+                "Reservation Confirmed 🔒",
+                `Your plan for ${result.productName} is now active. You are ${createPercent}% there — ₦${createRemaining.toLocaleString()} left to complete it.`,
+                { type: "plan_detail", planId: result.planIdStr, image: result.productImage },
+                'customers'
             );
 
+            // 2. If paid in full immediately
             if (result.pickupCode) {
-                 await sendFcm(customerUid, "Plan Completed! 🎉", `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to your merchant.`, { type: "plan_detail", planId: result.planIdStr });
+                await sendFcm(
+                    customerUid,
+                    "It's Yours! 🎉",
+                    `You have fully paid for ${result.productName}. Your pickup PIN is: ${result.pickupCode}. Show this to the vendor to collect.`,
+                    { type: "plan_detail", planId: result.planIdStr }
+                );
             }
 
+            // 3. Notify Vendor — percentage context not raw amount
             await sendFcm(
                 result.vendorId,
-                "Payment Received 💰",
-                // 🚀 UPDATE: Clearly stating the funds are pending
-                `${result.customerName} just paid ₦${result.downPayment.toLocaleString()}. Funds are pending settlement and will be available to withdraw soon.`,
-                { type: "vendor_order", planId: result.planIdStr },
+                "New Reservation 📦",
+                `${result.customerName} just started a plan for ${result.productName} and is ${createPercent}% done. Please reserve this item immediately.`,
+                { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
                 'vendors'
             );
 
-            await sendFcm(
-                result.vendorId,
-                "New Order: Action Required 📦",
-                `Please RESERVE ${result.productName} immediately, Customer ${result.customerName} just paid ₦${result.downPayment.toLocaleString()} initial deposit.`,
-                { type: "vendor_order", planId: result.planIdStr, image: result.productImage },
-                'vendors',
-            );
+            // ==========================================================
+            // 🎁 PROMO NOTIFICATIONS
+            // ==========================================================
+            if (result.promoAppliedAmount > 0) {
+                // 1. Hype up the Customer
+                await sendFcm(
+                    customerUid,
+                    "🎁 Bonus Applied!",
+                    `Awesome! A Sponsored Bonus of ₦${result.promoAppliedAmount.toLocaleString()} was automatically deducted from your ${result.productName} balance.`,
+                    { type: "plan_detail", planId: result.planIdStr },
+                    'customers'
+                );
+
+                // 2. Notify the Vendor their campaign is working
+                await sendFcm(
+                    result.vendorId,
+                    "🏷️ Promo Claimed!",
+                    `${result.customerName} just used your flash sale to reserve ${result.productName}. Korra covered ₦${result.promoAppliedAmount.toLocaleString()} of their balance.`,
+                    { type: "promo_dashboard", planId: result.planIdStr },
+                    'vendors'
+                );
+            }
 
             // await sendFcm(
             //     result.vendorId,
@@ -811,7 +1045,7 @@ serve(async (req) => {
         // 💸 ACTION: PAY INSTALLMENT (FINAL BUSINESS LOGIC)
         // =======================================================================
         if (action === 'PAY_INSTALLMENT') {
-            const paymentAmount = to2DP(Number(amount));
+            let paymentAmount = to2DP(Number(amount));
             if (paymentAmount <= 0) throw "Invalid payment amount.";
 
             if (!customerUid) throw "User not authenticated.";
@@ -833,6 +1067,51 @@ serve(async (req) => {
                 const userData = userDoc.exists ? userDoc.data() : {};
                 const statsDoc = await t.get(statsRef);
                 const statsData = statsDoc.exists ? statsDoc.data() : {};
+
+                const promoBonus = plan.promoApplied || 0;
+                let pendingPromoSnapshot = null;
+                if (promoBonus > 0) {
+                    pendingPromoSnapshot = await t.get(
+                        db.collection('vendors').doc(plan.vendorId)
+                          .collection('ledger_transactions')
+                          .where('planId', '==', planId)
+                          .where('type', '==', 'promo_credit')
+                          .where('status', '==', 'pending')
+                          .limit(1)
+                    );
+                }
+
+                // ==========================================
+                // 🛡️ THE OVERPAYMENT INTERCEPTOR (WITH ₦7500 CAP)
+                // ==========================================
+                const remainingDebt = to2DP(plan.outstandingLoanAmount);
+                const isPerPaymentFee = plan.totalAmount > PER_PAYMENT_THRESHOLD;
+
+                // Calculate fee with the 7500 ceiling
+                let estimatedFee = 0;
+                if (isPerPaymentFee) {
+                    const rawFee = to2DP(paymentAmount * CUSTOMER_FEE_RATE);
+                    estimatedFee = rawFee > MAX_FEE ? MAX_FEE : rawFee;
+                }
+
+                const estimatedNetContribution = to2DP(paymentAmount - estimatedFee);
+
+                if (estimatedNetContribution > remainingDebt) {
+                    if (isPerPaymentFee) {
+                        // If the fee at 3.5% would exceed 7500, we just add flat 7500 to the debt.
+                        // Otherwise, we use the percentage formula.
+                        const uncappedGross = remainingDebt / (1 - CUSTOMER_FEE_RATE);
+                        if (uncappedGross - remainingDebt > MAX_FEE) {
+                            paymentAmount = remainingDebt + MAX_FEE;
+                        } else {
+                            paymentAmount = Math.ceil(uncappedGross);
+                        }
+                    } else {
+                        paymentAmount = remainingDebt;
+                    }
+                    console.log(`🛡️ Intercepted Overpayment. Shrunk capped payment down to: ₦${paymentAmount}`);
+                }
+                // ==========================================
                 
                 // ✅ MONEY
                 const walletBalance = to2DP_Floor(userData.monnify?.availableBalance || 0);
@@ -855,6 +1134,7 @@ serve(async (req) => {
                 const availableStoreCredit = to2DP_Floor(vendorRel.storeCredit || 0);
 
                 // --- FINANCIAL MATH ---
+                // Store balance is ALWAYS used first
                 let creditUsed = 0;
                 let walletUsed = 0;
 
@@ -866,15 +1146,47 @@ serve(async (req) => {
                     walletUsed = to2DP(paymentAmount - creditUsed);
                 }
 
-                if (walletBalance < walletUsed) {
-                    throw `Insufficient funds. Needed: ₦${walletUsed.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}`;
+                // Store balance fee — charged from wallet, minimum ₦100
+                let storeFeeAmount = 0;
+                if (isPerPaymentFee && creditUsed > 0) {
+                    const rawStoreFee = to2DP(creditUsed * STORE_FEE_RATE);
+                    storeFeeAmount = rawStoreFee < MIN_STORE_FEE ? MIN_STORE_FEE : rawStoreFee;
                 }
 
-                // ✅ 1. STRICT DUST CLEARING LOGIC (The Fix)
-                let newAmountPaid = to2DP(plan.amountPaid + paymentAmount);
-                let remainingBalance = to2DP(plan.totalAmount - newAmountPaid);
+                // Cash fee — capped at ₦7500 maximum
+                let cashFeeAmount = 0;
+                if (isPerPaymentFee && walletUsed > 0) {
+                    const rawCashFee = to2DP(walletUsed * CUSTOMER_FEE_RATE);
+                    cashFeeAmount = rawCashFee > MAX_FEE ? MAX_FEE : rawCashFee;
+                }
+
+                const totalFeeAmount = to2DP(storeFeeAmount + cashFeeAmount);
+
+                // Applied to item = store credit (full) + cash minus cash fee
+                const appliedToItem = to2DP((creditUsed) + (walletUsed - cashFeeAmount));
+
+                // Total wallet deducted = cash portion + store balance fee
+                const totalWalletDeducted = to2DP(walletUsed + storeFeeAmount);
+
+                // ✅ WALLET VALIDATION — must have enough for cash portion + store balance fee
+                const requiredFromWallet = totalWalletDeducted;
+                if (walletBalance < requiredFromWallet) {
+                    if (creditUsed > 0 && walletBalance < storeFeeAmount) {
+                        throw `Insufficient wallet balance to cover store balance fee. You need at least ₦${storeFeeAmount.toLocaleString()} in your wallet to use store balance.`;
+                    }
+                    throw `Insufficient funds. Needed: ₦${requiredFromWallet.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}`;
+                }
+
+                // ✅ 1. STRICT DUST CLEARING LOGIC
+                let newAmountPaid = to2DP(plan.amountPaid + appliedToItem);
+                
+                // 🎯 THE FIX: Calculate remaining balance directly from the outstanding debt!
+                // This ignores UI fee-calculation mistakes and Store Balance drift.
+                let remainingBalance = to2DP(plan.outstandingLoanAmount - appliedToItem);
                 let isFinished = false;
                 let pickupCode = null;
+
+                console.log(`🔎 DEBUG: Total: ${plan.totalAmount}, Paid: ${newAmountPaid}, Remaining: ${remainingBalance}`);
 
                 // 🎯 CHANGED: Tolerance is now strictly less than 100 Naira (e.g. 0.99 clears, 100.00 does not)
                 if (remainingBalance < 1.0) {
@@ -966,6 +1278,12 @@ serve(async (req) => {
                     isFinished: isFinished,
                     creditUsed: creditUsed,
                     walletUsed: walletUsed,
+                    // ✅ FEE BREAKDOWN
+                    feeAmount: totalFeeAmount,
+                    cashFeeAmount: cashFeeAmount,
+                    storeFeeAmount: storeFeeAmount,
+                    appliedToItem: appliedToItem,
+                    totalWalletDeducted: totalWalletDeducted,
                     // ✅ SAFE DATE HELPER
                     nextDueDate: !isFinished ? newNextDueDate.toISOString() : null
                 };
@@ -982,13 +1300,23 @@ serve(async (req) => {
                     balanceBefore: walletBalance,
                     balanceAfter: to2DP_Floor(walletBalance - walletUsed),
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                    metadata: { paidWithWallet: walletUsed, paidWithCredit: creditUsed, vendorName: plan.storeName },
+                    metadata: { 
+                        paidWithWallet: walletUsed, 
+                        paidWithCredit: creditUsed, 
+                        vendorName: plan.storeName,
+                        feeAmount: totalFeeAmount,
+                        cashFeeAmount: cashFeeAmount,
+                        storeFeeAmount: storeFeeAmount,
+                        appliedToItem: appliedToItem,
+                        totalWalletDeducted: totalWalletDeducted
+                    },
                     receiptData: receiptPayload
                 });
 
-                if (walletUsed > 0) {
+                // Deduct total wallet amount (cash portion + store balance fee)
+                if (totalWalletDeducted > 0) {
                     t.update(userRef, {
-                        "monnify.availableBalance": admin.firestore.FieldValue.increment(-walletUsed)
+                        "monnify.availableBalance": admin.firestore.FieldValue.increment(-totalWalletDeducted)
                     });
                 }
 
@@ -1039,7 +1367,45 @@ serve(async (req) => {
                         completedCount: admin.firestore.FieldValue.increment(1),
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
+
+                    // =======================================================================
+                    // 💸 VENDOR PAYOUT: Unlock Pending Promo Funds on Completion
+                    // =======================================================================
+
+                    if (promoBonus > 0) {
+                        // 🎯 THE FIX: Use the snapshot we fetched at the top of the file!
+                        if (pendingPromoSnapshot && !pendingPromoSnapshot.empty) {
+                            const pendingDoc = pendingPromoSnapshot.docs[0];
+                            
+                            // 1. Flip it to success and tag it for the cron job!
+                            t.update(pendingDoc.ref, {
+                                status: 'success',
+                                settlementStatus: 'pending', 
+                                description: `Korra Bonus Unlocked: Completion reward for ${plan.title || 'item'}`,
+                                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+
+                            // 2. Transfer the liability from Korra to Vendor Earnings
+                            const companyWalletRef = db.collection('company_wallet').doc('main');
+                            t.update(companyWalletRef, { availableBalance: admin.firestore.FieldValue.increment(-promoBonus) });
+
+                            t.update(db.collection('vendor_stats').doc(vendorId), { 
+                                totalEarnings: admin.firestore.FieldValue.increment(promoBonus) 
+                            });
+                            
+                            // 3. Mark campaign success
+                            const promoRefForCompletion = db.collection('promos').doc(vendorId);
+                            t.update(promoRefForCompletion, { 
+                                completedUses: admin.firestore.FieldValue.increment(1) 
+                            });
+
+                            console.log(`💸 Pending Promo Bonus of ₦${promoBonus} unlocked for vendor ${vendorId}`);
+                        }
+                    }
+                    // =======================================================================
                 }
+
+
 
                 // ---------------------------------------------------------
                 // 📝 4. VENDOR RELATION (Store Credit)
@@ -1186,51 +1552,70 @@ serve(async (req) => {
             // 🔔 NOTIFICATIONS
             // ---------------------------------------------------------
             
-            // 1. Notify Customer
-            await sendFcm(customerUid, "Payment Successful ✅", `You paid ₦${paymentAmount.toLocaleString()} for ${result.receiptData.productName}.`, { type: "plan_detail", planId: planId });
+            // Calculate percentage for smart notifications
+            const totalAmount = result.receiptData.totalValue;
+            const amountPaidSoFar = result.receiptData.amountPaidSoFar;
+            const remaining = result.receiptData.balanceRemaining;
+            const percentPaid = Math.round((amountPaidSoFar / totalAmount) * 100);
+            const productName = result.receiptData.productName;
+            const customerName = result.receiptData.customerName;
+            const vendorId = result.receiptData.vendorId;
 
-            // 2. Notify Vendor (Money In)
+            // 1. Notify Customer progress focused
+            let customerMessage = `You're ${percentPaid}% done on ${productName}. ₦${remaining.toLocaleString()} left keep going!`;
+
+            // Milestone messages
+            if (percentPaid >= 90 && percentPaid < 100) {
+                customerMessage = `So close! You're 90% done on ${productName}. Just ₦${remaining.toLocaleString()} left finish strong! 💪`;
+            } else if (percentPaid >= 75 && percentPaid < 90) {
+                customerMessage = `Almost there! 75% paid on ${productName}. Only ₦${remaining.toLocaleString()} remaining.`;
+            } else if (percentPaid >= 50 && percentPaid < 75) {
+                customerMessage = `Halfway there! You're 50% done on ${productName}. ₦${remaining.toLocaleString()} left to go.`;
+            }
+
             await sendFcm(
-                result.receiptData.vendorId,
+                customerUid,
+                "Payment Confirmed ✅",
+                customerMessage,
+                { type: "plan_detail", planId: planId }
+            );
+
+            // 2. Notify Vendor percentage + remaining, not raw amount
+            await sendFcm(
+                vendorId,
                 "Payment Received 💰",
-                `${result.receiptData.customerName} just paid ₦${paymentAmount.toLocaleString()} Funds are pending settlement and will be available to withdraw soon.`,
+                `${customerName} is now ${percentPaid}% done on ${productName}. ₦${remaining.toLocaleString()} remaining.`,
                 { type: "vendor_order", planId: planId },
                 'vendors'
             );
 
-            // 3. Notify Vendor (Fee Deduction)
-            if (result.receiptData.feeDeducted > 0) {
+            // 3. Notify on completion
+            if (result.receiptData.isFinished) {
                 await sendFcm(
-                    result.receiptData.vendorId,
-                    "Platform Fee 📉",
-                    `A fee of ₦${result.receiptData.feeDeducted.toLocaleString()} was deducted from the recent payment.`,
-                    { type: "payment", planId: planId },
+                    vendorId,
+                    "Plan Completed! 🎉",
+                    `${customerName} has fully paid for ${productName}. Ready for pickup confirm collection when done.`,
+                    { type: "vendor_order", planId: planId },
                     'vendors'
                 );
-            }
 
-            // 4. Notify Vendor (Completion)
-            if (result.receiptData.isFinished) {
-                await sendFcm(result.receiptData.vendorId, "Order Completed! 🎉", `${result.receiptData.customerName} has finished paying for ${result.receiptData.productName}.`, { type: "vendor_order", planId: planId }, 'vendors');
-                
-                // 5. ✅ Notify Customer with PIN
                 if (result.pickupCode) {
                     await sendFcm(
-                        customerUid, 
-                        "Plan Completed! 🎉", 
-                        `Your item is ready. Your Pickup PIN is: ${result.pickupCode}. Show this to the vendor.`, 
+                        customerUid,
+                        "It's Yours! 🎉",
+                        `You've completed payment for ${productName}. Your pickup PIN is: ${result.pickupCode}. Show this to the vendor to collect.`,
                         { type: "plan_detail", planId: planId }
                     );
                 }
             }
 
-            // 6. 🏆 NEW: Notify Customer of Tier Upgrade
+            // 4. Tier upgrade notification
             if (result.upgradedTier) {
                 await sendFcm(
                     customerUid,
                     "Level Up! 🌟",
-                    `Congratulations! You've been upgraded to the ${result.upgradedTier} tier. Enjoy your new perks and extra active plan slots!`,
-                    { type: "home" } // You can route this to 'home', 'profile', or wherever makes sense
+                    `You've been upgraded to ${result.upgradedTier} tier. Enjoy your new perks and extra plan slots!`,
+                    { type: "home" }
                 );
             }
 
@@ -1367,35 +1752,61 @@ serve(async (req) => {
             if (!planId || !customerUid) throw "Missing planId or customerUid.";
 
             const result = await db.runTransaction(async (t) => {
+                // ==========================================
+                // 🔍 PHASE 1: ALL READS FIRST (No Writes Allowed Yet)
+                // ==========================================
                 const planRef = db.collection("plans").doc(planId);
                 const planDoc = await t.get(planRef);
 
                 if (!planDoc.exists) throw "Plan not found.";
                 const plan = planDoc.data();
 
-                // 2. Security Checks
+                // Security Checks
                 if (plan.customerId !== customerUid) throw "Unauthorized.";
                 if (plan.status !== 'active') throw "Plan is not active.";
 
                 const vendorId = plan.vendorId;
-                const refundAmount = to2DP_Floor(plan.amountPaid); // Full amount
-                const penaltyAmount = 0; // No penalty
+
+                // Pre-fetch User Stats
+                const { statsRef } = await getUserAndStats(customerUid);
+                
+                // Pre-fetch Promo Ledger (if applicable)
+                const promoBonus = plan.promoApplied || 0;
+                let promoLedgerSnapshot = null;
+                
+                if (promoBonus > 0) {
+                    promoLedgerSnapshot = await t.get(
+                        db.collection('vendors').doc(vendorId)
+                          .collection('ledger_transactions')
+                          .where('planId', '==', planId)
+                          .where('type', '==', 'promo_credit')
+                          .where('status', '==', 'pending') // Only cancel if it was still pending
+                          .limit(1)
+                    );
+                }
+
+                // ==========================================
+                // 📝 PHASE 2: ALL WRITES (No Reads Allowed Below Here)
+                // ==========================================
+                
+                // 🛡️ THE PROMO MATH: Customer only gets their CASH back, not the bonus
+                const refundAmount = to2DP_Floor(plan.amountPaid - promoBonus);
 
                 // 3. UPDATE PLAN: Mark Cancelled
                 t.update(planRef, {
                     status: 'cancelled',
                     cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
                     refundAmount: refundAmount,
-                    penaltyAmount: 0,
+                    penaltyAmount: 0, // No penalty applied
                     cancellationReason: 'Converted to Store Balance',
+                    outstandingLoanAmount: 0
                 });
 
                 // 4. CUSTOMER SIDE: Increase Store Credit
-                // We update the specific relationship doc for this vendor
                 const relRef = db.collection('customers').doc(customerUid).collection('my_vendors').doc(vendorId);
                 t.set(relRef, {
                     vendorId: vendorId,
-                    storeName: plan.storeName || 'Store', // Ensure name exists
+                    storeName: plan.storeName || 'Store',
                     storeCredit: admin.firestore.FieldValue.increment(refundAmount),
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
@@ -1408,11 +1819,26 @@ serve(async (req) => {
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // 5. CUSTOMER SIDE: Stats & Ledger
-                const { statsRef } = await getUserAndStats(customerUid);
+                // =======================================================================
+                // 🛑 REVOKE PROMO (Don't let the Cron Job settle this!)
+                // =======================================================================
+                if (promoLedgerSnapshot && !promoLedgerSnapshot.empty) {
+                    t.update(promoLedgerSnapshot.docs[0].ref, { 
+                        status: 'cancelled',
+                        settlementStatus: 'cancelled', // 👈 THE FIX: Clears the Amber Badge for the Merchant
+                        description: `Promo revoked: Plan cancelled by customer.`,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`🛑 Promo funds revoked for cancelled plan ${planId}`);
+                }
+                // =======================================================================
 
-                // Get Dates & Determine if it was an Expiry
+                // 5. CUSTOMER SIDE: Stats & Ledger
                 const now = new Date();
+                const parseFirestoreDate = (val: any) => {
+                    if (!val) return new Date();
+                    return (typeof val.toDate === 'function') ? val.toDate() : new Date(val);
+                };
                 const expiryDate = parseFirestoreDate(plan.planExpiryDate);
                 
                 // Set both to midnight to strictly compare the days
@@ -1426,11 +1852,10 @@ serve(async (req) => {
                     t.set(statsRef, {
                         activePlansCount: admin.firestore.FieldValue.increment(-1),
                         cancelledPlansCount: admin.firestore.FieldValue.increment(1),
-                        expiredPlansCount: admin.firestore.FieldValue.increment(1), // New field for expired count
+                        expiredPlansCount: admin.firestore.FieldValue.increment(1), // Strike against customer
                         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 } else {
-                    // Update Counts
                     t.set(statsRef, {
                         activePlansCount: admin.firestore.FieldValue.increment(-1),
                         cancelledPlansCount: admin.firestore.FieldValue.increment(1),
@@ -1442,19 +1867,19 @@ serve(async (req) => {
                 const custMonthlyRef = db.collection('customers').doc(customerUid)
                                                 .collection('monthly_stats').doc(currentMonth);
                     
-                    t.set(custMonthlyRef, {
-                        month: currentMonth,
-                        year: now.getFullYear().toString(),
-                        closedCount: admin.firestore.FieldValue.increment(1),
-                        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
+                t.set(custMonthlyRef, {
+                    month: currentMonth,
+                    year: now.getFullYear().toString(),
+                    closedCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
 
-                // Log Transaction
+                // Log Transaction for Customer
                 const ledgerRef = db.collection('customers').doc(customerUid).collection('ledger_transactions').doc();
                 t.set(ledgerRef, {
                     id: ledgerRef.id,
                     customerId: customerUid,
-                    amount: 0, // No cash returned to wallet, so 0 flow
+                    amount: 0, // No cash returned to liquid wallet
                     type: 'plan_cancelled',
                     reference: ledgerRef.id,
                     description: `Credited ₦${refundAmount.toLocaleString()} to Store Balance`,
@@ -1476,7 +1901,7 @@ serve(async (req) => {
                     id: vLiabRef.id,
                     userId: vendorId,
                     amount: refundAmount,
-                    type: 'conversion', // New type for clarity
+                    type: 'conversion', 
                     description: `Plan Closed: ${plan.customerName}`,
                     planId: planId,
                     status: 'success',
@@ -1487,67 +1912,72 @@ serve(async (req) => {
                 t.update(vendorStatsRef, {
                     totalLiability: admin.firestore.FieldValue.increment(refundAmount),
                     activePlansCount: admin.firestore.FieldValue.increment(-1),
-                    // Note: We do NOT touch 'currentActivePlanValue' here because that tracks potential revenue. 
-                    // Since the plan is dead, that potential revenue is gone, replaced by liability.
-                    // If you track 'projected_revenue', decrease it here.
                 });
 
                 const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 
-
-                // 2. UPDATE MONTHLY ANALYTICS (The Flow)
+                // UPDATE MONTHLY ANALYTICS
                 const monthlyRef = db.collection('vendors').doc(vendorId).collection('monthly_stats').doc(currentMonthStr);
                 t.set(monthlyRef, {
                     month: currentMonthStr,
                     year: now.getFullYear().toString(),
-                    storeCreditIssued: admin.firestore.FieldValue.increment(refundAmount), // 🚀 Track new debt created this month
+                    storeCreditIssued: admin.firestore.FieldValue.increment(refundAmount), 
                     cancelledPlansCount: admin.firestore.FieldValue.increment(1),
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
                 // Release Stock
-                const productRef = db.collection("products").doc(plan.productId);
-                t.update(productRef, { 
-                    availableStock: admin.firestore.FieldValue.increment(1) 
-                });
+                if (plan.productId) {
+                    const productRef = db.collection("products").doc(plan.productId);
+                    t.update(productRef, { 
+                        availableStock: admin.firestore.FieldValue.increment(1) 
+                    });
+                }
 
-                // 7. Activity Feed
+                // 7. Activity Feed for Vendor
                 const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
                 t.set(activityRef, {
                     id: activityRef.id,
                     type: 'reservation_cancel',
                     title: 'Plan Closed',
-                    body: `${plan.customerName} closed ${plan.title}. Refund secured in Store Balance.`,
+                    // 👈 THE FIX: Appends "Promo bonus revoked." to the body text if a promo was used
+                    body: `${plan.customerName} closed ${plan.title || 'item'}. Refund secured in Store Balance.${promoBonus > 0 ? ' Promo bonus revoked.' : ''}`,
                     ref_id: planId,
                     amount_display: `+₦${refundAmount.toLocaleString()} Credit`,
                     date: admin.firestore.FieldValue.serverTimestamp(),
                     is_read: false
                 });
 
+                // Return everything needed for Notifications
                 return { 
                     status: "SUCCESS", 
                     refundAmount: refundAmount,
                     storeName: plan.storeName,
                     vendorId: vendorId,
-                    productName: plan.title || "Product"
+                    productName: plan.title || "Product",
+                    promoBonus: promoBonus // 👈 CRITICAL: Exposes the bonus amount to the Notification code below
                 };
             });
 
+            // =======================================================================
             // 8. NOTIFICATIONS
+            // =======================================================================
+            
+            // To Customer
             await sendFcm(
                 customerUid, 
-                "Refund Secured 🔒", // Title focuses on the MONEY, not the cancellation.
-                // "Your money is safe here."
-                `Your ₦${result.refundAmount.toLocaleString()} is now available in your Store Balance at ${result.storeName}.`, 
+                "Refund Secured 🔒",
+                // 👈 THE FIX: Appends "(Bonus revoked)" dynamically based on the returned promoBonus
+                `Your ₦${result.refundAmount.toLocaleString()} is now available in your Store Balance at ${result.storeName}.${result.promoBonus > 0 ? ' (Bonus revoked)' : ''}`, 
                 { type: "plan_detail", planId: planId }
             );
 
             // To Vendor
             await sendFcm(
                 result.vendorId,
-                "Plan Closed 📁", // "Closed" implies the file is put away.
-                // clear instruction: The deal is off, money moved.
-                `Customer closed the plan for ${result.productName}. Refund secured in their Store Balance.`,
+                "Plan Closed 📁",
+                // 👈 THE FIX: Appends "Promo bonus revoked." dynamically
+                `Customer closed the plan for ${result.productName}. Refund secured in their Store Balance.${result.promoBonus > 0 ? ' Promo bonus revoked.' : ''}`,
                 { type: "vendor_order", planId: planId },
                 'vendors'
             );
@@ -1555,75 +1985,42 @@ serve(async (req) => {
             return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        
         // =======================================================================
-        // 🤝 ACTION: VERIFY PICKUP
+        // 🤝 ACTION: BULK FULFILL
         // =======================================================================
-        if (action === 'VERIFY_PICKUP') {
-            // 1. Validate Inputs
-            if (!planId || !pin || !vendorUid) {
-                throw "Missing required fields: planId, pin, or vendorUid.";
+        if (action === 'BULK_FULFILL') {
+            if (!vendorUid || !planIds || !Array.isArray(planIds) || planIds.length === 0) {
+                throw "Missing or invalid fields: vendorUid or planIds must be a non-empty array.";
             }
 
-            const result = await db.runTransaction(async (t) => {
-                const planRef = db.collection("plans").doc(planId);
-                const planDoc = await t.get(planRef);
-                
-                if (!planDoc.exists) throw "Reservation not found.";
-                const plan = planDoc.data();
+            const batch = db.batch();
 
-                // 2. Security Checks
-                if (plan.vendorId !== vendorUid) {
-                    throw "Unauthorized: You do not own this order.";
-                }
-                if (plan.status !== 'completed') {
-                    throw "Plan is not fully paid yet.";
-                }
-                if (plan.fulfilledAt != null) {
-                    throw "Item already collected.";
-                }
-
-                // 3. Verify PIN (String comparison)
-                // We use String() to ensure '1234' matches 1234
-                if (String(plan.pickupCode).trim() !== String(pin).trim()) {
-                    throw "Incorrect PIN.";
-                }
-
-                // 4. Update Plan
-                t.update(planRef, {
-                    fulfilledAt: admin.firestore.FieldValue.serverTimestamp(),
-                    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-                    // We keep the PIN for audit logs, but you could delete it here
+            // Loop through all selected plans and stamp them as fulfilled
+            for (const id of planIds) {
+                const planRef = db.collection("plans").doc(id);
+                batch.update(planRef, {
+                    finalFulfilledAt: admin.firestore.FieldValue.serverTimestamp(), // ✅ Updated
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
+            }
 
-                // 5. Log to Vendor Activity
-                const activityRef = db.collection('vendors').doc(vendorUid).collection('activity_feed').doc();
-                t.set(activityRef, {
-                    id: activityRef.id,
-                    type: 'reservation_fulfilled',
-                    title: 'Order Fulfilled',
-                    body: `Handed over ${plan.title} to ${plan.customerName}`,
-                    ref_id: planId,
-                    amount_display: null, 
-                    date: admin.firestore.FieldValue.serverTimestamp(),
-                    is_read: false
-                });
-
-                return { 
-                    success: true,
-                    customerId: customerUid
-                };
+            // Create ONE activity log for the bulk action (prevents spamming the feed)
+            const activityRef = db.collection('vendors').doc(vendorUid).collection('activity_feed').doc();
+            batch.set(activityRef, {
+                id: activityRef.id,
+                type: 'bulk_fulfilled',
+                title: 'Orders Fulfilled',
+                body: `Marked ${planIds.length} items as fulfilled.`,
+                ref_id: 'bulk', 
+                amount_display: null, 
+                date: admin.firestore.FieldValue.serverTimestamp(),
+                is_read: false
             });
 
-            // 6. Notify Customer
-            await sendFcm(
-                result.customerId, // Ensure result has this if you return it from transaction, or query it
-                "Order Collected ✅", 
-                "You have successfully picked up your item. Thanks for using Korra!", 
-                { type: "plan_detail", planId: planId }
-            );
+            await batch.commit();
 
-            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ success: true, count: planIds.length }), 
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // =======================================================================

@@ -1,17 +1,40 @@
 <!DOCTYPE html>
+<!-- ============================================================
+     DEPLOYMENT SWITCH — Change these sections when deploying:
+     
+     FOR MERCHANT APP (business.korra.com.ng):
+       - theme-color:   #000000
+       - title:         Korra Business
+     
+     FOR CUSTOMER APP (app.korra.com.ng):
+       - theme-color:   #A54600
+       - title:         Korra
+     ============================================================ -->
 <html>
 <head>
   <base href="/">
 
+  <!-- Cache control — forces browser to always check for new version -->
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Reserve now pay in parts, own with ease.">
+
+  <!-- [MERCHANT] --> <meta name="description" content="A better way to accept installment payments.">
+  <!-- [CUSTOMER] <meta name="description" content="Reserve now, pay in parts, own with ease."> -->
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Korra">
-  <meta name="theme-color" content="#A54600">
-  
+
+  <!-- [MERCHANT] --> <meta name="apple-mobile-web-app-title" content="Korra Business">
+  <!-- [CUSTOMER] <meta name="apple-mobile-web-app-title" content="Korra"> -->
+
+  <!-- [MERCHANT] --> <meta name="theme-color" content="#000000"> 
+  <!-- [CUSTOMER] <meta name="theme-color" content="#A54600"> -->
+
+
   <!-- for development, replace with actual client ID in production -->
   <!-- <meta name="google-signin-client_id" content="618221423421-ehvu3t9g9e4dkmumei7s1hm7nj7hm0cj.apps.googleusercontent.com"> -->
 
@@ -20,7 +43,10 @@
 
   <link rel="apple-touch-icon" href="icons/korra_logo_icon.webp">
   <link rel="icon" type="image/webp" href="korra_logo_icon.webp">
-  <title>Korra</title>
+
+  <!-- [MERCHANT] --> <title>Korra Business</title> 
+  <!-- [CUSTOMER] <title>Korra</title> -->
+
   <link rel="manifest" href="manifest.json">
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
 
@@ -28,9 +54,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+
   <style>
     body {
-      background-color: #A54600; /* Beautiful Brand Background */
+      background-color: #A54600;
       margin: 0;
       height: 100vh;
       width: 100vw;
@@ -42,21 +70,21 @@
       overflow: hidden;
     }
 
+    /* ===== SPLASH ===== */
     .splash-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       position: relative;
-      transition: opacity 0.5s ease; /* Smooth Fade Out */
+      transition: opacity 0.5s ease;
     }
 
-    /* iOS-style Icon Container */
     .logo-container {
       width: 100px;
       height: 100px;
       background-color: white;
-      border-radius: 22px; 
+      border-radius: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -71,15 +99,10 @@
       object-fit: contain;
     }
 
-    /* Bouncing Dots Loader */
-    .loader {
-      display: flex;
-      gap: 8px;
-    }
+    .loader { display: flex; gap: 8px; }
 
     .dot {
-      width: 10px;
-      height: 10px;
+      width: 10px; height: 10px;
       background-color: rgba(255, 255, 255, 0.8);
       border-radius: 50%;
       animation: bounce 1.4s infinite ease-in-out both;
@@ -88,21 +111,21 @@
     .dot:nth-child(1) { animation-delay: -0.32s; }
     .dot:nth-child(2) { animation-delay: -0.16s; }
 
-    /* Animations */
     @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2); }
-      50% { transform: scale(1.05); box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3); }
-      100% { transform: scale(1); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2); }
+      0%   { transform: scale(1);    box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
+      50%  { transform: scale(1.05); box-shadow: 0 20px 45px rgba(0,0,0,0.3); }
+      100% { transform: scale(1);    box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
     }
 
     @keyframes bounce {
       0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-      40% { transform: scale(1); opacity: 1; }
+      40%           { transform: scale(1); opacity: 1; }
     }
   </style>
 </head>
 <body>
 
+  <!-- SPLASH -->
   <div id="loading_indicator" class="splash-container">
     <div class="logo-container">
       <img src="korra_logo_icon.webp" class="logo" alt="Korra Logo">
@@ -114,18 +137,45 @@
     </div>
   </div>
 
+  <!-- PWA JS — UI is handled by Flutter widget (global_install_button.dart) -->
+  <script>
+    let deferredPrompt;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    function promptKorraInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('Korra installed');
+          }
+          deferredPrompt = null;
+        });
+      }
+    }
+
+    function isKorraInstalled() {
+      return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    }
+  </script>
+
+  <!-- SPLASH REMOVE -->
   <script>
     function removeSplashFromWeb() {
       var loading = document.getElementById("loading_indicator");
       if (loading) {
-        loading.style.opacity = "0"; // Trigger CSS fade out
-        setTimeout(function() {
-          loading.remove(); // Remove from DOM after transition
-        }, 500);
+        loading.style.opacity = "0";
+        setTimeout(function() { loading.remove(); }, 500);
       }
     }
   </script>
 
+  <!-- SERVICE WORKER — auto update -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {

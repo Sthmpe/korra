@@ -15,7 +15,7 @@ const messaging = admin.messaging();
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 
 // --- 2. PUSH NOTIFICATION HELPER ---
-async function sendPushNotification(customerId: string, name: string, planCount: number) {
+async function sendPushNotification(customerId: string, name: string, planCount: number, pushTitle: string, pushBody: string) {
   if (!customerId) return;
   
   try {
@@ -27,16 +27,10 @@ async function sendPushNotification(customerId: string, name: string, planCount:
       return;
     }
 
-    const title = "Keep your plan active ⚡";
-
-    const body = planCount === 1 
-      ? `Hi ${name}, a quick payment today keeps your plan on track. Even small amount counts.`
-      : `Hi ${name}, you have ${planCount} active plans. A quick payment keeps everything on track.`;
-
     // 1. Write to In-App Notifications Feed
     await userRef.collection('notifications').add({
-      title: title,
-      body: body,
+      title: pushTitle,
+      body: pushBody,
       type: 'reminder',
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -48,7 +42,7 @@ async function sendPushNotification(customerId: string, name: string, planCount:
     if (fcmToken) {
       await messaging.send({
         token: fcmToken,
-        notification: { title, body },
+        notification: { title: pushTitle, body: pushBody },
         data: { type: "reminder" }
       });
       console.log(`✅ Push successfully fired to device for ${name}`);
@@ -61,9 +55,8 @@ async function sendPushNotification(customerId: string, name: string, planCount:
 }
 
 // 🛡️ PREMIUM REMINDER TEMPLATE
-const getReminderTemplate = (name: string, planCount: number) => {
-  const planLabel = planCount === 1 ? "Active Plan" : "Active Plans";
-  const cadenceText = planCount === 1 ? "your reservation plan" : "your reservation plans";
+const getReminderTemplate = (name: string, planCount: number, heroHeadline: string, balFigure: string, balSubtext: string) => {
+  const planLabel = planCount === 1 ? "reserved item" : "reserved items";
 
   return `
 <!doctype html>
@@ -71,7 +64,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Korra – Payment Reminder</title>
+<title>Korra – Milestone Alert</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -79,28 +72,27 @@ const getReminderTemplate = (name: string, planCount: number) => {
   body {
     background: #EDE8E1;
     font-family: 'DM Sans', sans-serif;
-    padding: 32px 12px; /* Slimmer outer padding */
+    padding: 32px 12px;
     min-height: 100vh;
   }
 
   .email-wrap {
-    max-width: 500px; /* Slimmer card width */
+    max-width: 500px;
     margin: 0 auto;
   }
 
   /* ── MAIN CARD WRAPPER ── */
   .main-card {
     background: #FDFAF7;
-    border-radius: 16px; /* Slightly softer corners for a smaller card */
-    border: 1px solid #EAE0D5;
-    box-shadow: 0 8px 24px rgba(28, 13, 0, 0.04);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(28, 13, 0, 0.06);
     overflow: hidden; 
   }
 
   /* ── HERO SECTION ── */
   .hero {
     background: #1C0D00;
-    padding: 40px 32px 32px; /* Tighter padding */
+    padding: 40px 32px 32px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -119,7 +111,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
   }
   .hero h1 {
     font-family: 'DM Serif Display', serif;
-    font-size: 26px; /* Scaled down from 36px */
+    font-size: 26px;
     font-weight: 400;
     color: #FDF6EE;
     line-height: 1.2;
@@ -132,7 +124,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
     color: #E07A3A;
   }
   .hero-sub {
-    font-size: 13px; /* Scaled down */
+    font-size: 13px;
     color: rgba(253,246,238,0.7);
     line-height: 1.5;
     position: relative;
@@ -141,11 +133,11 @@ const getReminderTemplate = (name: string, planCount: number) => {
 
   /* ── BODY ── */
   .body {
-    padding: 36px 32px; /* Tighter padding */
+    padding: 36px 32px;
   }
 
   .greeting {
-    font-size: 14px; /* Scaled down */
+    font-size: 14px;
     color: #3D2B1A;
     line-height: 1.6;
     margin-bottom: 24px;
@@ -155,15 +147,12 @@ const getReminderTemplate = (name: string, planCount: number) => {
     font-weight: 600;
     color: #1C0D00;
   }
-  .cadence-text {
-    text-transform: capitalize;
-  }
 
   /* ── BALANCE CARD ── */
   .balance-card {
     background: #1C0D00;
     border-radius: 12px;
-    padding: 24px 24px; /* Tighter padding */
+    padding: 24px 24px;
     margin-bottom: 28px;
     text-align: left; 
   }
@@ -177,7 +166,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
   }
   .bal-figure {
     font-family: 'DM Serif Display', serif;
-    font-size: 32px; /* Scaled down from 42px */
+    font-size: 32px;
     color: #FDF6EE;
     letter-spacing: -0.5px;
     line-height: 1;
@@ -195,7 +184,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
     color: #FDF6EE;
     font-size: 12px;
     font-weight: 600;
-    padding: 8px 20px; /* Slimmer button */
+    padding: 8px 20px;
     border-radius: 40px;
     letter-spacing: 0.3px;
     text-decoration: none;
@@ -207,7 +196,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
 
   /* ── BODY COPY ── */
   .copy {
-    font-size: 14px; /* Scaled down */
+    font-size: 14px;
     color: #5A3E2B;
     line-height: 1.6;
     margin-bottom: 28px;
@@ -222,12 +211,12 @@ const getReminderTemplate = (name: string, planCount: number) => {
   .lock-row {
     background: #FDF0E6;
     border-radius: 10px;
-    padding: 18px 20px; /* Tighter padding */
+    padding: 18px 20px;
     margin-bottom: 32px;
     text-align: left;
   }
   .lock-copy {
-    font-size: 13px; /* Scaled down */
+    font-size: 13px;
     color: #7C4A25;
     line-height: 1.5;
     font-weight: 400;
@@ -249,9 +238,9 @@ const getReminderTemplate = (name: string, planCount: number) => {
     background: #A54600;
     color: #FDF6EE;
     text-decoration: none;
-    font-size: 14px; /* Scaled down */
+    font-size: 14px;
     font-weight: 600;
-    padding: 14px 40px; /* Sleeker button */
+    padding: 14px 40px;
     border-radius: 50px;
     letter-spacing: 0.3px;
     transition: background 0.2s;
@@ -273,18 +262,17 @@ const getReminderTemplate = (name: string, planCount: number) => {
     text-align: left;
   }
   .signoff p {
-    font-size: 13px; /* Scaled down */
+    font-size: 13px;
     color: #5A3E2B;
     line-height: 1.6;
     font-weight: 300;
     margin-bottom: 20px;
     padding-top: 28px;
-    border-top: 1px solid #EAE0D5;
   }
   .signoff strong { font-weight: 600; color: #1C0D00; }
   .sig-name {
     font-family: 'DM Serif Display', serif;
-    font-size: 20px; /* Scaled down */
+    font-size: 20px;
     color: #A54600;
     margin-bottom: 4px;
   }
@@ -298,11 +286,11 @@ const getReminderTemplate = (name: string, planCount: number) => {
   .footer {
     background: #1C0D00;
     text-align: center;
-    padding: 28px 20px; /* Tighter padding */
+    padding: 28px 20px;
   }
   
   .footer-row {
-    font-size: 12px; /* Scaled down */
+    font-size: 12px;
     color: rgba(253, 246, 238, 0.6);
     line-height: 1.5;
     margin-bottom: 12px;
@@ -333,7 +321,7 @@ const getReminderTemplate = (name: string, planCount: number) => {
     
     .balance-card { 
       padding: 20px; 
-      text-align: center; /* Centers the balance on mobile */
+      text-align: center; 
     }
     .bal-figure { font-size: 28px; }
     
@@ -353,50 +341,50 @@ const getReminderTemplate = (name: string, planCount: number) => {
 <div class="email-wrap">
   <div class="main-card">
     <div class="hero">
-      <div class="hero-eyebrow">Payment Reminder</div>
-      <h1>You’re still on track<br><em>keep it going</em></h1>
-      <p class="hero-sub">A small payment today keeps your plan active</p>
+      <div class="hero-eyebrow">Milestone Alert</div>
+      <h1>${heroHeadline}</h1>
+      <p class="hero-sub">Add to your progress today to unlock your items</p>
     </div>
 
     <div class="body">
       <p class="greeting">
-      Hi <strong>${name}</strong>, you’re making great progress on your <strong class="cadence-text">${cadenceText}</strong> plan.
+      Hi <strong>${name}</strong>, you're making great progress.
 
-      A quick payment today keeps everything on track even a small amount counts.
+      Every bit counts—add to your progress today to keep your streak alive.
       </p>
 
       <div class="balance-card">
-        <div class="bal-label">Your Active Plans</div>
-        <div class="bal-figure">${planCount} ${planLabel}</div>
-        <div class="bal-plan">Your prices are still locked</div>
+        <div class="bal-label">Total Progress</div>
+        <div class="bal-figure">${balFigure}</div>
+        <div class="bal-plan">${balSubtext} &bull; ${planCount} ${planLabel}</div>
         <a href="https://app.korra.com.ng" class="due-pill">Open App</a>
       </div>
 
       <p class="copy">
-        You don’t need to complete everything at once. Just keep your plan active by paying small small.
+        You don't need to complete everything at once. Just keep your momentum going by dropping small amounts.
 
-        The earlier you stay consistent, the faster you complete and collect your item.
+        The earlier you stay consistent, the faster you unlock your items.
       </p>
 
       <div class="lock-row">
         <div class="lock-copy">
           <strong>Your price stays the same.</strong> 
-          As long as your plan remains active, your reserved item and agreed price are secured.
+          As long as your momentum continues, your reserved items and agreed prices are secured.
         </div>
       </div>
 
       <div class="cta-wrap">
-        <a href="https://app.korra.com.ng" class="cta-btn">Continue Payment</a>
+        <a href="https://app.korra.com.ng" class="cta-btn">Add to Progress</a>
         <p class="cta-note">Takes less than a minute</p>
       </div>
     </div>
 
     <div class="signoff">
       <p>
-        If you need help or have any questions, we’re here for you at <strong>support@korra.com.ng</strong>.
+        If you need help or have any questions, we're here for you at <strong>support@korra.com.ng</strong>.
       </p>
       <p>
-        Keep going you’re closer than you think.
+        Keep going you're closer than you think.
       </p>
       <div class="sig-name">The Korra Team</div>
       <div class="sig-role">app.korra.com.ng</div>
@@ -405,10 +393,10 @@ const getReminderTemplate = (name: string, planCount: number) => {
     <div class="footer">
       <div class="footer-row">
         <img class="footer-logo" src="https://ltytmqjpektcgwajfzfm.supabase.co/storage/v1/object/public/open/korra_logo_icon.webp" alt="Korra Icon"> 
-        © 2026 Korra &nbsp;|&nbsp; <a href="mailto:support@korra.com.ng">support@korra.com.ng</a>
+        &copy; 2026 Korra &nbsp;|&nbsp; <a href="mailto:support@korra.com.ng">support@korra.com.ng</a>
       </div>
       <div class="footer-disclaimer">
-        You are receiving this because you have an active reservation plan.
+        You are receiving this because you have active reserved items.
       </div>
     </div>
   </div>
@@ -419,6 +407,49 @@ const getReminderTemplate = (name: string, planCount: number) => {
 </html>
 `;
 };
+
+
+// ============================================================
+// SAFE AWAIT — catches errors without breaking other channels
+// Returns [error, data] — if error has value it failed, if data has value it succeeded
+// ============================================================
+async function safeAwait<T>(promise: Promise<T>) {
+  try {
+    const data = await promise;
+    return [null, data] as const;
+  } catch (error) {
+    return [error, null] as const;
+  }
+}
+
+// ============================================================
+// SEND WHATSAPP VIA RENDER (BAILEYS)
+// Posts customer data to the Render server which uses Korra
+// to craft a natural AI message and send to customer's WhatsApp
+// ============================================================
+const RENDER_URL = Deno.env.get('RENDER_URL') ?? '';
+const RENDER_SECRET = Deno.env.get('RENDER_SECRET') ?? '';
+
+async function sendBaileysWhatsApp(phone: string, name: string, progressPercentage: number, planCount: number, pushBody: string) {
+  if (!phone || phone === 'No Phone') throw new Error('No phone number available');
+  if (!RENDER_URL) throw new Error('RENDER_URL not set');
+
+  const res = await fetch(`${RENDER_URL}/send-reminder`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-secret-key': RENDER_SECRET
+    },
+    body: JSON.stringify({ phone, name, progressPercentage, planCount, pushBody })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(`Render responded with ${res.status}: ${JSON.stringify(errData)}`);
+  }
+
+  return await res.json();
+}
 
 serve(async (req) => {
   console.log("🚀 KORRA NOTIFICATION CRON TRIGGERED");
@@ -464,13 +495,17 @@ serve(async (req) => {
           email: email,
           phone: plan.customerPhone || "No Phone",
           totalOutstandingBalance: 0,
-          plans: [] // We keep track of their specific plans here
+          totalAmount: 0,       // sum of all plan totalAmount fields
+          totalAmountPaid: 0,   // sum of all plan amountPaid fields
+          plans: []
         });
       }
 
       // Add this plan's data to the customer's cart
       const customerRecord = groupedCustomers.get(customerId);
       customerRecord.totalOutstandingBalance += plan.outstandingLoanAmount;
+      customerRecord.totalAmount += plan.totalAmount || 0;
+      customerRecord.totalAmountPaid += plan.amountPaid || 0;
       customerRecord.plans.push({
         planId: doc.id,
         cadence: plan.cadenceType,
@@ -484,45 +519,148 @@ serve(async (req) => {
     whatsappReportString += `Included Cadences: ${cadencesToProcess.join(', ').toUpperCase()}\n\n`;
 
     // 🚀 2. SEND THE CONSOLIDATED NOTIFICATIONS
-    for (const [customerId, data] of groupedCustomers.entries()) {
-      const { name, email, phone, totalOutstandingBalance, plans } = data;
-      const planCount = plans.length;
+    // Using Promise.allSettled — all customers processed concurrently.
+    // One customer failing does NOT stop others from being notified.
+    const customersArray = [...groupedCustomers.values()];
 
-      console.log(`\n⚙️ --- Processing Customer: ${name} (${planCount} plans) ---`);
+    const results = await Promise.allSettled(
+      customersArray.map(async (data) => {
+        const { customerId, name, email, phone, totalOutstandingBalance, totalAmount, totalAmountPaid, plans } = data;
+        const planCount = plans.length;
 
-      // A. Send ONE Consolidated Push Notification
-      await sendPushNotification(customerId, name, planCount);
+        console.log(`\n⚙️ --- Processing Customer: ${name} (${planCount} plans) ---`);
 
-      // B. Send ONE Consolidated Email
-      if (email) {
-        console.log(`✉️ Sending Batched Resend Email to ${email}...`);
-        const userEmailRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${RESEND_API_KEY}`, 
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify({
-            from: 'Korra <notifications@korra.com.ng>',
-            to: [email],
-            subject: planCount === 1 ? `KORRA PAYMENT REMINDER` : `Action Required: Multiple Korra Payments Due`,
-            html: getReminderTemplate(name, planCount),
-            tags: [{ name: 'category', value: 'reminder' }]
-          })
-        });
+        // 🎯 Calculate progress percentage
+        const progressPercentage = totalAmount > 0
+          ? Math.min(100, Math.round((totalAmountPaid / totalAmount) * 100))
+          : 0;
+        const remainingPercentage = 100 - progressPercentage;
 
-        const userEmailData = await userEmailRes.json();
-        if (!userEmailRes.ok) {
-          console.error(`❌ RESEND ERROR [Customer: ${email}]:`, JSON.stringify(userEmailData));
+        // 🎯 3-Phase Milestone Logic
+        let pushTitle = "";
+        let pushBody = "";
+        let heroHeadline = "";
+        let balFigure = "";
+        let balSubtext = "";
+
+        if (progressPercentage < 40) {
+          // 🟢 Phase 1: The Start
+          pushTitle = "Great start! 🎯";
+          pushBody = `Hi ${name}, you've already unlocked ${progressPercentage}% of your target. Add to your progress today to keep that momentum going!`;
+          heroHeadline = `You've unlocked ${progressPercentage}%<br><em>keep your momentum</em>`;
+          balFigure = `${progressPercentage}% Unlocked`;
+          balSubtext = "You are making solid progress";
+        } else if (progressPercentage <= 60) {
+          // 🟡 Phase 2: The Middle
+          pushTitle = "Halfway there! ⚖️";
+          pushBody = `Hi ${name}, you are ${progressPercentage}% of the way there! Add to your progress today and cross that halfway mark.`;
+          heroHeadline = `You are ${progressPercentage}% there<br><em>keep pushing forward</em>`;
+          balFigure = `${progressPercentage}% Unlocked`;
+          balSubtext = "You are crossing the halfway mark";
         } else {
-          console.log(`✅ RESEND SUCCESS [Customer: ${email}]: Email ID ${userEmailData.id}`);
+          // 🔴 Phase 3: The Finish Line
+          pushTitle = "Almost there! 🏁";
+          pushBody = `Hi ${name}, you are just ${remainingPercentage}% away from unlocking your items! Add to your progress today to close the gap.`;
+          heroHeadline = `Only ${remainingPercentage}% left<br><em>finish strong</em>`;
+          balFigure = `Only ${remainingPercentage}% Remaining`;
+          balSubtext = "You are so close to the finish line";
         }
-      } else {
-        console.warn(`⚠️ Missing email for ${name}. Skipped Resend Email.`);
-      }
 
-      // C. Append to WhatsApp Report (Shows the aggregate)
-      whatsappReportString += `Name: ${name}\nCustomerID: ${customerId}\nPhone: ${phone}\nTotal Active Plans: ${planCount}\nTotal Outstanding: ₦${totalOutstandingBalance}\n---------------------------\n`;
+        console.log(`📊 Progress: ${progressPercentage}% | Phase: ${progressPercentage < 40 ? 'Start' : progressPercentage <= 60 ? 'Middle' : 'Finish'}`);
+
+        let channelStatus = "";
+
+        // 🛡️ A. PUSH NOTIFICATION BLOCK
+        const [pushErr] = await safeAwait(
+          sendPushNotification(customerId, name, planCount, pushTitle, pushBody)
+        );
+        if (pushErr) {
+          console.error(`❌ Push crashed for ${name}:`, pushErr);
+          channelStatus += "Push: ❌ | ";
+        } else {
+          channelStatus += "Push: ✅ | ";
+        }
+
+        // 🛡️ B. EMAIL BLOCK
+        if (email) {
+          const [emailErr] = await safeAwait(
+            fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 
+                'Authorization': `Bearer ${RESEND_API_KEY}`, 
+                'Content-Type': 'application/json' 
+              },
+              body: JSON.stringify({
+                from: 'Korra <notifications@korra.com.ng>',
+                to: [email],
+                subject: planCount === 1 ? `KORRA PAYMENT REMINDER` : `Action Required: Multiple Korra Payments Due`,
+                html: getReminderTemplate(name, planCount, heroHeadline, balFigure, balSubtext),
+                tags: [{ name: 'category', value: 'reminder' }]
+              })
+            }).then(async (res) => {
+              const data = await res.json();
+              if (!res.ok) throw new Error(`Resend error: ${JSON.stringify(data)}`);
+              console.log(`✅ RESEND SUCCESS [Customer: ${email}]: Email ID ${data.id}`);
+              return data;
+            })
+          );
+          if (emailErr) {
+            console.error(`❌ Email crashed for ${name}:`, emailErr);
+            channelStatus += "Email: ❌ | ";
+          } else {
+            channelStatus += "Email: ✅ | ";
+          }
+        } else {
+          console.warn(`⚠️ Missing email for ${name}. Skipped Resend Email.`);
+          channelStatus += "Email: ⚠️ No email | ";
+        }
+
+        // 🛡️ C. WHATSAPP BLOCK
+        if (phone && phone !== 'No Phone') {
+          const [waErr] = await safeAwait(
+            sendBaileysWhatsApp(phone, name, progressPercentage, planCount, pushBody)
+          );
+          if (waErr) {
+            console.error(`❌ WhatsApp crashed for ${name}:`, waErr);
+            channelStatus += "WhatsApp: ❌";
+          } else {
+            channelStatus += "WhatsApp: ✅";
+          }
+        } else {
+          channelStatus += "WhatsApp: ⚠️ No phone";
+        }
+
+        console.log(`📋 Channel Status for ${name}: ${channelStatus}`);
+
+        // D. Return report line with channel status
+        return `Name: ${name}\nCustomerID: ${customerId}\nPhone: ${phone}\nTotal Active Plans: ${planCount}\nTotal Outstanding: ₦${totalOutstandingBalance}\nProgress: ${progressPercentage}%\nChannels: ${channelStatus}\nSTATUS: ✅ SUCCESS\n---------------------------\n`;
+      })
+    );
+
+    // 🚀 4. AUDIT RESULTS
+    let successCount = 0;
+    const failedCustomers: { name: string; id: string; error: any }[] = [];
+
+    results.forEach((result, index) => {
+      const currentCustomer = customersArray[index];
+      if (result.status === 'fulfilled') {
+        successCount++;
+        whatsappReportString += result.value;
+      } else {
+        failedCustomers.push({
+          name: currentCustomer.name,
+          id: currentCustomer.customerId,
+          error: result.reason
+        });
+        whatsappReportString += `Name: ${currentCustomer.name}\nCustomerID: ${currentCustomer.customerId}\nSTATUS: ⚠️ FAILED TO PROCESS\n---------------------------\n`;
+      }
+    });
+
+    // 🚀 5. THE BATCH LOG
+    console.log(`\n🏁 Processing Complete! Success: ${successCount} | Failed: ${failedCustomers.length}`);
+
+    if (failedCustomers.length > 0) {
+      console.error(`🚨 BATCH FAILURE ALERT: ${failedCustomers.length} notifications failed to send.`, JSON.stringify(failedCustomers, null, 2));
     }
 
     // 6. EMAIL THE ADMIN

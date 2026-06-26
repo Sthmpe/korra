@@ -1,11 +1,13 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Haptics
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../config/constants/buttons.dart';
 import '../../../../config/constants/colors.dart';
+import '../../../../config/constants/sizes.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_bloc.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_event.dart';
 import '../../../../logic/bloc/auth/role_login/role_login_state.dart';
@@ -30,7 +32,7 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
       vsync: this,
       duration: const Duration(milliseconds: 100),
       lowerBound: 0.0,
-      upperBound: 0.05, // Shrink by 5%
+      upperBound: 0.05,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(_controller);
   }
@@ -49,7 +51,7 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return BlocBuilder<RoleLoginBloc, RoleLoginState>(
       builder: (context, state) {
-        final isLoading = state.loading; // Use your actual loading state getter
+        final isLoading = state.loading;
         final role = state.role;
 
         return GestureDetector(
@@ -71,32 +73,18 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
               scale: _scaleAnimation.value,
               child: Container(
                 width: double.infinity,
-                height: 56.h,
-                decoration: BoxDecoration(
-                  color: isLoading 
-                      ? KorraColors.brand.withOpacity(0.7) 
-                      : KorraColors.brand,
-                  borderRadius: BorderRadius.circular(16.r),
-                  boxShadow: isLoading
-                      ? [] // No shadow when loading/flat
-                      : [
-                          BoxShadow(
-                            color: KorraColors.brand.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                ),
+                height: KorraButtons.heightLg.h,
+                decoration: KorraButtons.primaryDecorationWithShadow(disabled: isLoading),
                 alignment: Alignment.center,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   child: isLoading
                       ? SizedBox(
-                          width: 24.w,
-                          height: 24.w,
+                          width: KorraButtons.spinnerLg.w,
+                          height: KorraButtons.spinnerLg.w,
                           child: const CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
+                            color: KorraColors.white,
+                            strokeWidth: KorraButtons.spinnerStroke,
                           ),
                         )
                       : AutoSizeText(
@@ -104,10 +92,10 @@ class _LoginButtonState extends State<LoginButton> with SingleTickerProviderStat
                               ? 'Sign in as Merchant'
                               : 'Sign in as Customer',
                           style: GoogleFonts.inter(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w700,
+                            fontSize: KorraSizes.fontLg.sp,
+                            fontWeight: KorraSizes.weightBold,
                             color: Colors.white,
-                            letterSpacing: 0.5,
+                            letterSpacing: KorraSizes.trackingWide,
                           ),
                           maxLines: 1,
                         ),

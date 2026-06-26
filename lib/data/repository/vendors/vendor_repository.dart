@@ -715,6 +715,7 @@ Stream<VendorCompliance> streamComplianceStatus(String vendorId) {
         body: {
           'name': '${vendor.firstName} ${vendor.lastName}'.trim(),
           'email': vendor.email,
+          'phone': vendor.phone,
           'userType': 'vendor'
         },
       );

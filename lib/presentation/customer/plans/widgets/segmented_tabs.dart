@@ -34,8 +34,7 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-               _chip('Active', PlansTab.active),
-              _chip('Ready for Pickup', PlansTab.readyForPickup, isHighPriority: true),
+               _chip('Active', PlansTab.active, isHighPriority: true),
               _chip('Completed', PlansTab.completed),
               _chip('Past due', PlansTab.overdue),
               _chip('Pending', PlansTab.pending),

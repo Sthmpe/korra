@@ -3,6 +3,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart'; // Assuming you use Iconsax, or change to Icons.map_outlined
+import '../../config/constants/buttons.dart';
+import '../../config/constants/colors.dart';
+import '../../config/constants/sizes.dart';
 import '../../config/routes/app_routes.dart';
 
 class NotFoundScreen extends StatelessWidget {
@@ -30,8 +33,8 @@ class NotFoundScreen extends StatelessWidget {
                 child: Center(
                   child: Icon(
                     Iconsax.radar_2, // Or Icons.route_outlined
-                    size: 40.sp,
-                    color: Colors.grey.shade400,
+                    size: KorraSizes.icon2xl.sp,
+                    color: KorraColors.greyShade400,
                   ),
                 ),
               ),
@@ -41,10 +44,10 @@ class NotFoundScreen extends StatelessWidget {
               Text(
                 "Navigation Error",
                 style: GoogleFonts.inter(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
-                  letterSpacing: -0.5,
+                  fontSize: KorraSizes.font2xl.sp,
+                  fontWeight: KorraSizes.weightBold,
+                  color: KorraColors.black,
+                  letterSpacing: KorraSizes.trackingSnug,
                 ),
               ),
               SizedBox(height: 8.h),
@@ -55,8 +58,8 @@ class NotFoundScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 14.sp,
-                  color: Colors.grey.shade500,
-                  height: 1.5,
+                  color: KorraColors.greyShade500,
+                  height: KorraSizes.lineHeightNormal,
                 ),
               ),
               SizedBox(height: 40.h),
@@ -72,18 +75,18 @@ class NotFoundScreen extends StatelessWidget {
                     Get.offAllNamed(Routes.roleLoginScreen);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
+                    backgroundColor: KorraColors.black,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.r),
+                      borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
                     ),
                   ),
                   child: Text(
                     "Back to Safety",
                     style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w600,
+                      fontSize: KorraSizes.fontMd.sp,
+                      fontWeight: KorraSizes.weightSemiBold,
                     ),
                   ),
                 ),

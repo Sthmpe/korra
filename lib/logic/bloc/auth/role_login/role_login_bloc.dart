@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,14 +82,17 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
       final uid = userCred.user!.uid;
 
       // 3. FLAVOR ROUTING & CROSS-CHECKING
-     if (state.role == KorraRole.vendor) {
+      if (state.role == KorraRole.vendor) {
         // --- VENDOR APP FLOW ---
         final vendorDoc = await FirebaseFirestore.instance.collection('vendors').doc(uid).get();
         final data = vendorDoc.data();
         
         // 🚀 THE CLEAN FIX: This perfectly matches your logic
         if (vendorDoc.exists && data?['personal']?['first'] != null) {
-          
+          await FirebaseAnalytics.instance.logEvent(
+            name: 'login_success',
+            parameters: {'role': 'vendor', 'method': 'google'},
+          );
           emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: false));
           await _persistUserSession(uid, 'vendor');
           
@@ -103,7 +107,10 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         
         // 🚀 THE CLEAN FIX
         if (customerDoc.exists && data?['personal']?['first'] != null) {
-          
+          await FirebaseAnalytics.instance.logEvent(
+            name: 'login_success',
+            parameters: {'role': 'customer', 'method': 'google'},
+          );
           emit(state.copyWith(uid: uid, loading: false, status: LoginStatus.success, isNewUser: false));
           await _persistUserSession(uid, 'customer');
           
@@ -113,6 +120,10 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
       }
 
     } on FirebaseAuthException catch (ex) {
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'login_failed',
+        parameters: {'method': 'google', 'error_code': ex.code},
+      );
       emit(
         state.copyWith(
           loading: false,
@@ -198,6 +209,10 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           state.password.trim(),
         );
         if (uid.isNotEmpty) {
+          await FirebaseAnalytics.instance.logEvent(
+            name: 'login_success',
+            parameters: {'role': 'vendor', 'method': 'email'},
+          );
           emit(
             state.copyWith(
               uid: uid,
@@ -221,6 +236,10 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           state.password.trim(),
         );
         if (uid.isNotEmpty) {
+          await FirebaseAnalytics.instance.logEvent(
+            name: 'login_success',
+            parameters: {'role': 'customer', 'method': 'email'},
+          );
           emit(
             state.copyWith(
               uid: uid,
@@ -234,6 +253,10 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
         }
       }
     } on FirebaseAuthException catch (ex) {
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'login_failed',
+        parameters: {'method': 'email', 'error_code': ex.code},
+      );
       emit(
         state.copyWith(
           loading: false,

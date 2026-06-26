@@ -7,10 +7,10 @@ import '../../../../config/constants/contacts.dart';
 
 class ContactSupportSheet extends StatelessWidget {
   const ContactSupportSheet({
-    Key? key,
+    super.key,
     required this.title,
     required this.subTitle,
-  }) : super(key: key);
+  });
 
   final String title;
   final String subTitle;

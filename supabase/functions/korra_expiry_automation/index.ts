@@ -217,6 +217,9 @@ serve(async (req) => {
         
         try {
           const result = await db.runTransaction(async (t) => {
+            // ==========================================
+            // 🔍 PHASE 1: ALL READS FIRST
+            // ==========================================
             const planRef = db.collection("plans").doc(planId);
             const planDoc = await t.get(planRef);
 
@@ -224,8 +227,25 @@ serve(async (req) => {
             const currentPlan = planDoc.data()!;
             if (currentPlan.status !== 'active') throw "Plan is already inactive.";
 
-            const refundAmount = to2DP_Floor(currentPlan.amountPaid); 
+            const promoBonus = currentPlan.promoApplied || 0;
+            const refundAmount = to2DP_Floor(currentPlan.amountPaid - promoBonus); 
 
+            // 🚨 PRE-FETCH THE PROMO LEDGER HERE!
+            let promoSnap = null;
+            if (promoBonus > 0) {
+                promoSnap = await t.get(
+                    db.collection('vendors').doc(vendorId)
+                      .collection('ledger_transactions')
+                      .where('planId', '==', planId)
+                      .where('type', '==', 'promo_credit')
+                      .where('status', '==', 'pending')
+                      .limit(1)
+                );
+            }
+
+            // ==========================================
+            // 📝 PHASE 2: ALL WRITES
+            // ==========================================
             t.update(planRef, {
                 status: 'cancelled',
                 cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -234,6 +254,16 @@ serve(async (req) => {
                 cancellationReason: 'System Auto-Cancelled (Expired)',
                 outstandingLoanAmount: 0
             });
+
+            // 🚨 REVOKE THE PROMO PROPERLY
+            if (promoSnap && !promoSnap.empty) {
+                t.update(promoSnap.docs[0].ref, { 
+                    status: 'cancelled', 
+                    settlementStatus: 'cancelled', // 👈 CLEARS THE AMBER BADGE
+                    description: `Promo revoked: Plan expired/cancelled.`,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
 
             const relRef = db.collection('customers').doc(customerId).collection('my_vendors').doc(vendorId);
             t.set(relRef, {
@@ -287,16 +317,22 @@ serve(async (req) => {
             const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
             t.set(activityRef, {
                 id: activityRef.id, type: 'reservation_cancel', title: 'Plan Expired & Closed',
-                body: `${currentPlan.customerName}'s timeline elapsed. Funds secured in Store Balance.`,
+                // 🚨 ADD THE DYNAMIC PROMO TEXT FOR THE VENDOR
+                body: `${currentPlan.customerName}'s timeline elapsed. Funds secured in Store Balance.${promoBonus > 0 ? ' Promo bonus revoked.' : ''}`,
                 ref_id: planId, amount_display: `+₦${refundAmount.toLocaleString()} Credit`,
                 date: admin.firestore.FieldValue.serverTimestamp(), is_read: false
             });
 
-            return { refundAmount, storeName: currentPlan.storeName || 'the store' };
+            // 🚨 RETURN PROMOBONUS SO NOTIFICATIONS WORK
+            return { 
+                refundAmount, 
+                storeName: currentPlan.storeName || 'the store',
+                promoBonus 
+            };
           });
 
           // 1. INDIVIDUAL NOTIFICATION TO CUSTOMER
-          await sendNotification(customerId, 'customers', "Plan ended funds safe 🔒", `Your plan has ended. ₦${result.refundAmount.toLocaleString()} is now available as Store Balance.`, 'cancellation');
+          await sendNotification(customerId, 'customers', "Plan ended funds safe 🔒", `Your plan has ended. ₦${result.refundAmount.toLocaleString()} is now available as Store Balance.${result.promoBonus > 0 ? ' Bonus revoked.' : ''}`, 'cancellation');
           
           if (email) {
             await fetch('https://api.resend.com/emails', {
@@ -305,12 +341,12 @@ serve(async (req) => {
               body: JSON.stringify({
                 from: 'Korra <notifications@korra.com.ng>',
                 to: [email],
-                subject: `Plan Ended Your Funds Are Safe`,
+                subject: `Plan Ended - ${productName}`,
                 html: getEmailTemplate(
                   name, "Status Update", "Reservation Expired", 
                   `Hi <strong>${name}</strong>, your plan for <strong>${productName}</strong> has ended.`,
                   "Funds Secured", `₦${result.refundAmount.toLocaleString()}`, `Moved to Store Balance`,
-                  `<strong>Your money is safe.</strong><br>Your payment has been moved to your Store Balance with ${result.storeName}. You can use it anytime for another purchase with the store.`,
+                  `<strong>Your cash is safe.</strong><br>Your payment has been moved to your Store Balance with ${result.storeName}.${result.promoBonus > 0 ? '<br><small>Note: Promo bonus was revoked due to expiration.</small>' : ''}`,
                   "View Store Balance", "https://app.korra.com.ng"
                 ),
               })

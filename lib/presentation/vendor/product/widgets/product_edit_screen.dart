@@ -273,7 +273,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     controller: nameCtrl,
                     hint: "Name",
                     enabled: _canEditIdentity,
-                    validator: (v) => v!.isEmpty ? "Required" : null,
+                    validator: null,
                   ),
                   SizedBox(height: 12.h),
                   _buildInput(
@@ -281,7 +281,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     hint: "Description",
                     maxLines: 4,
                     enabled: _canEditIdentity,
-                    validator: (v) => v!.isEmpty ? "Required" : null,
+                    validator: null,
                   ),
 
                   SizedBox(height: 20.h),

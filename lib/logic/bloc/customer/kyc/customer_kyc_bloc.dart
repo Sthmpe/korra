@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -76,6 +77,11 @@ class CustomerKycBloc extends Bloc<CustomerKycEvent, CustomerKycState> {
         'personal.gender': state.gender,
       });
 
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'kyc_bvn_verified',
+        parameters: {'customer_uid': customerUid},
+      );
+
       emit(state.copyWith(bvnVerificationInProgress: false, isBvnVerified: true));
 
     } catch (e) {
@@ -127,6 +133,11 @@ class CustomerKycBloc extends Bloc<CustomerKycEvent, CustomerKycState> {
         'personal.dob': Timestamp.fromDate(state.dob!),
         'personal.gender': state.gender,
       });
+
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'kyc_nin_verified',
+        parameters: {'customer_uid': customerUid},
+      );
 
       emit(state.copyWith(ninVerificationInProgress: false, isNinVerified: true));
 

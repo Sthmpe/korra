@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../config/constants/colors.dart';
+import '../../../config/constants/sizes.dart';
 
 class KorraStepperBar extends StatelessWidget {
   final int pageIndex;
@@ -55,8 +56,8 @@ class KorraStepperBar extends StatelessWidget {
         Text(
           'Step ${pageIndex + 1} of $totalPages',
           style: GoogleFonts.inter(
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w600,
+            fontSize: KorraSizes.fontSm.sp,
+            fontWeight: KorraSizes.weightSemiBold,
             color: const Color(0xFF666666),
           ),
         ),

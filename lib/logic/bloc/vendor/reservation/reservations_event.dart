@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 import '../../../../data/models/vendor/reservation.dart'; 
-// Note: Keeping VendorReservation model name as is, since it describes the data structure.
 
 abstract class ReservationsEvent extends Equatable {
   const ReservationsEvent();
@@ -36,17 +35,6 @@ class ResLoadMore extends ReservationsEvent {
   List<Object> get props => [];
 }
 
-class ResVerifyPickup extends ReservationsEvent {
-  final String planId;
-  final String pin;
-  final String customerId;
-
-  const ResVerifyPickup({required this.planId, required this.pin, required this.customerId});
-
-  @override
-  List<Object?> get props => [planId, pin, customerId];
-}
-
 class ResSearchChanged extends ReservationsEvent {
   final String query;
   const ResSearchChanged(this.query);
@@ -69,4 +57,31 @@ class ResArrangeDelivery extends ReservationsEvent {
   
   @override
   List<Object?> get props => [id];
+}
+
+// =========================================================
+// ✅ NEW BULK EVENTS
+// =========================================================
+
+class ResMarkFulfilled extends ReservationsEvent {
+  final List<String> planIds;
+  const ResMarkFulfilled(this.planIds);
+  @override
+  List<Object?> get props => [planIds];
+}
+
+class ResToggleSelection extends ReservationsEvent {
+  final String id;
+  const ResToggleSelection(this.id);
+  @override
+  List<Object?> get props => [id];
+}
+
+class ResClearSelection extends ReservationsEvent {}
+
+class ResSelectAll extends ReservationsEvent {
+  final List<String> allIds;
+  const ResSelectAll(this.allIds);
+  @override
+  List<Object?> get props => [allIds];
 }

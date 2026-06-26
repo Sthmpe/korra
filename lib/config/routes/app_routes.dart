@@ -27,6 +27,7 @@ abstract class Routes {
   static const String vendorLegal = '/vendor/settings/legal';
   static const String vendorReceipt = '/vendor/receipt';
   static const String vendorStoreBalances = '/vendor/profile/store-balances';
+  static const String vendorPayoutSettings = '/vendor/payout/settings';
 
   // --- Customer ---
   static const String customerShell = '/customer/shell';

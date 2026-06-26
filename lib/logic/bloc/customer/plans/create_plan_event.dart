@@ -11,7 +11,20 @@ class LoadPlanPreview extends CreatePlanEvent {
   final double productPrice;
   final String customerUid;
   final String productId;
-  LoadPlanPreview(this.productPrice, this.customerUid, this.productId);
+  final int? merchantDurationDays;
+  final bool? allowExtension;
+  final int? extensionDays;
+  final int? noticeDays;
+
+  LoadPlanPreview(
+    this.productPrice, 
+    this.customerUid, 
+    this.productId,
+    this.merchantDurationDays,
+    this.allowExtension,
+    this.extensionDays,
+    this.noticeDays,
+  );
 }
 
 class ConfirmPlanCreation extends CreatePlanEvent {

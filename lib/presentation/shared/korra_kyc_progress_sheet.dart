@@ -4,6 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../config/constants/sizes.dart';
+
 class KycProgressSheet<B extends StateStreamable<S>, S> extends StatelessWidget {
   final bool Function(S, S)? buildWhen;
   final bool Function(S state)? allVerified;
@@ -60,8 +62,8 @@ class KycProgressSheet<B extends StateStreamable<S>, S> extends StatelessWidget 
                 Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w700,
+                    fontSize: KorraSizes.fontLg.sp,
+                    fontWeight: KorraSizes.weightBold,
                   ),
                 ),
                 SizedBox(height: 8.h),
@@ -82,16 +84,16 @@ class KycProgressSheet<B extends StateStreamable<S>, S> extends StatelessWidget 
 
                 SizedBox(height: 10.h),
                 if (verified) ...[
-                  Text('Done', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600))
+                  Text('Done', style: GoogleFonts.inter(fontSize: KorraSizes.fontSm.sp, fontWeight: KorraSizes.weightSemiBold))
                 ] else if (error) ...[
                   Text(
                     'There was an issue',
-                    style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.red),
+                    style: GoogleFonts.inter(fontSize: KorraSizes.fontSm.sp, fontWeight: KorraSizes.weightSemiBold, color: Colors.red),
                   )
                 ] else ...[
                   Text(
                     'This won’t take long…',
-                    style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.black54),
+                    style: GoogleFonts.inter(fontSize: KorraSizes.fontSm.sp, color: Colors.black54),
                   )
                 ],
                 SizedBox(height: 6.h),
@@ -140,18 +142,18 @@ class KycProgressSheet<B extends StateStreamable<S>, S> extends StatelessWidget 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16.sp, color: color),
+        Icon(icon, size: KorraSizes.iconSm.sp, color: color),
         SizedBox(width: 8.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600)),
+                  style: GoogleFonts.inter(fontSize: KorraSizes.fontSmPlus.sp, fontWeight: KorraSizes.weightSemiBold)),
               Text(
                 ok ? subtitle : (err ?? 'Pending'),
                 style: GoogleFonts.inter(
-                  fontSize: 11.sp,
+                  fontSize: KorraSizes.fontXs.sp,
                   color: ok ? Colors.green : err != null ? Colors.red : Colors.black54,
                 ),
               ),

@@ -68,6 +68,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   double processingFee = 0.0;
   double totalDueNow = 0.0;
 
+  bool _isPayInFull = false;
+
   double _roundUpAmount(double amount) {
     if (amount == 0) return 0;
     double val = amount * 100;
@@ -219,64 +221,75 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   // 2. The Master Calculator
   void _recalculateFees() {
     final double totalProductPrice = widget.product.data['price']?.toDouble() ?? 0.0;
-    
-    // --- STEP 1: THE MANDATORY SWEEP ---
-    // Rule: "Store Credit First. Always."
-    // We determine how much of the Product Price is covered by Credit immediately.
-    
-    if (_useStoreCredit && _storeCredit > 0) {
-      // We sweep all available credit, capped only by the product price.
-      if (_storeCredit >= totalProductPrice) {
-        _creditSweepAmount = totalProductPrice;
+    final bool isAbove30k = totalProductPrice > 30000;
+
+    if (_isPayInFull) {
+      // ─── PAY IN FULL ───────────────────────────────────────────────────────
+      // Store balance allowed. Applied first, cash covers the rest.
+      userEnteredDownPayment = totalProductPrice;
+
+      if (_storeCredit > 0) {
+        _creditSweepAmount = math.min(_storeCredit, totalProductPrice);
       } else {
-        _creditSweepAmount = _storeCredit;
+        _creditSweepAmount = 0.0;
       }
+
+      final double cashPortionOfPrice = totalProductPrice - _creditSweepAmount;
+
+      // Cash fee: 3.5% of cash portion — added on top, no minimum
+      double feeCashPart = cashPortionOfPrice > 0
+          ? _calculateStandardFee(cashPortionOfPrice)
+          : 0.0;
+
+      // Store balance fee: 0.35% of store portion — added on top, minimum ₦100
+      double feeCreditPart = 0.0;
+      if (_creditSweepAmount > 0) {
+        final double rawStoreFee = _creditSweepAmount * 0.035 * 0.10;
+        feeCreditPart = math.max(rawStoreFee, 100.0);
+      }
+
+      setState(() {
+        processingFee = _roundUpAmount(feeCashPart + feeCreditPart);
+        // Wallet pays: cash portion + all fees (fee is added on top, not deducted)
+        totalDueNow = _roundUpAmount(cashPortionOfPrice + processingFee);
+        _amountCoveredByCredit = _creditSweepAmount;
+        _amountCoveredByCash = cashPortionOfPrice;
+      });
+
     } else {
+      // ─── INSTALLMENT PLAN ─────────────────────────────────────────────────
+      // Store balance BLOCKED — fresh cash only for deposit
       _creditSweepAmount = 0.0;
-    }
+      _amountCoveredByCredit = 0.0;
+      _amountCoveredByCash = userEnteredDownPayment;
 
-    // --- STEP 2: CALCULATE FEES ON THE SPLIT ---
-    // Fee Bucket A: The Credit Portion (Pays 10% rate)
-    // Fee Bucket B: The Cash Portion (Pays Standard rate)
-    
-    double cashPortionOfPrice = totalProductPrice - _creditSweepAmount;
-    
-    // Calculate Fee on Cash Portion
-    double feeCashPart = 0.0;
-    if (cashPortionOfPrice > 0) {
-      feeCashPart = _calculateStandardFee(cashPortionOfPrice);
-    }
+      double fee = 0.0;
 
-    // Calculate Fee on Credit Portion
-    double feeCreditPart = 0.0;
-    if (_creditSweepAmount > 0) {
-      double standard = _calculateStandardFee(_creditSweepAmount);
-      feeCreditPart = math.max(standard * 0.10, 100.0); // Min N100 covers server costs
-    }
+      if (!isAbove30k) {
+        // Items ≤ ₦30k: fee = 3.5% of TOTAL PRODUCT PRICE — collected upfront once
+        fee = _calculateStandardFee(totalProductPrice);
+      } else {
+        // Items > ₦30k: fee = 3.5% of INITIAL DEPOSIT AMOUNT — added on top
+        fee = userEnteredDownPayment > 0
+            ? _roundUpAmount(userEnteredDownPayment * 0.035)
+            : 0.0;
+      }
 
-    setState(() {
-      processingFee = _roundUpAmount(feeCashPart + feeCreditPart);
-      
-      // Update the Total Due based on the CURRENT user input
-      // Logic: (User Total Target) - (Already Paid via Sweep) + (Fee)
-      
-      // Safety: Ensure User Input is at least the Sweep Amount
-      // (Visual validation happens in build, but math safety is needed here)
-      double effectivePrincipalUserPays = math.max(0, userEnteredDownPayment - _creditSweepAmount);
-      
-      totalDueNow = _roundUpAmount(effectivePrincipalUserPays + processingFee);
-      
-      // Update transparency vars
-      _amountCoveredByCredit = _creditSweepAmount;
-      _amountCoveredByCash = cashPortionOfPrice;
-    });
+      setState(() {
+        processingFee = fee;
+        // Wallet pays: deposit + fee (fee is added on top)
+        totalDueNow = _roundUpAmount(userEnteredDownPayment + processingFee);
+      });
+    }
 
     if (kDebugMode) {
-      print("--- MANDATORY SWEEP LOGIC ---");
-      print("Product Price: $totalProductPrice");
-      print("Credit Sweep: $_creditSweepAmount | Fee: $feeCreditPart");
-      print("Cash Remainder: $cashPortionOfPrice | Fee: $feeCashPart");
-      print("Total Fee: $processingFee");
+      print("--- FEE CALC ---");
+      print("Product Price: $totalProductPrice | Above 30k: $isAbove30k");
+      print("Pay in Full: $_isPayInFull");
+      print("Credit Sweep: $_creditSweepAmount");
+      print("Deposit: $userEnteredDownPayment");
+      print("Processing Fee: $processingFee");
+      print("Total Due Now: $totalDueNow");
     }
   }
 
@@ -292,11 +305,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
     setState(() {
       userEnteredDownPayment = _roundUpAmount(val);
-      
-      // Logic: User Amount - Credit Sweep + Fee
-      double cashPrincipalNeeded = math.max(0, userEnteredDownPayment - _creditSweepAmount);
-      totalDueNow = _roundUpAmount(cashPrincipalNeeded + processingFee);
     });
+
+    // Recalculate fees — needed for above ₦30k installment where fee is on deposit amount
+    _recalculateFees();
   }
 
   debugPrintAmountCalculations() {
@@ -325,10 +337,55 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             snapshot.data ?? CustomerAccountStats.empty(widget.customerUid);
         final isSlotsFull = stats.isSlotsFull;
 
+        // =====================================================================
+        // 1. EXTRACT AND CLEAN MERCHANT SETTINGS
+        // =====================================================================
+        // A. Base Duration (Saved as a String like "14 Days" under 'baseDuration')
+        int? parsedMerchantDuration;
+        final String? baseDurationString = widget.product.data['baseDuration'] as String?;
+        if (baseDurationString != null) {
+          final match = RegExp(r'\d+').firstMatch(baseDurationString);
+          if (match != null) parsedMerchantDuration = int.tryParse(match.group(0)!);
+        }
+
+        // B. Extensions Enabled (Saved as a bool under 'extensionsEnabled')
+        final bool? parsedAllowExtension = widget.product.data['extensionsEnabled'] as bool?;
+
+        // C. Notice Days (Saved as a String like "1 Days" under 'noticePeriod')
+        int? parsedNoticeDays;
+        final String? noticeString = widget.product.data['noticePeriod'] as String?;
+        if (noticeString != null) {
+          final match = RegExp(r'\d+').firstMatch(noticeString);
+          if (match != null) parsedNoticeDays = int.tryParse(match.group(0)!);
+        }
+
+        // D. Extension Days (Reverse math using totalMaxTime)
+        int? parsedExtensionDays;
+        final String? totalString = widget.product.data['totalMaxTime'] as String?;
+        if (parsedAllowExtension == true && totalString != null && parsedMerchantDuration != null && parsedNoticeDays != null) {
+          final match = RegExp(r'\d+').firstMatch(totalString);
+          if (match != null) {
+            final totalDays = int.tryParse(match.group(0)!) ?? 0;
+            // Reverse math: extDays = totalDays - baseDays - noticeDays
+            parsedExtensionDays = totalDays - parsedMerchantDuration - parsedNoticeDays;
+            if (parsedExtensionDays < 0) parsedExtensionDays = 0; 
+          }
+        } else {
+          parsedExtensionDays = 0;
+        }
+
         return BlocProvider(
           create: (context) =>
               CreatePlanBloc(repo: widget.customerRepo)
-                ..add(LoadPlanPreview(productPrice, widget.customerUid, productId)),
+                ..add(LoadPlanPreview(
+                  productPrice, 
+                  widget.customerUid, 
+                  productId,
+                  parsedMerchantDuration, 
+                  parsedAllowExtension,   
+                  parsedExtensionDays,    
+                  parsedNoticeDays 
+                )),
           child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
             listenWhen: (previous, current) =>
                 previous.status != current.status,
@@ -463,115 +520,82 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                         height: 1.2,
                                       ),
                                     ),
-                                    SizedBox(height: 8.h),
+                                    SizedBox(height: 12.h),
                                     Text(
-                                      "Total Price: ${currencyFormat.format(productPrice)}",
+                                      currencyFormat.format(productPrice),
                                       style: GoogleFonts.inter(
-                                        fontSize: 14.sp,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w700,
                                         color: Colors.grey.shade600,
                                       ),
                                     ),
 
+                                    SizedBox(height: 20.h),
+
+                                   // 1. THE NEW PREMIUM TOGGLE
+                                    _buildPaymentModeToggle(state.riskEngineUpfront),
+                                    
+                                    // 2. THE STORE BALANCE UI
                                     if (_storeCredit > 0) ...[
                                       SizedBox(height: 16.h),
-                                      GestureDetector(
-                                        // onTap: () {
-                                        //     setState(() {
-                                        //       _useStoreCredit = !_useStoreCredit;
-                                        //       // IMPORTANT: Recalculate immediately
-                                        //       _recalculateFees();
-                                        //     });
-                                        //  },
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 16.w,
-                                            vertical: 12.h,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:  const Color(0xFFF9FAFB),
-                                            borderRadius: BorderRadius.circular(
-                                              12.r,
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                                        decoration: BoxDecoration(
+                                          color: _isPayInFull 
+                                              ? const Color(0xFFF0FDF4) // Green tint if active
+                                              : const Color(0xFFFFF7ED), // Orange tint if locked
+                                          borderRadius: BorderRadius.circular(12.r),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: EdgeInsets.all(8.r),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                _isPayInFull ? Iconsax.wallet_check : Iconsax.lock,
+                                                size: 18.sp,
+                                                color: _isPayInFull ? Colors.green : Colors.orange.shade600,
+                                              ),
                                             ),
-                                            // border: Border.all(
-                                            //   color: _useStoreCredit
-                                            //       ? const Color(0xFFF3F4F6)
-                                            //       : const Color(0xFFEAECF0),
-                                            //   width: 1.5,
-                                            // ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              // 1. Icon that clearly indicates "Store"
-                                              Container(
-                                                padding: EdgeInsets.all(8.r),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: Colors.grey.shade50,
+                                            SizedBox(width: 12.w),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    "Store Balance: ${currencyFormat.format(_storeCredit)}", 
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 13.sp,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: const Color(0xFF101828),
+                                                    ),
                                                   ),
-                                                ),
-                                                child: Icon(
-                                                  Iconsax.shop,
-                                                  size: 18.sp,
-                                                  color: KorraColors.brand,
-                                                ),
-                                              ),
-                                              SizedBox(width: 12.w),
-
-                                              // 2. Explicit Text
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      "Apply Store Balance", // ✅ Explicit Context
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 13.sp,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: const Color(
-                                                          0xFF101828,
-                                                        ),
-                                                      ),
+                                                  Text(
+                                                    _isPayInFull
+                                                      ? "Unlocked! Applied to your full payment."
+                                                      : "Locked for installments. Select 'Pay in Full' to use.",
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 11.sp,
+                                                      color: _isPayInFull ? Colors.green.shade700 : Colors.orange.shade700,
+                                                      fontWeight: FontWeight.w500,
                                                     ),
-                                                    Text(
-                                                      "Available: ${currencyFormat.format(_storeCredit)}",
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 12.sp,
-                                                        color: Colors
-                                                            .grey
-                                                            .shade500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
-
-                                              // 3. The Checkbox visual
-                                              if (_useStoreCredit)
-                                                Icon(
-                                                  Icons.check_circle,
-                                                  color: Colors.green,
-                                                  size: 20.sp,
-                                                )
-                                              else
-                                                Icon(
-                                                  Icons.radio_button_unchecked,
-                                                  color: Colors.grey.shade400,
-                                                  size: 24.sp,
-                                                ),
-                                            ],
-                                          ),
+                                            ),
+                                            if (_isPayInFull)
+                                              Icon(Icons.check_circle, color: Colors.green, size: 20.sp),
+                                          ],
                                         ),
                                       ),
                                     ],
 
                                     SizedBox(height: 24.h),
 
-                                    // ✅ SLOT LIMIT STATUS
+                                    // SLOT LIMIT STATUS
                                     _buildLimitContainer(
                                       activePlans: stats.activePlansCount,
                                       maxSlots: stats.maxSlots,
@@ -580,7 +604,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
                                     SizedBox(height: 32.h),
                                     Text(
-                                      "INITIAL DEPOSIT",
+                                      _isPayInFull ? "PAYMENT SUMMARY" : "INITIAL DEPOSIT",
                                       style: GoogleFonts.inter(
                                         fontSize: 11.sp,
                                         fontWeight: FontWeight.w700,
@@ -590,23 +614,16 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                     ),
                                     SizedBox(height: 12.h),
 
-                                    // Amount Input
+                                    // 3. THE DEPOSIT BOX (Hides typing if Pay in Full)
                                     Container(
                                       key: _scrollKey,
-                                      padding: EdgeInsets.symmetric(vertical:16.h, horizontal:0.w),
+                                      padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 0.w),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius: BorderRadius.circular(
-                                          16.r,
-                                        ),
-                                        // border: Border.all(
-                                        //   color: const Color(0xFFE5E7EB),
-                                        // ),
+                                        borderRadius: BorderRadius.circular(16.r),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.02,
-                                            ),
+                                            color: Colors.black.withOpacity(0.02),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -626,50 +643,40 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                               ),
                                               SizedBox(width: 4.w),
                                               Expanded(
-                                                child: TextField(
-                                                  controller: _amountCtrl,
-                                                  focusNode: _amountFocusNode,
-                                                  keyboardType:
-                                                      TextInputType.number,
-                                                  onChanged: _onAmountChanged,
-                                                  inputFormatters: [
-                                                    LengthLimitingTextInputFormatter(
-                                                      15,
-                                                    ),
-                                                    CurrencyInputFormatter(),
-                                                  ],
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 36.sp,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: KorraColors.black,
-                                                    height: 1.0,
-                                                  ),
-                                                  decoration: InputDecoration(
-                                                    border: InputBorder.none,
-                                                    isDense: true,
-                                                    contentPadding:
-                                                        EdgeInsets.symmetric(
-                                                          horizontal: 8.w,
-                                                          vertical: 8.h,
+                                                // If Pay in Full, just show text. If Installment, show the TextField.
+                                                child: _isPayInFull
+                                                    ? Text(
+                                                        currencyFormat.format(productPrice).replaceAll('₦', ''),
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 36.sp,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: KorraColors.black,
                                                         ),
-                                                    hintText: NumberFormat(
-                                                      "#,###",
-                                                    ).format(effectiveMinDownPayment),
-                                                    hintStyle:
-                                                        GoogleFonts.inter(
-                                                          color: Colors
-                                                              .grey
-                                                              .shade300,
+                                                      )
+                                                    : TextField(
+                                                        controller: _amountCtrl,
+                                                        focusNode: _amountFocusNode,
+                                                        keyboardType: TextInputType.number,
+                                                        onChanged: _onAmountChanged,
+                                                        inputFormatters: [
+                                                          LengthLimitingTextInputFormatter(15),
+                                                          CurrencyInputFormatter(),
+                                                        ],
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 36.sp,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: KorraColors.black,
+                                                          height: 1.0,
                                                         ),
-                                                    labelText:
-                                                        "",
-                                                    labelStyle:
-                                                        GoogleFonts.inter(
-                                                          fontSize: 12.sp,
-                                                          color: Colors.grey,
+                                                        decoration: InputDecoration(
+                                                          border: InputBorder.none,
+                                                          isDense: true,
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
+                                                          hintText: NumberFormat("#,###").format(effectiveMinDownPayment),
+                                                          hintStyle: GoogleFonts.inter(color: Colors.grey.shade300),
+                                                          labelText: "",
                                                         ),
-                                                  ),
-                                                ),
+                                                      ),
                                               ),
                                             ],
                                           ),
@@ -680,10 +687,9 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                               color: Color(0xFFF3F4F6),
                                             ),
                                           ),
-                                          // 3. The Math
+                                          // Service Fee Row
                                           Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(
                                                 "+ Service Fee",
@@ -694,9 +700,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                                 ),
                                               ),
                                               Text(
-                                                currencyFormat.format(
-                                                  processingFee,
-                                                ),
+                                                currencyFormat.format(processingFee),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12.sp,
                                                   color: Colors.grey.shade600,
@@ -936,6 +940,86 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPaymentModeToggle(double defaultUpfront) {
+    return Container(
+      height: 48.h,
+      padding: EdgeInsets.all(4.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6), 
+        borderRadius: BorderRadius.circular(12.r),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (!_isPayInFull) return;
+                setState(() {
+                  _isPayInFull = false;
+                  
+                  // ✅ 2. Use the passed variable instead of looking up the context!
+                  userEnteredDownPayment = defaultUpfront;
+                  _amountCtrl.text = NumberFormat("#,###").format(userEnteredDownPayment);
+                  
+                  _recalculateFees();
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: !_isPayInFull ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10.r),
+                  boxShadow: !_isPayInFull
+                      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                      : [],
+                ),
+                child: Text(
+                  "Installment Plan",
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: !_isPayInFull ? FontWeight.w700 : FontWeight.w600,
+                    color: !_isPayInFull ? KorraColors.text : Colors.grey.shade500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (_isPayInFull) return;
+                setState(() {
+                  _isPayInFull = true;
+                  _recalculateFees();
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _isPayInFull ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10.r),
+                  boxShadow: _isPayInFull
+                      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                      : [],
+                ),
+                child: Text(
+                  "Pay in Full",
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: _isPayInFull ? FontWeight.w700 : FontWeight.w600,
+                    color: _isPayInFull ? KorraColors.text : Colors.grey.shade500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2011,7 +2095,7 @@ class _PenaltyExplainerSheet extends StatelessWidget {
           _buildReasonRow(
             icon: Iconsax.refresh_circle,
             title: "Flexible Usage",
-            desc: "Your Store Balance is available immediately. You can use it to purchase or reserve any other item from this merchant.",
+            desc: "Your Store Balance is available immediately. You can use it to purchase any other item from this merchant.",
           ),
           
           SizedBox(height: 32.h),
@@ -2078,4 +2162,3 @@ class _PenaltyExplainerSheet extends StatelessWidget {
     );
   }
 }
-

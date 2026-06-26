@@ -249,6 +249,19 @@ const getVendorTemplate = (name: string) => `
 </html>
 `;
 
+// ============================================================
+// SAFE AWAIT — catches errors without breaking other channels
+// Returns [error, data] — if error has value it failed
+// ============================================================
+async function safeAwait<T>(promise: Promise<T>) {
+  try {
+    const data = await promise;
+    return [null, data] as const;
+  } catch (error) {
+    return [error, null] as const;
+  }
+}
+
 serve(async (req) => {
   // A. CORS Pre-flight
   if (req.method === 'OPTIONS') {
@@ -256,7 +269,7 @@ serve(async (req) => {
   }
 
   try {
-    const { name, email, userType } = await req.json(); // userType: 'customer' | 'vendor'
+    const { name, email, phone, userType } = await req.json(); // userType: 'customer' | 'vendor'
 
     if (!RESEND_API_KEY) {
       throw new Error("Missing RESEND_API_KEY environment variable");
@@ -301,6 +314,39 @@ serve(async (req) => {
       });
     }
 
+    // 3. Send WhatsApp welcome via Render
+    // We await just to confirm Render received it — not to wait for WhatsApp to finish.
+    // Render returns 200 immediately, then handles WhatsApp in its own background async.
+    const RENDER_URL = Deno.env.get('RENDER_URL') ?? '';
+    const RENDER_SECRET = Deno.env.get('RENDER_SECRET') ?? '';
+
+    if (phone && RENDER_URL) {
+      const [renderErr] = await safeAwait(
+        fetch(`${RENDER_URL}/send-welcome`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-secret-key': RENDER_SECRET
+          },
+          body: JSON.stringify({ phone, name, userType })
+        }).then(async (waRes) => {
+          if (!waRes.ok) throw new Error(`Render responded ${waRes.status}`);
+          return waRes.json();
+        })
+      );
+
+      if (renderErr) {
+        console.error(`❌ Render did not receive welcome for ${name}:`, renderErr.message);
+      } else {
+        console.log(`✅ Render received welcome request for ${name} — WhatsApp sending in background`);
+      }
+    } else if (!phone) {
+      console.log(`⚠️ No phone for ${name} — skipping WhatsApp welcome.`);
+    } else {
+      console.log('⚠️ RENDER_URL not set — skipping WhatsApp welcome.');
+    }
+
+    // 4. Return success immediately — email is done, WhatsApp is handled in background
     return new Response(JSON.stringify({ success: true, data }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

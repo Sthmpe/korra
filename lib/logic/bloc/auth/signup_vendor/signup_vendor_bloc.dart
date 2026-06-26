@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,6 +32,7 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     on<OwnerLastChanged>((e, emit) => emit(state.copyWith(lastName: e.value)));
     on<OwnerOtherChanged>((e, emit) => emit(state.copyWith(otherName: e.value)));
     on<OwnerPhoneChanged>(_onPhoneChanged);
+    on<VendorEmailChanged>((e, emit) => emit(state.copyWith(email: e.value)));
 
     // Step 2: Store Details
     on<StoreNameChanged>((e, emit) => emit(state.copyWith(storeName: e.value)));
@@ -120,6 +122,10 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
     emit(state.copyWith(loading: true, signUpError: null, status: SignupStatus.loading));
     try {
       final uid = await _vendorsRepo.createVendorFromState(state);
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'sign_up',
+        parameters: {'method': 'email', 'role': 'vendor'},
+      );
       emit(state.copyWith(loading: false, status: SignupStatus.success, uid: uid));
     } catch (error) {
       debugPrint('❌ Error submitting customer (Technical): $error');
@@ -129,6 +135,10 @@ class SignupVendorBloc extends Bloc<SignupVendorEvent, SignupVendorState> {
       if (error is KorraException) {
         userMessage = error.message;
       }
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'signup_failed',
+        parameters: {'role': 'vendor', 'error_message': userMessage},
+      );
       emit(state.copyWith(loading: false, signUpError: userMessage, status: SignupStatus.failure));
     }
   }

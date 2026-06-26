@@ -1,3 +1,4 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../config/utils/korra_exception.dart';
@@ -43,13 +44,20 @@ class PayPlanBloc extends Bloc<PayPlanEvent, PayPlanState> {
     emit(const PayPlanState(status: PayPlanStatus.loading));
     
     try {
-      // ✅ 1. Capture the returned Receipt Data
       final receipt = await repo.payInstallment(
         planId: event.planId,
         customerUid: event.customerUid,
         amount: event.amount,
       );
       
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'installment_paid',
+        parameters: {
+          'plan_id': event.planId,
+          'amount': event.amount,
+        },
+      );
+
       // ✅ 2. Emit Success WITH the data
       emit(PayPlanState(
         status: PayPlanStatus.success, 
@@ -60,6 +68,14 @@ class PayPlanBloc extends Bloc<PayPlanEvent, PayPlanState> {
       if (e is KorraException) {
         msg = e.message; // Use the specific message from the Edge Function (e.g. "Insufficient Balance")
       }
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'installment_payment_failed',
+        parameters: {
+          'plan_id': event.planId,
+          'amount': event.amount,
+          'error_message': msg,
+        },
+      );
       emit(PayPlanState(status: PayPlanStatus.failure, errorMessage: msg));
     }
   }

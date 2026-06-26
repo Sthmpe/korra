@@ -139,17 +139,18 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     // 1. Determine Recommended Minimum Duration & Extension rules
-    if (cleanPrice <= 20000) {
-        recMinDays = 14; noticeDays = 1; extDays = 0; allowExt = false;
-    } else if (cleanPrice <= 120000) {
+    if (cleanPrice <= 50000) {
+      recMinDays = 14; noticeDays = 1; extDays = 0; allowExt = false;
+    } else if (cleanPrice <= 200000) {
+        recMinDays = 21; noticeDays = 1; extDays = 3; allowExt = true;
+    } else if (cleanPrice <= 500000) {
         recMinDays = 30; noticeDays = 1; extDays = 5; allowExt = true;
-    } else if (cleanPrice <= 350000) {
+    } else if (cleanPrice <= 750000) {
         recMinDays = 60; noticeDays = 1; extDays = 7; allowExt = true;
-    } else if (cleanPrice <= 950000) {
-        recMinDays = 90; noticeDays = 1; extDays = 7; allowExt = true;
     } else {
-        recMinDays = 120; noticeDays = 1; extDays = 7; allowExt = true;
+        recMinDays = 90; noticeDays = 1; extDays = 7; allowExt = true;
     }
+
 
     // 2. Accept the controller value directly
     int currentInput = int.tryParse(_durationCtrl.text) ?? 0;
@@ -336,9 +337,12 @@ class _AddProductPageState extends State<AddProductPage> {
 
             // C. Navigate Back (to Product List)
            // ✅ FIX: Wait for frame to finish before Popping
-           WidgetsBinding.instance.addPostFrameCallback((_) {
-               Get.back(); 
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (context.mounted) Get.back();
             });
+          //  WidgetsBinding.instance.addPostFrameCallback((_) {
+          //      Get.back(); 
+          //   });
           }
           
           if (state.errorMessage != null) {
@@ -474,9 +478,8 @@ class _AddProductPageState extends State<AddProductPage> {
                                       return null;
                                     },
                                   ),
-                                  // ✅ ADDED: Only show if they type a number LOWER than the minimum
-                                  if ((int.tryParse(_durationCtrl.text) ?? 0) > 0 && 
-                                      (int.tryParse(_durationCtrl.text) ?? 0) < _recommendedMinDays) ...[
+                                  // Warning: too long (above recommended max)
+                                  if ((int.tryParse(_durationCtrl.text) ?? 0) > _recommendedMinDays) ...[
                                     SizedBox(height: 6.h),
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,11 +488,11 @@ class _AddProductPageState extends State<AddProductPage> {
                                         SizedBox(width: 4.w),
                                         Expanded(
                                           child: Text(
-                                            "Warning: Plans under $_recommendedMinDays days have a high default rate.",
+                                            "Warning: Plans over $_recommendedMinDays days reduce completion rates for this price range.",
                                             style: GoogleFonts.inter(
                                               fontSize: 10.sp,
                                               fontWeight: FontWeight.w500,
-                                              color: const Color(0xFFA54600), // Warning Orange instead of Red
+                                              color: const Color(0xFFA54600),
                                               height: 1.3,
                                             ),
                                           ),
@@ -497,6 +500,9 @@ class _AddProductPageState extends State<AddProductPage> {
                                       ],
                                     ),
                                   ],
+
+
+
                                 ],
                               ),
                             ),

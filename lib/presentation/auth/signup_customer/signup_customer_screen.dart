@@ -3,10 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
-
 import '../../../config/constants/colors.dart';
+import '../../../config/constants/icons.dart';
 import '../../../config/constants/sizes.dart';
+import '../../../config/theme/gaps.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_bloc.dart';
 import '../../../logic/bloc/auth/signup_customer/signup_customer_event.dart';
@@ -51,9 +51,9 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: KorraColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: KorraColors.white,
         elevation: 0,
         centerTitle: false,
         automaticallyImplyLeading: false,
@@ -65,9 +65,9 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                 child: IconButton(
                   onPressed: () => Get.offAllNamed(Routes.roleLoginScreen),
                   icon: Icon(
-                    Iconsax.arrow_left,
-                    size: 24.sp,
-                    color: Colors.black,
+                    KorraIcons.back,
+                    size: KorraSizes.iconLg.sp,
+                    color: KorraColors.pureBlack,
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -79,10 +79,10 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
             Text(
               'Create Customer Account',
               style: GoogleFonts.inter(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF111111),
-                letterSpacing: -0.5,
+                fontSize: KorraSizes.fontXl.sp,
+                fontWeight: KorraSizes.weightBold,
+                color: KorraColors.nearBlack,
+                letterSpacing: KorraSizes.trackingSnug,
               ),
             ),
           ],
@@ -95,7 +95,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: KorraSizes.gutter.w,
-                vertical: 12.h,
+                vertical: KorraSizes.s12.h,
               ),
               child: const _StepperBar(),
             ),
@@ -162,7 +162,7 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                     KorraSizes.gutter.w,
                     0,
                     KorraSizes.gutter.w,
-                    16.h,
+                    KorraSizes.s16.h,
                   ),
                   child: _BottomNav(
                     formKey: _formKeys[state.pageIndex],
@@ -199,8 +199,8 @@ class _StepperBar extends StatelessWidget {
               height: 4.h,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7), // Light grey track
-                borderRadius: BorderRadius.circular(2.r),
+                color: KorraColors.surfaceCool,
+                borderRadius: BorderRadius.circular(KorraSizes.s2.r),
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -214,7 +214,7 @@ class _StepperBar extends StatelessWidget {
                         width: currentWidth,
                         decoration: BoxDecoration(
                           color: KorraColors.brand,
-                          borderRadius: BorderRadius.circular(2.r),
+                          borderRadius: BorderRadius.circular(KorraSizes.s2.r),
                         ),
                       ),
                     ],
@@ -226,9 +226,9 @@ class _StepperBar extends StatelessWidget {
             Text(
               'Step ${s.pageIndex + 1} of ${s.totalPages}',
               style: GoogleFonts.inter(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF666666),
+                fontSize: KorraSizes.fontSm.sp,
+                fontWeight: KorraSizes.weightSemiBold,
+                color: KorraColors.labelGrey,
               ),
             ),
           ],
@@ -290,15 +290,15 @@ class _BottomNav extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16.r),
+                  borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
                 ),
-                side: BorderSide(color: const Color(0xFFE5E7EB).withOpacity(0.45)),
-                backgroundColor: Colors.white,
+                side: BorderSide(color: KorraColors.borderCool.withOpacity(0.45)),
+                backgroundColor: KorraColors.white,
               ),
-              child: Icon(Iconsax.arrow_left, color: Colors.black, size: 24.sp),
+              child: Icon(KorraIcons.back, color: KorraColors.pureBlack, size: KorraSizes.iconLg.sp),
             ),
           ),
-          SizedBox(width: 12.w),
+          Gaps.w12,
         ],
 
         // NEXT / SUBMIT BUTTON
@@ -311,7 +311,7 @@ class _BottomNav extends StatelessWidget {
                 backgroundColor: KorraColors.brand,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16.r),
+                  borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
                 ),
                 disabledBackgroundColor: KorraColors.brand.withOpacity(0.5),
               ),
@@ -320,16 +320,16 @@ class _BottomNav extends StatelessWidget {
                       height: 20.h,
                       width: 20.h,
                       child: const CircularProgressIndicator(
-                        color: Colors.white,
+                        color: KorraColors.white,
                         strokeWidth: 2.5,
                       ),
                     )
                   : Text(
                       isLast ? 'Create Account' : 'Continue',
                       style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        fontSize: KorraSizes.fontLg.sp,
+                        fontWeight: KorraSizes.weightBold,
+                        color: KorraColors.white,
                       ),
                     ),
             ),

@@ -90,6 +90,8 @@ class _BankSelectorSheetState extends State<BankSelectorSheet> {
   }
 
   Future<void> _validateAccount() async {
+    debugPrint('🏦 Validating → bankCode: ${_selectedBank!.code} | accountNumber: ${_accNumController.text}');
+    
     setState(() { _isValidating = true; _validationError = null; });
 
     try {

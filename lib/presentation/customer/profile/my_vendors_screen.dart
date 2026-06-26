@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/constants/colors.dart';
@@ -326,21 +326,21 @@ class _VendorCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _SocialBtn(
-                      icon: Iconsax.call, 
+                      iconWidget: Icon(Iconsax.call, size: 20.sp, color: Colors.grey.shade700),
                       label: "Call", 
                       color: Colors.grey.shade700, 
                       onTap: () => _launchUri("tel:$phone"),
                       isVisible: phone.isNotEmpty,
                     ),
                     _SocialBtn(
-                      icon: MdiIcons.whatsapp, // WhatsApp
+                      iconWidget: Icon(MdiIcons.whatsapp, size: 20.sp, color: const Color(0xFF25D366)), // WhatsApp
                       label: "WhatsApp", 
                       color: const Color(0xFF25D366), 
                       onTap: () => _launchUri("https://wa.me/${phone.replaceAll('+', '')}"), // Fallback to phone if group link missing
                       isVisible: phone.isNotEmpty,
                     ),
                     _SocialBtn(
-                      icon: FontAwesomeIcons.x, // Twitter/X
+                      iconWidget: FaIcon(FontAwesomeIcons.xTwitter, size: 20.sp, color: Colors.black),   // Twitter/X
                       label: "X.com", 
                       color: Colors.black, 
                       onTap: () => _launchUri("https://twitter.com/$twitter"), 
@@ -365,13 +365,13 @@ class _VendorCard extends StatelessWidget {
 }
 
 class _SocialBtn extends StatelessWidget {
-  final IconData icon;
+  final Widget iconWidget;
   final String label;
   final Color color;
   final VoidCallback onTap;
   final bool isVisible;
 
-  const _SocialBtn({required this.icon, required this.label, required this.color, required this.onTap, required this.isVisible});
+  const _SocialBtn({required this.iconWidget, required this.label, required this.color, required this.onTap, required this.isVisible});
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +384,7 @@ class _SocialBtn extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         child: Column(
           children: [
-            Icon(icon, size: 20.sp, color: color),
+            iconWidget,
             SizedBox(height: 4.h),
             Text(label, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: Colors.grey.shade600)),
           ],

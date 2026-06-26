@@ -3,9 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
-
+import '../../../config/constants/buttons.dart';
+import '../../../config/constants/colors.dart';
+import '../../../config/constants/icons.dart';
 import '../../../config/constants/sizes.dart';
+import '../../../config/theme/gaps.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_bloc.dart';
 import '../../../logic/bloc/auth/forgot_password/forgot_password_event.dart';
@@ -24,8 +26,8 @@ class ForgotPasswordScreen extends StatelessWidget {
           title: Text(
             'Forgot password?',
             style: GoogleFonts.inter(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w700,
+              fontSize: KorraSizes.fontLg.sp,
+              fontWeight: KorraSizes.weightBold,
             ),
           ),
         ),
@@ -34,21 +36,21 @@ class ForgotPasswordScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 8.h),
+              Gaps.h8,
               Text(
                 'No worries. Enter your email and we’ll send a reset link.',
                 style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w500,
+                  fontSize: KorraSizes.fontMd.sp,
+                  fontWeight: KorraSizes.weightMedium,
                 ),
               ),
-              SizedBox(height: 40.h),
+              Gaps.h40,
               _EmailField(),
-              SizedBox(height: 8.h),
+              Gaps.h8,
               _InlineError(),
               const Spacer(),
               _PrimaryCTA(),
-              SizedBox(height: 12.h),
+              Gaps.h12,
               Center(
                 child: TextButton(
                   onPressed: () {
@@ -58,13 +60,13 @@ class ForgotPasswordScreen extends StatelessWidget {
                   child: Text(
                     'Back to sign in',
                     style: GoogleFonts.inter(
-                      fontSize: 14.sp,
+                      fontSize: KorraSizes.fontMd.sp,
                       color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: 20.h),
+              Gaps.h20,
             ],
           ),
         ),
@@ -82,14 +84,14 @@ class _EmailField extends StatelessWidget {
     return TextField(
       autofocus: true,
       keyboardType: TextInputType.emailAddress,
-      style: GoogleFonts.inter(fontSize: 13.5.sp),
+      style: GoogleFonts.inter(fontSize: KorraSizes.fontSmPlusH.sp),
       textInputAction: TextInputAction.send,
       autofillHints: const [AutofillHints.username, AutofillHints.email],
       decoration: InputDecoration(
         labelText: 'Email address',
-        labelStyle: GoogleFonts.inter(fontSize: 13.5.sp),
-        prefixIcon: Icon(Iconsax.sms, size: 18.sp),
-        errorStyle: GoogleFonts.inter(fontSize: 12.sp),
+        labelStyle: GoogleFonts.inter(fontSize: KorraSizes.fontSmPlusH.sp),
+        prefixIcon: Icon(KorraIcons.email, size: KorraSizes.fontXl.sp),
+        errorStyle: GoogleFonts.inter(fontSize: KorraSizes.fontSm.sp),
       ),
       onChanged: (v) =>
           context.read<ForgotPasswordBloc>().add(FPEmailChanged(v)),
@@ -161,7 +163,7 @@ class _PrimaryCTA extends StatelessWidget {
                   }
                 : null,
             style: FilledButton.styleFrom(
-              padding: EdgeInsets.symmetric(vertical: 14.h),
+              padding: EdgeInsets.symmetric(vertical: KorraSizes.s14.h),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
               ),
@@ -175,8 +177,8 @@ class _PrimaryCTA extends StatelessWidget {
                 : Text(
                     'Send reset link',
                     style: GoogleFonts.inter(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w700,
+                      fontSize: KorraSizes.fontLg.sp,
+                      fontWeight: KorraSizes.weightBold,
                     ),
                   ),
           ),

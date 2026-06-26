@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../data/models/vendor/reservation.dart';
+import '../../../../logic/bloc/vendor/reservation/reservations_bloc.dart';
+import '../../../../logic/bloc/vendor/reservation/reservations_event.dart';
 import 'reservation_tile.dart'; // Import the new Tile
 
 class ReservationList extends StatelessWidget {
@@ -50,10 +53,25 @@ class ReservationList extends StatelessWidget {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final item = items[index];
-          // ✅ FIX: Pass the 'reservation' argument here
-          return ReservationTile(
+          final bloc = context.read<ReservationsBloc>();
+          final isSelected = bloc.state.selectedIds.contains(item.id);
+          final isSelectionMode = bloc.state.selectedIds.isNotEmpty;
+
+          final isReadyTab = filter == ReservationStatus.readyForPickup;
+         return ReservationTile(
             reservation: item, 
-            onTap: () => onOpen(item.id),
+            isSelected: isSelected,
+            isSelectionMode: isSelectionMode,
+            onTap: () {
+              if (isSelectionMode) {
+                bloc.add(ResToggleSelection(item.id));
+              } else {
+                onOpen(item.id);
+              }
+            },
+            onLongPress: isReadyTab ? () {
+              bloc.add(ResToggleSelection(item.id));
+            } : null,
           );
         },
         childCount: items.length,

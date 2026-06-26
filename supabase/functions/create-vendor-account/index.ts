@@ -195,6 +195,20 @@ serve(async (req) => {
       createdAt: timestamp
     });
 
+    // 7. Initialize Vendor Promo Doc
+    const vendorPromoRef = db.collection('promos').doc(uid);
+    batch.set(vendorPromoRef, {
+        isActive: false,
+        maxUses: 10,
+        currentUses: 0,
+        completedUses: 0,
+        promoValue: 1500,
+        minItemPrice: 7000,
+        maxDurationDays: 14,
+        startDate: null,
+        usedByUids: []
+    });
+
     await batch.commit();
     // ============================================================
 

@@ -34,7 +34,7 @@ extension ReservationsRepository on VendorRepository {
           for (var doc in allDocs) {
             final data = doc.data();
             final status = data['status'] ?? 'active';
-            final fulfilledAt = data['fulfilledAt']; // Check fulfillment
+            final fulfilledAt = data['finalFulfilledAt']; // Check fulfillment
             final createdAtRaw = data['createdAt'];
 
             DateTime createdDate;
@@ -50,10 +50,10 @@ extension ReservationsRepository on VendorRepository {
             } 
             else if (status == 'completed') {
               // ✅ Split Completed vs Ready
-              if (fulfilledAt == null) {
-                ready++; 
+              if (fulfilledAt != null) {
+                completed++; 
               } else {
-                completed++;
+                ready++;
               }
             } 
             else if (status == 'active') {
@@ -123,12 +123,12 @@ extension ReservationsRepository on VendorRepository {
 
     // 3. FILTERING (Client Side - The Fix)
     if (status == ReservationStatus.readyForPickup) {
-      // ✅ Show only if fulfilledAt is missing (null)
-      results = results.where((r) => r.fulfilledAt == null).toList();
+      // ✅ Show only if finalFulfilledAt is missing (null)
+      results = results.where((r) => r.finalFulfilledAt == null).toList();
     } 
     else if (status == ReservationStatus.completed) {
-      // ✅ Show only if fulfilledAt EXISTS (History)
-      results = results.where((r) => r.fulfilledAt != null).toList();
+      // ✅ Show only if finalFulfilledAt EXISTS (History)
+      results = results.where((r) => r.finalFulfilledAt != null).toList();
     }
     else if (status == ReservationStatus.newRes) {
        final now = DateTime.now();
@@ -182,7 +182,7 @@ extension ReservationsRepository on VendorRepository {
       for (var doc in allDocs) {
         final data = doc.data();
         final status = data['status'] ?? 'active';
-        final fulfilledAt = data['fulfilledAt'];
+        final fulfilledAt = data['finalFulfilledAt'];
         final createdAtRaw = data['createdAt'];
 
         DateTime createdDate;
@@ -196,10 +196,10 @@ extension ReservationsRepository on VendorRepository {
           cancelled++;
         } else if (status == 'completed') {
           // ✅ Split Logic
-          if (fulfilledAt == null) {
-            ready++;
-          } else {
+          if (fulfilledAt != null) {
             completed++;
+          } else {
+            ready++;
           }
         } else if (status == 'active') {
           if (createdDate.isAfter(todayStart) || createdDate.isAtSameMomentAs(todayStart)) {
@@ -228,6 +228,53 @@ extension ReservationsRepository on VendorRepository {
       };
     }
   }
+
+  // =========================================================
+  // ✅ BULK FULFILLMENT (Secure Edge Function Call)
+  // =========================================================
+  Future<void> markReservationsFulfilled(String vendorUid, List<String> planIds) async {
+    try {
+      final user = auth.currentUser;
+      if (user == null) throw "You must be logged in.";
+
+      // 1. VIP Passes
+      final idToken = await user.getIdToken(true);
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // 2. Cryptographic Signature
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Calling plan-manager for BULK FULFILL...");
+
+      // 3. Invoke Backend
+      final result = await fx.invoke(
+        'plan-manager', 
+        headers: {
+          'firebase-token': 'Bearer $idToken',  
+          'x-korra-timestamp': timestamp,  
+          'x-korra-signature': signature,  
+        },
+        body: {
+          "action": "BULK_FULFILL", 
+          "vendorUid": vendorUid,
+          "planIds": planIds, // Sending the array to the backend
+        },
+      );
+
+      final data = result.data;
+      if (data['success'] != true) {
+        throw KorraException(
+          data['error'] ?? "Bulk fulfillment failed.",
+          technicalDetails: "Server returned false success status.",
+        );
+      }
+    } catch (e) {
+      throw handleError(e, context: "Bulk Fulfill");
+    }
+  }
+
 
   // =========================================================
   // ✅ 1. VERIFY PICKUP (The New Function)
