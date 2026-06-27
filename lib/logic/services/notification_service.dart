@@ -8,56 +8,76 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../config/routes/app_routes.dart';
 
+import 'dart:async';
+
 // ✅ 1. THE INTERFACE
 abstract class INotificationRepository {
   Future<void> updateFcmToken(String uid, String token);
 }
 
 // ✅ 2. THE SERVICE
-class NotificationService {
+class NotificationService extends GetxService {
+  static NotificationService get to => Get.find();
+
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   
-  final INotificationRepository repo; 
+  bool _listenersRegistered = false;
+  INotificationRepository? _currentRepo;
+  String? _currentUid;
+  StreamSubscription<String>? _tokenRefreshSubscription;
 
-  NotificationService(this.repo);
+  NotificationService();
 
-  Future<void> initialize(String uid) async {
-    // A. Request Permission
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('✅ Notifications Authorized');
-
-      // B. Create Channel (Android)
-      await _createNotificationChannel(); 
-
-      // C. Force iOS Foreground
-      await _fcm.setForegroundNotificationPresentationOptions(
+  Future<void> initialize(INotificationRepository repo, String uid) async {
+    // 1. Setup channel and message handlers once
+    if (!_listenersRegistered) {
+      _listenersRegistered = true;
+      
+      // A. Request Permission
+      NotificationSettings settings = await _fcm.requestPermission(
         alert: true,
         badge: true,
         sound: true,
+        provisional: false,
       );
 
-      // D. Get & Save Token
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('✅ Notifications Authorized');
+
+        // B. Create Channel (Android)
+        await _createNotificationChannel(); 
+
+        // C. Force iOS Foreground
+        await _fcm.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+
+        // F. Setup Handlers
+        _setupInteractedMessage();
+      }
+    }
+
+    // 2. Token generation and refresh listener per user session
+    NotificationSettings settings = await _fcm.getNotificationSettings();
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       String? token = await _fcm.getToken();
       if (token != null) {
         debugPrint("🔥 FCM Token: $token");
         await repo.updateFcmToken(uid, token); 
       }
 
-      // E. Listen for Refreshes
-      _fcm.onTokenRefresh.listen((newToken) {
-        repo.updateFcmToken(uid, newToken);
-      });
+      _currentRepo = repo;
+      _currentUid = uid;
 
-      // F. Setup Handlers
-      _setupInteractedMessage();
+      _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription = _fcm.onTokenRefresh.listen((newToken) {
+        if (_currentRepo != null && _currentUid != null) {
+          _currentRepo!.updateFcmToken(_currentUid!, newToken);
+        }
+      });
     }
   }
 

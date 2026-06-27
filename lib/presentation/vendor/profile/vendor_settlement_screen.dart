@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -14,12 +15,10 @@ import '../../../data/models/vendor/vendor_monthly_flow.dart';
 import '../../shared/widgets/korra_header.dart';
 
 class VendorSettlementScreen extends StatefulWidget {
-  final VendorRepository repo;
   final String vendorUid;
 
   const VendorSettlementScreen({
     super.key,
-    required this.repo,
     required this.vendorUid,
   });
 
@@ -35,9 +34,12 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
   int _limit = 50;
   bool _isLoadingMore = false;
 
+  late final VendorRepository _repo;
+
   @override
   void initState() {
     super.initState();
+    _repo = context.read<VendorRepository>();
     _scrollController.addListener(_onScroll);
   }
 
@@ -74,7 +76,8 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
           // 1. PREMIUM STATS ROW
           // 1. PURE MONTHLY ANALYTICS ROW
           StreamBuilder<VendorMonthlyFlow>(
-            stream: widget.repo.streamCurrentMonthStats(widget.vendorUid),
+            // A. STATS CARD STREAM
+            stream: _repo.streamCurrentMonthStats(widget.vendorUid),
             builder: (context, monthSnapshot) {
               // Default to 0 if no stats exist for the current month yet
               final monthly = monthSnapshot.data ?? VendorMonthlyFlow(earnings: 0, creditIssued: 0, creditRedeemed: 0);
@@ -171,9 +174,9 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
     
     // 🚀 PASS THE DYNAMIC LIMIT TO THE STREAM
     if (_filter == 'Store Credit') {
-      targetStream = widget.repo.streamLiabilityLedger(widget.vendorUid, limit: _limit);
+      targetStream = _repo.streamLiabilityLedger(widget.vendorUid, limit: _limit);
     } else {
-      targetStream = widget.repo.streamCashLedger(widget.vendorUid, limit: _limit);
+      targetStream = _repo.streamCashLedger(widget.vendorUid, limit: _limit);
     }
 
     return StreamBuilder<List<TransactionModel>>(

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:korra/data/repository/customer/customer_repository.dart';
 import 'package:korra/data/repository/customer/verification_repository.dart';
+import 'package:korra/config/utils/date_formatters.dart';
 
 import 'customer_kyc_event.dart';
 import 'customer_kyc_state.dart';
@@ -65,7 +66,7 @@ class CustomerKycBloc extends Bloc<CustomerKycEvent, CustomerKycState> {
       await repo.verifyBvn(
         bvn: event.bvn,
         name: fullName,
-        dateOfBirthIso: _formatDobForBvn(state.dob)!, 
+        dateOfBirthIso: formatDateOfBirthForBvn(state.dob!), 
         mobileNo: state.phone, 
       );
 
@@ -160,12 +161,4 @@ class CustomerKycBloc extends Bloc<CustomerKycEvent, CustomerKycState> {
     }
   }
 
-  String? _formatDobForBvn(DateTime? date) {
-    if (date == null) return null;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final dd = date.day.toString().padLeft(2, '0');
-    final mmm = months[date.month - 1];
-    final yyyy = date.year.toString().padLeft(4, '0');
-    return '$dd-$mmm-$yyyy'; 
-  }
 }

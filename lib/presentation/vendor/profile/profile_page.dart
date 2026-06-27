@@ -19,6 +19,7 @@ import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/identity_header_card.dart';
 import 'widgets/section_card.dart';
 import 'widgets/rows.dart';
+import 'widgets/static_info_row.dart';
 // For logout navigation
 
 // --- MODEL ---
@@ -27,17 +28,16 @@ import 'widgets/rows.dart';
 const _brand = Color(0xFFA54600);
 
 class VendorProfilePage extends StatelessWidget {
-  final VendorRepository vendors;
   final String vendorUid;
 
   const VendorProfilePage({
     super.key, 
-    required this.vendors, 
     required this.vendorUid
   });
 
   @override
   Widget build(BuildContext context) {
+    final vendors = context.read<VendorRepository>();
     return BlocProvider(
       create: (context) => ProfileBloc(
         vendorRepo: vendors,
@@ -123,7 +123,6 @@ class VendorProfilePage extends StatelessWidget {
                               Get.toNamed(
                                 Routes.vendorSettlement,
                                 arguments: {
-                                  'repo': vendors,
                                   'uid': vendorUid,
                                 },
                               );
@@ -156,7 +155,6 @@ class VendorProfilePage extends StatelessWidget {
                               Get.toNamed(
                                   Routes.vendorPayoutSettings,
                                   arguments: {
-                                    'repo': vendors,
                                     'uid': vendorUid,
                                   },
                                 );
@@ -174,21 +172,21 @@ class VendorProfilePage extends StatelessWidget {
                           _sectionTitle('Business Details'),
                           SizedBox(height: 12.h),
                 
-                          _StaticInfoRow(
+                          StaticInfoRow(
                             icon: Iconsax.briefcase,
                             title: 'Legal Name',
                             value: vendor.legalName,
                           ),
                           _divider(),
                           
-                          _StaticInfoRow(
+                          StaticInfoRow(
                             icon: Iconsax.document,
                             title: 'CAC Number',
                             value: vendor.cac.isNotEmpty ? vendor.cac : "Not Provided",
                           ),
                           _divider(),
                 
-                          _StaticInfoRow(
+                          StaticInfoRow(
                             icon: Iconsax.verify,
                             title: 'Status',
                             value: vendor.status.toUpperCase(),
@@ -196,7 +194,7 @@ class VendorProfilePage extends StatelessWidget {
                           ),
                           _divider(),
                 
-                          _StaticInfoRow(
+                          StaticInfoRow(
                             icon: Iconsax.category,
                             title: 'Categories',
                             value: vendor.categories.join(", "),
@@ -213,7 +211,7 @@ class VendorProfilePage extends StatelessWidget {
                           _sectionTitle('Location & Contact'),
                           SizedBox(height: 12.h),
                 
-                          _StaticInfoRow(
+                          StaticInfoRow(
                             icon: Iconsax.location,
                             title: 'Address',
                             // FIX: Logic for missing address
@@ -259,10 +257,7 @@ class VendorProfilePage extends StatelessWidget {
                             icon: Icons.lock_outline,
                             title: 'Change password',
                             onTap: () {
-                                       Get.toNamed(
-                                        Routes.vendorChangePassword,
-                                        arguments: {'repo': vendors},
-                                      );
+                                       Get.toNamed(Routes.vendorChangePassword);
                                     },
                           ),
                           _divider(),
@@ -454,78 +449,6 @@ class VendorProfilePage extends StatelessWidget {
               showAppSnackbar("Contact support to delete vendor account.", SnackbarType.info);
             },
             child: Text('Delete Permanently', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- LOCAL WIDGET: STATIC INFO ROW ---
-class _StaticInfoRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String value;
-  final String? subtitle;
-  final Color? valueColor;
-  final Widget? trailingIcon;
-
-  const _StaticInfoRow({
-    required this.icon,
-    required this.title,
-    required this.value,
-    this.subtitle,
-    this.valueColor,
-  }) : trailingIcon = null;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 6.h),
-      child: Row(
-        children: [
-          Container(
-            width: 34.w, height: 34.w,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAF7F4),
-              borderRadius: BorderRadius.circular(10.r),
-              //border: Border.all(color: const Color(0xFFEAE6E2)),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 18.sp, color: _brand),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF5E5E5E))),
-                SizedBox(height: 2.h),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        value,
-                        style: GoogleFonts.inter(
-                          fontSize: 14.sp, 
-                          fontWeight: FontWeight.w600,
-                          color: valueColor ?? Colors.black87
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (trailingIcon != null) ...[
-                      SizedBox(width: 6.w),
-                      trailingIcon!,
-                    ]
-                  ],
-                ),
-                if (subtitle != null) ...[
-                   SizedBox(height: 2.h),
-                   Text(subtitle!, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey)),
-                ]
-              ],
-            ),
           ),
         ],
       ),

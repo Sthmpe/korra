@@ -12,9 +12,8 @@ import '../../shared/widgets/korra_header.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final Customer customer;
-  final CustomerRepository repo;
 
-  const EditProfileScreen({super.key, required this.customer, required this.repo});
+  const EditProfileScreen({super.key, required this.customer});
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -47,9 +46,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = context.read<CustomerRepository>();
     return BlocProvider(
       create: (context) => EditProfileBloc(
-        repo: widget.repo, 
+        repo: repo, 
         customerUid: widget.customer.uid
       ),
       child: BlocConsumer<EditProfileBloc, EditProfileState>(

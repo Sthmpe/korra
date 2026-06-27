@@ -26,21 +26,21 @@ import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/identity_header_card.dart';
 import 'widgets/rows.dart';
 import 'widgets/section_card.dart';
+import 'widgets/level_up_slots_row.dart';
 
 const _brand = Color(0xFFA54600);
 
 class ProfilePage extends StatelessWidget {
-  final CustomerRepository customerRepo;
   final String customerUid;
 
   const ProfilePage({
     super.key,
-    required this.customerRepo,
     required this.customerUid,
   });
 
   @override
   Widget build(BuildContext context) {
+    final customerRepo = context.read<CustomerRepository>();
     return BlocProvider(
       create: (context) => ProfileBloc(
         customerRepo: customerRepo,
@@ -77,11 +77,7 @@ class ProfilePage extends StatelessWidget {
             }
 
             // 3. SUCCESS UI
-            return StreamBuilder<CustomerAccountStats?>(
-              stream: customerRepo.streamCustomerStats(customerUid),
-              builder: (context, limitSnap) {
-
-                return Scaffold(
+            return Scaffold(
                   backgroundColor: const Color(0xFFF9FAFB),
                   appBar: const KorraHeader(title: 'Profile'),
                   body: CustomScrollView(
@@ -112,7 +108,6 @@ class ProfilePage extends StatelessWidget {
                                   Routes.customerEditProfile,
                                   arguments: {
                                     'customer': customer,
-                                    'repo': customerRepo,
                                   }
                                 );
                               },
@@ -139,7 +134,6 @@ class ProfilePage extends StatelessWidget {
                                         Routes.customerBankDetails, 
                                         arguments: {
                                           'customer': customer,
-                                          'repo': customerRepo,
                                         }
                                       );
                                     },
@@ -167,7 +161,7 @@ class ProfilePage extends StatelessWidget {
                                   //   Routes.customerLiveness,
                                   //   arguments: {
                                   //     'onSuccess': (base64Image) {
-                                  //        print("Success! $base64Image");
+                                  //        debugPrint("Success! $base64Image");
                                   //        Navigator.pop(context);
                                   //     }
                                   //   }
@@ -177,37 +171,7 @@ class ProfilePage extends StatelessWidget {
 
                                   // _divider(),
 
-                                  StreamBuilder(
-                                    stream: customerRepo.streamCustomerStats(
-                                      customer.uid,
-                                    ),
-                                    builder: (context, snapshot) {
-                                      // 2. Define 'stats' safely (Default to empty if loading)
-                                      final stats =
-                                          snapshot.data ??
-                                          CustomerAccountStats.empty(
-                                            customer.uid,
-                                          );
-                                      return RowWithChevron(
-                                        icon: Iconsax.trend_up,
-                                        title:
-                                            'Level Up Slots', // Updated title
-                                        subtitle:
-                                            'Unlock more reservation slots', // Updated subtitle
-                                        onTap: () {
-                                          Get.toNamed(
-                                            Routes.customerLimitUpgrade,
-                                            arguments: {
-                                              'repo': customerRepo,
-                                              'customer': customer,
-                                              'currentMaxSlots': stats.maxSlots,
-                                              'completedPlansCount': stats.completedPlansCount,
-                                            }
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
+                                  LevelUpSlotsRow(customer: customer),
                                   _divider(),
 
                                   RowWithChevron(
@@ -238,7 +202,6 @@ class ProfilePage extends StatelessWidget {
                                       Get.toNamed(
                                         Routes.customerStatements,
                                         arguments: {
-                                          'repo': customerRepo,
                                           'uid': customerUid,
                                         }
                                       );
@@ -295,10 +258,7 @@ class ProfilePage extends StatelessWidget {
                                     icon: Icons.lock_outline,
                                     title: 'Change password',
                                     onTap: () {
-                                      Get.toNamed(
-                                        Routes.customerChangePassword,
-                                        arguments: {'repo': customerRepo}
-                                      );
+                                      Get.toNamed(Routes.customerChangePassword);
                                     },
                                   ),
                                   _divider(),
@@ -392,9 +352,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                 );
               },
-            );
-          },
-        ),
+            ),
       ),
     );
   }

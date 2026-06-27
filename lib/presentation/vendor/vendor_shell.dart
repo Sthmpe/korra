@@ -8,6 +8,7 @@ import '../../logic/bloc/bottom_nav/bottom_nav_event.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_state.dart';
 // import '../../logic/core/net/global_offline_banner.dart';
 import '../shared/widgets/korra_bottom_nav.dart';
+import '../shared/widgets/lazy_indexed_stack.dart';
 import 'home/home_page.dart';
 import 'product/products_page.dart';
 import 'profile/profile_page.dart';
@@ -42,15 +43,14 @@ class VendorShell extends StatelessWidget {
           create: (_) => BottomNavBloc(),
           child: BlocBuilder<BottomNavBloc, BottomNavState>(
             builder: (context, state) {
-              // We now safely read the single, authoritative instance of the repository.
-              final repo = context.read<VendorRepository>();
+
         
               // All pages now receive the same repository instance.
               final pages = [
-                VendorHomePage(vendors: repo, vendorUid: uid),
-                VendorProductsPage(vendors: repo, vendorUid: uid),
-                ReservationsPage(vendors: repo, vendorId: uid),
-                VendorProfilePage(vendors: repo, vendorUid: uid),
+                VendorHomePage(vendorUid: uid),
+                VendorProductsPage(vendorUid: uid),
+                ReservationsPage(vendorId: uid),
+                VendorProfilePage(vendorUid: uid),
               ];
         
               return Scaffold(
@@ -60,7 +60,7 @@ class VendorShell extends StatelessWidget {
                     children: [
                       // const GlobalOfflineBanner(),
                       Expanded(
-                        child: IndexedStack(index: state.index, children: pages),
+                        child: LazyIndexedStack(index: state.index, children: pages),
                       ),
                     ],
                   ),

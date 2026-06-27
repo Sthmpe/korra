@@ -13,20 +13,19 @@ import '../../shared/widgets/korra_header.dart';
 import 'vendor_products_body.dart';
 
 class VendorProductsPage extends StatelessWidget {
-  final VendorRepository vendors;
   final String vendorUid;
   
   const VendorProductsPage({
     super.key,
-    required this.vendors,
     required this.vendorUid,
   });
 
   @override
   Widget build(BuildContext context) {
+    final vendorsRepo = context.read<VendorRepository>();
     return BlocProvider(
       create: (_) => VendorProductsBloc(
-        vendors: vendors,
+        vendors: vendorsRepo,
         vendorUid: vendorUid,
         net: context.read<NetCubit>(),
       )..add(const VendorProductsStarted()),
@@ -47,9 +46,8 @@ class VendorProductsPage extends StatelessWidget {
                     await Get.toNamed(
                       Routes.vendorAddProduct,
                       arguments: {
-                        'repo': vendors,
                         'uid': vendorUid,
-                        'listBloc': currentBloc, // 👈 PASSING THE BLOC HERE
+                        'listBloc': currentBloc,
                       },
                     );
 
@@ -74,8 +72,7 @@ class VendorProductsPage extends StatelessWidget {
               ],
             ),
             body: VendorProductsBody(
-              vendors: vendors,
-              vendorUid: vendorUid, // Placeholder, will be provided by Bloc
+              vendorUid: vendorUid,
             ),
           );
         },

@@ -2,6 +2,12 @@
 > **Date:** 26 June 2026  
 > **Purpose:** Complete technical handover so any developer (or AI session) can pick up exactly where we left off without asking "what did we do?" ever again.
 
+> [!WARNING]
+> Only focus on the active conversation, `SESSION_HANDOVER.md`, and the `implementation_plan.md` artifact. Ignore all other `.md` files in the root directory (such as `BATCH1_SCAN.md` or `MONNIFY_MIGRATION.md`) as they are outdated reference files.
+
+> [!IMPORTANT]
+> **CRITICAL RULE:** Focus strictly on this conversation context, `SESSION_HANDOVER.md`, and the `implementation_plan.md` artifact. Avoid looking at or editing other `.md` files (like `BATCH1_SCAN.md` or `MONNIFY_MIGRATION.md`) as they are outdated. Do not perform any `flutter analyze` or execution of commands; the user will handle them locally. Keep UI styles and business logic 100% identical. Never assume code is wrong; ask the user first.
+
 ---
 
 ## 1. What Is Korra?
@@ -28,7 +34,7 @@ Korra is a **buy-now-pay-later (BNPL) / layaway mobile app** built in Flutter. I
 | **Auth** | Firebase Auth (email/password + Google Sign-In) |
 | **Primary Database** | Cloud Firestore (users, plans, products, reservations) |
 | **Backend / Edge Functions** | Supabase Edge Functions (TypeScript) |
-| **Payment Gateway** | Paystack (TEMPORARY — migrating to Monnify, see §10) |
+| **Payment Gateway** | Monnify |
 | **Analytics** | Firebase Analytics (`firebase_analytics ^12.4.3`) |
 | **Push Notifications** | Firebase Cloud Messaging (`firebase_messaging ^16.0.4`) |
 | **Storage** | Firebase Storage (product images) + Supabase Storage |
@@ -186,23 +192,68 @@ One codebase → two APKs:
 | Flavor | Entry Point | APK Name | Target |
 |---|---|---|---|
 | `customer` | `main_customer.dart` | `app-customer-release.apk` | End users |
-| `vendor` | `main_vendor.dart` | `app-merchant-release.apk` | Merchants |
+| `merchant` | `main_vendor.dart` | `app-merchant-release.apk` | Merchants |
 
-**Build commands:**
-```bash
-# Customer
-flutter build apk --flavor customer -t lib/main_customer.dart --release
+**Build & Run commands:**
 
-# Vendor
-flutter build apk --flavor vendor -t lib/main_vendor.dart --release
+*   **Local Debug (Mobile)**:
+    ```bash
+    # Customer
+    flutter run --flavor customer -t lib/main_customer.dart --dart-define=IS_LIVE=false
+    
+    # Vendor (Merchant)
+    flutter run --flavor merchant -t lib/main_vendor.dart --dart-define=IS_LIVE=false
+    ```
 
-# Run for debug
-flutter run --flavor customer -t lib/main_customer.dart
-flutter run --flavor vendor -t lib/main_vendor.dart
+*   **Local Debug (Web)**:
+    ```bash
+    # Customer
+    flutter run -d chrome -t lib/main_customer.dart --dart-define=IS_LIVE=false
+    
+    # Vendor (Merchant)
+    flutter run -d chrome -t lib/main_vendor.dart --dart-define=IS_LIVE=false
+    ```
 
-# Analyze
-flutter analyze lib/
-```
+*   **Production Release (APKs)**:
+    ```bash
+    # Customer
+    flutter build apk --flavor customer -t lib/main_customer.dart --release --dart-define=IS_LIVE=true
+    
+    # Vendor (Merchant)
+    flutter build apk --flavor merchant -t lib/main_vendor.dart --release --dart-define=IS_LIVE=true
+    ```
+
+*   **Production Release (Split APKs - Reduced Size)**:
+    ```bash
+    # Customer
+    flutter build apk --flavor customer -t lib/main_customer.dart --release --split-per-abi --dart-define=IS_LIVE=true
+    
+    # Vendor (Merchant)
+    flutter build apk --flavor merchant -t lib/main_vendor.dart --release --split-per-abi --dart-define=IS_LIVE=true
+    ```
+
+*   **Production Release (App Bundle - AAB for Play Store)**:
+    ```bash
+    # Customer
+    flutter build appbundle --flavor customer -t lib/main_customer.dart --release --dart-define=IS_LIVE=true
+    
+    # Vendor (Merchant)
+    flutter build appbundle --flavor merchant -t lib/main_vendor.dart --release --dart-define=IS_LIVE=true
+    ```
+
+*   **Production Release (Web)**:
+    ```bash
+    # Customer
+    flutter build web --release -t lib/main_customer.dart --dart-define=IS_LIVE=true --no-tree-shake-icons
+    
+    # Vendor (Merchant)
+    flutter build web --release -t lib/main_vendor.dart --dart-define=IS_LIVE=true --no-tree-shake-icons
+    ```
+
+*   **Static Analysis**:
+    ```bash
+    flutter analyze lib/
+    ```
 
 ---
 
@@ -233,60 +284,31 @@ Firebase config: `android/app/google-services.json` and `ios/Runner/GoogleServic
 ✅ Plan extension (when merchant allows it)  
 ✅ Vendor real-time ledger (stream-based, fires `VendorLedgerUpdated`)  
 ✅ T+1 settlement logic (locked funds release next day)  
-✅ Payout to bank via Paystack (Monnify is the target, pending)  
+✅ Payout to bank via Monnify  
 ✅ Transaction PIN for vendor withdrawals  
-✅ BVN/NIN verification via Supabase (CURRENTLY OPTIONAL during signup — see §10)  
+✅ BVN/NIN verification via Supabase  
 ✅ Vendor reservations with pagination + bulk fulfilment marking  
 ✅ Product pagination (load-more, 10 items at a time)  
-✅ Push notifications (FCM setup complete)  
+✅ Push notifications (FCM setup complete, restructured as a singleton service to prevent double init)  
 ✅ Firebase Analytics across all BLoCs (added this session)  
 ✅ Design system tokens partially implemented (KorraColors, KorraSizes, KorraPaddings, Gaps, KorraIcons)
+✅ Startup optimization via LazyIndexedStack in customer and vendor shell interfaces
 
 ---
 
 ## 10. Known Issues / Technical Debt
 
 ### 🔴 CRITICAL
-
-#### Paystack → Monnify Migration
-See `MONNIFY_MIGRATION.md` for the full checklist. The app uses Paystack for payouts as a **temporary workaround**. When Monnify live API is approved:
-
-- `payout_bloc.dart`: Remove `_mapMonnifyToPaystackCode()` and the Paystack recipient creation call
-- `VendorRepository`: Remove `createPaystackRecipientViaEdge()` method
-- `PayoutDetails` model: Remove `paystackRecipientCode` field
-- `vendor-transaction-ops/index.ts`: Switch from Paystack transfer to Monnify transfer block
-- Dashboard: Update webhook URL to `monnify-webhook` edge function
-
-#### KYC Verification Bypassed
-BVN/NIN verification is skipped during vendor signup. After Monnify:
-- Remove bypass code in `signup_vendor_bloc.dart` `_onNext`
-- Remove the "temporarily paused" banner from `step_identity.dart`
-- Re-enable `KorraValidators.nin/bvn` validators in the form
-- Add KYC blocker check in `payout_bloc.dart._onWithdrawClicked`
+* No critical issues. Paystack workaround has been completely removed as dead code; Monnify integration is fully active.
 
 ### 🟡 IMPORTANT
-
-#### Design System Refactor (`BATCH1_SCAN.md`)
-Large refactor pending: replace hardcoded colors/sizes/strings in 19 auth UI files with design system tokens.
-
-**Step A** (do first): Add new tokens to `colors.dart`, `sizes.dart`, `strings.dart`, `gaps.dart`, `paddings.dart`  
-**Step B**: Execute the 19-file replacement table  
-The exact replacement map is already in `BATCH1_SCAN.md`. **Do NOT re-scan. Just execute.**
-
-#### Open Plan Tasks (`task.md`)
-- Micro-tier engine changes (₦7k/15k/20k tiers with shorter durations)
-- Warning system — Supabase cron for "Payment Due Soon" / "Plan Closing Notice" push notifications
-- Cancellation refund UI (50% penalty, "Processing Refund" card)
-- "Awaiting Vendor Approval" status handling (`pending_approval`)
-- Help Center FAQ and Legal T&C updates
+* **Phase 2.2 — Split `VendorRepository` and `CustomerRepository`**: Further decompose these God classes into focused repositories (e.g. `VendorAuthRepository`, `VendorProductRepository`, etc.).
+* **Phase 3.5 — Fix `StreamBuilder` in `VendorHomePage` AppBar**: Wrap only the notification badge `Container` rather than rebuilding the full AppBar on notification count updates.
 
 ### 🟢 MINOR
-
-- Biometric auth in `role_login_bloc.dart` is a **mock** (fake delays + success). Not wired to `local_auth`.
-- `home_bloc.dart` `_onStarted` has empty stub — load logic not implemented
-- `_formatDobForBvn()` helper duplicated in 4 files — should be in `config/utils/`
-- `PlanActionBloc` and `PlanActionCubit` overlap in functionality — consolidate
-- `dart:math` imported but unused in `vendor_products_bloc.dart` — remove to fix lint
+* Biometric auth in `role_login_bloc.dart` is a **mock** (fake delays + success). Not wired to `local_auth`.
+* `home_bloc.dart` `_onStarted` has empty stub — load logic not implemented.
+* `dart:math` imported but unused in `vendor_products_bloc.dart` — remove to fix lint.
 
 ---
 
@@ -312,7 +334,7 @@ Security rules: see `firebase_rule.txt` in project root.
 |---|---|
 | `plan.ts` | Risk engine: min down payment, `secureToken`, create/pay plans |
 | `monnify-webhook.ts` | Monnify webhook handler (when live) |
-| `vendor-transaction-ops.ts` | Vendor payout processing (currently Paystack) |
+| `vendor-transaction-ops.ts` | Vendor payout processing (Monnify) |
 | `process-settlements.ts` | T+1 settlement — releases locked funds |
 
 ---
@@ -330,17 +352,35 @@ Security rules: see `firebase_rule.txt` in project root.
 # 1. Install dependencies
 flutter pub get
 
-# 2. Run customer app (debug)
-flutter run --flavor customer -t lib/main_customer.dart
+# 2. Run customer app (debug - mobile)
+flutter run --flavor customer -t lib/main_customer.dart --dart-define=IS_LIVE=false
 
-# 3. Run vendor app (debug)
-flutter run --flavor vendor -t lib/main_vendor.dart
+# 3. Run customer app (debug - web)
+flutter run -d chrome -t lib/main_customer.dart --dart-define=IS_LIVE=false
 
-# 4. Build release APKs
-flutter build apk --flavor customer -t lib/main_customer.dart --release
-flutter build apk --flavor vendor -t lib/main_vendor.dart --release
+# 4. Run vendor app (debug - mobile)
+flutter run --flavor merchant -t lib/main_vendor.dart --dart-define=IS_LIVE=false
 
-# 5. Analyze for issues
+# 5. Run vendor app (debug - web)
+flutter run -d chrome -t lib/main_vendor.dart --dart-define=IS_LIVE=false
+
+# 6. Build release APKs (production)
+flutter build apk --flavor customer -t lib/main_customer.dart --release --dart-define=IS_LIVE=true
+flutter build apk --flavor merchant -t lib/main_vendor.dart --release --dart-define=IS_LIVE=true
+
+# 7. Build release split-APKs (production - split by ABI)
+flutter build apk --flavor customer -t lib/main_customer.dart --release --split-per-abi --dart-define=IS_LIVE=true
+flutter build apk --flavor merchant -t lib/main_vendor.dart --release --split-per-abi --dart-define=IS_LIVE=true
+
+# 8. Build release App Bundles (production - AAB)
+flutter build appbundle --flavor customer -t lib/main_customer.dart --release --dart-define=IS_LIVE=true
+flutter build appbundle --flavor merchant -t lib/main_vendor.dart --release --dart-define=IS_LIVE=true
+
+# 9. Build release Web app (production)
+flutter build web --release -t lib/main_customer.dart --dart-define=IS_LIVE=true --no-tree-shake-icons
+flutter build web --release -t lib/main_vendor.dart --dart-define=IS_LIVE=true --no-tree-shake-icons
+
+# 10. Analyze for issues
 flutter analyze lib/
 ```
 
@@ -375,36 +415,123 @@ flutter analyze lib/
 | `vendor/product/vendor_products_bloc.dart` | `product_added`, `product_deleted`, `products_deleted_bulk` |
 | `vendor/payout/payout_bloc.dart` | `payout_initiated`, `payout_failed` |
 
+### Startup & Build Performance Optimizations:
+- Created [lazy_indexed_stack.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/lazy_indexed_stack.dart) under shared widgets.
+- Fixed compilation parameter error in [lazy_indexed_stack.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/lazy_indexed_stack.dart) by mapping the `fit` parameter to `sizing` inside `IndexedStack`.
+- Refactored [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) and [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) to replace `IndexedStack` with `LazyIndexedStack` to optimize startup rendering and prevent all tab pages from building at launch.
+- Configured R8 Full Mode in [gradle.properties](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/gradle.properties) by adding `android.enableR8.fullMode=true` for optimal release code shrinking.
+
+### NotificationService Singleton Implementation:
+- Converted `NotificationService` in [notification_service.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/services/notification_service.dart) to extend `GetxService` and implement a static `to` getter.
+- Moved repository and UID parameters to the `initialize` method so that it does not require constructor arguments.
+- Managed single-registration of message handlers and listeners via `_listenersRegistered` boolean to avoid duplicate FCM initialization on page rebuilds.
+- Registered the service globally inside [bootstrap.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/bootstrap.dart) using `Get.put()`.
+- Updated [home_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/home_page.dart) and [home_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/home_page.dart) to call `NotificationService.to.initialize(...)` instead of instantiating new objects.
+
+### GoogleFonts Caching (Central Style Files Optimization):
+- Restructured [text_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/text_styles.dart) by resolving the `'Inter'` font family string once at class loading time via `GoogleFonts.inter().fontFamily!`.
+- Implemented `KorraTextStyles.inter(...)` helper method that returns a standard `TextStyle` using the cached font family name.
+- Replaced all inline `GoogleFonts.inter(...)` calls inside [text_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/text_styles.dart) and [input_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/input_styles.dart) with the new optimized `KorraTextStyles.inter(...)` helper. This eliminates dynamic GoogleFonts lookups and dynamic platform resolution on every widget rebuild.
+
+### Constructor Dependency Injection Cleanup (Architecture Refactoring):
+- Wrapped the root-level `GetMaterialApp` inside [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) in a flavor-specific `RepositoryProvider` (`CustomerRepository` or `VendorRepository`). This exposes the active repository via context globally across both shell routes and all dynamically pushed routes.
+- Refactored [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart), [statements_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/statements_screen.dart), and [edit_profile_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/edit_profile_screen.dart) to remove `CustomerRepository` from their constructors and class fields. They now fetch the repository instance directly from context using `context.read<CustomerRepository>()`.
+- Refactored [create_plan_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart), [plan_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_details_screen.dart), [plan_details_loader_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_details_loader_screen.dart), [pay_plan_input_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/pay_plan_input_screen.dart), and [change_password_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/change_password_screen.dart) (both customer and vendor versions) to resolve repositories from the widget build context rather than constructors, completely removing constructor parameters and arguments on navigation routes.
+- Fully completed Customer-side DI refactoring: removed `CustomerRepository` constructor parameters from [HomePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/home_page.dart), [PlansPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/plans_page.dart), [ProfilePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/profile_page.dart), [NotificationScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/notification_screen.dart), and [LimitUpgradeScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/limit_upgrade_screen.dart).
+- Cleaned up [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) (no longer passes `customerRepo` to tab pages), and updated route definitions in [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart) for `customerNotifications` and `customerLimitUpgrade` to drop repository route arguments.
+- Refactored [pay_confirmation_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/pay_confirmation_sheet.dart) to resolve `CustomerRepository` from context rather than constructor params/helper args.
+- Fully completed Vendor-side DI refactoring: removed `VendorRepository` constructor parameters from [VendorHomePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/home_page.dart), [VendorHomeBody](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/vendor_home_body.dart), [VendorVaultScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/widgets/vault_screen.dart), [VendorProductsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/products_page.dart), [AddProductPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart), [ProductDetailsScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_screen.dart), [ProductEditScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart), [PayoutSettingsScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/payout_settings_screen.dart), [VendorSettlementScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/vendor_settlement_screen.dart), [VendorProfilePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/profile_page.dart), and [ReservationsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart).
+- Cleaned up [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) (no longer passes `repo` to tab pages), and updated route definitions in [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart) for all vendor sub-pages (`vendorReservations`, `vendorAddProduct`, `vendorProductDetails`, `vendorEditProduct`, `vendorSettlement`, and `vendorPayoutSettings`) to drop repository route arguments, utilizing `context.read<VendorRepository>()` dynamically instead.
+- Cleaned up duplicate `db` field from both `CustomerRepository` and `VendorRepository`, unifying all Firestore queries onto the `firestore` property, and updated references accordingly (e.g. inside `create_plan_screen.dart`).
+- Replaced hardcoded `korraSecret` string constants inside `CustomerRepository` and `VendorRepository` with environment configuration (`dotenv.env['KORRA_SECRET_CODE']`).
+- Optimized `plans_page.dart` by removing duplicate `StreamBuilder<List<Plan>>` inside the AppBar and instead using `_cachedPlans` to serve list data to search delegate.
+- Decomposed `plans_page.dart` by extracting the private `_SkeletonCard` widget to a public `PlanSkeletonCard` widget under `widgets/plan_skeleton_card.dart`.
+- Flattened the nested `StreamBuilder` tree in `plans_page.dart` by replacing the outer customer profile stream builder with a background `StreamSubscription` in `initState` to prevent profile updates from triggering plans list reload cycles.
+- Decomposed `vendor_home_body.dart` by extracting the liveness failure blocker modal sheet to a public standalone `LivenessBlockerSheet` widget under [liveness_blocker_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/widgets/liveness_blocker_sheet.dart).
+- Decomposed `plan_details_screen.dart` by extracting status banners, completed pickup arrangements, financial progress tracking, timeline grace periods, target payment calculator details, metadata info grids, resolve sheets, conversion sheets, and sticky bottom action bars into separate reusable widgets, shrinking the file size from 1,372 lines to 337 lines.
+- Fixed a nesting compilation error in [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) where the conditional `isMerchant` RepositoryProvider block was accidentally placed inside the `_PremiumDesktopBlocker` widget class instead of the root `KorraApp` class.
+
+### Widget Performance Extraction (create_plan_screen.dart cleanup):
+- Extracted `_PenaltyExplainerSheet` to public widget `PenaltyExplainerSheet` in [penalty_explainer_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/penalty_explainer_sheet.dart).
+- Extracted `_buildFullPaymentSuccess` to public widget `FullPaymentSuccessCard` in [full_payment_success_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/full_payment_success_card.dart).
+- Extracted `_buildModelPill` to public widget `PlanModelPill` in [plan_model_pill.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_model_pill.dart).
+- Extracted `_buildDurationCard` to public widget `PlanDurationCard` in [plan_duration_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_duration_card.dart).
+- Extracted `_buildLiabilityDisclaimer` to public widget `PlanLiabilityDisclaimer` in [plan_liability_disclaimer.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_liability_disclaimer.dart).
+- Refactored [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) and [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) to replace `IndexedStack` with `LazyIndexedStack`.
+- Configured R8 Full Mode in [gradle.properties](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/gradle.properties).
+
+### Widget Performance & Cleanup:
+- Extracted `PlanLimitContainer`, `PlanImageCarousel`, `PlanPaymentModeToggle`, `PlanGoalSelector`, `PlanCadenceSelector`, `PlanCommitmentMessage`, `PlanBottomBar`, and `PlanLiabilityCheckbox` to public widgets.
+- Decomposed `vendor_home_body.dart` by extracting the `LivenessBlockerSheet`.
+- Decomposed `plan_details_screen.dart` into reusable modules (banners, pickup arrangements, financial progress, etc.).
+- Fixed nesting compilation error in [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart).
+- Decomposed `Add_product_page.dart` and `product_edit_screen.dart` by extracting shared widgets: `ProductLimitHeader`, `ProductModelTabs`, `ProductCategorySelectorSheet`, and `ProductInfoBox`.
+- Consolidated duplicated KYC code by creating 6 shared, flavor-agnostic fields (`KycBvnField`, `KycNinField`, `KycDobSelector`, `KycGenderSelector`, `KycPhoneSection`, and `KycPremiumInput`) under `lib/presentation/shared/widgets/kyc/` and integrated them into both customer and vendor KYC sheets, deleting over 1,200 lines of duplicated code.
+- Decomposed customer `pay_plan_input_screen.dart` by extracting its fee breakdown preview card to a standalone `PayPlanFeeSummary` widget.
+- Optimized customer `profile_page.dart` by extracting the `LevelUpSlotsRow` to a standalone widget with its own `StreamBuilder`.
+- Refactored vendor `profile_page.dart` to extract `StaticInfoRow` to a dedicated widget file.
+
 ### Created:
 - `SESSION_HANDOVER.md` (this document) in project root
+
+
+### Widget Rebuild Optimizations (Phase 3.2):
+- Added `buildWhen` filters to `BlocBuilder` and `BlocConsumer` blocks across several screens and widgets:
+  - [AddProductPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart)
+  - [ProductEditScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart)
+  - [CreatePlanScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart)
+  - [ReservationsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart) (deep properties comparison implemented for non-Equatable state)
+  - [PayoutScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/payout/payout_screen_ui.dart)
+- Cleaned up obsolete Paystack-to-Monnify migration references across all documentation.
+
+### State Management Consolidation (Task B):
+- Consolidated `PlanActionBloc` and `PlanActionCubit` by transferring the enums `PlansTab` and `SortBy` directly to the top of [plan_action_cubit.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/customer/plans/plan_action_cubit.dart).
+- Decommissioned and emptied the unused [plan_action_bloc.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/customer/plans/plan_action_bloc.dart) to remove dead code.
+- Updated imports in [plans_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/plans_page.dart), [plans_filter_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plans_filter_sheet.dart), and [segmented_tabs.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/segmented_tabs.dart) to resolve from the cubit file.
+
+### Print Cleanups (Task D):
+- Replaced all raw `print(...)` statements with standard `debugPrint(...)` in:
+  - [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart)
+  - [vendor_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_repository.dart)
+  - [create_plan_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart)
+  - [profile_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/profile_page.dart) (commented print updated)
+
+### Static Analysis & Const Constructors (Task A):
+- Added `prefer_const_constructors` and `prefer_const_literals_to_create_immutables` rules to [analysis_options.yaml](file:///c:/Users/USER/Desktop/flutter_projects/korra/analysis_options.yaml).
+- Audited recently refactored widgets (e.g. KYC selectors, liveness blocker, plan summaries) to ensure constructor declarations and usage conform to `const`-safe requirements.
+
+### Vendor/Customer Repository Decomposing (Task A Extension):
+- Split `CustomerRepository` into `customer_auth_repository.dart` and `customer_profile_repository.dart` as extensions.
+- Split VendorRepository into vendor_auth_repository.dart, vendor_stats_repository.dart, and vendor_settings_repository.dart as extensions (including implementing the missing `changePassword` method in the auth extension).
+- Cleaned up duplicate/deprecated imports, unused local variables, and fields across both repository directories.
+- Consolidated duplicate `_formatDobForBvn` helper declarations into the centralized `formatDateOfBirthForBvn` helper in `date_formatters.dart` (cleaned up 4 duplicate implementations).
+- Fixed `catchError` handlers on both `verification_repository` files to return proper types (`then<void>((_) {})`).
+- Ran static analysis on `lib/data/repository/` and verified 0 warnings or errors.
+
+### AppBar StreamBuilder Optimizations (Task B):
+- Optimized the notification badge stream builder on both customer `HomePage` and `VendorHomePage` AppBars.
+- Moved the `StreamBuilder` inside the `Positioned` widget so that only the badge red dot rebuilds dynamically, preventing redundant rebuilds of the entire `IconButton` and its handlers.
+
+### APK Size Reduction & Modular Flavor-Routing (Phase 4):
+- Split monolithic `app_pages.dart` into `common_pages.dart`, `customer_pages.dart`, and `vendor_pages.dart` to separate routes and screen imports.
+- Updated `main_customer.dart` and `main_vendor.dart` to load respective flavor route files, allowing the tree-shaker to omit merchant screens in customer APKs and vice versa.
+- Converted `monnify.png` to WebP (`monnify.webp`) and updated all codebase references (`role_login_screen.dart`, `image_string.dart`).
+- Created `unused_assets/` at the root and moved all unused original png/json files there (`google-logo.png`, `korra_logo_icon.png`, `moniepoint.png`, `paystack.png`, `monnify.png`, and `payment_sucess.json`).
+- Audited Lottie animation packages, verified they are unused, removed `lottie` dependency from `pubspec.yaml`, and deleted empty assets directories.
 
 ---
 
 ## 17. What to Do Next (Prioritized)
 
-### Immediately After This Session
-1. `flutter analyze lib/` — confirm no new errors from analytics imports
-2. Test analytics in Firebase DebugView on a device: `flutter run --flavor customer -t lib/main_customer.dart` then enable Analytics Debug mode:
-   ```bash
-   adb shell setprop debug.firebase.analytics.app [your.package.name]
-   ```
-3. Verify events appear in Firebase Console → Analytics → DebugView
-
 ### Short Term (Next 1–2 Sessions)
-1. Execute `BATCH1_SCAN.md` Step A (add token constants) then Step B (19 files)
-2. Implement micro-tier engine from `task.md` §1
+1. **APK Size Reduction (Phase 4)**:
+   - Audit the `monnify_payment_sdk` size footprint.
 
 ### Medium Term
-1. **Monnify Migration** — `MONNIFY_MIGRATION.md` full checklist
-2. **Re-enable KYC enforcement** post-Monnify
-3. Wire up real biometric auth (`local_auth` package)
-
-### Long Term
-1. Consolidate `PlanActionBloc` + `PlanActionCubit`
-2. Extract `_formatDobForBvn` to shared utility
-3. Add BLoC unit tests
-4. Set up CI/CD for automated APK builds
+1. Wire up real biometric auth (`local_auth` package).
+2. Add BLoC unit tests.
+3. Set up CI/CD for automated APK builds.
 
 ---
 
-*Last updated: 26 June 2026. Update this document at the start of each new session with what changed.*
+*Last updated: 27 June 2026. Update this document at the start of each new session with what changed.*

@@ -19,17 +19,16 @@ import 'widgets/product_search_bar.dart';
 import 'widgets/product_filter_pills.dart';
 
 class VendorProductsBody extends StatelessWidget {
-  final VendorRepository vendors;
   final String vendorUid;
 
   const VendorProductsBody({
     super.key,
-    required this.vendors,
     required this.vendorUid,
   });
 
   @override
   Widget build(BuildContext context) {
+    final vendors = context.read<VendorRepository>();
     return BlocConsumer<VendorProductsBloc, VendorProductsState>(
       listenWhen: (previous, current) => current.flow == ProductFlow.delete && previous.success != current.success,
       listener: (context, state) {

@@ -10,12 +10,10 @@ import 'plan_card_compact.dart';
 
 class PlanCarouselSlider extends StatefulWidget {
   final List<Plan> plans;
-  final CustomerRepository customerRepo;
   
   const PlanCarouselSlider({
     super.key, 
     required this.plans, 
-    required this.customerRepo
   });
 
   @override
@@ -113,13 +111,13 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
                   onPay: () {
                     Get.toNamed(
                       Routes.customerPayPlan, 
-                      arguments: {'plan': p, 'repo': widget.customerRepo}
+                      arguments: {'plan': p}
                     );
                   },
                   onDetails: () {
                     Get.toNamed(
                       Routes.customerPlanDetails, 
-                      arguments: {'plan': p, 'customerRepo': widget.customerRepo}
+                      arguments: {'plan': p}
                     );
                   },
                 ),

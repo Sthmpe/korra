@@ -111,7 +111,7 @@ class RoleLoginScreen extends StatelessWidget {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Image.asset(
-                                        ImageString.gooogleLogoPng,
+                                        ImageString.gooogleLogo,
                                         height: 34.h,
                                         width: 34.h,
                                       ),

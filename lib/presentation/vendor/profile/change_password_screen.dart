@@ -12,8 +12,7 @@ import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 
 class VendorChangePasswordScreen extends StatefulWidget {
-  final VendorRepository repo;
-  const VendorChangePasswordScreen({super.key, required this.repo});
+  const VendorChangePasswordScreen({super.key});
 
   @override
   State<VendorChangePasswordScreen> createState() => _VendorChangePasswordScreenState();
@@ -41,7 +40,7 @@ class _VendorChangePasswordScreenState extends State<VendorChangePasswordScreen>
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => ChangePasswordBloc(changePassword: widget.repo.changePassword),
+      create: (_) => ChangePasswordBloc(changePassword: context.read<VendorRepository>().changePassword),
       child: BlocConsumer<ChangePasswordBloc, ChangePasswordState>(
         listener: (context, state) {
           if (state.status == ChangePassStatus.success) {

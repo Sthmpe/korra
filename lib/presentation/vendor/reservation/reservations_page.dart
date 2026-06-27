@@ -17,19 +17,18 @@ import 'widgets/vendor_reservation_detail_sheet.dart';
 class ReservationsPage extends StatelessWidget {
   final String vendorId;
   final ReservationStatus initialFilter;
-  final VendorRepository vendors;
   final bool showLeadingIcon;
 
   const ReservationsPage({
     super.key,
     required this.vendorId,
     this.initialFilter = ReservationStatus.ongoing,
-    required this.vendors,
     this.showLeadingIcon = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final vendors = context.read<VendorRepository>();
     return BlocProvider(
       create: (_) => ReservationsBloc(
         repo: vendors,
@@ -37,6 +36,28 @@ class ReservationsPage extends StatelessWidget {
         initial: initialFilter,
       )..add(ResStarted(initialFilter)),
       child: BlocBuilder<ReservationsBloc, ReservationsState>(
+        buildWhen: (previous, current) {
+          if (previous.loading != current.loading) return true;
+          if (previous.filter != current.filter) return true;
+          if (previous.query != current.query) return true;
+          if (previous.errorMessage != current.errorMessage) return true;
+          if (previous.countNew != current.countNew) return true;
+          if (previous.countOngoing != current.countOngoing) return true;
+          if (previous.countReady != current.countReady) return true;
+          if (previous.countCompleted != current.countCompleted) return true;
+          if (previous.countCancelled != current.countCancelled) return true;
+          if (previous.verificationStatus != current.verificationStatus) return true;
+          
+          if (previous.visible.length != current.visible.length) return true;
+          for (int i = 0; i < previous.visible.length; i++) {
+            if (previous.visible[i] != current.visible[i]) return true;
+          }
+
+          if (previous.selectedIds.length != current.selectedIds.length) return true;
+          if (!previous.selectedIds.containsAll(current.selectedIds)) return true;
+
+          return false;
+        },
         builder: (context, state) {
           final bloc = context.read<ReservationsBloc>(); // 1. Capture the Bloc here
 

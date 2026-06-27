@@ -108,26 +108,4 @@ class SignupCustomerBloc
     emit(state.copyWith(email: event.value));
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  String? _formatDobForBvn(DateTime? date) {
-    if (date == null) return null;
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final dd = date.day.toString().padLeft(2, '0');
-    final mmm = months[date.month - 1];
-    final yyyy = date.year.toString().padLeft(4, '0');
-    return '$dd-$mmm-$yyyy'; // e.g., 03-Oct-1993
-  }
 }

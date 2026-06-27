@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -11,14 +12,12 @@ import '../../shared/notify/korra_notify.dart';
 
 class LimitUpgradeScreen extends StatefulWidget {
   final Customer customer;
-  final CustomerRepository repo;
   final int currentMaxSlots;
   final int completedPlansCount;
 
   const LimitUpgradeScreen({
     super.key,
     required this.customer,
-    required this.repo,
     required this.currentMaxSlots,
     required this.completedPlansCount,
   });
@@ -397,7 +396,7 @@ class _LimitUpgradeScreenState extends State<LimitUpgradeScreen> {
       );
 
       // ✅ Update the TIER NAME (String), not just the slot number
-      await widget.repo.upgradeTier(widget.customer.uid, tier.name);
+      await context.read<CustomerRepository>().upgradeTier(widget.customer.uid, tier.name);
 
       Get.back(); // Close loading
       Get.back(); // Close screen

@@ -9,8 +9,10 @@ import 'home/home_page.dart';
 import 'plans/plans_page.dart';
 import 'profile/profile_page.dart';
 import '../shared/widgets/korra_bottom_nav.dart';
+import '../shared/widgets/lazy_indexed_stack.dart';
 
 class CustomerShell extends StatelessWidget {
+
   final String uid;
   const CustomerShell({super.key, required this.uid});
 
@@ -35,9 +37,9 @@ class CustomerShell extends StatelessWidget {
               final navBloc = context.read<BottomNavBloc>();
         
               final pages = [
-                HomePage(customerRepo: repo, customerUid: uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
-                PlansPage(customerRepo: repo, customerUid: uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),),
-                ProfilePage(customerRepo: repo, customerUid: uid),
+                HomePage(customerUid: uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
+                PlansPage(customerUid: uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),),
+                ProfilePage(customerUid: uid),
               ];
         
               return Scaffold(
@@ -47,7 +49,7 @@ class CustomerShell extends StatelessWidget {
                     children: [
                       // const GlobalOfflineBanner(),
                       Expanded(
-                        child: IndexedStack(index: state.index, children: pages),
+                        child: LazyIndexedStack(index: state.index, children: pages),
                       ),
                     ],
                   ),

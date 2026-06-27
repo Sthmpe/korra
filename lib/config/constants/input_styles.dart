@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'colors.dart';
 import 'sizes.dart';
+import 'text_styles.dart';
 
 /// Text field styles, container decorations, and InputDecoration factories.
 ///
@@ -23,21 +23,21 @@ class KorraInputStyles {
   // -------------------------------------------------------------------------
 
   /// 15sp w600 black - standard input text for all wrapped fields.
-  static TextStyle get inputText => GoogleFonts.inter(
+  static TextStyle get inputText => KorraTextStyles.inter(
     fontSize: 15.sp,
     fontWeight: FontWeight.w600,
     color: KorraColors.black,
   );
 
   /// 14sp w500 black - profile / change-password standalone fields.
-  static TextStyle get inputTextMd => GoogleFonts.inter(
+  static TextStyle get inputTextMd => KorraTextStyles.inter(
     fontSize: 14.sp,
     fontWeight: FontWeight.w500,
     color: Colors.black,
   );
 
   /// 20sp w700 textDark tracked - payout amount field.
-  static TextStyle get inputTextAmount => GoogleFonts.inter(
+  static TextStyle get inputTextAmount => KorraTextStyles.inter(
     fontSize: 20.sp,
     fontWeight: FontWeight.w700,
     color: KorraColors.textDark,
@@ -45,7 +45,7 @@ class KorraInputStyles {
   );
 
   /// 36sp w800 h1 black - large currency amount display (create plan).
-  static TextStyle get inputTextAmountLg => GoogleFonts.inter(
+  static TextStyle get inputTextAmountLg => KorraTextStyles.inter(
     fontSize: 36.sp,
     fontWeight: FontWeight.w800,
     color: KorraColors.black,
@@ -53,57 +53,57 @@ class KorraInputStyles {
   );
 
   /// 14sp w500 cool-grey - hint for premium/link wrapped fields.
-  static TextStyle get hintPremium => GoogleFonts.inter(
+  static TextStyle get hintPremium => KorraTextStyles.inter(
     fontSize: 14.sp,
     fontWeight: FontWeight.w500,
     color: const Color(0xFF9CA3AF),
   );
 
   /// 14sp w400 softer-grey - hint for standard signup/KYC wrapped fields.
-  static TextStyle get hintStandard => GoogleFonts.inter(
+  static TextStyle get hintStandard => KorraTextStyles.inter(
     fontSize: 14.sp,
     fontWeight: FontWeight.w400,
     color: const Color(0xFFAAAAAA),
   );
 
   /// No fixed size, greyShade400 - hint for standalone filled fields.
-  static TextStyle get hintFilled => GoogleFonts.inter(
+  static TextStyle get hintFilled => KorraTextStyles.inter(
     color: KorraColors.greyShade400,
   );
 
   /// 14sp greyShade400 - hint for most search fields.
-  static TextStyle get hintSearch => GoogleFonts.inter(
+  static TextStyle get hintSearch => KorraTextStyles.inter(
     fontSize: 14.sp,
     color: KorraColors.greyShade400,
   );
 
   /// borderDisabled color, no fixed size - hint for amount/currency fields.
-  static TextStyle get hintAmount => GoogleFonts.inter(
+  static TextStyle get hintAmount => KorraTextStyles.inter(
     color: KorraColors.borderDisabled,
   );
 
   /// 12sp w500 red - standard error text for profile/password fields.
-  static TextStyle get errorText => GoogleFonts.inter(
+  static TextStyle get errorText => KorraTextStyles.inter(
     fontSize: 12.sp,
     fontWeight: FontWeight.w500,
     color: Colors.red,
   );
 
   /// 12sp w500 red.shade600 - error text for the login premium field.
-  static TextStyle get errorTextStrong => GoogleFonts.inter(
+  static TextStyle get errorTextStrong => KorraTextStyles.inter(
     fontSize: 12.sp,
     fontWeight: FontWeight.w500,
     color: Colors.red.shade600,
   );
 
   /// 10sp brightRed - compact error text for product form fields.
-  static TextStyle get errorTextSm => GoogleFonts.inter(
+  static TextStyle get errorTextSm => KorraTextStyles.inter(
     fontSize: 10.sp,
     color: KorraColors.brightRed,
   );
 
   /// 13.5sp grey - floating label style for label-type inputs.
-  static TextStyle get labelStyle => GoogleFonts.inter(
+  static TextStyle get labelStyle => KorraTextStyles.inter(
     fontSize: 13.5.sp,
     color: Colors.grey,
   );
@@ -351,7 +351,7 @@ class KorraInputStyles {
   static InputDecoration searchNakedDecoration({required String hint}) =>
       InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.inter(
+        hintStyle: KorraTextStyles.inter(
           fontSize: 14.sp,
           fontWeight: FontWeight.w400,
           color: KorraColors.textHint,
@@ -401,7 +401,7 @@ class KorraInputStyles {
           ),
           child: Text(
             currencySymbol,
-            style: GoogleFonts.inter(
+            style: KorraTextStyles.inter(
               fontSize: 20.sp,
               fontWeight: FontWeight.w700,
               color: KorraColors.textMid,
@@ -447,7 +447,7 @@ class KorraInputStyles {
         prefixIcon: prefixIcon,
         suffixIcon: suffixIcon,
         errorText: errorText,
-        errorStyle: GoogleFonts.inter(
+        errorStyle: KorraTextStyles.inter(
           fontSize: 12.sp,
           fontWeight: FontWeight.w500,
         ),
@@ -478,7 +478,7 @@ class KorraInputStyles {
   /// InputDecorationTheme for SearchDelegate (plan search screen).
   static InputDecorationTheme searchDelegateTheme() => InputDecorationTheme(
     border: InputBorder.none,
-    hintStyle: GoogleFonts.inter(
+    hintStyle: KorraTextStyles.inter(
       fontSize: 16.sp,
       color: KorraColors.greyShade400,
     ),

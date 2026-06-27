@@ -19,9 +19,8 @@ import 'widgets/kyc_verification_sheet.dart';
 
 class BankDetailsScreen extends StatefulWidget {
   final Customer customer;
-  final CustomerRepository repo;
 
-  const BankDetailsScreen({super.key, required this.customer, required this.repo});
+  const BankDetailsScreen({super.key, required this.customer});
 
   @override
   State<BankDetailsScreen> createState() => _BankDetailsScreenState();
@@ -148,13 +147,14 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   }
 
   void _openKycSheet(BuildContext context) {
+    final repo = context.read<CustomerRepository>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => BlocProvider(
-        create: (context) => CustomerKycBloc(
-          repo: widget.repo, 
+      builder: (sheetContext) => BlocProvider(
+        create: (blocContext) => CustomerKycBloc(
+          repo: repo, 
           customerUid: widget.customer.uid,
         ),
         child: KycVerificationSheet(
@@ -181,7 +181,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
             );
         
             try {
-              await widget.repo.createReserveAccount(
+              await repo.createReserveAccount(
                 uid: widget.customer.uid,
                 email: widget.customer.email,
                 firstName: widget.customer.firstName,

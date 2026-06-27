@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -13,19 +14,18 @@ import '../../../config/routes/app_routes.dart';
 import '../../shared/widgets/korra_header.dart';
 
 class NotificationScreen extends StatelessWidget {
-  final CustomerRepository repo;
   final String uid;
   final VoidCallback onJumpToPlans;
 
   const NotificationScreen({
     super.key,
-    required this.repo,
     required this.uid,
     required this.onJumpToPlans,
   });
 
   @override
   Widget build(BuildContext context) {
+    final repo = context.read<CustomerRepository>();
     return Scaffold(
       backgroundColor: Colors.white, // ✅ Matched Vendor: White Background
       appBar: KorraHeader(

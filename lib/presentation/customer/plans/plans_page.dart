@@ -12,27 +12,27 @@ import '../../../data/repository/customer/customer_repository.dart';
 import '../../../logic/bloc/customer/link/link_bloc.dart';
 import '../../../logic/bloc/customer/link/link_event.dart';
 import '../../../logic/bloc/customer/link/link_state.dart';
-import '../../../logic/bloc/customer/plans/plan_action_bloc.dart';
+import '../../../logic/bloc/customer/plans/plan_action_cubit.dart';
 import '../../shared/widgets/korra_header.dart';
+import 'dart:async';
 import 'widgets/new_plan_sheet.dart';
 import 'widgets/plan_card.dart';
 import 'widgets/plan_search_delegate.dart';
 import 'widgets/plans_filter_sheet.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/empty_state_card.dart';
+import 'widgets/plan_skeleton_card.dart';
 
 // Enum for your tabs
 //import '../../../logic/bloc/customer/plans/plans_event.dart'; // Import the correct SortBy enum
 
 class PlansPage extends StatefulWidget {
-  final CustomerRepository customerRepo;
   final String customerUid;
   final VoidCallback onJumpToHome;
   final VoidCallback onJumpToPlan;
 
   const PlansPage({
     super.key,
-    required this.customerRepo,
     required this.customerUid,
     required this.onJumpToHome,
     required this.onJumpToPlan,
@@ -43,6 +43,7 @@ class PlansPage extends StatefulWidget {
 }
 
 class _PlansPageState extends State<PlansPage> {
+  late final CustomerRepository _repo;
   // Filters State
   PlansTab _currentTab = PlansTab.active;
   SortBy _sortBy = SortBy.recent;
@@ -53,7 +54,8 @@ class _PlansPageState extends State<PlansPage> {
   // 1. 👇 Add a single stream variable here
   int _currentLimit = 15;
   late Stream<List<Plan>> _plansStream;
-  late Stream<Customer?> _customerStream;
+  Customer? _latestCustomer;
+  StreamSubscription<Customer?>? _customerSub;
   final ScrollController _scrollController = ScrollController();
   List<Plan> _cachedPlans = [];
   bool _isLoadingMore = false;
@@ -63,10 +65,12 @@ class _PlansPageState extends State<PlansPage> {
   static const _brand = Color(0xFFA54600);
 
   @override
-  @override
   void initState() {
     super.initState();
-    _customerStream = widget.customerRepo.streamCustomer(widget.customerUid);
+    _repo = context.read<CustomerRepository>();
+    _customerSub = _repo.streamCustomer(widget.customerUid).listen((customer) {
+      _latestCustomer = customer;
+    });
     _loadPlansStream();
     
     _scrollController.addListener(_onScroll);
@@ -101,9 +105,9 @@ class _PlansPageState extends State<PlansPage> {
   }
 
   void _loadPlansStream() {
-    if (_currentLimit == _lastLoadedLimit) return; // no-op if limit didn't change
+    if (_currentLimit == _lastLoadedLimit) return;
     _lastLoadedLimit = _currentLimit;
-    _plansStream = widget.customerRepo.streamCustomerPlans(
+    _plansStream = _repo.streamCustomerPlans(
       widget.customerUid,
       limit: _currentLimit,
     );
@@ -111,6 +115,7 @@ class _PlansPageState extends State<PlansPage> {
 
   @override
   void dispose() {
+    _customerSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -119,246 +124,228 @@ class _PlansPageState extends State<PlansPage> {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => LinkBloc(
-        customerRepo: widget.customerRepo,
+        customerRepo: _repo,
         customerUid: widget.customerUid,
       ),
-      child: StreamBuilder<Customer?>(
-        stream: _customerStream,
-        builder: (context, snapshot) {
-          final customer = snapshot.data;
-          final currentBalance = customer?.availableBalance ?? 0.00;
+      child: BlocListener<LinkBloc, LinkState>(
+        listenWhen: (p, c) => p.status != c.status,
+        listener: (context, state) async {
+          if (state.status == LinkStatus.loaded) {
+            // 1. Get the product from the LinkBloc state
+            final product =
+                state.productFetch ?? ProductFetchResult.empty();
 
-          return BlocListener<LinkBloc, LinkState>(
-            listenWhen: (p, c) => p.status != c.status,
-            listener: (context, state) async {
-              if (state.status == LinkStatus.loaded) {
-                // 1. Get the product from the LinkBloc state
-                final product =
-                    state.productFetch ?? ProductFetchResult.empty();
+            final customer = _latestCustomer;
+            final currentBalance = customer?.availableBalance ?? 0.00;
 
-                // 2. Navigate directly (No BlocProvider needed here)
-                // CreatePlanScreen will instantiate its own 'CreatePlanBloc' automatically.
-                final result = await Get.toNamed(
-                  Routes.customerCreatePlan,
-                  arguments: {
-                    'product': product,
-                    'customer': customer!, // Ensure customer is not null
-                    'customerRepo': widget.customerRepo,
-                    'customerUid': widget.customerUid,
-                    'walletBalance': currentBalance,
-                  },
-                );
+            // 2. Navigate directly (No BlocProvider needed here)
+            // CreatePlanScreen will instantiate its own 'CreatePlanBloc' automatically.
+            final result = await Get.toNamed(
+              Routes.customerCreatePlan,
+              arguments: {
+                'product': product,
+                'customer': customer,
+                'customerUid': widget.customerUid,
+                'walletBalance': currentBalance,
+              },
+            );
 
-                // 🦘 JUMP LOGIC: Check the result sent back from Create Screen
-                if (result == 'jump_to_home') {
-                  widget.onJumpToHome();
-                } else if (result == 'jump_to_plans') {
-                  widget
-                      .onJumpToPlan(); // (Even though we are already on Plans, this might refresh or reset tab)
-                }
-              }
-            },
-            child: Scaffold(
-              backgroundColor: Colors.white,
-              appBar: KorraHeader(
-                title: 'Plans',
-                trailingActions: [
-                  // Search Icon
-                  StreamBuilder<List<Plan>>(
-                    // Optimization: We need data for search, so we can grab it from repo or
-                    // just use the builder below. For cleaner UI, we usually access the stream
-                    // inside the SearchDelegate, or pass the current list if we have it.
-                    // Here, we'll wait for the body stream to load.
-                    stream: _plansStream,
-                    builder: (context, snapshot) {
-                      final plans = snapshot.data ?? [];
-                      return IconButton(
-                        onPressed: () {
-                          // --- 2. FIXED SEARCH IMPLEMENTATION ---
-                          showSearch(
-                            context: context,
-                            delegate: PlanSearchDelegate(sourcePlans: plans),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.search,
-                          color: Color(0xFF1B1B1B),
-                        ),
-                        iconSize: 22.sp,
-                      );
-                    },
-                  ),
-                  // Filter Icon
-                  IconButton(
-                    onPressed: () {
-                      // --- 3. FIXED FILTER IMPLEMENTATION ---
-                      showPlansFilterSheet(
-                        context: context,
-                        currentSort: _sortBy,
-                        autopayOnly: _autopayOnly,
-                        overdueOnly: _overdueOnly,
-                        highValueOnly: _highValueOnly,
-                        onApply: (sort, auto, over, high) {
-                          // Update state to trigger rebuild of the list
-                          setState(() {
-                            // Cast to the correct SortBy enum
-                            _sortBy = sort;
-                            _autopayOnly = auto;
-                            _overdueOnly = over;
-                            _highValueOnly = high;
-                          });
-                        },
-                        onReset: () {
-                          setState(() {
-                            _sortBy = SortBy.nextDue;
-                            _autopayOnly = false;
-                            _overdueOnly = false;
-                            _highValueOnly = false;
-                          });
-                        },
-                      );
-                    },
-                    icon: Stack(
-                      children: [
-                        const Icon(Icons.tune, color: Color(0xFF1B1B1B)),
-                        // Engineering Polish: Show a dot if filters are active
-                        if (_autopayOnly || _overdueOnly || _highValueOnly)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8.w,
-                              height: 8.w,
-                              decoration: const BoxDecoration(
-                                color: _brand,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    iconSize: 22.sp,
-                  ),
-                ],
-              ),
-
-              floatingActionButton: FloatingActionButton(
+            // 🦘 JUMP LOGIC: Check the result sent back from Create Screen
+            if (result == 'jump_to_home') {
+              widget.onJumpToHome();
+            } else if (result == 'jump_to_plans') {
+              widget
+                  .onJumpToPlan(); // (Even though we are already on Plans, this might refresh or reset tab)
+            }
+          }
+        },
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          appBar: KorraHeader(
+            title: 'Plans',
+            trailingActions: [
+              // Search Icon
+              IconButton(
                 onPressed: () {
-                  showModalBottomSheet(
+                  // --- 2. FIXED SEARCH IMPLEMENTATION ---
+                  showSearch(
                     context: context,
-                    backgroundColor: Colors
-                        .transparent, // Important: Let the sheet handle its own rounded corners
-                    isScrollControlled:
-                        true, // <--- ⚠️ THIS IS THE CRITICAL FIX
-                    builder: (_) => BlocProvider.value(
-                      value: context.read<LinkBloc>(),
-                      child: NewPlanSheet(
-                        onSubmit: (v) {
-                          FocusManager.instance.primaryFocus?.unfocus();
-                          context.read<LinkBloc>().add(LinkSubmitted(v));
-                        },
-                      ),
-                    ),
+                    delegate: PlanSearchDelegate(sourcePlans: _cachedPlans),
                   );
                 },
-                backgroundColor: _brand,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16.r),
+                icon: const Icon(
+                  Icons.search,
+                  color: Color(0xFF1B1B1B),
                 ),
-                child: const Icon(Icons.add, color: Colors.white),
+                iconSize: 22.sp,
               ),
-
-              // THE CORE: Real-Time Data Stream
-              body: StreamBuilder<List<Plan>>(
-                stream: _plansStream,
-                builder: (context, snapshot) {
-
-                  // 1. Cache the data so the screen doesn't flicker when loading more
-                  if (snapshot.hasData) {
-                    _cachedPlans = snapshot.data!;
-                  }
-
-                  // 2. Only show loading skeleton if we have NO data cached at all
-                  if (snapshot.connectionState == ConnectionState.waiting && _cachedPlans.isEmpty) {
-                    return _buildLoadingSkeleton();
-                  }
-
-                  if (snapshot.hasError && _cachedPlans.isEmpty) {
-                    return Center(child: Text("Something went wrong", style: GoogleFonts.inter()));
-                  }
-
-                  // 3. Use the cached plans while waiting for the new chunk
-                  final allPlans = snapshot.hasData ? snapshot.data! : _cachedPlans;
-                  final visiblePlans = _processPlans(allPlans);
-
-                  return CustomScrollView(
-                    controller: _scrollController,
-                    key: const PageStorageKey('korra_plans_list_key'),
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      // Sticky Tab Header
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: PlansTabsSliver(
-                          current: _currentTab,
-                          onChanged: (tab) => setState(() => _currentTab = tab),
+              // Filter Icon
+              IconButton(
+                onPressed: () {
+                  // --- 3. FIXED FILTER IMPLEMENTATION ---
+                  showPlansFilterSheet(
+                    context: context,
+                    currentSort: _sortBy,
+                    autopayOnly: _autopayOnly,
+                    overdueOnly: _overdueOnly,
+                    highValueOnly: _highValueOnly,
+                    onApply: (sort, auto, over, high) {
+                      // Update state to trigger rebuild of the list
+                      setState(() {
+                        // Cast to the correct SortBy enum
+                        _sortBy = sort;
+                        _autopayOnly = auto;
+                        _overdueOnly = over;
+                        _highValueOnly = high;
+                      });
+                    },
+                    onReset: () {
+                      setState(() {
+                        _sortBy = SortBy.nextDue;
+                        _autopayOnly = false;
+                        _overdueOnly = false;
+                        _highValueOnly = false;
+                      });
+                    },
+                  );
+                },
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.tune, color: Color(0xFF1B1B1B)),
+                    // Engineering Polish: Show a dot if filters are active
+                    if (_autopayOnly || _overdueOnly || _highValueOnly)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8.w,
+                          height: 8.w,
+                          decoration: const BoxDecoration(
+                            color: _brand,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
+                  ],
+                ),
+                iconSize: 22.sp,
+              ),
+            ],
+          ),
 
-                      // Empty State for Tab
-                      if (visiblePlans.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.only(top: 40.h),
-                            child: EmptyStateCard(
-                              text: _emptyText(_currentTab),
-                            ),
-                          ),
-                        )
-                      else
-                        // The Real List
-                        SliverList.builder(
-                          itemCount: visiblePlans.length,
-                          itemBuilder: (context, index) {
-                            final plan = visiblePlans[index];
-                            return PlanCard(
-                              plan: plan,
-                              // 🔄 CHANGE: Named Route
-                              onPayNow: () {
-                                Get.toNamed(
-                                  Routes.customerPayPlan,
-                                  arguments: {
-                                    'plan': plan,
-                                    'repo': widget.customerRepo,
-                                  },
-                                );
-                              },
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors
+                    .transparent, // Important: Let the sheet handle its own rounded corners
+                isScrollControlled:
+                    true, // <--- ⚠️ THIS IS THE CRITICAL FIX
+                builder: (_) => BlocProvider.value(
+                  value: context.read<LinkBloc>(),
+                  child: NewPlanSheet(
+                    onSubmit: (v) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      context.read<LinkBloc>().add(LinkSubmitted(v));
+                    },
+                  ),
+                ),
+              );
+            },
+            backgroundColor: _brand,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
 
-                              // 🔄 CHANGE: Named Route
-                              onView: () {
-                                Get.toNamed(
-                                  Routes.customerPlanDetails,
-                                  preventDuplicates: true,
-                                  arguments: {
-                                    'plan': plan,
-                                    'customerRepo': widget.customerRepo,
-                                  },
-                                );
+          // THE CORE: Real-Time Data Stream
+          body: StreamBuilder<List<Plan>>(
+            stream: _plansStream,
+            builder: (context, snapshot) {
+
+              // 1. Cache the data so the screen doesn't flicker when loading more
+              if (snapshot.hasData) {
+                _cachedPlans = snapshot.data!;
+              }
+
+              // 2. Only show loading skeleton if we have NO data cached at all
+              if (snapshot.connectionState == ConnectionState.waiting && _cachedPlans.isEmpty) {
+                return _buildLoadingSkeleton();
+              }
+
+              if (snapshot.hasError && _cachedPlans.isEmpty) {
+                return Center(child: Text("Something went wrong", style: GoogleFonts.inter()));
+              }
+
+              // 3. Use the cached plans while waiting for the new chunk
+              final allPlans = snapshot.hasData ? snapshot.data! : _cachedPlans;
+              final visiblePlans = _processPlans(allPlans);
+
+              return CustomScrollView(
+                controller: _scrollController,
+                key: const PageStorageKey('korra_plans_list_key'),
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // Sticky Tab Header
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: PlansTabsSliver(
+                      current: _currentTab,
+                      onChanged: (tab) => setState(() => _currentTab = tab),
+                    ),
+                  ),
+
+                  // Empty State for Tab
+                  if (visiblePlans.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 40.h),
+                        child: EmptyStateCard(
+                          text: _emptyText(_currentTab),
+                        ),
+                      ),
+                    )
+                  else
+                    // The Real List
+                    SliverList.builder(
+                      itemCount: visiblePlans.length,
+                      itemBuilder: (context, index) {
+                        final plan = visiblePlans[index];
+                        return PlanCard(
+                          plan: plan,
+                          // 🔄 CHANGE: Named Route
+                          onPayNow: () {
+                            Get.toNamed(
+                              Routes.customerPayPlan,
+                              arguments: {
+                                'plan': plan,
                               },
-                              onMenu: () {},
                             );
                           },
-                        ),
 
-                      // Bottom Padding for FAB
-                      SliverToBoxAdapter(child: SizedBox(height: 100.h)),
-                    ],
-                  );
-                },
-              ),
-            ),
-          );
-        },
+                          // 🔄 CHANGE: Named Route
+                          onView: () {
+                            Get.toNamed(
+                              Routes.customerPlanDetails,
+                              preventDuplicates: true,
+                              arguments: {
+                                'plan': plan,
+                              },
+                            );
+                          },
+                          onMenu: () {},
+                        );
+                      },
+                    ),
+
+                  // Bottom Padding for FAB
+                  SliverToBoxAdapter(child: SizedBox(height: 100.h)),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -435,61 +422,7 @@ class _PlansPageState extends State<PlansPage> {
     return ListView.builder(
       itemCount: 4,
       padding: EdgeInsets.only(top: 60.h),
-      itemBuilder: (_, __) => const _SkeletonCard(),
-    );
-  }
-}
-
-// --- HELPER WIDGETS ---
-
-class _SkeletonCard extends StatefulWidget {
-  const _SkeletonCard();
-  @override
-  State<_SkeletonCard> createState() => _SkeletonCardState();
-}
-
-class _SkeletonCardState extends State<_SkeletonCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) => ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (b) => LinearGradient(
-            colors: [Colors.grey[100]!, Colors.white, Colors.grey[100]!],
-            stops: const [0.0, 0.5, 1.0],
-            begin: Alignment(-1.0 + (_controller.value * 3), 0.0),
-            end: Alignment(1.0 + (_controller.value * 3), 0.0),
-          ).createShader(b),
-          child: Container(
-            height: 110.h,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-          ),
-        ),
-      ),
+      itemBuilder: (_, __) => const PlanSkeletonCard(),
     );
   }
 }

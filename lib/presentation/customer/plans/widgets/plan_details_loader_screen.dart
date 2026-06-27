@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
@@ -9,12 +10,10 @@ import '../../../../config/routes/app_routes.dart';
 
 class PlanDetailsLoaderScreen extends StatefulWidget {
   final String planId;
-  final CustomerRepository? repo; 
 
   const PlanDetailsLoaderScreen({
-    super.key, 
+    super.key,
     required this.planId,
-    this.repo,
   });
 
   @override
@@ -27,7 +26,7 @@ class _PlanDetailsLoaderScreenState extends State<PlanDetailsLoaderScreen> {
   @override
   void initState() {
     super.initState();
-    _repo = widget.repo ?? CustomerRepository();
+    _repo = context.read<CustomerRepository>();
     _fetchAndRedirect();
   }
 
@@ -46,7 +45,6 @@ class _PlanDetailsLoaderScreenState extends State<PlanDetailsLoaderScreen> {
         Routes.customerPlanDetails,
         arguments: {
           'plan': plan,
-          'customerRepo': _repo,
         }
       );
 

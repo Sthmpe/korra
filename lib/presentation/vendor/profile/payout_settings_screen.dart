@@ -13,6 +13,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -63,12 +64,10 @@ class _AutoPayoutAccount {
 // Screen
 // ---------------------------------------------------------------------------
 class PayoutSettingsScreen extends StatefulWidget {
-  final VendorRepository repo;
   final String vendorUid;
 
   const PayoutSettingsScreen({
     super.key,
-    required this.repo,
     required this.vendorUid,
   });
 
@@ -94,9 +93,12 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
   bool _isSaving = false;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
+  late final VendorRepository _repo;
+
   @override
   void initState() {
     super.initState();
+    _repo = context.read<VendorRepository>();
     _load();
   }
 
@@ -104,8 +106,8 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
     setState(() { _isLoading = true; _loadError = null; });
     try {
       final results = await Future.wait([
-        widget.repo.getBankList(),
-        widget.repo.getVendorSettings(widget.vendorUid, forceRefresh: true),
+        _repo.getBankList(),
+        _repo.getVendorSettings(widget.vendorUid, forceRefresh: true),
         _loadSavedAccount(),
       ]);
 
@@ -124,7 +126,7 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
   }
 
   Future<_AutoPayoutAccount> _loadSavedAccount() async {
-    final doc = await widget.repo.firestore
+    final doc = await _repo.firestore
         .collection('vendors')
         .doc(widget.vendorUid)
         .collection('settings')
@@ -153,7 +155,7 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
       builder: (_) => BankSelectorSheet(
         banks: _bankList,
         onValidate: (bankCode, accountNumber) =>
-            widget.repo.verifyBankAccount(
+            _repo.verifyBankAccount(
               bankCode: bankCode,
               accountNumber: accountNumber,
             ),
@@ -202,9 +204,9 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
   Future<void> _createPinThenSave(String pin) async {
     setState(() => _isSaving = true);
     try {
-      await widget.repo.setTransactionPin(widget.vendorUid, pin);
+      await _repo.setTransactionPin(widget.vendorUid, pin);
       setState(() => _hasPinSet = true);
-      widget.repo.cachedSettings = null;
+      _repo.cachedSettings = null;
       await _saveAccountToFirestore();
     } catch (e) {
       setState(() => _isSaving = false);
@@ -224,10 +226,10 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
 
       final idToken   = await user.getIdToken(true);
       final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final hmac      = Hmac(sha256, utf8.encode(widget.repo.korraSecret));
+      final hmac      = Hmac(sha256, utf8.encode(_repo.korraSecret));
       final signature = hmac.convert(utf8.encode(timestamp)).toString();
 
-      final response = await widget.repo.fx.invoke(
+      final response = await _repo.fx.invoke(
         'vendor-transaction-ops',
         headers: {
           'x-korra-timestamp': timestamp,
@@ -289,7 +291,7 @@ class _PayoutSettingsScreenState extends State<PayoutSettingsScreen> {
         _pendingAccountName == null) return;
 
     try {
-      await widget.repo.firestore
+      await _repo.firestore
           .collection('vendors')
           .doc(widget.vendorUid)
           .collection('settings')

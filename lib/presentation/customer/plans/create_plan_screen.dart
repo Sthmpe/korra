@@ -27,10 +27,20 @@ import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import '../currency_input_formatter.dart';
 import '../customer_failure_sheet.dart';
+import 'widgets/penalty_explainer_sheet.dart';
+import 'widgets/full_payment_success_card.dart';
+import 'widgets/plan_model_pill.dart';
+import 'widgets/plan_duration_card.dart';
+import 'widgets/plan_liability_disclaimer.dart';
+import 'widgets/plan_limit_container.dart';
+import 'widgets/plan_image_carousel.dart';
+import 'widgets/plan_payment_mode_toggle.dart';
+import 'widgets/plan_cadence_selector.dart';
+import 'widgets/plan_bottom_bar.dart';
+import 'widgets/plan_liability_checkbox.dart';
 
 class CreatePlanScreen extends StatefulWidget {
   final ProductFetchResult product;
-  final CustomerRepository customerRepo;
   final String customerUid;
   final Customer customer;
   final VoidCallback onJumpToHome;
@@ -40,7 +50,6 @@ class CreatePlanScreen extends StatefulWidget {
   const CreatePlanScreen({
     super.key,
     required this.product,
-    required this.customerRepo,
     required this.customerUid,
     required this.customer,
     required this.walletBalance,
@@ -53,6 +62,7 @@ class CreatePlanScreen extends StatefulWidget {
 }
 
 class _CreatePlanScreenState extends State<CreatePlanScreen> {
+  late final CustomerRepository customerRepo;
   late TextEditingController _amountCtrl;
   late FocusNode _amountFocusNode;
   final GlobalKey _scrollKey = GlobalKey();
@@ -115,6 +125,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   @override
   void initState() {
     super.initState();
+    customerRepo = context.read<CustomerRepository>();
     _amountCtrl = TextEditingController();
     _amountFocusNode = FocusNode();
     _amountFocusNode.addListener(() {
@@ -139,7 +150,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     final vendorId = widget.product.data['vendorId'];
     
     if (vendorId != null) {
-      final credit = await widget.customerRepo.getStoreCredit(
+      final credit = await customerRepo.getStoreCredit(
         widget.customerUid,
         vendorId,
       );
@@ -162,7 +173,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     
     if (vendorId != null) {
       // 1. Call your clean repository function
-      final compliance = await widget.customerRepo.getComplianceStatus(vendorId);
+      final compliance = await customerRepo.getComplianceStatus(vendorId);
 
       if (mounted) {
         setState(() {
@@ -283,13 +294,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     }
 
     if (kDebugMode) {
-      print("--- FEE CALC ---");
-      print("Product Price: $totalProductPrice | Above 30k: $isAbove30k");
-      print("Pay in Full: $_isPayInFull");
-      print("Credit Sweep: $_creditSweepAmount");
-      print("Deposit: $userEnteredDownPayment");
-      print("Processing Fee: $processingFee");
-      print("Total Due Now: $totalDueNow");
+      debugPrint("--- FEE CALC ---");
+      debugPrint("Product Price: $totalProductPrice | Above 30k: $isAbove30k");
+      debugPrint("Pay in Full: $_isPayInFull");
+      debugPrint("Credit Sweep: $_creditSweepAmount");
+      debugPrint("Deposit: $userEnteredDownPayment");
+      debugPrint("Processing Fee: $processingFee");
+      debugPrint("Total Due Now: $totalDueNow");
     }
   }
 
@@ -331,7 +342,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     final storeName = widget.product.data['storeName'] ?? 'Store';
 
     return StreamBuilder<CustomerAccountStats?>(
-      stream: widget.customerRepo.streamCustomerStats(widget.customerUid),
+      stream: customerRepo.streamCustomerStats(widget.customerUid),
       builder: (context, snapshot) {
         final stats =
             snapshot.data ?? CustomerAccountStats.empty(widget.customerUid);
@@ -376,7 +387,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
         return BlocProvider(
           create: (context) =>
-              CreatePlanBloc(repo: widget.customerRepo)
+              CreatePlanBloc(repo: customerRepo)
                 ..add(LoadPlanPreview(
                   productPrice, 
                   widget.customerUid, 
@@ -389,6 +400,15 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
             listenWhen: (previous, current) =>
                 previous.status != current.status,
+            buildWhen: (previous, current) =>
+                previous.status != current.status ||
+                previous.riskEngineUpfront != current.riskEngineUpfront ||
+                previous.baseDurationDays != current.baseDurationDays ||
+                previous.canExtend != current.canExtend ||
+                previous.loanAmount != current.loanAmount ||
+                previous.dpPercentage != current.dpPercentage ||
+                previous.noticeDays != current.noticeDays ||
+                previous.extensionDays != current.extensionDays,
             listener: (context, state) {
               if (state.status == CreatePlanStatus.previewLoaded) {
                setState(() {
@@ -486,8 +506,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildImageCarousel(
-                                widget.product.data['images'] ?? [],
+                              PlanImageCarousel(
+                                images: widget.product.data['images'] ?? [],
                               ),
                               Padding(
                                 padding: EdgeInsets.symmetric(
@@ -506,7 +526,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                           widget.product.data['storeName'] ??
                                               'Store',
                                         ),
-                                        _buildModelPill(modelType),
+                                        PlanModelPill(modelType: modelType),
                                       ],
                                     ),
                                     SizedBox(height: 14.h),
@@ -533,7 +553,19 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                     SizedBox(height: 20.h),
 
                                    // 1. THE NEW PREMIUM TOGGLE
-                                    _buildPaymentModeToggle(state.riskEngineUpfront),
+                                    PlanPaymentModeToggle(
+                                      isPayInFull: _isPayInFull,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _isPayInFull = val;
+                                          if (!val) {
+                                            userEnteredDownPayment = state.riskEngineUpfront;
+                                            _amountCtrl.text = NumberFormat("#,###").format(userEnteredDownPayment);
+                                          }
+                                          _recalculateFees();
+                                        });
+                                      },
+                                    ),
                                     
                                     // 2. THE STORE BALANCE UI
                                     if (_storeCredit > 0) ...[
@@ -596,7 +628,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                     SizedBox(height: 24.h),
 
                                     // SLOT LIMIT STATUS
-                                    _buildLimitContainer(
+                                    PlanLimitContainer(
                                       activePlans: stats.activePlansCount,
                                       maxSlots: stats.maxSlots,
                                       isSlotsFull: isSlotsFull,
@@ -841,10 +873,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
                                     if (!isFullPayment) ...[
                                       // DYNAMIC DEADLINE CARD
-                                      _buildDurationCard(
+                                      PlanDurationCard(
                                         duration: state.baseDurationDays,
                                         canExtend: state.canExtend,
-                                        type: modelType,
+                                        modelType: modelType,
                                       ),
                                       SizedBox(height: 32.h),
 
@@ -883,32 +915,49 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                           ],
                                         ),
                                       ),
-                                      SizedBox(height: 32.h),
                                       _buildSectionLabel("Set your goal"),
                                       SizedBox(height: 12.h),
-                                      _buildGoalSelector(
-                                        state.baseDurationDays,
+                                      PlanGoalSelector(
+                                        maxDays: state.baseDurationDays,
+                                        selectedGoalDays: _selectedGoalDays,
+                                        onChanged: (days) {
+                                          setState(() {
+                                            _selectedGoalDays = days;
+                                            cadenceType = null; // Reset schedule on change
+                                          });
+                                        },
                                       ),
                                       SizedBox(height: 32.h),
                                       _buildSectionLabel("Choose Schedule"),
                                       SizedBox(height: 12.h),
-                                      _buildScheduleGrid(remainingBalance),
-                                      _buildCommitmentMessage(
-                                        state.baseDurationDays,
+                                      PlanCadenceSelector(
+                                        cadenceType: cadenceType,
+                                        selectedGoalDays: _selectedGoalDays,
+                                        remainingBalance: remainingBalance,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            cadenceType = val;
+                                          });
+                                        },
+                                        currencyFormat: currencyFormat,
+                                      ),
+                                      PlanCommitmentMessage(
+                                        cadenceType: cadenceType,
+                                        days: state.baseDurationDays,
                                       ),
                                     ] else ...[
-                                      _buildFullPaymentSuccess(),
+                                      const FullPaymentSuccessCard(),
                                     ],
 
                                     if (!isSlotsFull) ...[
-                                      _buildLiabilityCheckbox(
+                                      PlanLiabilityCheckbox(
                                         isChecked: _agreedToTerms,
                                         policyString: _policyString,
                                         onChanged: (v) => setState(
                                           () => _agreedToTerms = v ?? false,
                                         ),
                                       ),
-                                      _buildLiabilityDisclaimer(),
+                                      const PlanLiabilityDisclaimer(),
                                     ],
                                     SizedBox(
                                       height: isKeyboardOpen ? 300.h : 40.h,
@@ -921,16 +970,71 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                         ),
                       ),
                       if (!isKeyboardOpen)
-                        _buildBottomBar(
-                          context,
-                          state,
-                          isFullPayment,
-                          effectiveMinDownPayment,
-                          isInsufficient,
-                          processingFee,
-                          isSlotsFull,
-                          amountToPayFromWallet, // For UI check
-                          creditUsed,
+                        PlanBottomBar(
+                          status: state.status,
+                          isSlotsFull: isSlotsFull,
+                          isInsufficient: isInsufficient,
+                          isFullPayment: isFullPayment,
+                          walletAmount: amountToPayFromWallet,
+                          storeCreditUsed: creditUsed,
+                          userEnteredDownPayment: userEnteredDownPayment,
+                          processingFee: processingFee,
+                          minDown: effectiveMinDownPayment,
+                          cadenceType: cadenceType,
+                          agreedToTerms: _agreedToTerms,
+                          currencyFormat: currencyFormat,
+                          onJumpToPlan: widget.onJumpToPlan,
+                          onFundWallet: () {
+                            Get.toNamed(Routes.customerBankDetails, arguments: widget.customer);
+                          },
+                          onPayPressed: () async {
+                            debugPrint("Block Payments Check: $_blockPayments");
+                            
+                            if (_blockPayments) {
+                              showKorraFailureSheetCustomer(
+                                context,
+                                title: 'Merchant Flagged for Review.',
+                                message: "Transactions paused due to a trust and compliance issue. This store is currently flagged for violating Korra's operational terms. All payments to this store are blocked until the merchant resolves the restrictions on their portal.",
+                                isDismissible: true,
+                                onCancel: () => Get.back(),
+                              );
+                              return;
+                            }
+
+                            final newPlanRef = customerRepo.firestore.collection('plans').doc();
+                            final plan = Plan.create(
+                              generatedId: newPlanRef.id,
+                              vendorId: widget.product.data['vendorId'] ?? '',
+                              customerId: widget.customerUid,
+                              customerName: "${widget.customer.firstName} ${widget.customer.lastName}",
+                              customerEmail: widget.customer.email,
+                              customerPhone: widget.customer.phone,
+                              productId: widget.product.id,
+                              productCode: widget.product.data['code'] ?? '',
+                              title: widget.product.data['name'] ?? 'Unknown',
+                              storeName: widget.product.data['storeName'] ?? 'Unknown',
+                              imageUrls: List<String>.from(widget.product.data['images'] ?? []),
+                              totalProductPrice: widget.product.data['price']?.toDouble() ?? 0.0,
+                              totalUpfrontPaid: userEnteredDownPayment,
+                              processingFee: processingFee,
+                              loanAmount: state.loanAmount,
+                              dpPercentage: state.dpPercentage,
+                              cadenceType: isFullPayment ? 'full_payment' : cadenceType,
+                              commitmentEnabled: true,
+                              baseDurationDays: state.baseDurationDays,
+                              noticeDays: state.noticeDays,
+                              extensionDays: state.extensionDays,
+                              durationMonths: (state.baseDurationDays / 30).ceil(),
+                              cancellationPolicy: _policyString,
+                              modelType: modelType == ProductModelType.strict ? 'strict' : 'direct',
+                            );
+
+                            final double totalRawAmount = userEnteredDownPayment + processingFee;
+
+                            context.read<CreatePlanBloc>().add(
+                              ConfirmPlanCreation(plan, _roundUpAmount(totalRawAmount)),
+                            );
+                          },
                         ),
                     ],
                   ),
@@ -943,139 +1047,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildPaymentModeToggle(double defaultUpfront) {
-    return Container(
-      height: 48.h,
-      padding: EdgeInsets.all(4.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6), 
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (!_isPayInFull) return;
-                setState(() {
-                  _isPayInFull = false;
-                  
-                  // ✅ 2. Use the passed variable instead of looking up the context!
-                  userEnteredDownPayment = defaultUpfront;
-                  _amountCtrl.text = NumberFormat("#,###").format(userEnteredDownPayment);
-                  
-                  _recalculateFees();
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: !_isPayInFull ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                  boxShadow: !_isPayInFull
-                      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                      : [],
-                ),
-                child: Text(
-                  "Installment Plan",
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: !_isPayInFull ? FontWeight.w700 : FontWeight.w600,
-                    color: !_isPayInFull ? KorraColors.text : Colors.grey.shade500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (_isPayInFull) return;
-                setState(() {
-                  _isPayInFull = true;
-                  _recalculateFees();
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _isPayInFull ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                  boxShadow: _isPayInFull
-                      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                      : [],
-                ),
-                child: Text(
-                  "Pay in Full",
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: _isPayInFull ? FontWeight.w700 : FontWeight.w600,
-                    color: _isPayInFull ? KorraColors.text : Colors.grey.shade500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildLiabilityDisclaimer() {
-    return Container(
-      margin: EdgeInsets.only(top: 24.h, bottom: 8.h),
-      padding: EdgeInsets.all(12.r),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12.r),
-        //border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(top: 2.h),
-            child: Icon(
-              Iconsax.info_circle,
-              size: 16.sp,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 11.sp,
-                  color: Colors.grey.shade600,
-                  height: 1.4,
-                ),
-                children: [
-                  const TextSpan(
-                    text:
-                        "Disclaimer: Korra facilitates and tracks payments, and monitors merchant compliance, but is ",
-                  ),
-                  TextSpan(
-                    text: "not liable ",
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                  const TextSpan(
-                    text:
-                        "for product quality, authenticity, or delivery. All fulfillment issues are the responsibility of the merchant.",
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // Widget _buildStrictDeadlineCard({
   //   required int duration,
@@ -1130,157 +1103,11 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   //   );
   // }
 
-  Widget _buildModelPill(ProductModelType type) {
-    final isStrict = type == ProductModelType.strict;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-      decoration: BoxDecoration(
-        //color: isStrict ? const Color(0xFFFFF7ED) : const Color(0xFFF0F9FF),
-        borderRadius: BorderRadius.circular(20.r),
-        // border: Border.all(
-        //   color: isStrict ? const Color(0xFFFFEDD5) : const Color(0xFFE0F2FE),
-        // ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isStrict ? Iconsax.shield_tick : Icons.handshake_rounded,
-            size: 14.sp,
-            color: isStrict ? const Color(0xFF9A3412) : const Color(0xFF0369A1),
-          ),
-          SizedBox(width: 4.w),
-          Text(
-            isStrict ? "Strict Lock" : "Korra Direct",
-            style: GoogleFonts.inter(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w700,
-              color: isStrict
-                  ? const Color(0xFF9A3412)
-                  : const Color(0xFF0369A1),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildDurationCard({
-    required int duration,
-    required bool canExtend,
-    required ProductModelType type,
-  }) {
-    // Customize text/color based on model if needed, currently both use orange for "Deadline"
-    return Container(
-      padding: EdgeInsets.all(12.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E5),
-        borderRadius: BorderRadius.circular(12.r),
-        //border: Border.all(color: const Color(0xFFFFDDB3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Iconsax.timer_1, size: 20.sp, color: const Color(0xFFB95000)),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF96490B),
-                  height: 1.4,
-                ),
-                children: [
-                  const TextSpan(text: "Duration: "),
-                  TextSpan(
-                    text: "$duration Days.\n",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                 TextSpan(
-                    text: type == ProductModelType.strict
-                        // ✅ "Incomplete plans" is objective. "Failure" is personal.
-                        ? "Incomplete plans convert your reservation to Store Balance."
-                        : "Flexible timeline. Refunds are secured in Store Balance.",
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildLiabilityCheckbox({
-    required bool isChecked,
-    required String policyString, // Received from helper
-    required ValueChanged<bool?> onChanged,
-  }) {
-    // Logic: Does the string contain "50%"?
-    final bool is50Percent = policyString.contains("50%");
 
-    final String highlightText = "Store Balance Terms";
 
-    return Padding(
-      padding: EdgeInsets.only(top: 24.h, bottom: 16.h),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 24.w,
-            height: 24.w,
-            child: Checkbox(
-              value: isChecked,
-              onChanged: onChanged,
-              activeColor: KorraColors.brand,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4.r),
-              ),
-            ),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-                children: [
-                  const TextSpan(
-                    text:
-                        "I acknowledge that incomplete plans are secured under the ",
-                  ),
-                  TextSpan(
-                    text: highlightText,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      color: KorraColors.brand,
-                      decoration: TextDecoration.underline,
-                      decorationColor: KorraColors.brand.withOpacity(0.5),
-                    ),
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () =>
-                          _showPenaltyExplainer(context, policyString),
-                  ),
-                  const TextSpan(text: "."),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _showPenaltyExplainer(BuildContext context, String policyString) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _PenaltyExplainerSheet(policyString: policyString),
-    );
-  }
 
   // THE UPGRADE SHEET
   // void _showUpgradePrompt(BuildContext context) {
@@ -1337,300 +1164,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  // --- 🎨 NEW SLOT UI ---
-  Widget _buildLimitContainer({
-    required int activePlans,
-    required int maxSlots,
-    required bool isSlotsFull,
-  }) {
-    final color = isSlotsFull ? Colors.orange : Colors.green;
 
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12.r),
-        // border: Border.all(
-        //   color: isSlotsFull ? Colors.orange.shade100 : const Color(0xFFF3F4F6),
-        // ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(6.r),
-            decoration: BoxDecoration(
-              color: isSlotsFull ? Colors.orange.shade50 : Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSlotsFull
-                    ? Colors.orange.shade100
-                    : Colors.grey.shade200,
-              ),
-            ),
-            child: Icon(
-              Iconsax.box,
-              size: 16.sp,
-              color: isSlotsFull ? Colors.orange : KorraColors.text,
-            ),
-          ),
-          SizedBox(width: 12.w),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Active Slot Limit",
-                style: GoogleFonts.inter(
-                  fontSize: 11.sp,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                isSlotsFull
-                    ? "Limit Reached ($activePlans/$maxSlots)"
-                    : "$activePlans of $maxSlots Slots Used",
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  color: isSlotsFull
-                      ? Colors.orange.shade800
-                      : KorraColors.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Icon(
-            isSlotsFull ? Icons.info_outline_rounded : Icons.check_circle,
-            color: color,
-            size: 20.sp,
-          ),
-        ],
-      ),
-    );
-  }
 
-  // --- 🏗️ UPDATED BOTTOM BAR ---
-  Widget _buildBottomBar(
-    BuildContext context,
-    CreatePlanState state,
-    bool isFullPayment,
-    double minDown,
-    bool isInsufficient,
-    double processingFee,
-    bool isSlotsFull,
-    double walletAmount, // For Insufficient Check
-    double storeCreditUsed,
-  ) {
-    final bool isAmountValid = (userEnteredDownPayment + processingFee) >= (minDown + processingFee);
-    final bool isSchedulePicked = isFullPayment || cadenceType != null;
-    final bool isFormComplete = isAmountValid && isSchedulePicked;
 
-    final bool canProceed = !isSlotsFull && isFormComplete && _agreedToTerms;
 
-    final double totalRawAmount = userEnteredDownPayment + processingFee;
-
-    String btnText = "Pay & Start Plan";
-    if (storeCreditUsed > 0 && walletAmount == 0) {
-      btnText = "Pay with Store Credit";
-    } else if (storeCreditUsed > 0) {
-      btnText = "Pay Balance (${currencyFormat.format(walletAmount)})";
-    }
-
-    Color btnColor = KorraColors.brand;
-    VoidCallback? customAction;
-
-    if (isSlotsFull) {
-      btnText = "View Active Plans";
-      btnColor = Colors.orange.shade800;
-      customAction = widget.onJumpToPlan;
-    } else if (isInsufficient) {
-      btnText = "Fund Wallet & Start";
-      btnColor = Colors.black;
-      customAction = () {
-        Get.toNamed(Routes.customerBankDetails, arguments: widget.customer);
-      };
-    } else if (isFullPayment && walletAmount > 0) {
-      btnText = "Pay Full Amount";
-    }
-
-    final VoidCallback? onPressed =
-        (state.status == CreatePlanStatus.creating ||
-            (!canProceed && !isInsufficient && !isSlotsFull))
-        ? null
-        : () async {
-            if (customAction != null) {
-              customAction!();
-              return;
-            }
-
-            debugPrint("Block Payments Check: $_blockPayments");
-            
-            if (_blockPayments) {
-              showKorraFailureSheetCustomer(
-                context,
-                title: 'Merchant Flagged for Review.',
-                message: "Transactions paused due to a trust and compliance issue. This store is currently flagged for violating Korra's operational terms. All payments to this store are blocked until the merchant resolves the restrictions on their portal.",
-                isDismissible: true,
-                onCancel: () => Get.back(),
-              );
-              return;
-            }
-
-            final newPlanRef = widget.customerRepo.db.collection('plans').doc();
-            final plan = Plan.create(
-              generatedId: newPlanRef.id,
-              vendorId: widget.product.data['vendorId'] ?? '',
-              customerId: widget.customerUid,
-              customerName: "${widget.customer.firstName} ${widget.customer.lastName}",
-              customerEmail: widget.customer.email,
-              customerPhone: widget.customer.phone,
-              productId: widget.product.id,
-              productCode: widget.product.data['code'] ?? '',
-              title: widget.product.data['name'] ?? 'Unknown',
-              storeName: widget.product.data['storeName'] ?? 'Unknown',
-              imageUrls: List<String>.from(widget.product.data['images'] ?? []),
-              totalProductPrice: widget.product.data['price']?.toDouble() ?? 0.0,
-              totalUpfrontPaid: userEnteredDownPayment,
-              processingFee: processingFee,
-              loanAmount: state.loanAmount,
-              dpPercentage: state.dpPercentage,
-              cadenceType: isFullPayment ? 'full_payment' : cadenceType,
-              commitmentEnabled: true,
-              baseDurationDays: state.baseDurationDays,
-              noticeDays: state.noticeDays,
-              extensionDays: state.extensionDays,
-              durationMonths: (state.baseDurationDays / 30).ceil(),
-              cancellationPolicy: _policyString,
-              modelType: modelType == ProductModelType.strict ? 'strict' : 'direct',
-            );
-
-            // Pass the FULL required amount to Bloc.
-            // The Backend logic we wrote earlier AUTOMATICALLY checks store credit usage.
-            // So we just send the total, and backend splits it.
-            // Note: If you want to force explicit credit usage, pass a flag to Bloc -> Repo -> Backend.
-            // Based on backend code: 'useStoreCredit' flag is accepted but logic prioritizes logic.
-            // Let's assume sending total is fine and backend handles deduction as programmed.
-
-            if (kDebugMode) {
-              final price = widget.product.data['price']?.toDouble() ?? 0.0;
-              debugPrint("Price: $price");
-              debugPrint("User Down Payment: $userEnteredDownPayment");
-              debugPrint("Processing Fee: $processingFee");
-              debugPrint("Total Raw Amount: ${_roundUpAmount(totalRawAmount)}");
-              debugPrint("Wallet Amount: $walletAmount");
-              debugPrint("Store Credit Used: $storeCreditUsed");
-            }
-
-            context.read<CreatePlanBloc>().add(
-              ConfirmPlanCreation(plan, _roundUpAmount(totalRawAmount)),
-            );
-          };
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(24.w, 10.h, 24.w, 32.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 54.h,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: btnColor,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            disabledBackgroundColor: Colors.grey.shade300,
-          ),
-          onPressed: onPressed,
-          child: state.status == CreatePlanStatus.creating
-              ? SizedBox(
-                  height: 24.h,
-                  width: 24.w,
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(
-                  btnText,
-                  style: GoogleFonts.inter(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
-  // other helpers _buildImageCarousel etc. here
-  Widget _buildImageCarousel(List<dynamic> images) {
-    if (images.isEmpty) return SizedBox(height: 200.h);
-    return Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        SizedBox(
-          height: 280.h,
-          width: double.infinity,
-          child: PageView.builder(
-            onPageChanged: (index) =>
-                setState(() => _currentImageIndex = index),
-            itemCount: images.length,
-            itemBuilder: (context, index) => CachedNetworkImage(
-              imageUrl: images[index],
-              fit: BoxFit.cover,
-              errorWidget: (context, url, error) => Container(
-                color: Colors.grey[100],
-                child: const Icon(Icons.image_not_supported, color: Colors.grey),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 16.h,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: images
-                  .asMap()
-                  .entries
-                  .map(
-                    (entry) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: _currentImageIndex == entry.key ? 16.0.w : 6.0.w,
-                      height: 4.0.h,
-                      margin: const EdgeInsets.symmetric(horizontal: 3.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: _currentImageIndex == entry.key
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.4),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildVendorHeader(String storeName) {
     return Row(
@@ -1683,482 +1220,4 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     );
   }
 
-  Widget _buildSmartCadenceOption({
-    required String label,
-    required String value,
-    required double calculatedAmount,
-  }) {
-    final isSelected = cadenceType == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => cadenceType = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
-          decoration: BoxDecoration(
-            color: isSelected ? KorraColors.brand : const Color(0xFFE5E7EB).withOpacity(0.5),
-            borderRadius: BorderRadius.circular(16.r),
-            // border: Border.all(
-            //   color: isSelected ? KorraColors.brand : const Color(0xFFE5E7EB),
-            //   width: 1.5,
-            // ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: KorraColors.brand.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Column(
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.9)
-                      : KorraColors.textMuted,
-                ),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                currencyFormat.format(calculatedAmount),
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : KorraColors.text,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFlexibleOption() {
-    final isSelected = cadenceType == 'flexible';
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => cadenceType = 'flexible'),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF10B981) : const Color(0xFFE5E7EB).withOpacity(0.5),
-            borderRadius: BorderRadius.circular(16.r),
-            // border: Border.all(
-            //   color: isSelected
-            //       ? const Color(0xFF10B981)
-            //       : const Color(0xFFE5E7EB),
-            //   width: 1.5,
-            // ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF10B981).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Column(
-            children: [
-              Text(
-                "Flexible",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.9)
-                      : KorraColors.textMuted,
-                ),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                "Anytime",
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : KorraColors.text,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // DYNAMIC GOAL TABS
-  Widget _buildGoalSelector(int maxDays) {
-    List<int> options = [];
-    // Only show options that fit within the Max Days
-    if (maxDays >= 7) options.add(7);
-    if (maxDays >= 14) options.add(14);
-    if (maxDays >= 28) options.add(28);
-
-    // Always add the Max Limit as the last option
-    if (!options.contains(maxDays)) options.add(maxDays);
-
-    return Container(
-      height: 48.h,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: options.map((days) {
-          final isSelected = _selectedGoalDays == days;
-
-          String label;
-          if (days == 7)
-            label = "1 Week";
-          else if (days == 14)
-            label = "2 Weeks";
-          else if (days == 28)
-            label = "4 Weeks";
-          else
-            label = "$days Days"; // Exact days (e.g. 15, 25, 90)
-
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() {
-                _selectedGoalDays = days;
-                cadenceType = null; // Reset schedule on change
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 0),
-                margin: EdgeInsets.all(4.r),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                          ),
-                        ]
-                      : [],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected
-                        ? KorraColors.text
-                        : KorraColors.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildScheduleGrid(double balance) {
-    // Calculation based on SELECTED GOAL, not Max Limit
-    final durationDays = _selectedGoalDays;
-
-    final daily = balance / durationDays;
-    final weekly = balance / (durationDays / 7);
-
-    // Only show monthly if duration > 30 days
-    final showMonthly = durationDays >= 30;
-    // Only show weekly if duration >= 14 days
-    final showWeekly = durationDays >= 14;
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            _buildSmartCadenceOption(
-              label: "Daily",
-              value: "daily",
-              calculatedAmount: daily,
-            ),
-            SizedBox(width: 10.w),
-
-            if (showWeekly)
-              _buildSmartCadenceOption(
-                label: "Weekly",
-                value: "weekly",
-                calculatedAmount: weekly,
-              )
-            else
-              const Spacer(),
-          ],
-        ),
-        SizedBox(height: 10.h),
-        Row(
-          children: [
-            if (showMonthly) ...[
-              _buildSmartCadenceOption(
-                label: "Monthly",
-                value: "monthly",
-                calculatedAmount: balance / (durationDays / 30),
-              ),
-              SizedBox(width: 10.w),
-            ],
-            _buildFlexibleOption(),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommitmentMessage(int days) {
-    if (cadenceType == null) return const SizedBox.shrink();
-    final isFlex = cadenceType == 'flexible';
-    final date = DateFormat(
-      'MMM d',
-    ).format(DateTime.now().add(Duration(days: days)));
-
-    return Padding(
-      padding: EdgeInsets.only(top: 20.h),
-      child: Container(
-        padding: EdgeInsets.all(16.r),
-        decoration: BoxDecoration(
-          color: isFlex
-              ? const Color(0xFFECFDF5)
-              : Colors.blue.shade50.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(16.r),
-          // border: Border.all(
-          //   color: isFlex ? const Color(0xFFA7F3D0) : Colors.blue.shade100,
-          // ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isFlex ? Icons.verified_user_outlined : Icons.flag_rounded,
-              color: isFlex ? const Color(0xFF059669) : Colors.blue.shade700,
-              size: 20.sp,
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Text(
-                "Finish by $date.",
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  height: 1.4,
-                  color: KorraColors.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFullPaymentSuccess() {
-    return Container(
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4), // Green-50
-        borderRadius: BorderRadius.circular(16.r),
-        //border: Border.all(color: const Color(0xFFBBF7D0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(4.r),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Iconsax.tick_circle5,
-              color: Color(0xFF16A34A),
-              size: 20,
-            ),
-          ),
-          SizedBox(width: 16.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Full Payment",
-                  style: GoogleFonts.inter(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF15803D),
-                  ),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  "No schedule needed. We'll process your order immediately.",
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    height: 1.4,
-                    color: const Color(0xFF166534),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PenaltyExplainerSheet extends StatelessWidget {
-  final String policyString; // Kept for interface compatibility, but logic is now Universal.
-
-  const _PenaltyExplainerSheet({required this.policyString});
-
-  @override
-  Widget build(BuildContext context) {
-    // ✅ Logic Simplified: No more "50% Penalty" checks. It's always Store Balance.
-    
-    return Container(
-      padding: EdgeInsets.all(24.w),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // --- HEADER ---
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(10.r),
-                decoration: BoxDecoration(
-                  // ✅ Changed from Red (Error) to Brand Blue (Safe/Info)
-                  color: const Color(0xFFEFF6FF), 
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Iconsax.shield_tick, // ✅ Changed from "Cross" to "Tick/Shield"
-                  color: const Color(0xFF1570EF), // Brand Blue
-                  size: 24.sp,
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Store Balance Terms", // ✅ Professional Title
-                      style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF101828),
-                      ),
-                    ),
-                    Text(
-                      "How your funds are secured", // ✅ Reassuring Subtitle
-                      style: GoogleFonts.inter(
-                        fontSize: 12.sp,
-                        color: const Color(0xFF667085),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 24.h),
-
-          // --- REASON 1: The Value of Reservation ---
-          _buildReasonRow(
-            icon: Iconsax.shop,
-            title: "Confirmed Reservation",
-            desc: "When you start a plan, the merchant removes this item from the shelf. It is reserved exclusively for you.",
-          ),
-          SizedBox(height: 16.h),
-
-          // --- REASON 2: The Safety Net ---
-          _buildReasonRow(
-            icon: Iconsax.wallet_check,
-            title: "100% Funds Secured",
-            desc: "If you stop a plan, you don't lose money. Your payments are moved to your Store Balance.",
-          ),
-          SizedBox(height: 16.h),
-
-          // --- REASON 3: Liquidity ---
-          _buildReasonRow(
-            icon: Iconsax.refresh_circle,
-            title: "Flexible Usage",
-            desc: "Your Store Balance is available immediately. You can use it to purchase any other item from this merchant.",
-          ),
-          
-          SizedBox(height: 32.h),
-
-          // --- FOOTER BUTTON ---
-          SizedBox(
-            width: double.infinity,
-            height: 50.h,
-            child: OutlinedButton(
-              onPressed: () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey.shade300.withOpacity(0.5)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                foregroundColor: Colors.black,
-              ),
-              child: Text(
-                "I Understand",
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: 16.h),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReasonRow({required IconData icon, required String title, required String desc}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20.sp, color: Colors.grey.shade700),
-        SizedBox(width: 12.w),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp, 
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF344054)
-                ),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                desc,
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp, 
-                  color: const Color(0xFF667085),
-                  height: 1.4
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }

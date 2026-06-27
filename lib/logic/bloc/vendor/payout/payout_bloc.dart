@@ -6,6 +6,7 @@ import 'package:korra/data/repository/vendors/bank_repository.dart';
 import 'package:korra/data/repository/vendors/pin_repository.dart';
 import 'package:korra/data/repository/vendors/transfer_repository.dart';
 import 'package:korra/data/repository/vendors/verification_repository.dart';
+import 'package:korra/config/utils/date_formatters.dart';
 import '../../../../data/models/vendor/payout/payout_details.dart';
 import '../../../../data/models/vendor/vendor_setting.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
@@ -283,7 +284,7 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
       await repo.verifyBvn(
         bvn: event.bvn,
         name: fullName,
-        dateOfBirthIso: _formatDobForBvn(state.dob)!, // Using your custom DD-MMM-YYYY helper
+        dateOfBirthIso: formatDateOfBirthForBvn(state.dob!), // Using your custom DD-MMM-YYYY helper
         mobileNo: state.phone, // 🚀 Uses the phone from STATE (catches fresh edits!)
       );
 
@@ -397,13 +398,4 @@ class PayoutBloc extends Bloc<PayoutEvent, PayoutState> {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  String? _formatDobForBvn(DateTime? date) {
-    if (date == null) return null;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final dd = date.day.toString().padLeft(2, '0');
-    final mmm = months[date.month - 1];
-    final yyyy = date.year.toString().padLeft(4, '0');
-    return '$dd-$mmm-$yyyy'; 
-  }
 }

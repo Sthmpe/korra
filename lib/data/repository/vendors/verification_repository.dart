@@ -388,7 +388,7 @@ extension VerificationRepository on VendorRepository {
           'email': email,
           'name': vendorName,
         }
-      ).catchError((e) => debugPrint("Silent Background Email Error: $e"));
+      ).then<void>((_) {}).catchError((e) => debugPrint("Silent Background Email Error: $e"));
 
     } catch (e) {
       if (e is String) rethrow; 

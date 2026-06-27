@@ -38,7 +38,7 @@ dependencies:
   iconsax: ^0.0.8
   image_picker: ^1.2.0
   intl: ^0.20.2
-  lottie: ^3.3.1
+  lottie: ^3.4.0
   monnify_payment_sdk: ^1.0.8
   package_info_plus: ^9.0.0
   path_provider: ^2.1.5
@@ -73,8 +73,6 @@ flutter:
     - .env
     - .env.prod
     - assets/images/
-    - assets/icons/
-    - assets/animations/
 
 flutter_launcher_icons:
   android: "launcher_icon" # Generates ic_launcher
@@ -88,16 +86,16 @@ flutter_native_splash:
 
   # 1. LIGHT MODE (Brand Color Background)
   color: "#FFFFFF"
-  image: "assets/images/korra_logo_icon.png" 
-  # branding: "assets/images/korra_logo_icon.png" # Optional
+  image: "unused_assets/korra_logo_icon.png" 
+  # branding: "unused_assets/korra_logo_icon.png" # Optional
 
   # 2. DARK MODE (Same Brand Color)
   color_dark: "#FFFFFF"
-  image_dark: "assets/images/korra_logo_icon.png"
+  image_dark: "unused_assets/korra_logo_icon.png"
 
   # 3. ANDROID 12+ (Adaptive Icon Background)
   android_12:
-    image: "assets/images/korra_logo_icon.png"
+    image: "unused_assets/korra_logo_icon.png"
     color: "#FFFFFF"
     icon_background_color: "#FFFFFF"
 

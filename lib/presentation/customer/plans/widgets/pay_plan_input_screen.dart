@@ -16,18 +16,19 @@ import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/payment_receipt_data.dart';
 import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
+import 'pay_plan_fee_summary.dart';
 
 class PayPlanInputScreen extends StatefulWidget {
   final Plan plan;
-  final CustomerRepository repo;
 
-  const PayPlanInputScreen({super.key, required this.plan, required this.repo});
+  const PayPlanInputScreen({super.key, required this.plan});
 
   @override
   State<PayPlanInputScreen> createState() => _PayPlanInputScreenState();
 }
 
 class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
+  late final CustomerRepository repo;
   String _inputString = ""; 
   final _moneyFormat = NumberFormat("#,##0.##", "en_US");
   int _currentImageIndex = 0;
@@ -49,6 +50,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
   @override
   void initState() {
     super.initState();
+    repo = context.read<CustomerRepository>();
     // 1. Pre-fill Logic
     double initial = widget.plan.nextAmount;
     if (initial > widget.plan.amountRemaining) initial = widget.plan.amountRemaining;
@@ -215,7 +217,7 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => PayPlanBloc(repo: widget.repo),
+      create: (_) => PayPlanBloc(repo: repo),
       child: BlocConsumer<PayPlanBloc, PayPlanState>(
         listener: (context, state) {
           if (state.status == PayPlanStatus.success) {
@@ -275,13 +277,13 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
   Widget _buildMainContent(BuildContext context) {
     // 1. Stream Wallet (Main Doc)
     return StreamBuilder(
-      stream: widget.repo.streamCustomer(widget.plan.customerId),
+      stream: repo.streamCustomer(widget.plan.customerId),
       builder: (context, snapshotCust) {
         final walletBal = snapshotCust.data?.availableBalance ?? 0.0;
         
         // 2. Stream Store Credit (Vendor Relation)
         return StreamBuilder<double>(
-          stream: widget.repo.streamStoreCredit(widget.plan.customerId, widget.plan.vendorId),
+          stream: repo.streamStoreCredit(widget.plan.customerId, widget.plan.vendorId),
           initialData: 0.0,
           builder: (context, snapshotCredit) {
             final storeCredit = snapshotCredit.data ?? 0.0;
@@ -346,79 +348,20 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                   SizedBox(height: 8.h),
 
                   // ✅ FEE PREVIEW — only show when amount > 0 and plan is above ₦30,000
+                  // ✅ FEE PREVIEW — only show when amount > 0 and plan is above ₦30,000
                   if (_currentAmount > 0 && _isPerPaymentFee) ...[
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 28.w),
                       child: Builder(
                         builder: (context) {
                           final sc = snapshotCredit.data ?? 0.0;
-                          final storePortion = _storeCreditPortion(sc);
-                          final cashPortion = _cashPortion(sc);
-                          final storeFeeAmt = _storeFee(sc);
-                          final cashFeeAmt = _cashFee(sc);
-                          final applied = _appliedToItemFull(sc);
-                          final walletDeducted = _totalWalletDeducted(sc);
-
-                          return Container(
-                            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF9FAFB),
-                              borderRadius: BorderRadius.circular(12.r),
-                              border: Border.all(color: const Color(0xFFEAECF0), width: 0.5.w),
-                            ),
-                            child: Column(
-                              children: [
-                                // Store balance row
-                                if (storePortion > 0) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text("Store balance used", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
-                                      Text("₦${_moneyFormat.format(storePortion)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF027A48))),
-                                    ],
-                                  ),
-                                  SizedBox(height: 4.h),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text("Store balance fee (0.35%)", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade400)),
-                                      Text("₦${_moneyFormat.format(storeFeeAmt)} from wallet", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500)),
-                                    ],
-                                  ),
-                                  SizedBox(height: 6.h),
-                                ],
-                                // Cash fee row
-                                if (cashPortion > 0) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text("Processing fee (3.5%)", style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade500)),
-                                      Text("- ₦${_moneyFormat.format(cashFeeAmt)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-                                    ],
-                                  ),
-                                  SizedBox(height: 6.h),
-                                ],
-                                Divider(height: 1, color: Colors.grey.shade200),
-                                SizedBox(height: 6.h),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text("Applied to your plan", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
-                                    Text("₦${_moneyFormat.format(applied)}", style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: KorraColors.brand)),
-                                  ],
-                                ),
-                                if (storePortion > 0) ...[
-                                  SizedBox(height: 4.h),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text("Wallet deducted", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade400)),
-                                      Text("₦${_moneyFormat.format(walletDeducted)}", style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.grey.shade500)),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
+                          return PayPlanFeeSummary(
+                            storePortion: _storeCreditPortion(sc),
+                            storeFeeAmt: _storeFee(sc),
+                            cashPortion: _cashPortion(sc),
+                            cashFeeAmt: _cashFee(sc),
+                            applied: _appliedToItemFull(sc),
+                            walletDeducted: _totalWalletDeducted(sc),
                           );
                         },
                       ),
@@ -504,7 +447,6 @@ class _PayPlanInputScreenState extends State<PayPlanInputScreen> {
                               Routes.customerBankDetails, 
                               arguments: {
                                 'customer': customerData,
-                                'repo': widget.repo,
                               }
                             );
                           } else if (isValid) {

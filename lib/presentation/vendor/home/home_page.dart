@@ -14,12 +14,10 @@ import '../../shared/widgets/korra_header.dart';
 import 'vendor_home_body.dart';
 
 class VendorHomePage extends StatefulWidget {
-  final VendorRepository vendors;
   final String vendorUid;
 
   const VendorHomePage({
     super.key,
-    required this.vendors,
     required this.vendorUid,
   });
 
@@ -28,12 +26,14 @@ class VendorHomePage extends StatefulWidget {
 }
 
 class _VendorHomePageState extends State<VendorHomePage> {
+  late final VendorRepository _vendors;
   
   @override
   void initState() {
     super.initState();
+    _vendors = context.read<VendorRepository>();
     // 🔔 Initialize Push Notifications
-    NotificationService(widget.vendors).initialize(widget.vendorUid);
+    NotificationService.to.initialize(_vendors, widget.vendorUid);
   }
 
   @override
@@ -42,7 +42,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
       providers: [
         BlocProvider(
           create: (_) => VendorHomeBloc(
-            vendors: widget.vendors,
+            vendors: _vendors,
             vendorUid: widget.vendorUid,
             net: context.read<NetCubit>(),
           )..add(const VendorHomeStarted()),
@@ -55,49 +55,46 @@ class _VendorHomePageState extends State<VendorHomePage> {
         appBar: KorraHeader(
           title: 'Home',
           trailingActions: [
-            StreamBuilder<int>(
-              stream: widget.vendors.streamUnreadCount(widget.vendorUid),
-              initialData: 0,
-              builder: (context, notifSnap) {
-                final count = notifSnap.data ?? 0;
-                final hasUnread = count > 0;
-
-                return IconButton(
-                  onPressed: () {
-                    Get.toNamed(
-                      Routes.vendorNotifications,
-                      arguments: {'uid': widget.vendorUid},
-                    );
-                  },
-                  icon: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(Iconsax.notification, color: const Color(0xFF1B1B1B), size: 24.sp),
-                      if (hasUnread)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 10.w,
-                            height: 10.w,
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1.5),
-                            ),
-                          ),
-                        )
-                    ],
-                  ),
+            IconButton(
+              onPressed: () {
+                Get.toNamed(
+                  Routes.vendorNotifications,
+                  arguments: {'uid': widget.vendorUid},
                 );
               },
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(Iconsax.notification, color: const Color(0xFF1B1B1B), size: 24.sp),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: StreamBuilder<int>(
+                      stream: _vendors.streamUnreadCount(widget.vendorUid),
+                      initialData: 0,
+                      builder: (context, notifSnap) {
+                        final count = notifSnap.data ?? 0;
+                        if (count <= 0) return const SizedBox.shrink();
+                        return Container(
+                          width: 10.w,
+                          height: 10.w,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
 
         // --- 2. BODY ---
         body: VendorHomeBody(
-          vendors: widget.vendors,
           vendorUid: widget.vendorUid,
         ),
       ),

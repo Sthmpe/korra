@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'bootstrap.dart';
-import 'config/routes/app_pages.dart';
+import 'config/routes/vendor_pages.dart';
 import 'config/routes/app_routes.dart';
 import 'flavors/app_config.dart';
 import 'korra_app.dart'; // ✅ Uses your existing KorraApp
@@ -36,7 +36,7 @@ void main() async {
       ],
       child: KorraApp(
         initialRoute: initialRoute,
-        appPages: AppPages.vendorRoutes, // 👈 Only Vendor + Common routes
+        appPages: VendorPages.routes, // 👈 Only Vendor + Common routes
         isMerchant: true, // 👈 3. PASS THIS FLAG
       ),
     ),

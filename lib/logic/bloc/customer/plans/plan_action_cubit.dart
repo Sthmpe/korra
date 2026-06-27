@@ -5,6 +5,9 @@ import 'package:equatable/equatable.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 
+enum PlansTab { active, pending, completed, overdue, cancelled }
+enum SortBy  { recent, nextDue, amount, progress }
+
 // --- States ---
 abstract class PlanActionState extends Equatable {
   @override

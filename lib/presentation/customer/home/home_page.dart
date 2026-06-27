@@ -38,14 +38,12 @@ import 'widgets/plan_carousel_slider.dart';
 import 'widgets/shimmer_loading.dart';
 
 class HomePage extends StatefulWidget {
-  final CustomerRepository customerRepo;
   final String customerUid;
   final ValueChanged<int> onJumpTo;
   final VoidCallback onJumpToPlan;
 
   const HomePage({
     super.key,
-    required this.customerRepo,
     required this.customerUid,
     required this.onJumpTo,
     required this.onJumpToPlan,
@@ -56,6 +54,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  late final CustomerRepository _repo;
   late Stream<Customer?> _customerStream;
   late Stream<int> _unreadStream;
   late Stream<List<Plan>> _plansStream;
@@ -64,12 +63,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    NotificationService(widget.customerRepo).initialize(widget.customerUid);
+    _repo = context.read<CustomerRepository>();
+    NotificationService.to.initialize(_repo, widget.customerUid);
 
-    _customerStream = widget.customerRepo.streamCustomer(widget.customerUid);
-    _unreadStream = widget.customerRepo.streamUnreadCount(widget.customerUid);
-    _plansStream = widget.customerRepo.streamCustomerPlans(widget.customerUid);
-    _activityStream = widget.customerRepo.streamActivityFeed(widget.customerUid);
+    _customerStream = _repo.streamCustomer(widget.customerUid);
+    _unreadStream = _repo.streamUnreadCount(widget.customerUid);
+    _plansStream = _repo.streamCustomerPlans(widget.customerUid);
+    _activityStream = _repo.streamActivityFeed(widget.customerUid);
   }
   
 
@@ -79,13 +79,13 @@ class _HomePageState extends State<HomePage> {
       providers: [
         BlocProvider(
           create: (_) => HomeBloc(
-            customerRepo: widget.customerRepo,
+            customerRepo: _repo,
             customerUid: widget.customerUid,
             net: context.read<NetCubit>(),
-          )..add(HomeStarted()), // Start fetching vendors/data
+          )..add(HomeStarted()),
         ),
         BlocProvider(
-          create: (_) => LinkBloc(customerRepo: widget.customerRepo, customerUid: widget.customerUid),
+          create: (_) => LinkBloc(customerRepo: _repo, customerUid: widget.customerUid),
         ),
       ],
       
@@ -114,7 +114,6 @@ class _HomePageState extends State<HomePage> {
                       Routes.customerCreatePlan,
                       arguments: {
                         'product': product,
-                        'customerRepo': widget.customerRepo,
                         'customer': customer,
                         'customerUid': widget.customerUid,
                         'walletBalance': currentBalance,
@@ -137,51 +136,48 @@ class _HomePageState extends State<HomePage> {
               appBar: KorraHeader(
                 title: 'Home',
                 trailingActions: [
-                  StreamBuilder<int>(
-                    stream: _unreadStream,
-                    initialData: 0,
-                    builder: (context, notifSnap) {
-                      final count = notifSnap.data ?? 0;
-                      final hasUnread = count > 0;
-
-                      return IconButton(
-                        onPressed: () async {
-                          // 🔄 CHANGE: Named Route
-                          final result = await Get.toNamed(
-                            Routes.customerNotifications,
-                            arguments: {
-                              'repo': widget.customerRepo, 
-                              'uid': widget.customerUid,
-                            }
-                          );
-
-                          // 🦘 JUMP LOGIC
-                          if (result == 'jump_to_plans') {
-                            widget.onJumpTo(1); 
-                          }
-                        },
-                        icon: Stack(
-                          clipBehavior: Clip.none, // Allow badge to overflow slightly
-                          children: [
-                            Icon(Iconsax.notification, color: const Color(0xFF1B1B1B), size: 24.sp),
-                            if (hasUnread)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  width: 10.w, // Slightly larger for visibility
-                                  height: 10.w,
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 1.5), // White ring makes it pop
-                                  ),
-                                ),
-                              )
-                          ],
-                        ),
+                  IconButton(
+                    onPressed: () async {
+                      // 🔄 CHANGE: Named Route
+                      final result = await Get.toNamed(
+                        Routes.customerNotifications,
+                        arguments: {
+                          'uid': widget.customerUid,
+                        }
                       );
+
+                      // 🦘 JUMP LOGIC
+                      if (result == 'jump_to_plans') {
+                        widget.onJumpTo(1); 
+                      }
                     },
+                    icon: Stack(
+                      clipBehavior: Clip.none, // Allow badge to overflow slightly
+                      children: [
+                        Icon(Iconsax.notification, color: const Color(0xFF1B1B1B), size: 24.sp),
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: StreamBuilder<int>(
+                            stream: _unreadStream,
+                            initialData: 0,
+                            builder: (context, notifSnap) {
+                              final count = notifSnap.data ?? 0;
+                              if (count <= 0) return const SizedBox.shrink();
+                              return Container(
+                                width: 10.w, // Slightly larger for visibility
+                                height: 10.w,
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 1.5), // White ring makes it pop
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -213,7 +209,6 @@ class _HomePageState extends State<HomePage> {
                                 Routes.customerBankDetails, 
                                 arguments: {
                                   'customer': customer,
-                                  'repo': widget.customerRepo,
                                 }
                               );
                             },
@@ -249,7 +244,6 @@ class _HomePageState extends State<HomePage> {
                                     ? _buildEmptyPlanState()
                                     : PlanCarouselSlider(
                                         plans: activePlans.take(5).toList(),
-                                        customerRepo: widget.customerRepo,
                                       ),
                                 ],
                               );
@@ -381,7 +375,6 @@ class _HomePageState extends State<HomePage> {
                                     Routes.customerPlanDetails,
                                     arguments: {
                                       'plan': shellPlan, 
-                                      'customerRepo': widget.customerRepo
                                     }
                                   );
                                 },

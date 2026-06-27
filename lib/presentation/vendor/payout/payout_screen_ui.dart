@@ -41,6 +41,20 @@ class PayoutScreen extends StatelessWidget {
     return BlocConsumer<PayoutBloc, PayoutState>(
       listenWhen: (prev, curr) =>
           prev.step != curr.step || prev.status != curr.status,
+      buildWhen: (prev, curr) =>
+          prev.status != curr.status ||
+          prev.step != curr.step ||
+          prev.amountInput != curr.amountInput ||
+          prev.bankName != curr.bankName ||
+          prev.accountNumber != curr.accountNumber ||
+          prev.accountName != curr.accountName ||
+          prev.withdrawableBalance != curr.withdrawableBalance ||
+          prev.bankList != curr.bankList ||
+          prev.complianceStatus != curr.complianceStatus ||
+          prev.blockMessage != curr.blockMessage ||
+          prev.isBvnVerified != curr.isBvnVerified ||
+          prev.isNinVerified != curr.isNinVerified ||
+          prev.canWithdraw != curr.canWithdraw,
       listener: (context, state) {
         
         // Handle Side Effects (Dialogs, Bottom Sheets, Navigation)

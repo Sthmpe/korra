@@ -8,7 +8,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../config/constants/colors.dart';
+
 import '../../../../data/models/vendor/reservation.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_bloc.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_event.dart';

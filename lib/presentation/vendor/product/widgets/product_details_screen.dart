@@ -18,13 +18,11 @@ import '../../../shared/widgets/korra_header.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final ProductItem product;
-  final VendorRepository vendors;
   final String vendorUid;
 
   const ProductDetailsScreen({
     super.key,
     required this.product,
-    required this.vendors,
     required this.vendorUid,
   });
 
@@ -424,7 +422,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       arguments: {
         'product': widget.product, // Pass the product data
         'listBloc': vendorBloc,    // 👈 Pass the LIVE bloc instance
-        'repo': widget.vendors,    // Pass the repository for any needed operations
         'uid': widget.vendorUid,   // Pass the vendor UID for context
       },
     );

@@ -10,6 +10,9 @@ import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
 import 'presentation/shared/not_found_screen.dart';
 import 'presentation/shared/pwa/global_install_button.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'data/repository/customer/customer_repository.dart';
+import 'data/repository/vendors/vendor_repository.dart';
 
 class KorraApp extends StatelessWidget {
   const KorraApp({
@@ -27,7 +30,7 @@ class KorraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp( 
+    final app = GetMaterialApp( 
       debugShowCheckedModeBanner: false,
       title: isMerchant ? 'Korra Business' : 'Korra',
       theme: AppTheme.light(),
@@ -109,6 +112,18 @@ class KorraApp extends StatelessWidget {
         );
       },
     );
+
+    if (isMerchant) {
+      return RepositoryProvider<VendorRepository>(
+        create: (context) => VendorRepository(),
+        child: app,
+      );
+    } else {
+      return RepositoryProvider<CustomerRepository>(
+        create: (context) => CustomerRepository(),
+        child: app,
+      );
+    }
   }
 }
 

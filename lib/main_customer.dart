@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'bootstrap.dart';
-import 'config/routes/app_pages.dart';
+import 'config/routes/customer_pages.dart';
 import 'config/routes/app_routes.dart';
 import 'flavors/app_config.dart';
 import 'korra_app.dart'; // ✅ Uses your existing KorraApp
@@ -38,7 +38,7 @@ void main() async {
       // We pass the calculated route to your existing KorraApp
       child: KorraApp(
         initialRoute: initialRoute,
-        appPages: AppPages.customerRoutes, // 👈 Only Customer + Common routes
+        appPages: CustomerPages.routes, // 👈 Only Customer + Common routes
         isMerchant: false,
       ),
     ),

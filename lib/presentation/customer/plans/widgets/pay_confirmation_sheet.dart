@@ -12,7 +12,7 @@ import '../../../../data/repository/customer/customer_repository.dart'; // For w
 import '../../../../logic/bloc/customer/plans/pay_plan_bloc.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 
-void showPaySheet(BuildContext context, Plan p, CustomerRepository customerRepo) {
+void showPaySheet(BuildContext context, Plan p) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -22,7 +22,6 @@ void showPaySheet(BuildContext context, Plan p, CustomerRepository customerRepo)
         return PayConfirmationSheet(
           plan: p, 
           customerUid: p.customerId,
-          customerRepo: customerRepo,
         );
       },
     );
@@ -31,17 +30,16 @@ void showPaySheet(BuildContext context, Plan p, CustomerRepository customerRepo)
 class PayConfirmationSheet extends StatelessWidget {
   final Plan plan;
   final String customerUid;
-  final CustomerRepository customerRepo;
 
   const PayConfirmationSheet({
     super.key,
     required this.plan,
     required this.customerUid,
-    required this.customerRepo,
   });
 
   @override
   Widget build(BuildContext context) {
+    final customerRepo = context.read<CustomerRepository>();
     return BlocProvider(
       create: (context) => PayPlanBloc(repo: customerRepo),
       child: StreamBuilder(

@@ -3,7 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ✅ IMPORT THE SOURCE OF TRUTH (Do not define enum locally)
-import '../../../../logic/bloc/customer/plans/plan_action_bloc.dart';
+import '../../../../logic/bloc/customer/plans/plan_action_cubit.dart';
 
 const _brand = Color(0xFFA54600);
 const _stroke = Color(0xFFEAE6E2);

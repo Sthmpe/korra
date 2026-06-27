@@ -5,7 +5,7 @@ extension NotificationRepo on CustomerRepository {
   
   // Stream of Notifications (Ordered by newest)
   Stream<List<KorraNotification>> streamNotifications(String uid) {
-    return db.collection('customers')
+    return firestore.collection('customers')
         .doc(uid)
         .collection('notifications')
         .orderBy('createdAt', descending: true)
@@ -16,7 +16,7 @@ extension NotificationRepo on CustomerRepository {
 
   // Count unread
   Stream<int> streamUnreadCount(String uid) {
-    return db.collection('customers')
+    return firestore.collection('customers')
         .doc(uid)
         .collection('notifications')
         .where('isRead', isEqualTo: false)
@@ -26,7 +26,7 @@ extension NotificationRepo on CustomerRepository {
 
   // Mark as read
   Future<void> markNotificationRead(String uid, String notifId) async {
-    await db.collection('customers')
+    await firestore.collection('customers')
         .doc(uid)
         .collection('notifications')
         .doc(notifId)
@@ -35,8 +35,8 @@ extension NotificationRepo on CustomerRepository {
   
   // Mark ALL as read (Engineering Polish)
   Future<void> markAllRead(String uid) async {
-    final batch = db.batch();
-    final unread = await db.collection('customers')
+    final batch = firestore.batch();
+    final unread = await firestore.collection('customers')
         .doc(uid)
         .collection('notifications')
         .where('isRead', isEqualTo: false)

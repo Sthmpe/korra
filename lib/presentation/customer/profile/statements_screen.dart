@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -15,12 +16,10 @@ import '../../shared/widgets/korra_header.dart';
 import '../plans/widgets/empty_state_card.dart';
 
 class StatementsScreen extends StatefulWidget {
-  final CustomerRepository repo;
   final String customerUid;
 
   const StatementsScreen({
     super.key,
-    required this.repo,
     required this.customerUid,
   });
 
@@ -33,6 +32,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = context.read<CustomerRepository>();
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const KorraHeader(title: "Statements", showLeadingIcon: true),
@@ -55,7 +55,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
           // 2. TRANSACTION LIST
           Expanded(
             child: StreamBuilder<List<TransactionModel>>(
-              stream: widget.repo.streamLedger(widget.customerUid), // Ensure you have this stream
+              stream: repo.streamLedger(widget.customerUid), // Ensure you have this stream
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: KorraColors.brand));

@@ -258,7 +258,7 @@ extension VerificationRepository on CustomerRepository {
           'email': email,
           'name': firstName,
         }
-      ).catchError((e) => debugPrint("Silent Background Email Error: $e"));
+      ).then<void>((_) {}).catchError((e) => debugPrint("Silent Background Email Error: $e"));
 
     } catch (e) {
       debugPrint("❌ OTP Verify Error: $e");

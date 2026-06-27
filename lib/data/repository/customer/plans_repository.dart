@@ -393,12 +393,7 @@ extension CustomerPlans on CustomerRepository {
     throw KorraException(error ?? "Could not create plan.");
   }
 
-  void _handlePaymentErrors(String? error) {
-    final err = error?.toLowerCase() ?? '';
-    if (err.contains('insufficient')) throw KorraException("Insufficient wallet balance.");
-    if (err.contains('active')) throw KorraException("This plan is not active.");
-    throw KorraException(error ?? "Payment failed.");
-  }
+
 
   void _handleCancelErrors(String? error) {
     final err = error?.toLowerCase() ?? '';

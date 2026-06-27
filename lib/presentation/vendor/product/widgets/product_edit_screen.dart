@@ -17,16 +17,16 @@ import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 import '../../payout/widgets/contact_support_sheet.dart';
 import 'image_upload_box.dart';
+import 'product_limit_header.dart';
+import 'product_category_selector_sheet.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final ProductItem product;
-  final VendorRepository vendors;
   final String vendorUid;
 
   const ProductEditScreen({
     super.key, 
     required this.product,
-    required this.vendors,
     required this.vendorUid
   });
 
@@ -55,28 +55,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
   String? _helperMessage;
 
-  final List<String> _categories = [
-    "Mens Clothing",
-    "Womens Clothing",
-    "Kids & Baby",
-    "Shoes & Footwear",
-    "Bags & Handbags",
-    "Jewelry & Watches",
-    "Wigs & Hair",
-    "Accessories",
-    "Phones",
-    "Laptops",
-    "Gadgets",
-    "Home Appliances",
-    "Furniture",
-    "Health & Beauty",
-    "Food & Drinks",
-    "Automotive",
-  ];
+  late final VendorRepository _vendors;
+
+  void _onTextChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
+    _vendors = context.read<VendorRepository>();
     final p = widget.product;
 
     // Init Controllers
@@ -88,6 +76,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     stockCtrl = TextEditingController(text: p.stock.toString());
     categoryCtrl = TextEditingController(text: p.category);
     codeCtrl = TextEditingController(text: p.code);
+
+    priceCtrl.addListener(_onTextChanged);
+    stockCtrl.addListener(_onTextChanged);
 
     
 
@@ -116,7 +107,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
   Future<void> _fetchComplianceStatus() async {
     try {
-      final compliance = await widget.vendors.getComplianceStatus(widget.vendorUid);
+      final compliance = await _vendors.getComplianceStatus(widget.vendorUid);
       if (mounted) {
         setState(() {
           _complianceStatus = compliance['status'] ?? 'active';
@@ -195,6 +186,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           }
         },
         child: BlocBuilder<VendorProductsBloc, VendorProductsState>(
+          buildWhen: (previous, current) =>
+              previous.isSubmitting != current.isSubmitting ||
+              previous.availableLimit != current.availableLimit,
           builder: (context, state) {
             final isLoading = state.isSubmitting ?? false;
 
@@ -207,7 +201,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   _buildRestrictionBanner(_complianceStatus, _blockMessage),
 
                   // 1. LIMIT HEADER (Live Feedback)
-                  _buildLimitHeader(state.availableLimit),
+                  ProductLimitHeader(
+                    availableLimit: state.availableLimit,
+                    price: double.tryParse(priceCtrl.text.replaceAll(',', '')) ?? 0.0,
+                    stock: int.tryParse(stockCtrl.text.replaceAll(',', '')) ?? 0,
+                  ),
 
                   // 2. HELPER MESSAGE
                   if (_helperMessage != null) ...[
@@ -365,7 +363,22 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   SizedBox(height: 6.h),
                   GestureDetector(
                     onTap: _canEditIdentity
-                        ? () => _showCategorySheet(context)
+                        ? () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                              ),
+                              builder: (ctx) => ProductCategorySelectorSheet(
+                                selectedCategory: categoryCtrl.text,
+                                onCategorySelected: (cat) {
+                                  setState(() => categoryCtrl.text = cat);
+                                },
+                              ),
+                            );
+                          }
                         : null,
                     child: AbsorbPointer(
                       child: _buildInput(
@@ -618,38 +631,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
 
-  Widget _buildLimitHeader(double availableLimit) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 24.h),
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F9FF),
-        borderRadius: BorderRadius.circular(12.r),
-        //border: Border.all(color: const Color(0xFFB2DDFF)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            "Reservation Limit",
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF004EEB),
-            ),
-          ),
-          Text(
-            "₦${NumberFormat('#,##0').format(availableLimit)} Available",
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF004EEB),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   TextStyle _labelStyle() {
     return GoogleFonts.inter(
@@ -714,66 +696,5 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     );
   }
 
-  void _showCategorySheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            SizedBox(height: 12.h),
-            Container(
-              width: 40.w,
-              height: 4.h,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              "Select Category",
-              style: GoogleFonts.inter(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollController,
-                itemCount: _categories.length,
-                separatorBuilder: (_, __) =>
-                    const Divider(height: 1, color: Color(0xFFF2F4F7)),
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  return ListTile(
-                    title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
-                    onTap: () {
-                      setState(() => categoryCtrl.text = cat);
-                      Navigator.pop(context);
-                    },
-                    trailing: categoryCtrl.text == cat
-                        ? const Icon(
-                            Iconsax.tick_circle,
-                            color: KorraColors.brand,
-                          )
-                        : null,
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 }

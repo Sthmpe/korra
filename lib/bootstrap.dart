@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/firebase_options_dev.dart' as dev;
 import 'config/firebase_options_prod.dart' as prod;
 import '../../logic/services/auth_service.dart';
+import '../../logic/services/notification_service.dart';
 
 Future<void> bootstrap({required bool isLive}) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,4 +54,7 @@ Future<void> bootstrap({required bool isLive}) async {
 
   // 5. Auth Service
   await Get.putAsync(() => AuthService().init());
+
+  // 6. Notification Service
+  Get.put(NotificationService());
 }

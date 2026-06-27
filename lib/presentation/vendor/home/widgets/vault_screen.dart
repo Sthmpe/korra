@@ -11,12 +11,10 @@ import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../shared/widgets/korra_header.dart';
 
 class VendorVaultScreen extends StatelessWidget {
-  final VendorRepository repo;
   final String vendorUid;
 
   const VendorVaultScreen({
     super.key,
-    required this.repo,
     required this.vendorUid,
   });
 

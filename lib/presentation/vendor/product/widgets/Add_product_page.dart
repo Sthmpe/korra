@@ -20,14 +20,16 @@ import '../../../shared/widgets/korra_header.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 import '../../payout/widgets/contact_support_sheet.dart';
 import 'image_upload_box.dart';
+import 'product_limit_header.dart';
+import 'product_model_tabs.dart';
+import 'product_category_selector_sheet.dart';
+import 'product_info_box.dart';
 
 class AddProductPage extends StatefulWidget {
-  final VendorRepository vendors;
   final String vendorUid;
 
   const AddProductPage({
     super.key,
-    required this.vendors,
     required this.vendorUid,
   });
 
@@ -82,13 +84,17 @@ class _AddProductPageState extends State<AddProductPage> {
   // 1. Define the stream variable here
   late Stream<VendorStats> _statsStream;
 
+  late final VendorRepository vendors;
+
   @override
   void initState() {
     super.initState();
+    vendors = context.read<VendorRepository>();
 
     // 2. Initialize the stream ONCE here
-    _statsStream = widget.vendors.streamVendorStats(widget.vendorUid);
+    _statsStream = vendors.streamVendorStats(widget.vendorUid);
     _priceCtrl.addListener(_updatePlanLogic);
+    _stockCtrl.addListener(_updatePlanLogic);
     _durationCtrl.addListener(_onDurationInputChanged);
 
     _fetchComplianceStatus();
@@ -96,7 +102,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   Future<void> _fetchComplianceStatus() async {
     try {
-      final compliance = await widget.vendors.getComplianceStatus(widget.vendorUid);
+      final compliance = await vendors.getComplianceStatus(widget.vendorUid);
       if (mounted) {
         setState(() {
           _complianceStatus = compliance['status'] ?? 'active';
@@ -369,6 +375,9 @@ class _AddProductPageState extends State<AddProductPage> {
                });
             }
               return BlocBuilder<VendorProductsBloc, VendorProductsState>(
+                buildWhen: (previous, current) =>
+                    previous.isSubmitting != current.isSubmitting ||
+                    previous.availableLimit != current.availableLimit,
                 builder: (context, state) {
                   final isLoading = state.isSubmitting ?? false;
             
@@ -380,7 +389,11 @@ class _AddProductPageState extends State<AddProductPage> {
                       children: [
                         _buildRestrictionBanner(_complianceStatus, _blockMessage),
                         
-                        _buildLimitHeader(state.availableLimit),
+                        ProductLimitHeader(
+                          availableLimit: state.availableLimit,
+                          price: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0.0,
+                          stock: int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0,
+                        ),
             
                         // 1. IMAGES
                         Text("Product Photos", style: _labelStyle()),
@@ -539,7 +552,22 @@ class _AddProductPageState extends State<AddProductPage> {
                                   Text("Category", style: _labelStyle()),
                                   SizedBox(height: 8.h),
                                   GestureDetector(
-                                    onTap: () => _showCategorySheet(context),
+                                    onTap: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                        ),
+                                        builder: (ctx) => ProductCategorySelectorSheet(
+                                          selectedCategory: _categoryCtrl.text,
+                                          onCategorySelected: (cat) {
+                                            setState(() => _categoryCtrl.text = cat);
+                                          },
+                                        ),
+                                      );
+                                    },
                                     child: Container(
                                       height: 48.h,
                                       padding: EdgeInsets.symmetric(horizontal: 12.w),
@@ -645,18 +673,12 @@ class _AddProductPageState extends State<AddProductPage> {
                         // 4. MODEL SELECTION
                         Text("Sales Model", style: _labelStyle()),
                         SizedBox(height: 12.h),
-                        Container(
-                          padding: EdgeInsets.all(4.r),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF2F4F7),
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          child: Row(
-                            children: [
-                              _buildModelTab("Strict Lock", ProductModelType.strict),
-                              _buildModelTab("Korra Direct", ProductModelType.direct),
-                            ],
-                          ),
+                        ProductModelTabs(
+                          selectedModel: _selectedModel,
+                          onModelChanged: (model) {
+                            setState(() => _selectedModel = model);
+                            _updatePlanLogic(); // ✅ RE-CALCULATE TIMELINE
+                          },
                         ),
             
                         SizedBox(height: 20.h),
@@ -965,10 +987,10 @@ class _AddProductPageState extends State<AddProductPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 1. Info Card
-        _buildInfoBox(
-          "Strict Model",
-          "Automated Plan. Korra automatically requires a 30% down payment from the customer. Any cancellations are refunded purely as Store Balance to protect your inventory.",
-          Iconsax.shield_tick,
+        const ProductInfoBox(
+          title: "Strict Model",
+          description: "Automated Plan. Korra automatically requires a 30% down payment from the customer. Any cancellations are refunded purely as Store Balance to protect your inventory.",
+          icon: Iconsax.shield_tick,
         ),
 
         SizedBox(height: 16.h),
@@ -1098,101 +1120,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // --- HELPER WIDGETS ---
 
-  Widget _buildLimitHeader(double availableLimit) {
-    // Parse current price input
-    final priceInput =
-        double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0.0;
-    final stockInput = int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
-    final totalValue =
-        priceInput * (stockInput > 0 ? stockInput : 1); // Estimate value
 
-    final isExceeded = totalValue > availableLimit;
-    final progress = (availableLimit > 0)
-        ? (totalValue / availableLimit).clamp(0.0, 1.0)
-        : 0.0;
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 24.h),
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: isExceeded
-            ? const Color(0xFFFEF3F2)
-            : KorraColors.brandLight, // Red or Blue bg
-        borderRadius: BorderRadius.circular(12.r),
-        // border: Border.all(
-        //   color: isExceeded ? const Color(0xFFFECDCA) : KorraColors.brandDark.withOpacity(0.3),
-        // ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Reservation Limit",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w600,
-                  color: isExceeded
-                      ? const Color(0xFFB42318)
-                      : KorraColors.brandDark,
-                ),
-              ),
-              Text(
-                "₦${NumberFormat('#,##0').format(availableLimit)} Available",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w700,
-                  color: isExceeded
-                      ? const Color(0xFFB42318)
-                      : KorraColors.brandDark,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8.h),
-
-          // Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4.r),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.white,
-              valueColor: AlwaysStoppedAnimation(
-                isExceeded ? const Color(0xFFD92D20) : KorraColors.brandDark,
-              ),
-              minHeight: 6.h,
-            ),
-          ),
-
-          if (isExceeded) ...[
-            SizedBox(height: 8.h),
-            Row(
-              children: [
-                Icon(
-                  Iconsax.warning_2,
-                  size: 14.sp,
-                  color: const Color(0xFFB42318),
-                ),
-                SizedBox(width: 6.w),
-                Expanded(
-                  child: Text(
-                    "Product value (₦${NumberFormat.compact().format(totalValue)}) exceeds your limit.",
-                    style: GoogleFonts.inter(
-                      fontSize: 11.sp,
-                      color: const Color(0xFFB42318),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   // --- HELPER FOR TIMELINE ---
   Widget _buildTimelineRow(
@@ -1227,44 +1155,7 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  Widget _buildModelTab(String label, ProductModelType model) {
-    final isSelected = _selectedModel == model;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedModel = model);
-          _updatePlanLogic(); // ✅ RE-CALCULATE TIMELINE
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(10.r),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 4,
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w600,
-              color: isSelected
-                  ? const Color(0xFF101828)
-                  : Colors.grey.shade500,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildInput({
     required TextEditingController controller,
@@ -1317,170 +1208,7 @@ class _AddProductPageState extends State<AddProductPage> {
     color: const Color(0xFF344054),
   );
 
-  Widget _buildInfoBox(String title, String desc, IconData icon) {
-    return Container(
-      padding: EdgeInsets.all(12.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(8.r),
-        //border: Border.all(color: const Color(0xFFEAECF0)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20.sp, color: const Color(0xFF667085)),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF344054),
-                  ),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  desc,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    color: const Color(0xFF667085),
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
- void _showCategorySheet(BuildContext context) {
-    // 1. Create a local copy of the categories and a controller for the search bar
-    // 1. Point this to the new flatList
-    List<String> filteredCategories = List.from(ProductCategories.flatList);
-    final searchCtrl = TextEditingController();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: DraggableScrollableSheet(
-              initialChildSize: 0.7, 
-              minChildSize: 0.5,
-              maxChildSize: 0.9,
-              expand: false,
-              builder: (context, scrollController) => Column(
-                children: [
-                  SizedBox(height: 12.h),
-                  Container(
-                    width: 40.w,
-                    height: 4.h,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  Text(
-                    "Select Category",
-                    style: GoogleFonts.inter(
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  
-                  // ✅ NEW: SEARCH BAR
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20.w),
-                    child: TextField(
-                      controller: searchCtrl,
-                      onChanged: (query) {
-                        setSheetState(() {
-                          // 2. Point this to the new flatList as well
-                          filteredCategories = ProductCategories.searchCategories(query);
-                        });
-                      },
-                      style: GoogleFonts.inter(fontSize: 14.sp),
-                      decoration: InputDecoration(
-                        hintText: "Search categories...",
-                        hintStyle: GoogleFonts.inter(color: Colors.grey.shade400),
-                        prefixIcon: const Icon(Iconsax.search_normal, color: Colors.grey, size: 18),
-                        filled: true,
-                        fillColor: const Color(0xFFF9FAFB),
-                        contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16.w),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                          borderSide: const BorderSide(color: Color(0xFFEAECF0)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                          borderSide: const BorderSide(color: KorraColors.brand),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  
-                  // ✅ UPDATED: LIST VIEW USING filteredCategories
-                  Expanded(
-                    child: filteredCategories.isEmpty
-                        ? Center(
-                            child: Text(
-                              "No categories found",
-                              style: GoogleFonts.inter(
-                                fontSize: 14.sp, 
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: filteredCategories.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1, color: Color(0xFFF2F4F7)),
-                            itemBuilder: (context, index) {
-                              final cat = filteredCategories[index];
-                              return ListTile(
-                                contentPadding: EdgeInsets.symmetric(horizontal: 20.w),
-                                title: Text(cat, style: GoogleFonts.inter(fontSize: 15.sp)),
-                                onTap: () {
-                                  // This updates the main page's state
-                                  setState(() => _categoryCtrl.text = cat);
-                                  Navigator.pop(context);
-                                },
-                                trailing: _categoryCtrl.text == cat
-                                    ? const Icon(
-                                        Iconsax.tick_circle,
-                                        color: KorraColors.brand,
-                                      )
-                                    : null,
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+
 }
