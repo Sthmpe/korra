@@ -398,11 +398,11 @@ class _LimitUpgradeScreenState extends State<LimitUpgradeScreen> {
       // ✅ Update the TIER NAME (String), not just the slot number
       await context.read<CustomerRepository>().upgradeTier(widget.customer.uid, tier.name);
 
-      Get.back(); // Close loading
-      Get.back(); // Close screen
+      Navigator.pop(context); // Close loading
+      Navigator.pop(context); // Close screen
       KorraNotify.success(context, "Welcome to the ${tier.name} Tier! 🚀");
     } catch (e) {
-      Get.back();
+      Navigator.pop(context);
       KorraNotify.error(context, e.toString());
     }
   }

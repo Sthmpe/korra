@@ -120,7 +120,15 @@ extension CustomerAuth on CustomerRepository {
 
     // 2. Disconnect Google (Isolated)
     try {
-      await GoogleSignIn.instance.signOut();
+      if (!kIsWeb) {
+        await GoogleSignIn.instance.signOut().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            debugPrint("⚠️ Google sign out timed-out during customer logout");
+            return null;
+          },
+        );
+      }
       debugPrint("✅ Google Disconnected");
     } catch (e) {
       debugPrint('⚠️ Google disconnect failed: $e');

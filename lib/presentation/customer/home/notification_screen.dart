@@ -31,7 +31,7 @@ class NotificationScreen extends StatelessWidget {
       appBar: KorraHeader(
         title: "Notifications",
         showLeadingIcon: true,
-        onBackpressed: () => Get.back(),
+        onBackpressed: () => Navigator.pop(context),
         // Optional: Keep "Mark all read" if you want functionality, 
         // but removed to match Vendor UI strictness. Uncomment if needed.
         

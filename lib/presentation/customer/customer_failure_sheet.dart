@@ -131,7 +131,7 @@ class _KorraFailureSheetCustomer extends StatelessWidget {
                       height: 56.h,
                       child: TextButton(
                         onPressed: () {
-                          Get.back();
+                          Navigator.pop(context);
                           onCancel?.call();
                         },
                         style: TextButton.styleFrom(
@@ -160,7 +160,7 @@ class _KorraFailureSheetCustomer extends StatelessWidget {
                       height: 56.h,
                       child: ElevatedButton(
                         onPressed: () {
-                          Get.back();
+                          Navigator.pop(context);
                           onRetry?.call();
                         },
                         style: ElevatedButton.styleFrom(
@@ -193,7 +193,7 @@ class _KorraFailureSheetCustomer extends StatelessWidget {
                     if (onCancel != null) {
                       onCancel?.call();
                     } else {
-                      Get.back();
+                      Navigator.pop(context);
                     }
                   },
                   style: ElevatedButton.styleFrom(

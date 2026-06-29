@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:get/get.dart';
 
 import '../../../data/models/customer/customer_model.dart';
 import '../../../data/repository/customer/customer_repository.dart';
@@ -55,7 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: BlocConsumer<EditProfileBloc, EditProfileState>(
         listener: (context, state) {
           if (state.status == EditStatus.success) {
-            Get.back(); // Close screen
+            Navigator.pop(context); // Close screen
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Profile updated successfully"), backgroundColor: Colors.green),
             );

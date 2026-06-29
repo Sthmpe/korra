@@ -111,7 +111,7 @@ class _BackButton extends StatelessWidget {
         if (onPressed != null) {
           onPressed!();
         } else {
-          Get.back();
+          Navigator.pop(context);
         }
       },
       borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
@@ -44,7 +43,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       child: BlocConsumer<ChangePasswordBloc, ChangePasswordState>(
         listener: (context, state) {
           if (state.status == ChangePassStatus.success) {
-            Get.back();
+            Navigator.pop(context);
             showAppSnackbar('Password updated successfully', SnackbarType.success);
           }
           if (state.status == ChangePassStatus.failure) {

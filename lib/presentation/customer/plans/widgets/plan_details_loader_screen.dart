@@ -58,9 +58,8 @@ class _PlanDetailsLoaderScreenState extends State<PlanDetailsLoaderScreen> {
     // A. Show Error SnackBar
     showAppSnackbar(message, SnackbarType.error);
     // B. Safe Navigation Logic
-   // 👇 FIX 1: Added parentheses () to canPop
-    if (Get.key.currentState?.canPop() ?? false) {
-      Get.back();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     } else {
       // 👇 FIX 2: Get current UID from Firebase Auth
       final user = FirebaseAuth.instance.currentUser;

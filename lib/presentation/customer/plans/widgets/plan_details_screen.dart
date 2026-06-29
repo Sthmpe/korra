@@ -94,11 +94,11 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
         listener: (context, state) {
           if (state is PlanActionSuccess) {
             showAppSnackbar(state.message, SnackbarType.success);
-            Get.back();
+            Navigator.pop(context);
           }
           if (state is PlanActionError) {
             showAppSnackbar(state.error, SnackbarType.error);
-            Get.back();
+            Navigator.pop(context);
           }
         },
         child: StreamBuilder<Plan?>(

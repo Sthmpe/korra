@@ -519,12 +519,27 @@ flutter analyze lib/
 - Created `unused_assets/` at the root and moved all unused original png/json files there (`google-logo.png`, `korra_logo_icon.png`, `moniepoint.png`, `paystack.png`, `monnify.png`, and `payment_sucess.json`).
 - Audited Lottie animation packages, verified they are unused, removed `lottie` dependency from `pubspec.yaml`, and deleted empty assets directories.
 
+### Navigation Freeze Resolution & Pop Optimization:
+- Replaced custom `Get.back()` navigation calls with standard native `Navigator.pop(context)` in `KorraHeader` (the default back action) to guarantee full compatibility with predictive back gestures in Flutter 3.22/3.24.
+- Updated all occurrences of `Get.back()` in customer screens (`create_plan_screen.dart`, `limit_upgrade_screen.dart`, `notification_screen.dart`, `plan_details_loader_screen.dart`, `plan_details_screen.dart`, `change_password_screen.dart`, and `edit_profile_screen.dart`) to standard native pops, resolving routing stack corruption/freezing.
+- Cleaned up the `customer_failure_sheet.dart` UI buttons to natively dismiss modal sheets using standard `Navigator.pop(context)`.
+- Removed unused `get` package imports from modified profile screens to maintain zero warnings.
+
+### Web Optimization & Auth Service Fixes:
+- Safeguarded `GoogleSignIn.instance.signOut()` calls across `AuthService`, `CustomerAuthRepository`, and `VendorAuthRepository` with `kIsWeb` platform checks and a 2-second timeout fallback. This completely prevents the web app from getting stuck on unresolved native futures during startup/zombie checks or logout events.
+- Optimized `web/vercel.json` configurations by introducing high-performance edge-caching headers for CanvasKit WebAssembly modules and application assets (`/assets/(.*)` and `/canvaskit/(.*)`), boosting repeat page load speed on Vercel.
+
 ---
 
 ## 17. What to Do Next (Prioritized)
 
 ### Short Term (Next 1–2 Sessions)
-1. **APK Size Reduction (Phase 4)**:
+1. **App Links & Clipboard Features**:
+   - **App Links Integration**: Configure Android App Links and iOS Universal Deep Links.
+   - **Clipboard Product Scanner (Customer App)**: Check the user's clipboard on app startup. If a valid product code pattern is detected, display a modal sheet with the product summary or link redirection.
+   - **Flexible Sharing Options (Merchant App)**: Provide merchants a toggle/option to share either the raw Product Code or the direct deep link.
+   - **Deep Link Navigation (Merchant App)**: Support deep links that route the merchant directly to the "Add Product" form screen.
+2. **APK Size Reduction (Phase 4)**:
    - Audit the `monnify_payment_sdk` size footprint.
 
 ### Medium Term

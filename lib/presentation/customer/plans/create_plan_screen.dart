@@ -451,7 +451,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                   title: 'Plan creation error',
                   message: state.errorMessage ?? "Failed to create plan",
                   isDismissible: true,
-                  onCancel: () => Get.back(),
+                  onCancel: () => Navigator.pop(context),
                 );
               }
             },
@@ -996,7 +996,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                 title: 'Merchant Flagged for Review.',
                                 message: "Transactions paused due to a trust and compliance issue. This store is currently flagged for violating Korra's operational terms. All payments to this store are blocked until the merchant resolves the restrictions on their portal.",
                                 isDismissible: true,
-                                onCancel: () => Get.back(),
+                                onCancel: () => Navigator.pop(context),
                               );
                               return;
                             }

@@ -32,7 +32,20 @@ class AuthService extends GetxService {
         debugPrint("🧟 Zombie session caught in AuthService! Wiping...");
         
         try {
-          await GoogleSignIn.instance.signOut();
+          if (!kIsWeb) {
+            await GoogleSignIn.instance.signOut().timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                debugPrint("⚠️ Google sign out timed-out in zombie check");
+                return null;
+              },
+            );
+          }
+        } catch (e) {
+          debugPrint("Failed to clear Google session: $e");
+        }
+
+        try {
           await FirebaseAuth.instance.signOut();
         } catch (e) {
           debugPrint("Failed to clear zombie session: $e");
