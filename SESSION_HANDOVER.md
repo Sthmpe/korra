@@ -528,6 +528,7 @@ flutter analyze lib/
 ### Web Optimization & Auth Service Fixes:
 - Safeguarded `GoogleSignIn.instance.signOut()` calls across `AuthService`, `CustomerAuthRepository`, and `VendorAuthRepository` with `kIsWeb` platform checks and a 2-second timeout fallback. This completely prevents the web app from getting stuck on unresolved native futures during startup/zombie checks or logout events.
 - Optimized `web/vercel.json` configurations by introducing high-performance edge-caching headers for CanvasKit WebAssembly modules and application assets (`/assets/(.*)` and `/canvaskit/(.*)`), boosting repeat page load speed on Vercel.
+- Created a comprehensive [design.md](file:///C:/Users/USER/Desktop/flutter_projects/korra/design.md) specification file in the root of the project, detailing the brand palette, typography scales, layout spacing, shape corners, component metrics, and micro-interactions for other design/developer agents.
 
 ---
 
