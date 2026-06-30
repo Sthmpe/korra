@@ -23,7 +23,7 @@ class KorraApp extends StatelessWidget {
   final List<GetPage> appPages;
   final bool isMerchant; 
 
-  static const double kMaxMobileWidth = 5990.0; // 🔥 Lowered to 480px to match standard wide mobile devices and stop tablet stretching
+  static const double kMaxMobileWidth = 599.0; // 🔥 Lowered to 480px to match standard wide mobile devices and stop tablet stretching
 
   @override
   Widget build(BuildContext context) {
