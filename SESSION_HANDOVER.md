@@ -530,24 +530,95 @@ flutter analyze lib/
 - Optimized `web/vercel.json` configurations by introducing high-performance edge-caching headers for CanvasKit WebAssembly modules and application assets (`/assets/(.*)` and `/canvaskit/(.*)`), boosting repeat page load speed on Vercel.
 - Created a comprehensive [design.md](file:///C:/Users/USER/Desktop/flutter_projects/korra/design.md) specification file in the root of the project, detailing the brand palette, typography scales, layout spacing, shape corners, component metrics, and micro-interactions for other design/developer agents.
 
+### Clipboard Product Scanner (Task F):
+- Converted [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) to include a stateful lifecycle observer body (`_CustomerShellBody`) that watches for launch and app resume (`WidgetsBindingObserver`).
+- Implemented a secure [clipboard_scanner_helper.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/clipboard_scanner_helper.dart) utility:
+  * Automatically scans the device clipboard for standard Korra product code patterns (`^K-[A-Z0-9]{4}-[A-Z0-9]{7}$`).
+  * Fetches the product from Firestore and prompts a beautiful custom bottom sheet preview.
+  * Caches the scanned code to `SharedPreferences` to prevent repeat dialog popups for the same code.
+  * Automatically bypasses web instances (`kIsWeb`) to prevent browser popup interference.
+
+### Post-Auth Redirect Flow (Task G):
+- Updated [role_login_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/role_login/role_login_screen.dart) to check for a `redirect` parameter inside route arguments on login success.
+- New users are forwarded to customer/vendor signup screens with the `redirect` route passed along.
+- Existing users are routed to their target deep-link screen using a stack-safe dual transition (`Get.offAllNamed(shellRoute)` followed by `Get.toNamed(redirectRoute)`), ensuring proper back button behavior.
+- Integrated matching post-signup redirect handlers inside [signup_customer_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/signup_customer/signup_customer_screen.dart) and [signup_vendor_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/signup_vendor/signup_vendor_screen.dart).
+
+### App Links & Universal Links Configuration (Task H):
+- Configured dynamic `appLinkHost` manifest placeholders per build flavor inside [build.gradle.kts](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/app/build.gradle.kts).
+- Added an auto-verifying `<intent-filter>` bound to `${appLinkHost}` inside [AndroidManifest.xml](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/app/src/main/AndroidManifest.xml) to isolate routing behavior per flavor APK.
+- Created [Runner.entitlements](file:///c:/Users/USER/Desktop/flutter_projects/korra/ios/Runner/Runner.entitlements) listing both subdomains to enable iOS Associated Domains / Universal Links.
+- Generated unified configuration files [assetlinks.json](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/.well-known/assetlinks.json) and [apple-app-site-association](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/.well-known/apple-app-site-association) under the `web/.well-known/` directory to serve verified association signatures for both subdomains.
+
+### App Download Interstitial (Task I):
+- Created [app_download_interstitial.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/pwa/app_download_interstitial.dart) to show a download recommendation overlay on mobile web browsers (Android and iOS).
+- Utilized SharedPreferences to cache user dismissals so they are not prompted again during the active session.
+- Configured dynamic redirection links pointing to the Play Store closed test tracks per build flavor (`customer` vs `merchant`).
+- Integrated the rendering logic into the root stack builder of [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart).
+
 ---
 
 ## 17. What to Do Next (Prioritized)
 
 ### Short Term (Next 1–2 Sessions)
-1. **App Links & Clipboard Features**:
-   - **App Links Integration**: Configure Android App Links and iOS Universal Deep Links.
-   - **Clipboard Product Scanner (Customer App)**: Check the user's clipboard on app startup. If a valid product code pattern is detected, display a modal sheet with the product summary or link redirection.
-   - **Flexible Sharing Options (Merchant App)**: Provide merchants a toggle/option to share either the raw Product Code or the direct deep link.
-   - **Deep Link Navigation (Merchant App)**: Support deep links that route the merchant directly to the "Add Product" form screen.
-2. **APK Size Reduction (Phase 4)**:
+1. **Shorebird OTA Integration**:
+   - Integrate **Shorebird** for push-to-device Over-The-Air (OTA) updates on Android and iOS (bypassing App Store/Play Store review delays for minor updates).
+2. **App Links & Deep Linking (Web & Mobile)**:
+   - **Cross-Platform Dual Domains**: Configure independent App Links / Universal Links for each app:
+     * **Customer App (`app.korra.com.ng`)**: Map App Link domains and associated `.well-known` configurations to the Customer app.
+     * **Merchant App (`business.korra.com.ng`)**: Map App Link domains and associated `.well-known` configurations to the Merchant app.
+     * *Note: When clicked on mobile, they deep-link directly into the respective native app. On desktop/browser, they fall back to the respective Web Apps.*
+   - **Post-Auth Redirect Flow**: Implement deep-link target caching (saving the destination route in memory/session storage if the user is unauthenticated). When a user gets blocked by route guards and completes signup/login, automatically redirect them to the originally requested deep-linked page (e.g. storefront or product form).
+   - **Clipboard Product Scanner (Customer App)**: Inspect clipboard on app launch. If a valid product code pattern is found, show a summary card/link sheet.
+   - **Flexible Share Options (Merchant App)**: Enable merchants to share either a direct App Link or the raw alphanumeric store code.
+   - **Form Direct Routing**: Deep link directly to the "Add Product" screen for merchants.
+3. **APK Size Reduction (Phase 4)**:
    - Audit the `monnify_payment_sdk` size footprint.
 
-### Medium Term
+### Medium Term: Upcoming Korra Platform Extensions
+
+#### 1. Automated Merchant Storefronts & Links
+* **Shared Experience**: Automatically generate store-specific URLs (e.g., `korra.shop/store/merchant-name`) for social media bios.
+* **Isolated Multi-Store Shopping**: Users view one specific storefront at a time. No combined global catalog. Checkout is strictly isolated (customers pay for items from only one specific merchant at a time).
+
+#### 2. Product Setup & Reservation Quantity Locks
+* **Flexible Listing Choices**: Toggles during product setup to enable *Full Payment Only*, *Reservation Only*, or *Both*.
+* **Total Reservation Stock Limit**: Caps the total stock that can be locked in active customer reservation layouts simultaneously.
+* **Per-Customer Limits**: Default lock of 1 unit per plan transaction. Reserving more requires completing checkout and starting a new transaction layout.
+
+#### 3. Merchant Dashboard: Analytics & Metrics
+* **Saved Storefront Count**: Track how many customer profiles have pinned the merchant's store.
+* **Weekly Traffic Meter**: Display a rolling 7-day unique visitor traffic meter.
+
+#### 4. Hyper-Local Customer Leaderboards ("Top Sellers")
+* **Dynamic Rankings**: Localized rankings based strictly on saved/interacted merchants.
+* **Activation Thresholds**:
+  * *Fewer than 5 saved merchants*: Hidden from UI.
+  * *5 to 19 saved merchants*: Highlights exactly 1 Top Seller.
+  * *20 or more saved merchants*: Leaderboard showing top 5 to 10 sellers.
+
+#### 5. Post-Purchase Merchant Profile Reviews
+* **Merchant-Level Ratings**: Feedback and rating prompts triggered on order completion.
+* **Vendor Credibility Focus**: Reviews are attached directly to the merchant profile (evaluating trust and payment tracking rather than individual item features).
+
+#### 6. Merchant Marketing Campaigns (Broadcast Alerts)
+* **Local Broadcasts**: Dashboard tool for merchants to send promotional alerts to following buyers.
+* **Customer Controls**: Full settings page toggles for customers to mute promotional alerts or manage notifications per store.
+
+#### 7. Network Discovery & Safe Disconnection (With Store Balances)
+* **Store Code Search**: Alphanumeric store code lookups to find new merchants.
+* **Store Balance Safeguards**: Prevent dashboard removals / unfollows if active plan balances exist with that vendor, enforcing confirmation warnings.
+
+#### 8. Time-Capsule Wishlist with Purchase Prompts
+* **Date-Driven Wishlist**: Save items with target acquisition dates.
+* **Intelligent Alerts**: Automated reminder on the target date or warnings when stock drops low before the date.
+* **Installment Hook**: Prompts users to start a reservation plan instead of risking a stockout.
+
+### Long Term
 1. Wire up real biometric auth (`local_auth` package).
 2. Add BLoC unit tests.
 3. Set up CI/CD for automated APK builds.
 
 ---
 
-*Last updated: 27 June 2026. Update this document at the start of each new session with what changed.*
+*Last updated: 29 June 2026. Update this document at the start of each new session with what changed.*

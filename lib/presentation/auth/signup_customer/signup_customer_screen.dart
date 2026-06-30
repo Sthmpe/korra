@@ -138,7 +138,14 @@ class _SignupCustomerScreenState extends State<SignupCustomerScreen> {
                           'Account created successfully!',
                           SnackbarType.success,
                         );
-                        Get.offAllNamed(Routes.customerShell);
+                        final args = Get.arguments as Map<String, dynamic>?;
+                        final redirectRoute = args?['redirect'] as String?;
+                        if (redirectRoute != null) {
+                          Get.offAllNamed(Routes.customerShell);
+                          Get.toNamed(redirectRoute);
+                        } else {
+                          Get.offAllNamed(Routes.customerShell);
+                        }
                       }
                     },
                   ),

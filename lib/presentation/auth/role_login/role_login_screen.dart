@@ -36,20 +36,28 @@ class RoleLoginScreen extends StatelessWidget {
           
           // --- SUCCESS ROUTING ---
           if (state.status == LoginStatus.success) {
+            final args = Get.arguments as Map<String, dynamic>?;
+            final redirectRoute = args?['redirect'] as String?;
+
             if (state.isNewUser) {
               // 🚀 NEW USER: Send to Frictionless Signup Form
               Get.offAllNamed(
                 state.role == KorraRole.vendor 
                     ? Routes.vendorSignup 
                     : Routes.customerSignup,
+                arguments: redirectRoute != null ? {'redirect': redirectRoute} : null,
               );
             } else {
-              // 🚀 EXISTING USER: Send straight to the Dashboard
-              Get.offAllNamed(
-                state.role == KorraRole.vendor 
-                    ? Routes.vendorShell 
-                    : Routes.customerShell,
-              );
+              // 🚀 EXISTING USER: Send straight to the Dashboard or target Redirect Route
+              final shellRoute = state.role == KorraRole.vendor 
+                  ? Routes.vendorShell 
+                  : Routes.customerShell;
+              if (redirectRoute != null) {
+                Get.offAllNamed(shellRoute);
+                Get.toNamed(redirectRoute);
+              } else {
+                Get.offAllNamed(shellRoute);
+              }
             }
           }
 

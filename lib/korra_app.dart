@@ -10,6 +10,7 @@ import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
 import 'presentation/shared/not_found_screen.dart';
 import 'presentation/shared/pwa/global_install_button.dart';
+import 'presentation/shared/pwa/app_download_interstitial.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'data/repository/customer/customer_repository.dart';
 import 'data/repository/vendors/vendor_repository.dart';
@@ -26,7 +27,7 @@ class KorraApp extends StatelessWidget {
   final List<GetPage> appPages;
   final bool isMerchant; 
 
-  static const double kMaxMobileWidth = 480.0; // 🔥 Lowered to 480px to match standard wide mobile devices and stop tablet stretching
+  static const double kMaxMobileWidth = 590.0; // 🔥 Lowered to 590px to match standard wide mobile devices and stop tablet stretching
 
   @override
   Widget build(BuildContext context) {
@@ -96,12 +97,18 @@ class KorraApp extends StatelessWidget {
                           ],
                         ),
                         
-                        if (kIsWeb)
+                        if (kIsWeb) ...[
                           GlobalInstallButton(
                             variant: isMerchant 
                                 ? KorraAppVariant.merchant 
                                 : KorraAppVariant.customer,
                           ),
+                          AppDownloadInterstitial(
+                            variant: isMerchant 
+                                ? KorraAppVariant.merchant 
+                                : KorraAppVariant.customer,
+                          ),
+                        ],
                       ],
                     ),
                   );

@@ -15,6 +15,15 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
+    <!-- 🚀 This targets phones precisely and completely drops 600dp+ tablets -->
+    <supports-screens 
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true" 
+        android:xlargeScreens="false"
+        android:requiresSmallestWidthDp="320"
+        android:largestWidthLimitDp="599" />
+
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -38,6 +47,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- 🔗 KORRA DUAL APP LINKS CONFIGURATION -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="${appLinkHost}" />
             </intent-filter>
         </activity>
 

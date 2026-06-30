@@ -144,8 +144,14 @@ class _SignupVendorScreenState extends State<SignupVendorScreen> {
                           'Your business account has been created successfully.',
                           SnackbarType.success,
                         );
-                        // Send them straight to the app!
-                        Get.offAllNamed(Routes.vendorShell);
+                        final args = Get.arguments as Map<String, dynamic>?;
+                        final redirectRoute = args?['redirect'] as String?;
+                        if (redirectRoute != null) {
+                          Get.offAllNamed(Routes.vendorShell);
+                          Get.toNamed(redirectRoute);
+                        } else {
+                          Get.offAllNamed(Routes.vendorShell);
+                        }
                       }
                     },
                   ),

@@ -73,6 +73,7 @@ android {
             // Becomes "com.korra.shop" in dev, and "com.korra.shop.live" in live
             applicationId = "com.korra.shop$appSuffix"
             resValue("string", "app_name", "Korra")
+            manifestPlaceholders["appLinkHost"] = "app.korra.com.ng"
         }
 
         // 🏢 Merchant App
@@ -81,6 +82,7 @@ android {
             // Becomes "com.korra.business" in dev, and "com.korra.business.live" in live
             applicationId = "com.korra.business$appSuffix"
             resValue("string", "app_name", "Korra Biz")
+            manifestPlaceholders["appLinkHost"] = "business.korra.com.ng"
         }
     }
 
