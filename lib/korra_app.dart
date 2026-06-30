@@ -10,7 +10,7 @@ import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
 import 'presentation/shared/not_found_screen.dart';
 import 'presentation/shared/pwa/global_install_button.dart';
-import 'presentation/shared/pwa/app_download_interstitial.dart';
+//import 'presentation/shared/pwa/app_download_interstitial.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'data/repository/customer/customer_repository.dart';
 import 'data/repository/vendors/vendor_repository.dart';
@@ -103,11 +103,12 @@ class KorraApp extends StatelessWidget {
                                 ? KorraAppVariant.merchant 
                                 : KorraAppVariant.customer,
                           ),
-                          AppDownloadInterstitial(
-                            variant: isMerchant 
-                                ? KorraAppVariant.merchant 
-                                : KorraAppVariant.customer,
-                          ),
+                          // TODO: Uncomment when Play Store testing links are ready
+                          // AppDownloadInterstitial(
+                          //   variant: isMerchant 
+                          //       ? KorraAppVariant.merchant 
+                          //       : KorraAppVariant.customer,
+                          // ),
                         ],
                       ],
                     ),

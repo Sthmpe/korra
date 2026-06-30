@@ -10,6 +10,8 @@ class UpdateService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Future<UpdateCheckResult> check() async {
+    if (kIsWeb) return UpdateCheckResult.allowed();
+
     try {
       // 1. Fetch Config
       final doc = await _db.collection('settings').doc('config').get();

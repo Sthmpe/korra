@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -26,9 +27,15 @@ class ClipboardScannerHelper {
     // 1. Skip on Web to avoid browser permission dialog spam
     if (kIsWeb) return;
 
+    // 🚀 DELAY SAFEGUARD: Let the app layout settle and gain focus before accessing clipboard
+    await Future.delayed(const Duration(seconds: 2));
+
     try {
-      // 2. Read clipboard text
-      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      // 2. Read clipboard text with a strict 2s timeout to prevent platform hangs
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain).timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => throw TimeoutException("Clipboard read timed out"),
+      );
       final String? rawText = clipboardData?.text;
       if (rawText == null || rawText.trim().isEmpty) return;
 
@@ -66,7 +73,7 @@ class ClipboardScannerHelper {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => _ClipboardPromptSheet(
+        builder: (ctx) => ClipboardPromptSheet(
           product: product,
           productResult: productResult,
           customer: customer,
@@ -80,14 +87,14 @@ class ClipboardScannerHelper {
   }
 }
 
-class _ClipboardPromptSheet extends StatelessWidget {
+class ClipboardPromptSheet extends StatelessWidget {
   final Product product;
   final ProductFetchResult productResult;
   final Customer customer;
   final String customerUid;
   final double walletBalance;
 
-  const _ClipboardPromptSheet({
+  const ClipboardPromptSheet({
     required this.product,
     required this.productResult,
     required this.customer,

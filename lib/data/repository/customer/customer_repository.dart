@@ -142,4 +142,66 @@ class CustomerRepository implements INotificationRepository {
       );
     }
   }
+
+  Future<String?> initializeWebCheckout({
+    required double amount,
+    required String email,
+    required String name,
+    required String paymentReference,
+  }) async {
+    try {
+      final firebaseUser = auth.currentUser;
+      if (firebaseUser == null) {
+        throw Exception("You must be logged in to initialize payment.");
+      }
+
+      final idToken = await firebaseUser.getIdToken(true);
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final hmacSha256 = Hmac(sha256, utf8.encode(korraSecret));
+      final digest = hmacSha256.convert(utf8.encode(timestamp));
+      final signature = digest.toString();
+
+      debugPrint("🔒 Initializing Monnify web checkout...");
+
+      final response = await fx.invoke(
+        'monnify-checkout',
+        headers: {
+          'x-korra-timestamp': timestamp,
+          'x-korra-signature': signature,
+          'firebase-token': 'Bearer $idToken', 
+        },
+        body: {
+          'amount': amount,
+          'customerName': name.isNotEmpty ? name : 'Korra Guest',
+          'customerEmail': email.isNotEmpty ? email : 'hello@korra.com.ng',
+          'paymentReference': paymentReference,
+          'paymentDescription': 'Korra Wallet Deposit',
+          'redirectUrl': kIsWeb ? Uri.base.toString() : 'https://app.korra.com.ng',
+        },
+      );
+
+      final responseData = response.data;
+      if (responseData == null || responseData['error'] != null) {
+        throw KorraException(
+          responseData != null ? responseData['error'] : 'Failed to parse server response.',
+        );
+      }
+
+      final String? checkoutUrl = responseData['checkoutUrl'];
+      return checkoutUrl;
+    } on FunctionException catch (e) {
+      debugPrint('❌ Supabase Payment Init Failed (Technical): $e');
+      final serverError = (e.details as Map?)?['error'] ?? e.reasonPhrase ?? 'Unknown server error.';
+      throw KorraException(serverError.toString(), technicalDetails: e.toString()); 
+    } catch (err) {
+      debugPrint('CRITICAL ERROR: Monnify web checkout failed: $err');
+      if (err is KorraException) {
+        rethrow;
+      }
+      throw KorraException(
+        'Payment initialization failed. Please try again.',
+        technicalDetails: err.toString(),
+      );
+    }
+  }
 }

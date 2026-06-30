@@ -8,11 +8,17 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/data/models/customer/customer_ui_extentsion.dart';
 import 'package:korra/data/repository/customer/customer_repository.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:monnify_payment_sdk/monnify_payment_sdk.dart'; // 🚀 MONNIFY SDK
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../data/models/customer/customer_model.dart';
 import '../../../logic/bloc/customer/kyc/customer_kyc_bloc.dart';
+//import '../../../logic/bloc/customer/wallet/customer_wallet_cubit.dart';
+//import '../../shared/components/custom_bottom_sheet.dart';
+//import '../../shared/components/custom_button.dart';
+//import '../../shared/components/custom_snackbar.dart';
+import 'monnify_web_helper.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/kyc_verification_sheet.dart';
@@ -37,7 +43,11 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _initMonnify();
+    Future.delayed(Duration.zero, () {
+      if (mounted) {
+        _initMonnify();
+      }
+    });
   }
 
   @override
@@ -48,9 +58,16 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
 
   // 🚀 INITIALIZE MONNIFY SDK
   void _initMonnify() async {
+    // On Web, skip native SDK initialization completely
+    if (kIsWeb) {
+      setState(() => _isInitializingSDK = false);
+      return;
+    }
+
     // 1. Read IS_LIVE securely from the terminal command (--dart-define)
     // It defaults to false if you forget to pass the flag.
     const bool isLive = bool.fromEnvironment('IS_LIVE', defaultValue: false);
+    debugPrint("Monnifyintialling...\n");
 
     // 2. Dynamically fetch the correct keys from the .env file
     final String? apiKey = isLive 
@@ -75,6 +92,7 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
         apiKey: apiKey,
         contractCode: contractCode,
       );
+      debugPrint("Monnify: $monnify\n");
       setState(() => _isInitializingSDK = false);
     } catch (e) {
       log("Monnify Init Error: $e");
@@ -92,15 +110,67 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
       return;
     }
 
+    final shortUid = widget.customer.uid.substring(0, 4).toUpperCase();
+    final paymentReference = 'KORRA-FUND-$shortUid-${DateTime.now().millisecondsSinceEpoch}';
+
+    // 🚀 WEB SDK FLOW (Using script tag iframe modal)
+    if (kIsWeb) {
+      FocusScope.of(context).unfocus();
+      setState(() => _isInitializingSDK = true);
+
+      // 1. Read IS_LIVE securely from the terminal command (--dart-define)
+      const bool isLive = bool.fromEnvironment('IS_LIVE', defaultValue: false);
+
+      // 2. Dynamically fetch the correct keys from the .env file
+      final String? apiKey = isLive 
+          ? dotenv.env['MONNIFY_API_KEY_LIVE'] 
+          : dotenv.env['MONNIFY_API_KEY_TEST'];
+          
+      final String? contractCode = isLive 
+          ? dotenv.env['MONNIFY_CONTRACT_CODE_LIVE'] 
+          : dotenv.env['MONNIFY_CONTRACT_CODE_TEST'];
+
+      if (apiKey == null || contractCode == null || apiKey.isEmpty || contractCode.isEmpty) {
+        showAppSnackbar("Payment keys missing. Please contact support.", SnackbarType.error);
+        setState(() => _isInitializingSDK = false);
+        return;
+      }
+
+      try {
+        initializeMonnifyWeb(
+          amount: amount,
+          apiKey: apiKey,
+          contractCode: contractCode,
+          paymentReference: paymentReference,
+          email: widget.customer.email.isNotEmpty ? widget.customer.email : 'hello@korra.com.ng',
+          name: widget.customer.displayName.isNotEmpty 
+              ? widget.customer.displayName 
+              : '${widget.customer.firstName} ${widget.customer.lastName}'.trim(),
+          uid: widget.customer.uid,
+          onComplete: () {
+            showAppSnackbar("Deposit Initiated! Your wallet will be updated shortly.", SnackbarType.success);
+            _amountController.clear();
+          },
+          onClose: () {
+            debugPrint("Monnify JS SDK modal closed.");
+          },
+        );
+        setState(() => _isInitializingSDK = false);
+      } catch (e) {
+        setState(() => _isInitializingSDK = false);
+        log('Web Monnify JS SDK Error: $e');
+        showAppSnackbar("Payment failed to initialize: $e", SnackbarType.error);
+      }
+      return;
+    }
+
+    // 🚀 MOBILE SDK FLOW
     if (monnify == null) {
       showAppSnackbar("Payment system not ready. Please try again.", SnackbarType.error);
       return;
     }
 
     FocusScope.of(context).unfocus(); // Close keyboard
-
-    final shortUid = widget.customer.uid.substring(0, 4).toUpperCase();
-    final paymentReference = 'KORRA-FUND-$shortUid-${DateTime.now().millisecondsSinceEpoch}';
 
     final transaction = TransactionDetails().copyWith(
       amount: amount,
@@ -117,9 +187,8 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
       final response = await monnify?.initializePayment(transaction: transaction);
       
       if (response != null && (response.transactionStatus == 'PAID' || response.transactionStatus == 'SUCCESS')) {
-        showAppSnackbar("Deposit Successful! Your wallet will be updated shortly.", SnackbarType.success);
+        showAppSnackbar("Deposit Initiated! Your wallet will be updated shortly.", SnackbarType.success);
         _amountController.clear();
-        // Note: Your backend webhook will catch this and update the Firebase wallet balance
       } else {
         showAppSnackbar("Transaction was not completed.", SnackbarType.info);
       }

@@ -554,7 +554,17 @@ flutter analyze lib/
 - Created [app_download_interstitial.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/pwa/app_download_interstitial.dart) to show a download recommendation overlay on mobile web browsers (Android and iOS).
 - Utilized SharedPreferences to cache user dismissals so they are not prompted again during the active session.
 - Configured dynamic redirection links pointing to the Play Store closed test tracks per build flavor (`customer` vs `merchant`).
-- Integrated the rendering logic into the root stack builder of [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart).
+- Integrated the rendering logic into the root stack builder of [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) (currently commented out as requested).
+
+### Monnify, Clipboard, and Product Casing Bug Fixes (Task J):
+- **Monnify Init Fix**: Wrapped the `_initMonnify` call in [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart) inside `Future.delayed(Duration.zero)` to prevent synchronous `setState` build-time crashes when live keys are missing.
+- **Clipboard Timeout & Delay**: Added a 2-second delay and a 2-second `.timeout()` guard to `Clipboard.getData` inside [clipboard_scanner_helper.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/clipboard_scanner_helper.dart) to prevent native channel hangs on launch.
+- **Product Code Normalization**: Updated the query in [plans_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/customer/plans_repository.dart) to automatically convert codes to uppercase (e.g., `K-SMTN-91F175A`) before querying Firestore. This ensures search matches succeed regardless of whether the customer typed or pasted it in lowercase, uppercase, or mixed-case.
+- **Monnify Web JS SDK Modal Overlay**:
+  * Injected the Monnify JS SDK script tag inside the HTML head of [index.customer.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.customer.html) and [web/index.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/index.html).
+  * Updated [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart) to import `dart:js` and invoke `MonnifySDK.initialize` directly via JS interop when running on Web (`kIsWeb`).
+  * Passed the required `metadata: { customerUid: uid }` payload to ensure your Monnify webhook correctly associates successful transactions with the correct customer ID in Firebase.
+  * This keeps web payments inside the application overlay, preventing browser redirects and app reloads while ensuring Firestore updates stream in real-time.
 
 ---
 

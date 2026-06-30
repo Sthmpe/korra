@@ -428,13 +428,15 @@ extension CustomerPlans on CustomerRepository {
   }
 
   Future<ProductFetchResult?> getProduct(String productCode) async {
+    final clean = productCode.trim().toUpperCase();
+
     final snap = await firestore
         .collection("products")
-        .where("code", isEqualTo: productCode)
+        .where("code", isEqualTo: clean)
         .limit(1)
         .get();
 
-    debugPrint("🔍 Product Fetch Snap: ${snap.docs.length} found for code $productCode");
+    debugPrint("🔍 Product Fetch Snap: ${snap.docs.length} found for code $clean (input: $productCode)");
 
     if (snap.docs.isEmpty) {
       return null;
