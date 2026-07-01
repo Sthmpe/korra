@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:761341878280:web:fc262ef313f9b7dbbcf1bd',
     messagingSenderId: '761341878280',
     projectId: 'korra-prod-63687',
-    authDomain: 'korra.com.ng',
+    authDomain: 'auth.korra.com.ng',
     storageBucket: 'korra-prod-63687.firebasestorage.app',
     measurementId: 'G-YKXMC6MD2F',
   );
