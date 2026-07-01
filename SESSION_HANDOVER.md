@@ -568,6 +568,10 @@ flutter analyze lib/
 - **Vercel Caching Bypass for Environment Configurations**:
   * Added a top-level rule to [vercel.json](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/vercel.json) to disable caching specifically for `.env` and `.env.prod` files (matching path `/assets/.env*`).
   * This bypasses the default 1-year browser/CDN caching for web assets, ensuring customers instantly load newly updated API keys without requiring manual cache clears or incognito windows.
+- **Temporary Cache-Buster Script**:
+  * Injected a temporary cache-reset script inside [index.customer.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.customer.html), [index.merchant.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.merchant.html), and [web/index.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/index.html).
+  * The script automatically unregisters old service workers and clears browser cache storage on the next page load for returning users.
+  * *Note: Recommend removing this script after a couple of days to restore standard offline caching benefits.*
 
 ---
 
