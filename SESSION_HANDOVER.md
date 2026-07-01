@@ -565,6 +565,9 @@ flutter analyze lib/
   * Updated [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart) to import `dart:js` and invoke `MonnifySDK.initialize` directly via JS interop when running on Web (`kIsWeb`).
   * Passed the required `metadata: { customerUid: uid }` payload to ensure your Monnify webhook correctly associates successful transactions with the correct customer ID in Firebase.
   * This keeps web payments inside the application overlay, preventing browser redirects and app reloads while ensuring Firestore updates stream in real-time.
+- **Vercel Caching Bypass for Environment Configurations**:
+  * Added a top-level rule to [vercel.json](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/vercel.json) to disable caching specifically for `.env` and `.env.prod` files (matching path `/assets/.env*`).
+  * This bypasses the default 1-year browser/CDN caching for web assets, ensuring customers instantly load newly updated API keys without requiring manual cache clears or incognito windows.
 
 ---
 

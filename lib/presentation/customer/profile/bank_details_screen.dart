@@ -131,6 +131,13 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
           : dotenv.env['MONNIFY_CONTRACT_CODE_TEST'];
 
       if (apiKey == null || contractCode == null || apiKey.isEmpty || contractCode.isEmpty) {
+        debugPrint("🔍 DIAGNOSTIC: isLive=$isLive");
+        debugPrint("🔍 DIAGNOSTIC: keys in dotenv: ${dotenv.env.keys.toList()}");
+        debugPrint("🔍 DIAGNOSTIC: MONNIFY_API_KEY_LIVE=${dotenv.env['MONNIFY_API_KEY_LIVE']}");
+        debugPrint("🔍 DIAGNOSTIC: MONNIFY_CONTRACT_CODE_LIVE=${dotenv.env['MONNIFY_CONTRACT_CODE_LIVE']}");
+        debugPrint("🔍 DIAGNOSTIC: MONNIFY_API_KEY_TEST=${dotenv.env['MONNIFY_API_KEY_TEST']}");
+        debugPrint("🔍 DIAGNOSTIC: MONNIFY_CONTRACT_CODE_TEST=${dotenv.env['MONNIFY_CONTRACT_CODE_TEST']}");
+        
         showAppSnackbar("Payment keys missing. Please contact support.", SnackbarType.error);
         setState(() => _isInitializingSDK = false);
         return;
