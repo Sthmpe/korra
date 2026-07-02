@@ -1,11 +1,11 @@
 {
-  "name": "Korra",
-  "short_name": "Korra",
-  "description": "Reserve now, pay in parts, own with ease.",
+  "name": "Korra Business",
+  "short_name": "Korra Biz",
+  "description": "A better way to accept installment payments",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#A54600",
-  "theme_color": "#A54600",
+  "background_color": "#FFFFFF",
+  "theme_color": "#000000",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [
