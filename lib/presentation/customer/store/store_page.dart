@@ -9,6 +9,7 @@ import '../../../config/constants/colors.dart';
 import '../../../config/constants/sizes.dart';
 import '../../../config/routes/app_routes.dart';
 import 'widgets/discover_store_list_item.dart';
+import '../storefront/widgets/mock_marketplace_data.dart';
 
 class StorePage extends StatefulWidget {
   final String customerUid;
@@ -146,12 +147,26 @@ class _StorePageState extends State<StorePage> {
         }
 
         final docs = snapshot.data?.docs ?? [];
+        final bool useMock = docs.isEmpty;
+
+        final List<Map<String, dynamic>> mockFiltered = [];
+        if (useMock) {
+          final query = _searchQuery.toLowerCase();
+          for (final vendor in MockMarketplaceData.mockVendors) {
+            final storeMap = vendor['store'] as Map<String, dynamic>? ?? {};
+            final name = (storeMap['storeName'] ?? '').toString().toLowerCase();
+            final slug = (storeMap['slug'] ?? '').toString().toLowerCase();
+            final vendorId = vendor['uid'].toString().toLowerCase();
+            if (name.contains(query) || slug.contains(query) || vendorId.contains(query)) {
+              mockFiltered.add(vendor);
+            }
+          }
+        }
 
         // Apply local search filter
         final filteredDocs = docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>? ?? {};
           final storeMap = data['store'] as Map<String, dynamic>? ?? {};
-          final personalMap = data['personal'] as Map<String, dynamic>? ?? {};
 
           final name = (storeMap['storeName'] ?? '').toString().toLowerCase();
           final slug = (storeMap['slug'] ?? '').toString().toLowerCase();
@@ -162,13 +177,15 @@ class _StorePageState extends State<StorePage> {
           return name.contains(query) || slug.contains(query) || code.contains(query) || vendorId.contains(query);
         }).toList();
 
+        final totalCount = useMock ? mockFiltered.length : filteredDocs.length;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
               child: Text(
-                _searchQuery.isEmpty ? "Explore Stores" : "Search Results (${filteredDocs.length})",
+                _searchQuery.isEmpty ? "Explore Stores" : "Search Results ($totalCount)",
                 style: GoogleFonts.inter(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w700,
@@ -176,24 +193,39 @@ class _StorePageState extends State<StorePage> {
                 ),
               ),
             ),
-            if (filteredDocs.isEmpty)
+            if (totalCount == 0)
               _buildSearchEmptyState()
             else
               ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 padding: EdgeInsets.symmetric(horizontal: 16.w),
-                itemCount: filteredDocs.length,
+                itemCount: totalCount,
                 itemBuilder: (context, index) {
-                  final doc = filteredDocs[index];
-                  final vendorId = doc.id;
-                  final vendorData = doc.data() as Map<String, dynamic>? ?? {};
-                  final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
+                  final String vendorId;
+                  final String name;
+                  final String description;
+                  final String logoUrl;
+                  final String slug;
 
-                  final name = storeMap['storeName'] ?? 'Unknown Merchant';
-                  final description = storeMap['description'] ?? 'No store description available.';
-                  final logoUrl = storeMap['logoUrl'] ?? '';
-                  final slug = storeMap['slug'] ?? vendorId;
+                  if (useMock) {
+                    final vendor = mockFiltered[index];
+                    vendorId = vendor['uid'];
+                    final storeMap = vendor['store'] as Map<String, dynamic>? ?? {};
+                    name = storeMap['storeName'] ?? 'Unknown Merchant';
+                    description = storeMap['description'] ?? 'No store description available.';
+                    logoUrl = storeMap['logoUrl'] ?? '';
+                    slug = storeMap['slug'] ?? vendorId;
+                  } else {
+                    final doc = filteredDocs[index];
+                    vendorId = doc.id;
+                    final vendorData = doc.data() as Map<String, dynamic>? ?? {};
+                    final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
+                    name = storeMap['storeName'] ?? 'Unknown Merchant';
+                    description = storeMap['description'] ?? 'No store description available.';
+                    logoUrl = storeMap['logoUrl'] ?? '';
+                    slug = storeMap['slug'] ?? vendorId;
+                  }
 
                   return DiscoverStoreListItem(
                     vendorId: vendorId,

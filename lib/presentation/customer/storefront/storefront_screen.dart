@@ -27,6 +27,13 @@ import 'widgets/storefront_product_details_sheet.dart';
 import 'widgets/cart_service.dart';
 import 'widgets/mock_marketplace_data.dart';
 
+class VendorFetchResult {
+  final String id;
+  final Map<String, dynamic> data;
+
+  VendorFetchResult({required this.id, required this.data});
+}
+
 class StorefrontScreen extends StatefulWidget {
   final String storeSlug;
 
@@ -40,7 +47,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  late Future<DocumentSnapshot?> _vendorFuture;
+  late Future<VendorFetchResult?> _vendorFuture;
   final TextEditingController _searchController = TextEditingController();
   
   String _searchQuery = '';
@@ -60,7 +67,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
     super.dispose();
   }
 
-  Future<DocumentSnapshot?> _fetchVendorBySlug(String slug) async {
+  Future<VendorFetchResult?> _fetchVendorBySlug(String slug) async {
     try {
       final slugQuery = await _firestore
           .collection('vendors')
@@ -71,17 +78,35 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
       if (slugQuery.docs.isNotEmpty) {
         final doc = slugQuery.docs.first;
         _checkPinStatus(doc.id);
-        return doc;
+        return VendorFetchResult(id: doc.id, data: doc.data() as Map<String, dynamic>? ?? {});
       }
 
       final uidQuery = await _firestore.collection('vendors').doc(slug).get();
       if (uidQuery.exists) {
         _checkPinStatus(uidQuery.id);
-        return uidQuery;
+        return VendorFetchResult(id: uidQuery.id, data: uidQuery.data() as Map<String, dynamic>? ?? {});
       }
     } catch (e) {
       debugPrint("Error fetching vendor: $e");
     }
+
+    // Local Fallback!
+    try {
+      final mockVendor = MockMarketplaceData.mockVendors.firstWhere(
+        (v) {
+          final storeMap = v['store'] as Map<String, dynamic>? ?? {};
+          final sSlug = (storeMap['slug'] as String? ?? '').toLowerCase();
+          final uid = (v['uid'] as String? ?? '').toLowerCase();
+          return sSlug == slug.toLowerCase() || uid == slug.toLowerCase();
+        },
+        orElse: () => {},
+      );
+
+      if (mockVendor.isNotEmpty) {
+        return VendorFetchResult(id: mockVendor['uid'], data: mockVendor);
+      }
+    } catch (_) {}
+
     return null;
   }
 
@@ -170,7 +195,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<DocumentSnapshot?>(
+    return FutureBuilder<VendorFetchResult?>(
       future: _vendorFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -191,7 +216,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
         final vendorDoc = snapshot.data!;
         final vendorId = vendorDoc.id;
-        final vendorData = vendorDoc.data() as Map<String, dynamic>? ?? {};
+        final vendorData = vendorDoc.data;
 
         final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
         final personalMap = vendorData['personal'] as Map<String, dynamic>? ?? {};

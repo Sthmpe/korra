@@ -23,6 +23,10 @@ class KorraOfflineGate extends StatelessWidget {
               child: child
             ),
 
+            // Dark Overlay (Fade in)
+            if (isOffline)
+              const ModalBarrier(dismissible: false, color: Colors.black54),
+
             // 2. Top Banner (Animated Slide In)
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
@@ -37,27 +41,18 @@ class KorraOfflineGate extends StatelessWidget {
             AnimatedPositioned(
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOutCubic,
-              bottom: isOffline ? 0 : -300, // Hide off-screen
+              bottom: isOffline ? 0 : -350, // Hide off-screen
               left: 0,
               right: 0,
-              child: Stack(
-                children: [
-                  // Dark Overlay (Fade in)
-                  if (isOffline)
-                    const ModalBarrier(dismissible: false, color: Colors.black54),
-                    
-                  // The Sheet
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: EdgeInsets.all(16.w),
-                        child: const _OfflineSheet(),
-                      ),
-                    ),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.all(16.w),
+                    child: const _OfflineSheet(),
                   ),
-                ],
+                ),
               ),
             ),
           ],
