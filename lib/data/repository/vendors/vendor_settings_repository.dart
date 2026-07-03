@@ -89,4 +89,41 @@ extension VendorSettingsExtension on VendorRepository {
       throw Exception("Error saving details: $e");
     }
   }
+
+  // SAVE STOREFRONT SETTINGS
+  Future<void> saveStorefrontSettings({
+    required String uid,
+    required String storeName,
+    required String description,
+    required String slug,
+    required String logoUrl,
+    required String coverUrl,
+    required String whatsappGroup,
+    required String instagram,
+    required String twitter,
+    required String contactPhone,
+    required bool absorbOutrightFee,
+  }) async {
+    try {
+      await firestore.collection('vendors').doc(uid).set({
+        'store': {
+          'storeName': storeName,
+          'description': description,
+          'slug': slug.toLowerCase().trim().replaceAll(' ', '-'),
+          'logoUrl': logoUrl,
+          'coverUrl': coverUrl,
+          'contactPhone': contactPhone,
+          'absorbOutrightFee': absorbOutrightFee,
+        },
+        'socials': {
+          'whatsappGroup': whatsappGroup,
+          'instagram': instagram,
+          'twitter': twitter,
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception("Error saving storefront settings: $e");
+    }
+  }
 }

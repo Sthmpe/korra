@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -261,10 +262,19 @@ class _VendorCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // 1. TOP SECTION: Info & Credit
-              Padding(
-                padding: EdgeInsets.all(16.r),
-                child: Row(
+              // 1. TOP SECTION: Info & Credit (Clickable to Storefront)
+              InkWell(
+                onTap: () {
+                  final String slug = storeMap['slug'] ?? vendorId;
+                  Get.toNamed('/store/$slug');
+                },
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16.r),
+                  topRight: Radius.circular(16.r),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(16.r),
+                  child: Row(
                   children: [
                     // Avatar
                     Container(
@@ -316,8 +326,9 @@ class _VendorCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
 
-              Divider(height: 1, color: Colors.grey.shade100),
+            Divider(height: 1, color: Colors.grey.shade100),
 
               // 2. BOTTOM SECTION: Social Actions
               Padding(

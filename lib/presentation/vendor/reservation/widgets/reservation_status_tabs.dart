@@ -34,7 +34,7 @@ class ReservationStatusTabs extends StatelessWidget {
         children: [
           // 1. Completed Formerly 'Ready' (High Priority - Green)
           _Tab(
-            label: "Completed",
+            label: "Ready to Deliver",
             count: readyCount,
             isActive: current == ReservationStatus.readyForPickup,
             onTap: () => onChanged(ReservationStatus.readyForPickup),
@@ -60,7 +60,7 @@ class ReservationStatusTabs extends StatelessWidget {
 
           // 4. FULFILLED (Formerly "Completed")
           _Tab(
-            label: "Fulfilled",
+            label: "Delivered",
             count: completedCount,
             isActive: current == ReservationStatus.completed,
             onTap: () => onChanged(ReservationStatus.completed),

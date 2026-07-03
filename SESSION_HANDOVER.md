@@ -1,12 +1,18 @@
 # 🚀 Korra — Session Handover Document
-> **Date:** 26 June 2026  
+> **Date:** 3 July 2026  
 > **Purpose:** Complete technical handover so any developer (or AI session) can pick up exactly where we left off without asking "what did we do?" ever again.
+
+> [!NOTE]
+> **Terminology (as of 3 July 2026):** The vendor "Reservations" tab has been renamed to **"Orders"**. All references to "Fulfilled/Fulfill" in the vendor UI are now **"Delivered/Deliver"**. The `plans` Firestore collection is for **layaway/installment orders only**. A separate `orders` collection (TBD) will handle outright purchases. The `isOutright` getter has been removed from the `Reservation` model.
 
 > [!WARNING]
 > Only focus on the active conversation, `SESSION_HANDOVER.md`, and the `implementation_plan.md` artifact. Ignore all other `.md` files in the root directory (such as `BATCH1_SCAN.md` or `MONNIFY_MIGRATION.md`) as they are outdated reference files.
 
 > [!IMPORTANT]
-> **CRITICAL RULE:** Focus strictly on this conversation context, `SESSION_HANDOVER.md`, and the `implementation_plan.md` artifact. Avoid looking at or editing other `.md` files (like `BATCH1_SCAN.md` or `MONNIFY_MIGRATION.md`) as they are outdated. Do not perform any `flutter analyze` or execution of commands; the user will handle them locally. Keep UI styles and business logic 100% identical. Never assume code is wrong; ask the user first.
+> **CRITICAL AGENT RULES:**
+> 1. **BACKGROUND TASKS & MCP:** Do NOT run any background tasks or MCP server tools (including `analyze_files` or `flutter analyze` terminal commands) without asking the user first.
+> 2. **WIDGET DECOMPOSITION:** Always split and decompose large widget trees into separate files in their respective `/widgets/` directory. Do not write inline method widgets or put large complex widget blocks inside a single page file. Keep page files lean (under 500 lines) and optimized for memory/performance.
+> 3. **SCOPE LIMITS:** Focus strictly on this active conversation, `SESSION_HANDOVER.md`, and the `implementation_plan.md` artifact. Avoid looking at or editing other `.md` files (like `BATCH1_SCAN.md` or `MONNIFY_MIGRATION.md`). Keep UI styles and business logic 100% identical. Never assume code is wrong; ask the user first.
 
 ---
 
@@ -572,6 +578,62 @@ flutter analyze lib/
   * Injected a temporary cache-reset script inside [index.customer.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.customer.html), [index.merchant.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.merchant.html), and [web/index.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/index.html).
   * The script automatically unregisters old service workers and clears browser cache storage on the next page load for returning users.
   * *Note: Recommend removing this script after a couple of days to restore standard offline caching benefits.*
+- **Automated Merchant Storefronts**:
+  * Added route constant `Routes.customerStorefront = '/store/:slug'` in [app_routes.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_routes.dart) and registered it in [customer_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/customer_pages.dart) for deep-linking compatibility.
+  * Implemented [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) displaying branded cover/banner, contact links, pin/unpin toggles, search, and category filtering.
+  * Integrated navigation inside [my_vendors_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/my_vendors_screen.dart) to redirect users to their storefronts on card tap.
+  * Created [store_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/store/store_page.dart) and integrated it as the third navigation tab (Stores) in [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart), aligning bottom navigation order to `{ Home, Plans, Stores, Profile }`.
+  * Added dynamic product preview thumbnails inside the Explore Stores list item cards, displaying up to 3 featured products under each merchant.
+  * Configured [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) with a header back button, resolved the customer profile type casting exception when clicking product cards, and added a receipt button in the top right to stream purchase history created specifically with that merchant.
+- **Storefront Performance Optimization & Refactoring**:
+  * Decomposed large inline widget trees in `StorefrontScreen` and `StorePage` into standalone memory-efficient widgets under respective `/widgets/` subdirectories:
+    * [discover_store_list_item.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/store/widgets/discover_store_list_item.dart)
+    * [storefront_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_header.dart)
+    * [storefront_filter_bar.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_filter_bar.dart)
+    * [storefront_product_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_card.dart)
+    * [storefront_purchase_history_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_purchase_history_sheet.dart)
+  * Cleansed and streamlined [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) from >1000 lines down to ~400 lines to optimize CPU rendering cycles and memory usage.
+- **Merchant Product Installment Toggles & UI Enhancements**:
+  * Integrated an "Allow Installments (Reservation)" toggle switch into [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) and [product_edit_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart).
+  * Collapses/hides timeline selectors and model tabs when disabled, streamlining product listing.
+  * Mapped `allowReservation` through the BLoC layer (using `VendorProductsAdd` and `VendorProductsEdit` in `vendor_products_event.dart`) to persist the boolean state to Cloud Firestore.
+  * Resolved compile-time errors in `product_edit_screen.dart` and `products_page.dart` by adding `allowReservation` (with JSON mapping and props) to `ProductItem` model inside `vendor_products_state.dart`, and corrected `unselectedStyle` to `unselectedLabelStyle` on the custom TabBar indicator.
+  * Redesigned the product card in [product_list_item_premium.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_list_item_premium.dart) using clean, border-free containers, standard Material and `MdiIcons` (removing `iconsax`), a flat monospace product code text, and replaced the outright info icon with a clean shopping bag icon.
+  * Added top padding to the search bar inside [vendor_products_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/vendor_products_body.dart) for clean breathing room.
+- **Product Management Widgets Refactoring (Memory & Performance Optimization)**:
+  * Decomposed large inline widget trees in `AddProductPage`, `ProductEditScreen`, and `ProductDetailsScreen` into standalone, memory-efficient widgets under the `/widgets/` directory:
+    * [product_restriction_banner.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_restriction_banner.dart)
+    * [product_submit_area.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_submit_area.dart)
+    * [product_timeline_logic_box.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_timeline_logic_box.dart)
+    * [product_strict_settings_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_strict_settings_card.dart)
+    * [product_direct_settings_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_direct_settings_card.dart)
+    * [product_details_gallery.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_gallery.dart)
+    * [product_details_timeline.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_timeline.dart)
+  * Shrunk page controller/viewer sizes: `Add_product_page.dart` (~1300 to ~900 lines), `product_edit_screen.dart` (~1200 to ~700 lines), `product_details_screen.dart` (~500 to ~330 lines) to prevent unnecessary rebuild churn and CPU rendering overhead.
+  * Extracted image gallery slider index page tracking into a localized stateful widget (`ProductDetailsGallery`) to eliminate main details page rebuilds on slide actions.
+- **Storefront Contact Privacy & Link Sharing**:
+  * Introduced a **"Contact Phone (Business Line)"** setting inside [storefront_settings.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/storefront_settings.dart) with a phone prefix icon, alongside WhatsApp, Instagram, and Twitter (X) fields utilizing `FaIcon` (FontAwesome).
+  * Defaults to the verified personal number as a fallback.
+  * Enforced storefront slug uniqueness checking in `_saveSettings` to prevent duplicate slugs across merchants.
+  * Added a **"Share Store Link"** shortcut below the slug input using `share_plus` to allow quick sharing of the `https://korra.shop/store/{slug}` storefront link.
+  * Modified the repository [vendor_settings_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_settings_repository.dart) and [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) to write and fetch this contact number.
+- **Product Details & Outright Purchases**:
+  * Tap gestures on storefront product cards now trigger a dynamic **Product Details Sheet** instead of redirecting directly to plans.
+  * Displays a green "Installment Plan Available" badge if installments are enabled, or a grey "Outright Purchase Only" badge if disabled.
+  * Configured card model tags to display **"OUTRIGHT"** if `allowReservation` is false.
+  * Implemented a **"Buy Outright"** action with confirmation. Executes a Firestore write batch to deduct the price from the customer's `availableBalance`, decrement the product's `availableStock`, and record the order as a completed plan with `modelType: 'outright'` and `status: 'completed'`.
+- **Unified Debug App Switcher Discarded**:
+  * Deleted `lib/main_debug.dart` as requested by the user, adhering strictly to target build configurations.
+- **Compilation Correctness & Deprecations Resolution**:
+  * Resolved the remaining compile error in [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) by defining `_showContactSheet` using `ContactSupportSheet`, and removed the unused `_blockMessage` field and its corresponding handler.
+  * Removed unused classes, imports, and methods across `product_details_screen.dart`, `Add_product_page.dart`, and `product_edit_screen.dart`.
+  * Replaced deprecated `withOpacity` calls with `.withValues(alpha: ...)` across details screens and timeline widgets.
+  * Corrected deprecated `activeColor` to `activeThumbColor` for Switch widgets.
+- **Outright Purchase Order Handling (Vendor-Side UI)**:
+  * Modified the `Reservation` model inside [reservation.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/reservation.dart) to parse and support `modelType` (e.g., `'outright'`), introducing an `isOutright` getter.
+  * Refactored [reservation_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/reservation_tile.dart) (list view item) to hide active saving progress percentages/progress bars for outright purchases, showing a solid green "Outright Purchase" status with 1.0 progress.
+  * Updated status badges on the list view tiles to show "Ready to Deliver" (for ready to fulfill state) or "Delivered" (for history state) when the order is an outright purchase.
+  * Updated [vendor_reservation_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/vendor_reservation_detail_sheet.dart) to show "Order Details", "Ready to Deliver / Order Delivered", "Mark as Delivered" actions, and contextualize the financial breakdown to hide outstanding balances for outright payments.
 
 ---
 
@@ -638,4 +700,123 @@ flutter analyze lib/
 
 ---
 
-*Last updated: 29 June 2026. Update this document at the start of each new session with what changed.*
+*Last updated: 3 July 2026. Update this document at the start of each new session with what changed.*
+
+---
+
+## 🛒 Orders Page — Architecture Decision (3 July 2026)
+
+### What Changed — Terminology
+The vendor "Reservations" page and all related UI text has been renamed:
+
+| Old | New |
+|---|---|
+| Reservations (page title) | Orders |
+| Reservation Details | Order Details |
+| Ready to Fulfill | Ready to Deliver |
+| Mark as Fulfilled | Mark as Delivered |
+| Fulfilled (tab + badge) | Delivered |
+| No reservations found | No orders found |
+| Confirm Fulfillment | Confirm Delivery |
+
+Files changed: `reservations_page.dart`, `reservation_status_tabs.dart`, `reservation_tile.dart`, `vendor_reservation_detail_sheet.dart`, `reservation_list.dart`, `reservation.dart` (removed `isOutright` getter).
+
+---
+
+### Database Split — Agreed Architecture
+
+| Collection | Purpose |
+|---|---|
+| `plans/` | **Layaway/installment reservations ONLY** — one plan = one product, one customer |
+| `orders/` | **Outright purchases ONLY** — one order = one customer, multiple line items (TBD, not yet built) |
+
+> [!IMPORTANT]
+> The `isOutright` getter has been **removed** from `Reservation` model. The `plans` collection is now strictly for layaway. Outright purchases will have their own `OutrightOrder` model and `orders` Firestore collection.
+
+---
+
+### Orders Page — Swipe UX (NOT YET BUILT)
+
+The `ReservationsPage` (renamed Orders) will become a **horizontal PageView** with two panels:
+
+```
+Page 0 (default) — Reservations    ← from plans/ collection
+Page 1            — Outright Orders ← from orders/ collection (TBD)
+```
+
+A custom `orders_panel_switcher.dart` swipe indicator sits at the top of the page to switch between panels. Full file breakdown is in `implementation_plan.md`.
+
+**Reservations panel status tabs:** New · Active · Ready to Deliver · Delivered · Closed
+
+**Outright orders panel status tabs:** New · Ready to Deliver · Delivered · Cancelled
+*(No "Active" tab — outright purchases are paid instantly)*
+
+---
+
+### Storefront Fee Policy (Already Implemented)
+
+Added to [storefront_settings.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/storefront_settings.dart):
+
+- **Reservations:** 3.5% fee always on customer — non-configurable, not shown in settings
+- **Outright:** Merchant can choose via toggle in Storefront Settings → "Outright Purchase Settings"
+  - **Customer Pays Fee** (default) → 3.5% (max ₦7,500) added to checkout total
+  - **I Absorb the Fee** → 3.5% (max ₦7,500) deducted from vendor payout
+
+Stored in Firestore at `vendors/{uid}/store.absorbOutrightFee` (bool).
+Read from `vendor_settings_repository.dart` → `saveStorefrontSettings()`.
+
+> [!NOTE]
+> The checkout and payout logic must read `store.absorbOutrightFee` when processing an outright order payment. This wiring is **not yet done** — it's a customer-side + backend (Supabase Edge Function) concern for a future session.
+
+---
+
+### Update: 3 July 2026 (Orders Page Swipe Architecture Implemented)
+We have fully implemented the Swipe UX / PageView architecture for the Orders screen:
+- **Model:** Created [OutrightOrder](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/outright_order.dart) with support for multi-item arrays, item mapping, total amount, and status helpers.
+- **Repository:** Created [OutrightOrdersRepository](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/outright_orders_repository.dart) to handle real-time streaming counts and pagination for the new `orders` collection.
+- **BLoC:** Implemented [OutrightOrdersBloc](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_bloc.dart) (and its [events](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_event.dart) / [states](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_state.dart)) to manage tabs, search queries, pagination state, and delivery confirmation state.
+- **UI & Widgets:**
+  - [orders_panel_switcher.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/orders_panel_switcher.dart): Toggle switcher with animated selection slide.
+  - [reservations_panel.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/reservations_panel.dart) & [outright_orders_panel.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_orders_panel.dart): Decoupled widget pages under 500 lines.
+  - [outright_order_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_tile.dart) & [outright_order_list.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_list.dart): Paginated lists displaying order previews and items count.
+  - [outright_order_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_detail_sheet.dart): Details modal sheet showing line-item summary, customer contact channels (phone, WhatsApp using FontAwesome icon support), and action button.
+- **Integration:** Updated [reservations_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart) with `MultiBlocProvider` and `PageView` containing both panels.
+- **Search Header Redesign:** Converted [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart) to a stateful widget to support an expanding title bar search mode. Integrated this inside [reservations_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart), letting merchants click a search action icon in the header to filter orders dynamically as they type. Deleted the redundant full-width `ReservationSearchBar` inputs from both panel views to clean up screen real estate.
+- **Icons Standardization:** Standardized all UI icons across [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart), [outright_order_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_detail_sheet.dart), [outright_order_list.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_list.dart), and [outright_order_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_tile.dart) to use standard Material `Icons` (such as `Icons.search`, `Icons.arrow_back`, `Icons.call`, `Icons.inbox_outlined`, `Icons.person_outline`, etc.) in place of `Iconsax` to keep UI consistent and lightweight.
+- **Search Input Size Tuning:** Wrapped the text field inside a light-grey search pill container (`height: 36.h`, `borderRadius: 8.r`) in [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart) with `isDense: true` and internal search/clear icons. This makes the search input look extremely clean, compact, and native to the title bar, eliminating any oversized layout issues.
+- **Store Ratings & Reviews:** Implemented the rating summary and list of customer feedback within the Store page tab bar:
+  - **Data Model:** Created [VendorReview](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/vendor_review.dart) model.
+  - **Repository:** Created [VendorReviewsRepository](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_reviews_repository.dart) extension on `VendorRepository` to stream customer reviews from `vendors/{uid}/reviews` ordered by date.
+  - **UI & Widgets:** Built [vendor_reviews_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/vendor_reviews_body.dart) displaying average rating score, star percentage progress bars, and scrollable review feed.
+  - **Integration:** Modified [products_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/products_page.dart) to check for `kIsWeb` dynamically. In mobile app mode, it instantiates 3 tabs (Products, Storefront, Reviews) and changes header title to "Ratings & Reviews" on the third tab. In web mode, it collapses back to 2 tabs.
+- **Firestore Security Rules:** Updated [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to include read/write permissions for the `orders` collection and the `vendors/{uid}/reviews` subcollection, resolving the `PERMISSION_DENIED` errors on both reviews and outright orders.
+- **Mock Data Seeding Actions:** Integrated a seeding system to quickly insert mock/demo reviews and outright orders for testing (with a `isMock: true` flag), and a corresponding "Clear Demo Data" warning banner at the top of the reviews screen for easy cleanup.
+- **Store Campaigns & Visibility (Plan D):** Added marketing suite:
+  - **Isolated Visibility Model:** Built [VendorVisibility](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/vendor_visibility.dart) to store Top Seller / Most Visited reach stats and Highlighted status without modifying the core `Vendor` model.
+  - **Firestore Rules:** Updated [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to permit read/write on campaigns and visibility.
+  - **Campaigns Main Body:** [vendor_campaigns_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/vendor_campaigns_body.dart) (under 250 lines) managing list views.
+  - **Decomposed UI Sub-Widgets:** 
+    - [campaign_reach_cards.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/campaign_reach_cards.dart): Renders analytics stats (renamed "orders volume" instead of plans).
+    - [highlighted_store_promo.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/highlighted_store_promo.dart): Borderless card using local state switch to avoid page refreshes.
+    - [campaign_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/campaign_card.dart): Shows 24h active/expired badges, 1-line caption, tags, and product lists.
+    - [create_campaign_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart): Bottom sheet form with character validations (20 for title/tags, 40 for caption), compulsory banner photo, and 3-active campaigns limit check.
+    - [product_selector_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/product_selector_page.dart): Selection page listing in-stock inventory products in an e-commerce grid.
+- **Rules updates:** Added delete rules to orders MATCH block inside [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to enable mock order deletes.
+- **Customer Storefront Redesign (Plan E):** Implemented Pinterest/Temu UI:
+  - **Pin/Unpin Permission Fix:** Fixed customer Firestore rules in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) by updating `/customers/{uid}/my_vendors/{vendorId}` rules to allow write access to resolving pin failures.
+  - **Featuring Properties:** Added `isFeatured`, `campaignTag`, and `discountedPrice` to [product_model.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/product_model.dart) with full mapping logic.
+  - **Merchant Featuring Switches:** Added the "Feature this product" switch to both [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) and [product_edit_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart).
+  - **Horizontal Featured Carousel:** Implemented a horizontal scrolling list view for featured products on the customer storefront.
+  - **Pinterest Staggered Masonry Grid:** Replaced rigid grid layouts with a staggered masonry style (`SliverMasonryGrid.count`) inside [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) and implemented dynamic card aspect ratios based on product ID hashes in [storefront_product_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_card.dart) to deliver genuine staggered grid heights.
+  - **Persistent Multi-Store Shopping Cart:** Created [storefront_cart_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_cart_sheet.dart) supporting quantity controls, item removals, subtotal tracking, and batch outright purchase checkouts. Carts are persisted per-store in Firestore under `/customers/{customerId}/carts/{vendorId}` so they sync across devices and sessions. Added a shopping bag badge button in the storefront header.
+  - **Details Sheet Carousel & Quantities:** Redesigned the product details sheet to show a swipable horizontal `PageView.builder` image carousel with page indicators, a quantity adjuster row, and an **"Add to Cart"** button.
+  - **Shein/Temu Circular Category Cards:** Upgraded storefront category filters in [storefront_filter_bar.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_filter_bar.dart) to display circular collection cards with representative icons instead of simple text chips.
+  - **Price Sorting Filter:** Added a sleek Price Sorting toggle chip (`Default` / `Price: Low to High` / `Price: High to Low`) in the filter bar which applies responsive in-memory sorting to the feed.
+  - **Store Ratings & Customer Reviews Feed:** Added a stream listener in the header to display the store's average stars and review count, and moved the reviews list to open inside a dedicated reviews modal sheet when clicking on the `4.4 ★★★★☆ reviews >` rating line under the store name.
+  - **Dev Seeder & Rules Updates:** Updated write permissions for `/products/{productId}` in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to allow seeding from the app. Seeder seeds 4 mock merchants and 12 detailed products (with multiple images for swiping).
+  - **Active Selection Borders Removed:** Active category collections and price sort toggle filter chips now remove their outline borders entirely when selected to offer a cleaner look.
+  - **Visual Spacing & Icons:** Balanced search bar spacing and added proportional padding around the "Shop by Collection" header. Upgraded the shopping bag app bar icon to a solid, bold `Icons.shopping_bag_rounded` for maximum visibility.
+  - **CRITICAL NOTE ON FIREBASE RULES DEPLOYMENT:** Since the cart uses a new Firestore path `/customers/{uid}/carts/{vendorId}` and pinning uses `/customers/{uid}/my_vendors/{vendorId}`, you **MUST** deploy the updated security rules in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to your Firebase backend. If you don't copy-paste these rules into the Firestore Rules tab on your Firebase Console, the database will return `PERMISSION_DENIED` and cart operations/pinning will fail.
+  - **Dynamic Checkout Processing Fee:** Added live checkout fee calculation to [storefront_cart_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_cart_sheet.dart) checking the merchant's `absorbOutrightFee` setting. If the merchant pushes the fee to the customer, we charge a **3.5% fee** (up to a max of **₦7,500**) and display it clearly. If absorbed, it displays **₦0 (absorbed by merchant)**. The checkout footer total is now labelled **Paying Now** instead of total amount due.
+
+

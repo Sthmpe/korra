@@ -8,7 +8,6 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
-import '../../../../config/constants/product_categories.dart';
 import '../../../../config/utils/currency_formatters.dart';
 import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
@@ -23,7 +22,11 @@ import 'image_upload_box.dart';
 import 'product_limit_header.dart';
 import 'product_model_tabs.dart';
 import 'product_category_selector_sheet.dart';
-import 'product_info_box.dart';
+import 'product_restriction_banner.dart';
+import 'product_submit_area.dart';
+import 'product_timeline_logic_box.dart';
+import 'product_strict_settings_card.dart';
+import 'product_direct_settings_card.dart';
 
 class AddProductPage extends StatefulWidget {
   final String vendorUid;
@@ -41,7 +44,6 @@ class _AddProductPageState extends State<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
 
   String _complianceStatus = 'active';
-  String _blockMessage = '';
 
   // Controllers
   final _nameCtrl = TextEditingController();
@@ -59,6 +61,8 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isDirectExtensionEnabled = true;
 
   bool _termsAccepted = false;
+  bool _allowReservation = true;
+  bool _isFeatured = false;
 
   bool _isPriceTooHigh = false;
 
@@ -106,7 +110,6 @@ class _AddProductPageState extends State<AddProductPage> {
       if (mounted) {
         setState(() {
           _complianceStatus = compliance['status'] ?? 'active';
-          _blockMessage = compliance['message'] ?? '';
         });
       }
     } catch (e) {
@@ -258,21 +261,20 @@ class _AddProductPageState extends State<AddProductPage> {
         return;
       }
     }
-
-    // ✅ ADD THIS: Rule 4: Manual Duration Check
-    int finalDuration = int.tryParse(_durationCtrl.text) ?? 0;
-    if (finalDuration <= 0) {
-      showAppSnackbar(
-        "Please enter a valid base duration.", 
-        SnackbarType.error
-      );
-      return;
+    // ✅ Rule 4: Manual Duration Check (only if installments are enabled)
+    if (_allowReservation) {
+      int finalDuration = int.tryParse(_durationCtrl.text) ?? 0;
+      if (finalDuration <= 0) {
+        showAppSnackbar(
+          "Please enter a valid base duration.", 
+          SnackbarType.error
+        );
+        return;
+      }
     }
 
     // Prepare Policy
-    // Strict: User Choice (50% / Store Credit)
-    // Direct: Always "Store Credit"
-    final finalPolicy = "Store Credit"; // Forced for Direct
+    final finalPolicy = "Store Credit";
 
     final imageObjects = imageBloc.state.images; 
 
@@ -283,21 +285,25 @@ class _AddProductPageState extends State<AddProductPage> {
         price: price,
         stock: stock,
         category: _categoryCtrl.text,
-        
-        images: imageObjects, // ✅ Pass List<dynamic> directly
-        
+        images: imageObjects,
         termsAccepted: _termsAccepted,
-        modelType: _selectedModel,
+        modelType: _allowReservation ? _selectedModel : ProductModelType.strict,
         cancellationPolicy: finalPolicy,
-        extensionsEnabled: _selectedModel == ProductModelType.strict
-            ? _priceAllowsExtension
-            : (_priceAllowsExtension && _isDirectExtensionEnabled),
-        directDownPayment: _selectedModel == ProductModelType.direct
-            ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
+        extensionsEnabled: _allowReservation
+            ? (_selectedModel == ProductModelType.strict
+                ? _priceAllowsExtension
+                : (_priceAllowsExtension && _isDirectExtensionEnabled))
+            : false,
+        directDownPayment: _allowReservation
+            ? (_selectedModel == ProductModelType.direct
+                ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
+                : null)
             : null,
-        duration: _calculatedDurationInt,
-        noticePeriod: _calculatedNoticeInt,
-        extensionPeriod: _calculatedExtensionInt,
+        duration: _allowReservation ? _calculatedDurationInt : 0,
+        noticePeriod: _allowReservation ? _calculatedNoticeInt : 0,
+        extensionPeriod: _allowReservation ? _calculatedExtensionInt : 0,
+        allowReservation: _allowReservation,
+        isFeatured: _isFeatured,
       ),
     );
   }
@@ -387,7 +393,10 @@ class _AddProductPageState extends State<AddProductPage> {
                       physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
                       children: [
-                        _buildRestrictionBanner(_complianceStatus, _blockMessage),
+                        ProductRestrictionBanner(
+                          status: _complianceStatus,
+                          title: "Product Creation Paused",
+                        ),
                         
                         ProductLimitHeader(
                           availableLimit: state.availableLimit,
@@ -400,9 +409,9 @@ class _AddProductPageState extends State<AddProductPage> {
                         SizedBox(height: 8.h),
                         BlocBuilder<ImageBloc, ImageState>(
                           builder: (context, imgState) {
-                            return ImageUploadBox(
+                            return const ImageUploadBox(
                               editable: true,
-                              imagesUrl: const [],
+                              imagesUrl: [],
                             );
                           },
                         ),
@@ -419,277 +428,426 @@ class _AddProductPageState extends State<AddProductPage> {
                           maxLines: 3,
                           validator: (value) => null,
                         ),
-                        SizedBox(height: 24.h),
-            
-                        // 3. PRICE & DURATION GRID
+                        SizedBox(height: 24.h),                      // 3. ALLOW INSTALLMENTS SWITCH
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              flex: 5,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Price", style: _labelStyle()),
-                                  SizedBox(height: 8.h),
-                                  _buildInput(
-                                    controller: _priceCtrl,
-                                    hint: "0.00",
-                                    prefixIcon: Padding(
-                                      padding: EdgeInsets.only(left: 14.w, right: 4.w),
-                                      child: Text(
-                                        "₦",
-                                        style: GoogleFonts.inter(
-                                          fontSize: 15.sp,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
+                                  Text("Allow Installments (Reservation)", style: _labelStyle()),
+                                  SizedBox(height: 4.h),
+                                  Text(
+                                    "Let customers buy this product using installment plans.",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11.5.sp,
+                                      color: Colors.grey.shade600,
+                                      height: 1.3,
                                     ),
-                                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      CurrencyInputFormatter(),
-                                    ],
                                   ),
-                                  // ✅ ADDED: Only show this if price is too high
-                                  if (_isPriceTooHigh) ...[
-                                    SizedBox(height: 4.h),
-                                    Text(
-                                      "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w500,
-                                        color: const Color(0xFFD92D20), // Error Red
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
-                            SizedBox(width: 12.w),
+                            Switch(
+                              value: _allowReservation,
+                              activeThumbColor: const Color(0xFFA54600),
+                              onChanged: (val) {
+                                setState(() {
+                                  _allowReservation = val;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16.h),
+
+                        // Featured Product switch
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
                             Expanded(
-                              flex: 4,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Base Duration (days)", style: _labelStyle()),
-                                  SizedBox(height: 8.h),
-                                  _buildInput(
-                                    controller: _durationCtrl,
-                                    hint: "e.g. $_recommendedMinDays",
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                    validator: (value) {
-                                      int? val = int.tryParse(value ?? '');
-                                      if (val == null || val <= 0) {
-                                        return 'Enter valid duration';
-                                      }
-                                      return null;
-                                    },
+                                  Text("Feature this product", style: _labelStyle()),
+                                  SizedBox(height: 4.h),
+                                  Text(
+                                    "Showcase this product prominently in a dedicated section on your storefront.",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11.5.sp,
+                                      color: Colors.grey.shade600,
+                                      height: 1.3,
+                                    ),
                                   ),
-                                  // Warning: too long (above recommended max)
-                                  if ((int.tryParse(_durationCtrl.text) ?? 0) > _recommendedMinDays) ...[
-                                    SizedBox(height: 6.h),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Icon(Iconsax.warning_2, size: 12.sp, color: const Color(0xFFA54600)),
-                                        SizedBox(width: 4.w),
-                                        Expanded(
-                                          child: Text(
-                                            "Warning: Plans over $_recommendedMinDays days reduce completion rates for this price range.",
-                                            style: GoogleFonts.inter(
-                                              fontSize: 10.sp,
-                                              fontWeight: FontWeight.w500,
-                                              color: const Color(0xFFA54600),
-                                              height: 1.3,
-                                            ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _isFeatured,
+                              activeThumbColor: const Color(0xFFA54600),
+                              onChanged: (val) {
+                                setState(() {
+                                  _isFeatured = val;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 24.h),
+
+                        // 4. DYNAMIC PRICE, STOCK, DURATION & CATEGORY FIELDS
+                        if (!_allowReservation) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Price", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    _buildInput(
+                                      controller: _priceCtrl,
+                                      hint: "0.00",
+                                      prefixIcon: Padding(
+                                        padding: EdgeInsets.only(left: 14.w, right: 4.w),
+                                        child: Text(
+                                          "₦",
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15.sp,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade600,
                                           ),
                                         ),
+                                      ),
+                                      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        CurrencyInputFormatter(),
+                                      ],
+                                    ),
+                                    if (_isPriceTooHigh) ...[
+                                      SizedBox(height: 4.h),
+                                      Text(
+                                        "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFFD92D20),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: 12.w),
+                              Expanded(
+                                flex: 4,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Stock", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    _buildInput(
+                                      controller: _stockCtrl,
+                                      hint: "Qty",
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
                                       ],
                                     ),
                                   ],
-
-
-
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-            
-                        SizedBox(height: 12.h),
-            
-                        // STOCK & CATEGORY
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            ],
+                          ),
+                          SizedBox(height: 24.h),
+                          Text("Category", style: _labelStyle()),
+                          SizedBox(height: 8.h),
+                          GestureDetector(
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                ),
+                                builder: (ctx) => ProductCategorySelectorSheet(
+                                  selectedCategory: _categoryCtrl.text,
+                                  onCategorySelected: (cat) {
+                                    setState(() => _categoryCtrl.text = cat);
+                                  },
+                                ),
+                              );
+                            },
+                            child: Container(
+                              height: 48.h,
+                              padding: EdgeInsets.symmetric(horizontal: 12.w),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12.r),
+                                border: Border.all(
+                                  color: const Color(0xFFEAECF0),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text("Stock", style: _labelStyle()),
-                                  SizedBox(height: 8.h),
-                                  _buildInput(
-                                    controller: _stockCtrl,
-                                    hint: "Qty",
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
+                                  Expanded(
+                                    child: Text(
+                                      _categoryCtrl.text.isEmpty ? "Select" : _categoryCtrl.text,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14.sp,
+                                        fontWeight: _categoryCtrl.text.isEmpty ? FontWeight.w400 : FontWeight.w600,
+                                        color: _categoryCtrl.text.isEmpty ? Colors.grey.shade400 : const Color(0xFF101828),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.arrow_drop_down,
+                                    size: 20,
+                                    color: Colors.grey,
                                   ),
                                 ],
                               ),
                             ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("Category", style: _labelStyle()),
-                                  SizedBox(height: 8.h),
-                                  GestureDetector(
-                                    onTap: () {
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-                                        ),
-                                        builder: (ctx) => ProductCategorySelectorSheet(
-                                          selectedCategory: _categoryCtrl.text,
-                                          onCategorySelected: (cat) {
-                                            setState(() => _categoryCtrl.text = cat);
-                                          },
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      height: 48.h,
-                                      padding: EdgeInsets.symmetric(horizontal: 12.w),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF9FAFB),
-                                        borderRadius: BorderRadius.circular(12.r),
-                                        border: Border.all(
-                                          color: const Color(0xFFEAECF0),
+                          ),
+                        ] else ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Price", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    _buildInput(
+                                      controller: _priceCtrl,
+                                      hint: "0.00",
+                                      prefixIcon: Padding(
+                                        padding: EdgeInsets.only(left: 14.w, right: 4.w),
+                                        child: Text(
+                                          "₦",
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15.sp,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade600,
+                                          ),
                                         ),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
+                                      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        CurrencyInputFormatter(),
+                                      ],
+                                    ),
+                                    if (_isPriceTooHigh) ...[
+                                      SizedBox(height: 4.h),
+                                      Text(
+                                        "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFFD92D20),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: 12.w),
+                              Expanded(
+                                flex: 4,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Base Duration (days)", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    _buildInput(
+                                      controller: _durationCtrl,
+                                      hint: "e.g. $_recommendedMinDays",
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      validator: (value) {
+                                        int? val = int.tryParse(value ?? '');
+                                        if (val == null || val <= 0) {
+                                          return 'Enter valid duration';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    if ((int.tryParse(_durationCtrl.text) ?? 0) > _recommendedMinDays) ...[
+                                      SizedBox(height: 6.h),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
+                                          const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFA54600)),
+                                          SizedBox(width: 4.w),
                                           Expanded(
                                             child: Text(
-                                              _categoryCtrl.text.isEmpty
-                                                  ? "Select"
-                                                  : _categoryCtrl.text,
+                                              "Warning: Plans over $_recommendedMinDays days reduce completion rates for this price range.",
                                               style: GoogleFonts.inter(
-                                                fontSize: 14.sp,
-                                                fontWeight: _categoryCtrl.text.isEmpty
-                                                    ? FontWeight.w400
-                                                    : FontWeight.w600,
-                                                color: _categoryCtrl.text.isEmpty
-                                                    ? Colors.grey.shade400
-                                                    : const Color(0xFF101828),
+                                                fontSize: 10.sp,
+                                                fontWeight: FontWeight.w500,
+                                                color: const Color(0xFFA54600),
+                                                height: 1.3,
                                               ),
-                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                          Icon(
-                                            Iconsax.arrow_down_1,
-                                            size: 16.sp,
-                                            color: Colors.grey,
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-            
-                        // ----------------------------------------------------
-                        // TIMELINE INFO
-                        // ----------------------------------------------------
-                        SizedBox(height: 20.h),
-                        Container(
-                          padding: EdgeInsets.all(16.r),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12.r),
-                            //border: Border.all(color: const Color(0xFFEAECF0)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Timeline Logic",
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black87,
+                                    ],
+                                  ],
                                 ),
                               ),
-                              SizedBox(height: 12.h),
-                              _buildTimelineRow("Base Duration", "${_calculatedDurationInt.toString()} Days"),
-                              _buildTimelineRow(
-                                "Notice Period",
-                                _noticePeriod,
-                                isAlert: true,
-                              ),
-                              _buildTimelineRow(
-                                "Potential Extension",
-                                _extensionDuration,
-                              ),
-                              _buildTimelineRow(
-                                "Total Max Time",
-                                _totalMaxTime,
-                              ),
-                              if (_priceAllowsExtension) ...[
-                                SizedBox(height: 4.h),
-                                Text(
-                                  "* Extension unlocks only if customer pays 80% of the product price.",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10.sp,
-                                    color: Colors.grey.shade500,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
-                        ),
-            
-                        SizedBox(height: 32.h),
-                        const Divider(color: Color(0xFFEAECF0)),
+                          SizedBox(height: 24.h),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Category", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    GestureDetector(
+                                      onTap: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                          ),
+                                          builder: (ctx) => ProductCategorySelectorSheet(
+                                            selectedCategory: _categoryCtrl.text,
+                                            onCategorySelected: (cat) {
+                                              setState(() => _categoryCtrl.text = cat);
+                                            },
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        height: 48.h,
+                                        padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF9FAFB),
+                                          borderRadius: BorderRadius.circular(12.r),
+                                          border: Border.all(
+                                            color: const Color(0xFFEAECF0),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                _categoryCtrl.text.isEmpty ? "Select" : _categoryCtrl.text,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14.sp,
+                                                  fontWeight: _categoryCtrl.text.isEmpty ? FontWeight.w400 : FontWeight.w600,
+                                                  color: _categoryCtrl.text.isEmpty ? Colors.grey.shade400 : const Color(0xFF101828),
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const Icon(
+                                              Icons.arrow_drop_down,
+                                              size: 20,
+                                              color: Colors.grey,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: 12.w),
+                              Expanded(
+                                flex: 4,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Stock", style: _labelStyle()),
+                                    SizedBox(height: 8.h),
+                                    _buildInput(
+                                      controller: _stockCtrl,
+                                      hint: "Qty",
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         SizedBox(height: 24.h),
-            
-                        // 4. MODEL SELECTION
-                        Text("Sales Model", style: _labelStyle()),
-                        SizedBox(height: 12.h),
-                        ProductModelTabs(
-                          selectedModel: _selectedModel,
-                          onModelChanged: (model) {
-                            setState(() => _selectedModel = model);
-                            _updatePlanLogic(); // ✅ RE-CALCULATE TIMELINE
-                          },
-                        ),
-            
-                        SizedBox(height: 20.h),
-            
-                        // 5. DYNAMIC MODEL SETTINGS
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: _selectedModel == ProductModelType.strict
-                              ? _buildStrictSettings()
-                              : _buildDirectSettings(),
-                        ),
+ 
+                        if (_allowReservation) ...[
+                          // ----------------------------------------------------
+                          // TIMELINE INFO
+                          // ----------------------------------------------------
+                          SizedBox(height: 20.h),
+                          ProductTimelineLogicBox(
+                            calculatedDurationInt: _calculatedDurationInt,
+                            noticePeriod: _noticePeriod,
+                            extensionDuration: _extensionDuration,
+                            totalMaxTime: _totalMaxTime,
+                            priceAllowsExtension: _priceAllowsExtension,
+                          ),
+              
+                          SizedBox(height: 32.h),
+                          const Divider(color: Color(0xFFEAECF0)),
+                          SizedBox(height: 24.h),
+              
+                          // 4. MODEL SELECTION
+                          Text("Sales Model", style: _labelStyle()),
+                          SizedBox(height: 12.h),
+                          ProductModelTabs(
+                            selectedModel: _selectedModel,
+                            onModelChanged: (model) {
+                              setState(() => _selectedModel = model);
+                              _updatePlanLogic(); // ✅ RE-CALCULATE TIMELINE
+                            },
+                          ),
+              
+                          SizedBox(height: 20.h),
+              
+                          // 5. DYNAMIC MODEL SETTINGS
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _selectedModel == ProductModelType.strict
+                                ? ProductStrictSettingsCard(
+                                    priceAllowsExtension: _priceAllowsExtension,
+                                  )
+                                : ProductDirectSettingsCard(
+                                    downPaymentCtrl: _downPaymentCtrl,
+                                    priceAllowsExtension: _priceAllowsExtension,
+                                    isDirectExtensionEnabled: _isDirectExtensionEnabled,
+                                    onExtensionChanged: (val) {
+                                      setState(() => _isDirectExtensionEnabled = val);
+                                      _updatePlanLogic();
+                                    },
+                                  ),
+                          ),
+                        ],
             
                         SizedBox(height: 32.h),
             
@@ -700,11 +858,6 @@ class _AddProductPageState extends State<AddProductPage> {
                           child: Container(
                             padding: EdgeInsets.all(12.r),
                             decoration: BoxDecoration(
-                              // border: Border.all(
-                              //   color: _termsAccepted
-                              //       ? KorraColors.brand
-                              //       : const Color(0xFFEAECF0),
-                              // ),
                               borderRadius: BorderRadius.circular(12.r),
                               color: _termsAccepted
                                   ? const Color(0xFFFFF4ED)
@@ -741,11 +894,18 @@ class _AddProductPageState extends State<AddProductPage> {
                         SizedBox(height: 32.h),
             
                         // 7. SUBMIT
-                        _buildSubmitArea(
-                          context, 
-                          status: _complianceStatus, 
-                          isLoading: isLoading, 
-                          onSubmit: () => _saveProduct(imageBloc, productBloc, state)
+                        ProductSubmitArea(
+                          status: _complianceStatus,
+                          isLoading: isLoading,
+                          buttonText: "Create Product",
+                          onSubmit: () => _saveProduct(imageBloc, productBloc, state),
+                          onResolveSupport: () => _showContactSheet(
+                            context,
+                            title: "Account Support",
+                            subTitle: "Product creation is restricted. Please contact us to resolve this.",
+                          ),
+                          pausedTitle: "Creation Paused",
+                          pausedMessage: "New product creation is disabled for your account. Please contact support to resolve your status.",
                         ),
                         
                         SizedBox(height: 40.h),
@@ -760,400 +920,7 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  // --- RESTRICTION BANNER ---
-  Widget _buildRestrictionBanner(String status, String message) {
-    // Only show the red banner if they are blocked
-    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
-      return Container(
-        margin: EdgeInsets.only(bottom: 20.h),
-        padding: EdgeInsets.all(12.w),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF3F2), // Soft error background
-          //border: Border.all(color: const Color(0xFFFEE4E2)), // Subtle red border
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.lock_outline, 
-              color: const Color(0xFFD92D20), 
-              size: 20.sp,
-            ),
-            SizedBox(width: 12.w),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Product Creation Paused",
-                  style: GoogleFonts.inter(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFB42318), // Darker red for header
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // If active or pending, show nothing at the top to save space
-    return const SizedBox.shrink(); 
-  }
 
-  // --- MODEL SPECIFIC WIDGETS ---
-  Widget _buildSubmitArea(BuildContext context, {required String status, required bool isLoading, required VoidCallback onSubmit}) {
-    // 🛑 Case 1: Restricted / Suspended (BLOCK ACTION)
-    // If the account is flagged, we stop them from adding more items.
-    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
-      return Padding(
-        padding: EdgeInsets.only(top: 24.h),
-        child: _buildStatusCard( 
-          context,
-          title: "Creation Paused",
-          message: "New product creation is disabled for your account. Please contact support to resolve your status.",
-          icon: Icons.lock_outline,
-          accentColor: const Color(0xFFD92D20), // Premium Error Red
-          buttonText: "Resolve Issue",
-          onPressed: () => _showContactSheet(
-            context, 
-            title: "Account Support", 
-            subTitle: "Product creation is restricted. Please contact us to resolve this."
-          ),
-        ),
-      );
-    }
-
-    // ✅ Case 2: Active OR Pending (ALLOW ACTION)
-    // We allow 'pending' users to add products so they can set up their shop 
-    // while waiting for verification.
-    return SizedBox(
-      width: double.infinity,
-      height: 52.h,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onSubmit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: KorraColors.brand,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14.r),
-          ),
-          disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
-        ),
-        child: isLoading
-            ? SizedBox(
-                width: 24.w,
-                height: 24.w,
-                child: const CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                "Create Product",
-                style: GoogleFonts.inter(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-      ),
-    );
-  }
-  
-  // 💎 THE PREMIUM CARD WIDGET
-  Widget _buildStatusCard(
-    BuildContext context, {
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color accentColor,
-    required String buttonText,
-    required VoidCallback onPressed,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(top: 0.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r), // Softer corners
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF101828).withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4), // Soft elevation
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(20.w),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Icon with Soft Background
-                Container(
-                  padding: EdgeInsets.all(12.r),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: accentColor, size: 24.sp),
-                ),
-                SizedBox(width: 16.w),
-                
-                // 2. Text Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.inter(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF101828), // Slate 900
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 6.h),
-                      Text(
-                        message,
-                        style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          height: 1.5, // Better readability
-                          color: const Color(0xFF667085), // Slate 500
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // 3. Integrated Action Button (Bottom Strip)
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey.shade100)),
-            ),
-            child: InkWell(
-              onTap: onPressed,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(20.r),
-                bottomRight: Radius.circular(20.r),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      buttonText,
-                      style: GoogleFonts.inter(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
-                      ),
-                    ),
-                    SizedBox(width: 8.w),
-                    Icon(Icons.arrow_forward_rounded, size: 16.sp, color: accentColor),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true, // Allows it to be taller if needed
-      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
-    );
-  }
-
-  Widget _buildStrictSettings() {
-    return Column(
-      key: const ValueKey('strict'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 1. Info Card
-        const ProductInfoBox(
-          title: "Strict Model",
-          description: "Automated Plan. Korra automatically requires a 30% down payment from the customer. Any cancellations are refunded purely as Store Balance to protect your inventory.",
-          icon: Iconsax.shield_tick,
-        ),
-
-        SizedBox(height: 16.h),
-
-        // 2. Extension Info
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline, size: 16.sp, color: Colors.blue),
-            SizedBox(width: 8.w),
-            Expanded(
-              child: Text(
-                _priceAllowsExtension
-                    ? "Automatic Extensions: Enabled (Customer gets extra time if 80% paid)."
-                    : "Extensions: Not available for this price range.",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: Colors.grey.shade600,
-                  height: 1.3,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDirectSettings() {
-    return Column(
-      key: const ValueKey('direct'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: EdgeInsets.all(12.r),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF4ED), // Light Orange for Manual Control
-            borderRadius: BorderRadius.circular(8.r),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Iconsax.setting_2, // Swapped to settings icon to imply control
-                size: 20.sp,
-                color: const Color(0xFFA54600),
-              ),
-              SizedBox(width: 10.w),
-              Expanded(
-                child: Text(
-                  "Flexible Plan. You control the required down payment and extensions. Cancellations are still refunded as Store Balance.",
-                  style: GoogleFonts.inter(
-                    fontSize: 12.sp,
-                    color: const Color(0xFF344054),
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: 20.h),
-
-        Text("Required Down Payment", style: _labelStyle()),
-        SizedBox(height: 8.h),
-        _buildInput(
-          controller: _downPaymentCtrl,
-          hint: "0.00",
-          prefixIcon: Padding(
-            padding: EdgeInsets.only(left: 14.w, right: 4.w),
-            child: Text(
-              "₦",
-              style: GoogleFonts.inter(
-                fontSize: 15.sp,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ),
-          prefixIconConstraints: const BoxConstraints(
-            minWidth: 0,
-            minHeight: 0,
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            CurrencyInputFormatter(),
-          ],
-        ),
-
-        if (_priceAllowsExtension) ...[
-          SizedBox(height: 20.h),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            activeColor: KorraColors.brand,
-            title: Text(
-              "Allow Extension?",
-              style: GoogleFonts.inter(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            subtitle: Text(
-              "If enabled, gives customer extra time if they reach 80% payment.",
-              style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey),
-            ),
-            value: _isDirectExtensionEnabled,
-            onChanged: (val) {
-              setState(() => _isDirectExtensionEnabled = val);
-              _updatePlanLogic(); // Re-calc total time
-            },
-          ),
-        ] else ...[
-          SizedBox(height: 12.h),
-          Text(
-            "Extensions disabled for this price range.",
-            style: GoogleFonts.inter(
-              fontSize: 12.sp,
-              color: Colors.grey.shade500,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  // --- HELPER WIDGETS ---
-
-
-
-  // --- HELPER FOR TIMELINE ---
-  Widget _buildTimelineRow(
-    String label,
-    String value, {
-    bool isBold = false,
-    bool isAlert = false,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 6.h),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 13.sp,
-              color: isAlert ? const Color(0xFFA54600) : Colors.grey.shade600,
-              fontWeight: isAlert ? FontWeight.w600 : FontWeight.w500,
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 13.sp,
-              color: const Color(0xFF101828),
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
 
 
@@ -1208,7 +975,12 @@ class _AddProductPageState extends State<AddProductPage> {
     color: const Color(0xFF344054),
   );
 
-
-
-
+  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
+    );
+  }
 }

@@ -22,6 +22,7 @@ class Reservation {
   final double amountPaid;
   final DateTime createdAt;
   final String statusRaw; 
+  final String modelType; // strict, direct, outright, or installment
   
   // ✅ NEW FIELD
   final DateTime? fulfilledAt; 
@@ -39,6 +40,7 @@ class Reservation {
     required this.amountPaid,
     required this.createdAt,
     required this.statusRaw,
+    required this.modelType,
     this.fulfilledAt,
     this.cancelledAt,
     this.finalFulfilledAt,
@@ -103,6 +105,7 @@ class Reservation {
           ? (data['finalFulfilledAt'] as Timestamp).toDate() 
           : null,
       statusRaw: data['status'] ?? 'active',
+      modelType: data['modelType'] ?? 'installment',
       
       // ✅ Parse Date
       fulfilledAt: data['fulfilledAt'] != null 

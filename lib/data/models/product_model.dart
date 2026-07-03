@@ -28,11 +28,17 @@ class Product {
   final String cancellationPolicy;        // e.g. "50% Refund"
   final bool extensionsEnabled;           // true/false
   final double? directDownPayment;        // Only for Direct model
+  final bool allowReservation;            // Whether installments are allowed (default to true)
 
   // ✅ TIMELINE FIELDS (Pre-calculated)
   final String baseDuration;  // e.g. "15 Days"
   final String noticePeriod;  // e.g. "1 Day"
   final String totalMaxTime;  // e.g. "16 Days"
+
+  // ✅ CAMPAIGNS & DISCOUNTS & FEATURING FIELDS
+  final String? campaignTag;
+  final double? discountedPrice;
+  final bool isFeatured;
 
   Product({
     required this.id,
@@ -58,6 +64,10 @@ class Product {
     required this.baseDuration,
     required this.noticePeriod,
     required this.totalMaxTime,
+    required this.allowReservation,
+    this.campaignTag,
+    this.discountedPrice,
+    this.isFeatured = false,
   });
 
   /// Create new product as pending
@@ -80,6 +90,10 @@ class Product {
     required String baseDuration,
     required String noticePeriod,
     required String totalMaxTime,
+    required bool allowReservation,
+    String? campaignTag,
+    double? discountedPrice,
+    bool isFeatured = false,
   }) {
     final now = DateTime.now();
     return Product(
@@ -106,6 +120,10 @@ class Product {
       baseDuration: baseDuration,
       noticePeriod: noticePeriod,
       totalMaxTime: totalMaxTime,
+      allowReservation: allowReservation,
+      campaignTag: campaignTag,
+      discountedPrice: discountedPrice,
+      isFeatured: isFeatured,
     );
   }
 
@@ -132,6 +150,10 @@ class Product {
     String? baseDuration,
     String? noticePeriod,
     String? totalMaxTime,
+    bool? allowReservation,
+    String? campaignTag,
+    double? discountedPrice,
+    bool? isFeatured,
   }) {
     return Product(
       id: id ?? this.id,
@@ -156,6 +178,10 @@ class Product {
       baseDuration: baseDuration ?? this.baseDuration,
       noticePeriod: noticePeriod ?? this.noticePeriod,
       totalMaxTime: totalMaxTime ?? this.totalMaxTime,
+      allowReservation: allowReservation ?? this.allowReservation,
+      campaignTag: campaignTag ?? this.campaignTag,
+      discountedPrice: discountedPrice ?? this.discountedPrice,
+      isFeatured: isFeatured ?? this.isFeatured,
     );
   }
 
@@ -199,6 +225,10 @@ class Product {
       baseDuration: map['baseDuration'] ?? '15 Days',
       noticePeriod: map['noticePeriod'] ?? '1 Day',
       totalMaxTime: map['totalMaxTime'] ?? '16 Days',
+      allowReservation: map['allowReservation'] ?? true, // Default to true for backward compatibility
+      campaignTag: map['campaignTag'],
+      discountedPrice: (map['discountedPrice'] as num?)?.toDouble(),
+      isFeatured: map['isFeatured'] ?? false,
     );
   }
 
@@ -226,6 +256,10 @@ class Product {
       'baseDuration': baseDuration,
       'noticePeriod': noticePeriod,
       'totalMaxTime': totalMaxTime,
+      'allowReservation': allowReservation,
+      'isFeatured': isFeatured,
+      if (campaignTag != null) 'campaignTag': campaignTag,
+      if (discountedPrice != null) 'discountedPrice': discountedPrice,
     };
   }
 }

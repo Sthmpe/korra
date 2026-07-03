@@ -29,6 +29,8 @@ class ProductItem extends Equatable {
   final String totalMaxTime;
   final bool extensionsEnabled;
   final double? directDownPayment;
+  final bool allowReservation;            // Whether installments are allowed (default to true)
+  final bool isFeatured;
 
   const ProductItem({
     required this.id,
@@ -49,6 +51,8 @@ class ProductItem extends Equatable {
     this.totalMaxTime = "17 Days",
     this.extensionsEnabled = false,
     this.directDownPayment,
+    this.allowReservation = true,
+    this.isFeatured = false,
   });
 
   bool get shareable => status == ProductStatus.approved && stock > 0;
@@ -111,6 +115,8 @@ class ProductItem extends Equatable {
       totalMaxTime: json['totalMaxTime'] ?? '17 Days',
       extensionsEnabled: json['extensionsEnabled'] ?? false,
       directDownPayment: (json['directDownPayment'] as num?)?.toDouble(),
+      allowReservation: json['allowReservation'] ?? true,
+      isFeatured: json['isFeatured'] ?? false,
     );
   }
 
@@ -118,7 +124,7 @@ class ProductItem extends Equatable {
   List<Object?> get props => [
     id, name, price, priceText, stock, status, imageUrl, code, 
     description, category, createdAt, modelType, cancellationPolicy, 
-    baseDuration, noticePeriod, totalMaxTime, extensionsEnabled, directDownPayment
+    baseDuration, noticePeriod, totalMaxTime, extensionsEnabled, directDownPayment, allowReservation, isFeatured
   ];
 }
 

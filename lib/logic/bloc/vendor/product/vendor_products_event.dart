@@ -96,6 +96,8 @@ class VendorProductsAdd extends VendorProductsEvent {
   final int duration;
   final int noticePeriod;
   final int extensionPeriod;
+  final bool allowReservation;
+  final bool isFeatured;
 
   const VendorProductsAdd({
     required this.name,
@@ -112,13 +114,15 @@ class VendorProductsAdd extends VendorProductsEvent {
     required this.duration,
     required this.noticePeriod,
     required this.extensionPeriod,
+    required this.allowReservation,
+    this.isFeatured = false,
   });
 
   @override
   List<Object?> get props => [
         name, description, price, stock, category, images,
         termsAccepted, modelType, cancellationPolicy, extensionsEnabled,
-        directDownPayment, duration, noticePeriod, extensionPeriod
+        directDownPayment, duration, noticePeriod, extensionPeriod, allowReservation, isFeatured
       ];
 }
 
@@ -135,6 +139,15 @@ class VendorProductsEdit extends VendorProductsEvent {
   final List<dynamic> newImages; 
 
   final ProductStatus status;
+  final bool allowReservation;
+  final ProductModelType modelType;
+  final String cancellationPolicy;
+  final bool extensionsEnabled;
+  final double? directDownPayment;
+  final int duration;
+  final int noticePeriod;
+  final int extensionPeriod;
+  final bool isFeatured;
 
   const VendorProductsEdit({
     required this.productCode,
@@ -146,8 +159,21 @@ class VendorProductsEdit extends VendorProductsEvent {
     required this.existingImageUrls,
     required this.newImages, // ✅ Now accepts dynamic list
     required this.status,
+    required this.allowReservation,
+    required this.modelType,
+    required this.cancellationPolicy,
+    required this.extensionsEnabled,
+    this.directDownPayment,
+    required this.duration,
+    required this.noticePeriod,
+    required this.extensionPeriod,
+    this.isFeatured = false,
   });
   
   @override
-  List<Object?> get props => [productCode, name, newImages, existingImageUrls];
+  List<Object?> get props => [
+    productCode, name, newImages, existingImageUrls, status, allowReservation,
+    modelType, cancellationPolicy, extensionsEnabled, directDownPayment,
+    duration, noticePeriod, extensionPeriod, isFeatured
+  ];
 }

@@ -25,6 +25,8 @@ export 'product_repository.dart';
 export 'reservations_repository.dart';
 export 'transfer_repository.dart';
 export 'verification_repository.dart';
+export 'vendor_reviews_repository.dart';
+export 'vendor_campaigns_repository.dart';
 
 class VendorRepository implements INotificationRepository {
   final FirebaseAuth auth;

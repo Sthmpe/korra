@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
@@ -19,6 +19,12 @@ import '../../payout/widgets/contact_support_sheet.dart';
 import 'image_upload_box.dart';
 import 'product_limit_header.dart';
 import 'product_category_selector_sheet.dart';
+import 'product_model_tabs.dart';
+import 'product_restriction_banner.dart';
+import 'product_submit_area.dart';
+import 'product_timeline_logic_box.dart';
+import 'product_strict_settings_card.dart';
+import 'product_direct_settings_card.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final ProductItem product;
@@ -38,7 +44,6 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _complianceStatus = 'active';
-  String _blockMessage = '';
 
   late TextEditingController nameCtrl;
   late TextEditingController descCtrl;
@@ -47,11 +52,28 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   late TextEditingController categoryCtrl;
   late TextEditingController codeCtrl;
 
+  late TextEditingController _downPaymentCtrl;
+  late TextEditingController _durationCtrl;
+  ProductModelType _selectedModel = ProductModelType.strict;
+  bool _isDirectExtensionEnabled = false;
+
+  int _recommendedMinDays = 14;
+  bool _priceAllowsExtension = false;
+  int _calculatedDurationInt = 14;
+  int _calculatedNoticeInt = 3;
+  int _calculatedExtensionInt = 3;
+  String _noticePeriod = "3 Days";
+  String _extensionDuration = "None";
+  String _totalMaxTime = "17 Days";
+  double _currentMaxPlanLimit = 1000000;
+  bool _isPriceTooHigh = false;
+  late Stream<VendorStats> _statsStream;
+
   // --- 🔒 PERMISSIONS ---
-  // Identity: Name, Desc, Images, Category (Locked if Approved)
   bool _canEditIdentity = true;
-  // Commerce: Price, Stock (Always Open if Approved)
   bool _canEditCommerce = true;
+  bool _allowReservation = true;
+  bool _isFeatured = false;
 
   String? _helperMessage;
 
@@ -67,6 +89,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _vendors = context.read<VendorRepository>();
     final p = widget.product;
 
+    _statsStream = _vendors.streamVendorStats(widget.vendorUid);
+
     // Init Controllers
     nameCtrl = TextEditingController(text: p.name);
     descCtrl = TextEditingController(text: p.description);
@@ -76,26 +100,36 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     stockCtrl = TextEditingController(text: p.stock.toString());
     categoryCtrl = TextEditingController(text: p.category);
     codeCtrl = TextEditingController(text: p.code);
+    _allowReservation = p.allowReservation;
+    _isFeatured = p.isFeatured;
+    _selectedModel = p.modelType;
+    _downPaymentCtrl = TextEditingController(
+      text: p.directDownPayment != null
+          ? p.directDownPayment!.toStringAsFixed(0)
+          : '',
+    );
+    final baseDurationStr = p.baseDuration.replaceAll(RegExp(r'[^0-9]'), '');
+    _durationCtrl = TextEditingController(text: baseDurationStr);
+
+    _isDirectExtensionEnabled = p.extensionsEnabled;
 
     priceCtrl.addListener(_onTextChanged);
     stockCtrl.addListener(_onTextChanged);
-
-    
+    priceCtrl.addListener(_updatePlanLogic);
+    _durationCtrl.addListener(_onDurationInputChanged);
+    _downPaymentCtrl.addListener(_onTextChanged);
 
     // --- DETERMINE PERMISSIONS ---
     if (p.status == ProductStatus.approved) {
-      // ✅ APPROVED: Lock Identity, Allow Price/Stock change
       _canEditIdentity = false;
       _canEditCommerce = true;
       _helperMessage =
           "Product is Live. You can update Price & Stock, but Name/Description are locked.";
     } else if (p.status == ProductStatus.pending) {
-      // ⏳ PENDING: Lock Everything
       _canEditIdentity = false;
       _canEditCommerce = false;
       _helperMessage = "Product is under review and cannot be edited.";
     } else if (p.status == ProductStatus.rejected) {
-      // ❌ REJECTED: Unlock Everything
       _canEditIdentity = true;
       _canEditCommerce = true;
       _helperMessage =
@@ -103,6 +137,72 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     }
 
     _fetchComplianceStatus();
+    _updatePlanLogic();
+  }
+
+  void _onDurationInputChanged() {
+    _updatePlanLogic();
+  }
+
+  void _updatePlanLogic() {
+    final cleanPrice = double.tryParse(priceCtrl.text.replaceAll(',', '')) ?? 0;
+    final double calculationCeiling = _currentMaxPlanLimit; 
+
+    int recMinDays = 14;
+    int noticeDays = 1;
+    int extDays = 0;
+    bool allowExt = false;
+
+    _isPriceTooHigh = false;
+
+    if (cleanPrice > calculationCeiling) {
+       _isPriceTooHigh = true;
+    }
+
+    if (cleanPrice <= 50000) {
+      recMinDays = 14; noticeDays = 1; extDays = 0; allowExt = false;
+    } else if (cleanPrice <= 200000) {
+        recMinDays = 21; noticeDays = 1; extDays = 3; allowExt = true;
+    } else if (cleanPrice <= 500000) {
+        recMinDays = 30; noticeDays = 1; extDays = 5; allowExt = true;
+    } else if (cleanPrice <= 750000) {
+        recMinDays = 60; noticeDays = 1; extDays = 7; allowExt = true;
+    } else {
+        recMinDays = 90; noticeDays = 1; extDays = 7; allowExt = true;
+    }
+
+    int currentInput = int.tryParse(_durationCtrl.text) ?? 0;
+    int effectiveDays = currentInput;
+
+    if (_selectedModel == ProductModelType.direct) {
+      if (!allowExt) {
+        _isDirectExtensionEnabled = false;
+        extDays = 0;
+      } else if (!_isDirectExtensionEnabled) {
+        extDays = 0;
+      }
+    } else {
+      if (!allowExt) extDays = 0;
+    }
+
+    int totalDays = effectiveDays + noticeDays + extDays;
+
+    setState(() {
+      _priceAllowsExtension = allowExt;
+      _recommendedMinDays = recMinDays; 
+      _calculatedDurationInt = effectiveDays; 
+      _calculatedNoticeInt = noticeDays;
+      _calculatedExtensionInt = extDays;
+
+      if (_isPriceTooHigh) {
+         _totalMaxTime = "N/A";
+         _extensionDuration = "N/A";
+      } else {
+        _noticePeriod = "$noticeDays Day";
+        _extensionDuration = allowExt ? "$extDays Days" : "None";
+        _totalMaxTime = "$totalDays Days";
+      }
+    });
   }
 
   Future<void> _fetchComplianceStatus() async {
@@ -111,527 +211,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       if (mounted) {
         setState(() {
           _complianceStatus = compliance['status'] ?? 'active';
-          _blockMessage = compliance['message'] ?? '';
         });
       }
     } catch (e) {
-      // If error, keep default (active) or handle error
       debugPrint("Error fetching status: $e");
     }
   }
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    descCtrl.dispose();
-    priceCtrl.dispose();
-    stockCtrl.dispose();
-    categoryCtrl.dispose();
-    codeCtrl.dispose();
-    super.dispose();
-  }
-
-  void _saveChanges(
-    ImageBloc imageBloc,
-    VendorProductsBloc productBloc,
-    VendorProductsState state,
-  ) {
-    if (!_formKey.currentState!.validate()) {
-      showAppSnackbar("Please check your inputs", SnackbarType.error);
-      return;
-    }
-
-    final priceTxt = priceCtrl.text.replaceAll(',', '');
-    final price = double.tryParse(priceTxt) ?? 0.0;
-    final stock = int.tryParse(stockCtrl.text) ?? 0;
-
-    productBloc.add(
-      VendorProductsEdit(
-        productCode: widget.product.code,
-        name: nameCtrl.text,
-        description: descCtrl.text,
-        price: price,
-        stock: stock,
-        category: categoryCtrl.text,
-        // Only send new images if identity editing is allowed
-        newImages: _canEditIdentity ? imageBloc.state.images : [],
-        existingImageUrls: widget.product.imageUrl,
-        status: widget.product.status,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final imageBloc = context.read<ImageBloc>();
-    final productBloc = context.read<VendorProductsBloc>();
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: const KorraHeader(title: "Edit Product", showLeadingIcon: true),
-      body: BlocListener<VendorProductsBloc, VendorProductsState>(
-        listenWhen: (previous, current) => previous.success != current.success,
-        listener: (context, state) {
-          if (state.success == true && state.isSubmitting == false) {
-            showAppSnackbar("Changes saved successfully", SnackbarType.success);
-            context.read<VendorProductsBloc>().add(
-              const VendorProductsRefresh(),
-            );
-            Navigator.pop(context);
-          } else if (state.success == false && state.isSubmitting == false) {
-            showAppSnackbar(
-              state.errorMessage ?? "Failed to save",
-              SnackbarType.error,
-            );
-          }
-        },
-        child: BlocBuilder<VendorProductsBloc, VendorProductsState>(
-          buildWhen: (previous, current) =>
-              previous.isSubmitting != current.isSubmitting ||
-              previous.availableLimit != current.availableLimit,
-          builder: (context, state) {
-            final isLoading = state.isSubmitting ?? false;
-
-            return Form(
-              key: _formKey,
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-                children: [
-                  _buildRestrictionBanner(_complianceStatus, _blockMessage),
-
-                  // 1. LIMIT HEADER (Live Feedback)
-                  ProductLimitHeader(
-                    availableLimit: state.availableLimit,
-                    price: double.tryParse(priceCtrl.text.replaceAll(',', '')) ?? 0.0,
-                    stock: int.tryParse(stockCtrl.text.replaceAll(',', '')) ?? 0,
-                  ),
-
-                  // 2. HELPER MESSAGE
-                  if (_helperMessage != null) ...[
-                    Container(
-                      padding: EdgeInsets.all(12.r),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(12.r),
-                        //border: Border.all(color: const Color(0xFFEAECF0)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Iconsax.info_circle,
-                            size: 20.sp,
-                            color: Colors.grey.shade600,
-                          ),
-                          SizedBox(width: 12.w),
-                          Expanded(
-                            child: Text(
-                              _helperMessage!,
-                              style: GoogleFonts.inter(
-                                fontSize: 13.sp,
-                                color: Colors.grey.shade700,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 24.h),
-                  ],
-
-                  // 3. READ ONLY CODE
-                  Text("Product Code", style: _labelStyle()),
-                  SizedBox(height: 6.h),
-                  _buildInput(
-                    controller: codeCtrl,
-                    hint: "Code",
-                    enabled: false,
-                    readOnly: true,
-                  ),
-                  SizedBox(height: 20.h),
-
-                  // 4. IMAGES (Identity)
-                  Text("Product Photos", style: _labelStyle()),
-                  SizedBox(height: 6.h),
-                  BlocBuilder<ImageBloc, ImageState>(
-                    builder: (context, imgState) {
-                      return ImageUploadBox(
-                        editable: _canEditIdentity,
-                        imagesUrl: widget.product.imageUrl,
-                      );
-                    },
-                  ),
-                  SizedBox(height: 24.h),
-
-                  // 5. DETAILS (Identity)
-                  Text("Details", style: _labelStyle()),
-                  SizedBox(height: 6.h),
-                  _buildInput(
-                    controller: nameCtrl,
-                    hint: "Name",
-                    enabled: _canEditIdentity,
-                    validator: null,
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildInput(
-                    controller: descCtrl,
-                    hint: "Description",
-                    maxLines: 4,
-                    enabled: _canEditIdentity,
-                    validator: null,
-                  ),
-
-                  SizedBox(height: 20.h),
-
-                  // 6. PRICE & STOCK (Commerce - OPEN FOR APPROVED)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Price", style: _labelStyle()),
-                            SizedBox(height: 6.h),
-                            _buildInput(
-                              controller: priceCtrl,
-                              hint: "0.00",
-                              enabled:
-                                  _canEditCommerce, // ✅ Editable even if Approved
-                              prefixIcon: Padding(
-                                padding: EdgeInsets.only(
-                                  left: 14.w,
-                                  right: 4.w,
-                                ),
-                                child: Text(
-                                  "₦",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 15.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: _canEditCommerce
-                                        ? Colors.grey.shade600
-                                        : Colors.grey.shade400,
-                                  ),
-                                ),
-                              ),
-                              prefixIconConstraints: const BoxConstraints(
-                                minWidth: 0,
-                                minHeight: 0,
-                              ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                CurrencyInputFormatter(),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Stock", style: _labelStyle()),
-                            SizedBox(height: 6.h),
-                            _buildInput(
-                              controller: stockCtrl,
-                              hint: "Qty",
-                              enabled:
-                                  true, // ✅ Always editable (add/remove stock)
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 20.h),
-
-                  // 7. CATEGORY (Identity - Sheet Logic Added)
-                  Text("Category", style: _labelStyle()),
-                  SizedBox(height: 6.h),
-                  GestureDetector(
-                    onTap: _canEditIdentity
-                        ? () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-                              ),
-                              builder: (ctx) => ProductCategorySelectorSheet(
-                                selectedCategory: categoryCtrl.text,
-                                onCategorySelected: (cat) {
-                                  setState(() => categoryCtrl.text = cat);
-                                },
-                              ),
-                            );
-                          }
-                        : null,
-                    child: AbsorbPointer(
-                      child: _buildInput(
-                        controller: categoryCtrl,
-                        hint: "Category",
-                        enabled: _canEditIdentity,
-                        readOnly: true,
-                        suffixIcon: _canEditIdentity
-                            ? const Icon(Iconsax.arrow_down_1, size: 18)
-                            : null,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 40.h),
-
-                  // 8. SAVE
-                  _buildSubmitArea(
-                    context, 
-                    status: _complianceStatus, 
-                    isLoading: isLoading, 
-                    onSubmit: () => _saveChanges(imageBloc, productBloc, state),
-                  ),
-
-                  SizedBox(height: 32.h),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // --- WIDGET HELPERS ---
-  Widget _buildRestrictionBanner(String status, String message) {
-    // Only show the red banner if they are blocked
-    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
-      return Container(
-        margin: EdgeInsets.only(bottom: 20.h),
-        padding: EdgeInsets.all(12.w),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF3F2), // Soft error background
-          //border: Border.all(color: const Color(0xFFFEE4E2)), // Subtle red border
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.lock_outline, 
-              color: const Color(0xFFD92D20), 
-              size: 20.sp,
-            ),
-            SizedBox(width: 12.w),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Product Edit Paused",
-                  style: GoogleFonts.inter(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFB42318), // Darker red for header
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // If active or pending, show nothing at the top to save space
-    return const SizedBox.shrink(); 
-  }
-
-  Widget _buildSubmitArea(BuildContext context, {required String status, required bool isLoading, required VoidCallback onSubmit}) {
-    // 🛑 Case 1: Restricted / Suspended (BLOCK ACTION)
-    // If the account is flagged, we stop them from adding more items.
-    if (status == 'restricted' || status == 'suspended' || status == 'banned') {
-      return Padding(
-        padding: EdgeInsets.only(top: 24.h),
-        child: _buildStatusCard( 
-          context,
-          title: "Edit Paused",
-          message: "Product editing is disabled for your account. Please contact support to resolve your status.",
-          icon: Icons.lock_outline,
-          accentColor: const Color(0xFFD92D20), // Premium Error Red
-          buttonText: "Resolve Issue",
-          onPressed: () => _showContactSheet(
-            context, 
-            title: "Account Support", 
-            subTitle: "Product editing is restricted. Please contact us to resolve this."
-          ),
-        ),
-      );
-    }
-
-     return SizedBox(
-      width: double.infinity,
-      height: 52.h,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onSubmit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: KorraColors.brand,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14.r),
-          ),
-          disabledBackgroundColor: KorraColors.brand.withOpacity(0.6),
-        ),
-        child: isLoading
-            ? SizedBox(
-                width: 24.w,
-                height: 24.w,
-                child: const CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                "Save Changes",
-                style: GoogleFonts.inter(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-      ),
-    );
-  }
-
-  // 💎 THE PREMIUM CARD WIDGET
-  Widget _buildStatusCard(
-    BuildContext context, {
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color accentColor,
-    required String buttonText,
-    required VoidCallback onPressed,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(top: 0.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r), // Softer corners
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF101828).withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4), // Soft elevation
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(20.w),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Icon with Soft Background
-                Container(
-                  padding: EdgeInsets.all(12.r),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: accentColor, size: 24.sp),
-                ),
-                SizedBox(width: 16.w),
-                
-                // 2. Text Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.inter(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF101828), // Slate 900
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 6.h),
-                      Text(
-                        message,
-                        style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          height: 1.5, // Better readability
-                          color: const Color(0xFF667085), // Slate 500
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // 3. Integrated Action Button (Bottom Strip)
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey.shade100)),
-            ),
-            child: InkWell(
-              onTap: onPressed,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(20.r),
-                bottomRight: Radius.circular(20.r),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      buttonText,
-                      style: GoogleFonts.inter(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
-                      ),
-                    ),
-                    SizedBox(width: 8.w),
-                    Icon(Icons.arrow_forward_rounded, size: 16.sp, color: accentColor),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true, // Allows it to be taller if needed
-      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
-    );
-  }
-
-
-
 
   TextStyle _labelStyle() {
     return GoogleFonts.inter(
@@ -696,5 +281,628 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     );
   }
 
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    priceCtrl.dispose();
+    stockCtrl.dispose();
+    categoryCtrl.dispose();
+    codeCtrl.dispose();
+    _downPaymentCtrl.dispose();
+    _durationCtrl.dispose();
+    super.dispose();
+  }
 
+  void _saveChanges(
+    ImageBloc imageBloc,
+    VendorProductsBloc productBloc,
+    VendorProductsState state,
+  ) {
+    if (!_formKey.currentState!.validate()) {
+      showAppSnackbar("Please check your inputs", SnackbarType.error);
+      return;
+    }
+
+    final priceTxt = priceCtrl.text.replaceAll(',', '');
+    final price = double.tryParse(priceTxt) ?? 0.0;
+    final stock = int.tryParse(stockCtrl.text) ?? 0;
+
+    if (_allowReservation) {
+      int finalDuration = int.tryParse(_durationCtrl.text) ?? 0;
+      if (finalDuration <= 0) {
+        showAppSnackbar(
+          "Please enter a valid base duration.", 
+          SnackbarType.error
+        );
+        return;
+      }
+    }
+
+    productBloc.add(
+      VendorProductsEdit(
+        productCode: widget.product.code,
+        name: nameCtrl.text,
+        description: descCtrl.text,
+        price: price,
+        stock: stock,
+        category: categoryCtrl.text,
+        newImages: _canEditIdentity ? imageBloc.state.images : [],
+        existingImageUrls: widget.product.imageUrl,
+        status: widget.product.status,
+        allowReservation: _allowReservation,
+        modelType: _allowReservation ? _selectedModel : ProductModelType.strict,
+        cancellationPolicy: "Store Credit",
+        extensionsEnabled: _allowReservation
+            ? (_selectedModel == ProductModelType.strict
+                ? _priceAllowsExtension
+                : (_priceAllowsExtension && _isDirectExtensionEnabled))
+            : false,
+        directDownPayment: _allowReservation
+            ? (_selectedModel == ProductModelType.direct
+                ? double.tryParse(_downPaymentCtrl.text.replaceAll(',', ''))
+                : null)
+            : null,
+        duration: _allowReservation ? _calculatedDurationInt : 0,
+        noticePeriod: _allowReservation ? _calculatedNoticeInt : 0,
+        extensionPeriod: _allowReservation ? _calculatedExtensionInt : 0,
+        isFeatured: _isFeatured,
+      ),
+    );
+  }
+
+  void _showContactSheet(BuildContext context, {required String title, required String subTitle}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => ContactSupportSheet(title: title, subTitle: subTitle),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageBloc = context.read<ImageBloc>();
+    final productBloc = context.read<VendorProductsBloc>();
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: const KorraHeader(title: "Edit Product", showLeadingIcon: true),
+      body: BlocListener<VendorProductsBloc, VendorProductsState>(
+        listenWhen: (previous, current) => previous.success != current.success,
+        listener: (context, state) {
+          if (state.success == true && state.isSubmitting == false) {
+            showAppSnackbar("Changes saved successfully", SnackbarType.success);
+            context.read<VendorProductsBloc>().add(
+              const VendorProductsRefresh(),
+            );
+            Navigator.pop(context);
+          } else if (state.success == false && state.isSubmitting == false) {
+            showAppSnackbar(
+              state.errorMessage ?? "Failed to save",
+              SnackbarType.error,
+            );
+          }
+        },
+        child: StreamBuilder<VendorStats>(
+          stream: _statsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final stats = snapshot.data ?? VendorStats.empty();
+            if (_currentMaxPlanLimit != stats.maxPlanAmount) {
+              _currentMaxPlanLimit = stats.maxPlanAmount;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _updatePlanLogic();
+              });
+            }
+
+            return BlocBuilder<VendorProductsBloc, VendorProductsState>(
+              buildWhen: (previous, current) =>
+                  previous.isSubmitting != current.isSubmitting ||
+                  previous.availableLimit != current.availableLimit,
+              builder: (context, state) {
+                final isLoading = state.isSubmitting ?? false;
+
+                return Form(
+                  key: _formKey,
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+                    children: [
+                      ProductRestrictionBanner(
+                        status: _complianceStatus,
+                        title: "Product Edit Paused",
+                      ),
+
+                      // 1. LIMIT HEADER (Live Feedback)
+                      ProductLimitHeader(
+                        availableLimit: state.availableLimit,
+                        price: double.tryParse(priceCtrl.text.replaceAll(',', '')) ?? 0.0,
+                        stock: int.tryParse(stockCtrl.text.replaceAll(',', '')) ?? 0,
+                      ),
+
+                      // 2. HELPER MESSAGE
+                      if (_helperMessage != null) ...[
+                        Container(
+                          padding: EdgeInsets.all(12.r),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 20.sp,
+                                color: Colors.grey.shade600,
+                              ),
+                              SizedBox(width: 12.w),
+                              Expanded(
+                                child: Text(
+                                  _helperMessage!,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13.sp,
+                                    color: Colors.grey.shade700,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 24.h),
+                      ],
+
+                      // 3. READ ONLY CODE
+                      Text("Product Code", style: _labelStyle()),
+                      SizedBox(height: 6.h),
+                      _buildInput(
+                        controller: codeCtrl,
+                        hint: "Code",
+                        enabled: false,
+                        readOnly: true,
+                      ),
+                      SizedBox(height: 20.h),
+
+                      // 4. IMAGES (Identity)
+                      Text("Product Photos", style: _labelStyle()),
+                      SizedBox(height: 6.h),
+                      BlocBuilder<ImageBloc, ImageState>(
+                        builder: (context, imgState) {
+                          return ImageUploadBox(
+                            editable: _canEditIdentity,
+                            imagesUrl: widget.product.imageUrl,
+                          );
+                        },
+                      ),
+                      SizedBox(height: 24.h),
+
+                      // 5. DETAILS (Identity)
+                      Text("Details", style: _labelStyle()),
+                      SizedBox(height: 6.h),
+                      _buildInput(
+                        controller: nameCtrl,
+                        hint: "Name",
+                        enabled: _canEditIdentity,
+                        validator: null,
+                      ),
+                      SizedBox(height: 12.h),
+                      _buildInput(
+                        controller: descCtrl,
+                        hint: "Description",
+                        maxLines: 4,
+                        enabled: _canEditIdentity,
+                        validator: null,
+                      ),
+
+                      SizedBox(height: 24.h),
+                      // 6. ALLOW INSTALLMENTS SWITCH (Moved to top of details)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("Allow Installments (Reservation)", style: _labelStyle()),
+                                SizedBox(height: 4.h),
+                                Text(
+                                  "Let customers buy this product using installment plans.",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11.5.sp,
+                                    color: Colors.grey.shade600,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _allowReservation,
+                            activeThumbColor: const Color(0xFFA54600),
+                            onChanged: (val) {
+                              setState(() {
+                                _allowReservation = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16.h),
+
+                      // Featured switch
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("Feature this product", style: _labelStyle()),
+                                SizedBox(height: 4.h),
+                                Text(
+                                  "Showcase this product prominently in a dedicated section on your storefront.",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11.5.sp,
+                                    color: Colors.grey.shade600,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _isFeatured,
+                            activeThumbColor: const Color(0xFFA54600),
+                            onChanged: (val) {
+                              setState(() {
+                                _isFeatured = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 24.h),
+
+                      // 7. DYNAMIC PRICE, STOCK, DURATION & CATEGORY FIELDS
+                      if (!_allowReservation) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Price", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  _buildInput(
+                                    controller: priceCtrl,
+                                    hint: "0.00",
+                                    enabled: _canEditCommerce,
+                                    prefixIcon: Padding(
+                                      padding: EdgeInsets.only(left: 14.w, right: 4.w),
+                                      child: Text(
+                                        "₦",
+                                        style: GoogleFonts.inter(
+                                          fontSize: 15.sp,
+                                          fontWeight: FontWeight.w600,
+                                          color: _canEditCommerce ? Colors.grey.shade600 : Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ),
+                                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      CurrencyInputFormatter(),
+                                    ],
+                                  ),
+                                  if (_isPriceTooHigh) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFFD92D20),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Stock", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  _buildInput(
+                                    controller: stockCtrl,
+                                    hint: "Qty",
+                                    enabled: true,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 24.h),
+                        Text("Category", style: _labelStyle()),
+                        SizedBox(height: 6.h),
+                        GestureDetector(
+                          onTap: _canEditIdentity
+                              ? () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                    ),
+                                    builder: (ctx) => ProductCategorySelectorSheet(
+                                      selectedCategory: categoryCtrl.text,
+                                      onCategorySelected: (cat) {
+                                        setState(() => categoryCtrl.text = cat);
+                                      },
+                                    ),
+                                  );
+                                }
+                              : null,
+                          child: AbsorbPointer(
+                            child: _buildInput(
+                              controller: categoryCtrl,
+                              hint: "Category",
+                              enabled: _canEditIdentity,
+                              readOnly: true,
+                              suffixIcon: _canEditIdentity ? const Icon(Icons.arrow_drop_down, size: 20) : null,
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Price", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  _buildInput(
+                                    controller: priceCtrl,
+                                    hint: "0.00",
+                                    enabled: _canEditCommerce,
+                                    prefixIcon: Padding(
+                                      padding: EdgeInsets.only(left: 14.w, right: 4.w),
+                                      child: Text(
+                                        "₦",
+                                        style: GoogleFonts.inter(
+                                          fontSize: 15.sp,
+                                          fontWeight: FontWeight.w600,
+                                          color: _canEditCommerce ? Colors.grey.shade600 : Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ),
+                                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      CurrencyInputFormatter(),
+                                    ],
+                                  ),
+                                  if (_isPriceTooHigh) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      "Max Limit: ₦${NumberFormat('#,##0').format(_currentMaxPlanLimit)}",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFFD92D20),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Base Duration (days)", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  _buildInput(
+                                    controller: _durationCtrl,
+                                    hint: "e.g. $_recommendedMinDays",
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    validator: (value) {
+                                      int? val = int.tryParse(value ?? '');
+                                      if (val == null || val <= 0) {
+                                        return 'Enter valid duration';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  if ((int.tryParse(_durationCtrl.text) ?? 0) > _recommendedMinDays) ...[
+                                    SizedBox(height: 6.h),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFA54600)),
+                                        SizedBox(width: 4.w),
+                                        Expanded(
+                                          child: Text(
+                                            "Warning: Plans over $_recommendedMinDays days reduce completion rates for this price range.",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.sp,
+                                              fontWeight: FontWeight.w500,
+                                              color: const Color(0xFFA54600),
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 24.h),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Category", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  GestureDetector(
+                                    onTap: _canEditIdentity
+                                        ? () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                              ),
+                                              builder: (ctx) => ProductCategorySelectorSheet(
+                                                selectedCategory: categoryCtrl.text,
+                                                onCategorySelected: (cat) {
+                                                  setState(() => categoryCtrl.text = cat);
+                                                },
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                    child: AbsorbPointer(
+                                      child: _buildInput(
+                                        controller: categoryCtrl,
+                                        hint: "Category",
+                                        enabled: _canEditIdentity,
+                                        readOnly: true,
+                                        suffixIcon: _canEditIdentity ? const Icon(Icons.arrow_drop_down, size: 20) : null,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Stock", style: _labelStyle()),
+                                  SizedBox(height: 6.h),
+                                  _buildInput(
+                                    controller: stockCtrl,
+                                    hint: "Qty",
+                                    enabled: true,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      SizedBox(height: 24.h),
+
+                      if (_allowReservation) ...[
+                        // ----------------------------------------------------
+                        // TIMELINE INFO
+                        // ----------------------------------------------------
+                        SizedBox(height: 20.h),
+                        ProductTimelineLogicBox(
+                          calculatedDurationInt: _calculatedDurationInt,
+                          noticePeriod: _noticePeriod,
+                          extensionDuration: _extensionDuration,
+                          totalMaxTime: _totalMaxTime,
+                          priceAllowsExtension: _priceAllowsExtension,
+                        ),
+                        SizedBox(height: 32.h),
+                        const Divider(color: Color(0xFFEAECF0)),
+                        SizedBox(height: 24.h),
+
+                        // Sales Model Selection
+                        Text("Sales Model", style: _labelStyle()),
+                        SizedBox(height: 12.h),
+                        ProductModelTabs(
+                          selectedModel: _selectedModel,
+                          onModelChanged: (model) {
+                            setState(() => _selectedModel = model);
+                            _updatePlanLogic();
+                          },
+                        ),
+                        SizedBox(height: 20.h),
+
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: _selectedModel == ProductModelType.strict
+                              ? ProductStrictSettingsCard(
+                                  priceAllowsExtension: _priceAllowsExtension,
+                                )
+                              : ProductDirectSettingsCard(
+                                  downPaymentCtrl: _downPaymentCtrl,
+                                  priceAllowsExtension: _priceAllowsExtension,
+                                  isDirectExtensionEnabled: _isDirectExtensionEnabled,
+                                  onExtensionChanged: (val) {
+                                    setState(() => _isDirectExtensionEnabled = val);
+                                    _updatePlanLogic();
+                                  },
+                                ),
+                        ),
+                      ],
+                      SizedBox(height: 32.h),
+
+                      // 8. SAVE
+                      ProductSubmitArea(
+                        status: _complianceStatus,
+                        isLoading: isLoading,
+                        buttonText: "Save Changes",
+                        onSubmit: () => _saveChanges(imageBloc, productBloc, state),
+                        onResolveSupport: () => _showContactSheet(
+                          context,
+                          title: "Account Support",
+                          subTitle: "Product edit is restricted. Please contact us to resolve this.",
+                        ),
+                        pausedTitle: "Edit Paused",
+                        pausedMessage: "Product editing is disabled for your account. Please contact support to resolve your status.",
+                      ),
+
+                      SizedBox(height: 32.h),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

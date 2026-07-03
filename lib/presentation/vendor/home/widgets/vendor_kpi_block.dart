@@ -37,7 +37,7 @@ class VendorKpiBlock extends StatelessWidget {
           Row(
             children: [
               _buildBigTile(
-                label: 'Ready to Pickup',
+                label: 'Ready to Deliver',
                 value: readyCount,
                 color: const Color(0xFF027A48), // Success Green
                 bg: const Color(0xFFECFDF5),

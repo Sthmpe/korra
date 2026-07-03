@@ -254,12 +254,12 @@ class ReservationTile extends StatelessWidget {
         fg = const Color(0xFF027A48); // Success-700
         break;
       case ReservationStatus.readyForPickup:
-        text = "Completed"; // Ready changed to Completed
-        bg = const Color(0xFFFFF7ED); // Orange/Cream
+        text = "Ready to Deliver";
+        bg = const Color(0xFFFFF7ED);
         fg = const Color(0xFFB95000);
         break;
       case ReservationStatus.completed:
-        text = "Fulfilled"; // Completed changed to Fulfilled
+        text = "Delivered";
         bg = Colors.grey.shade100;
         fg = Colors.grey.shade700;
         break;

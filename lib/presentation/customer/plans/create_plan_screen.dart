@@ -104,6 +104,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     decimalDigits: 2,
   );
 
+  double get productPrice {
+    final discount = widget.product.data['discountedPrice']?.toDouble() ?? 0.0;
+    if (discount > 0) return discount;
+    return widget.product.data['price']?.toDouble() ?? 0.0;
+  }
+
   ProductModelType get modelType {
     final typeStr = widget.product.data['modelType'] as String? ?? 'strict';
     return typeStr == 'direct'
@@ -231,7 +237,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
   // 2. The Master Calculator
   void _recalculateFees() {
-    final double totalProductPrice = widget.product.data['price']?.toDouble() ?? 0.0;
+    final double totalProductPrice = productPrice;
     final bool isAbove30k = totalProductPrice > 30000;
 
     if (_isPayInFull) {
@@ -307,7 +313,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   // --- 🧠 CORE FEE LOGIC END ---
 
   void _onAmountChanged(String value) {
-    final price = widget.product.data['price']?.toDouble() ?? 0.0;
+    final price = productPrice;
     String clean = value.replaceAll(',', '');
     double val = double.tryParse(clean) ?? 0.0;
 
@@ -323,7 +329,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   }
 
   debugPrintAmountCalculations() {
-    final price = widget.product.data['price']?.toDouble() ?? 0.0;
+    final price = productPrice;
     debugPrint("Price: $price");
     debugPrint("User Down Payment: $userEnteredDownPayment");
     debugPrint("Processing Fee: $processingFee");
@@ -336,7 +342,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double productPrice = widget.product.data['price']?.toDouble() ?? 0.0;
+    final double productPrice = this.productPrice;
     final String productId = widget.product.id ?? '';
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     final storeName = widget.product.data['storeName'] ?? 'Store';
@@ -1014,7 +1020,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                               title: widget.product.data['name'] ?? 'Unknown',
                               storeName: widget.product.data['storeName'] ?? 'Unknown',
                               imageUrls: List<String>.from(widget.product.data['images'] ?? []),
-                              totalProductPrice: widget.product.data['price']?.toDouble() ?? 0.0,
+                              totalProductPrice: productPrice,
                               totalUpfrontPaid: userEnteredDownPayment,
                               processingFee: processingFee,
                               loanAmount: state.loanAmount,

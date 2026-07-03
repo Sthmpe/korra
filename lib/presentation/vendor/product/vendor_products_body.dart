@@ -92,7 +92,7 @@ class VendorProductsBody extends StatelessWidget {
                   SliverToBoxAdapter(
                     child: Container(
                       color: Colors.white, // Continues from AppBar
-                      padding: EdgeInsets.only(bottom: 16.h),
+                      padding: EdgeInsets.only(top: 12.h, bottom: 16.h),
                       child: Column(
                         children: [
                           Padding(
@@ -227,6 +227,7 @@ class VendorProductsBody extends StatelessWidget {
       arguments: {
         'product': product,
         'listBloc': currentBloc, // 👈 Passing the Bloc
+        'uid': vendorUid,       // 👈 Pass uid to prevent Null type crash
       },
     );
   }

@@ -1,20 +1,18 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
-import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_bloc.dart';
 import '../../../../logic/bloc/vendor/product/vendor_products_state.dart';
 import '../../../../presentation/vendor/product/widgets/share_link_sheet.dart';
 import '../../../shared/widgets/korra_header.dart';
+import 'product_details_gallery.dart';
+import 'product_details_timeline.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final ProductItem product;
@@ -31,13 +29,6 @@ class ProductDetailsScreen extends StatefulWidget {
 }
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
-  int _currentImageIndex = 0;
-
-  // Helper for Price Formatting
-  String _formatCurrency(double amount) {
-    return NumberFormat("#,##0", "en_US").format(amount);
-  }
-
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
@@ -68,7 +59,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             if (product.status == ProductStatus.rejected) ...[
               _buildAlertBanner(
                 "This product was rejected.", 
-                Iconsax.close_circle, 
+                Icons.cancel, 
                 const Color(0xFFFEF3F2), 
                 const Color(0xFFB42318)
               ),
@@ -76,7 +67,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ],
 
             // 2. IMAGE GALLERY
-            _buildImageGallery(product.imageUrl),
+            ProductDetailsGallery(images: product.imageUrl),
             
             SizedBox(height: 24.h),
 
@@ -94,7 +85,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             Row(
               children: [
                 Text(
-                  product.priceText,//"₦${_formatCurrency(product.priceText)}", // ✅ ADDED COMMA FORMATTING
+                  product.priceText,
                   style: GoogleFonts.inter(
                     fontSize: 24.sp,
                     fontWeight: FontWeight.w800,
@@ -136,108 +127,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               SizedBox(height: 32.h),
             ],
 
-            // 5. TERMS OF SALE
-            Text(
-              "Terms of Sale",
-              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054)),
-            ),
-            SizedBox(height: 12.h),
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(16.r),
-                //border: Border.all(color: const Color(0xFFEAECF0)),
-              ),
-              child: Column(
-                children: [
-                  // Model Type
-                  Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8.r),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          //border: Border.all(color: const Color(0xFFEAECF0)),
-                        ),
-                        child: Icon(
-                          // ✅ Correct Icon logic based on Enum
-                          product.modelType == ProductModelType.strict ? Iconsax.shield_tick : Icons.handshake_rounded,
-                          size: 18.sp,
-                          color: KorraColors.brand,
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            // ✅ Correct Label logic based on Enum
-                            product.modelType == ProductModelType.strict ? "Strict Lock" : "Korra Direct",
-                            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: const Color(0xFF101828)),
-                          ),
-                          Text(
-                            "Sales Model",
-                            style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF667085)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16.h),
-                    child: const Divider(height: 1, color: Color(0xFFEAECF0)),
-                  ),
-
-                  // Policy Details Grid
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildDetailColumn("Cancellation", product.cancellationPolicy), // Should be "Store Credit"
-                      
-                      // Show Down Payment ONLY if Direct
-                      if (product.modelType == ProductModelType.direct && product.directDownPayment != null)
-                         _buildDetailColumn("Down Payment", "₦${_formatCurrency(product.directDownPayment!)}"),
-                      
-                      // Show Extension Status
-                      _buildDetailColumn("Extensions", product.extensionsEnabled ? "Allowed" : "No"),
-                    ],
-                  )
-                ],
-              ),
-            ),
-
-            SizedBox(height: 24.h),
-
-            // 6. TIMELINE CARD (Fixed Data Source)
-            Text(
-              "Lock Duration",
-              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF344054)),
-            ),
-            SizedBox(height: 12.h),
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // ✅ Using Fields directly from DB
-                  _buildTimelineItem(product.baseDuration, "Base Time", false),
-                  Icon(Iconsax.add, size: 14.sp, color: Colors.grey),
-                  _buildTimelineItem(product.noticePeriod, "Notice", true),
-                  Icon(Iconsax.arrow_right_1, size: 14.sp, color: Colors.grey),
-                  _buildTimelineItem(product.totalMaxTime, "Total Max", false, isBold: true),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 32.h),
+            ProductDetailsTimeline(product: product),
 
             // 7. STANDARD INFO GRID
             Container(
@@ -286,111 +176,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  // ... (Rest of your helpers: _buildDetailColumn, _buildTimelineItem, _buildImageGallery, _buildAlertBanner, _navigateToEdit) ...
-  // Keep them exactly as they were in your previous code.
-  
-  Widget _buildDetailColumn(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF667085), fontWeight: FontWeight.w500),
-        ),
-        SizedBox(height: 4.h),
-        Text(
-          value.contains("Credit") ? "Store Balance" : value,
-          style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF101828), fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildTimelineItem(String value, String label, bool isAlert, {bool isBold = false}) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 13.sp, 
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-            color: isAlert ? const Color(0xFFA54600) : const Color(0xFF101828)
-          ),
-        ),
-        SizedBox(height: 4.h),
-        Text(
-          label,
-          style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF667085)),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildImageGallery(List<String> images) {
-    if (images.isEmpty) {
-      return Container(
-        height: 250.h,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF2F4F7),
-          borderRadius: BorderRadius.circular(20.r),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Iconsax.image, size: 48.sp, color: Colors.grey.shade400),
-            SizedBox(height: 8.h),
-            Text("No images", style: GoogleFonts.inter(color: Colors.grey.shade500)),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        CarouselSlider(
-          options: CarouselOptions(
-            height: 300.h,
-            viewportFraction: 1.0, 
-            enableInfiniteScroll: images.length > 1,
-            autoPlay: false, 
-            onPageChanged: (index, _) => setState(() => _currentImageIndex = index),
-          ),
-          items: images.map((url) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(20.r),
-              child: CachedNetworkImage(
-                imageUrl: url,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(color: Colors.grey.shade100),
-                errorWidget: (_, __, ___) => Container(color: Colors.grey.shade100, child: const Icon(Icons.error)),
-              ),
-            );
-          }).toList(),
-        ),
-        if (images.length > 1) ...[
-          SizedBox(height: 12.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: images.asMap().entries.map((entry) {
-              final isActive = _currentImageIndex == entry.key;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: isActive ? 24.w : 6.w,
-                height: 6.w,
-                margin: EdgeInsets.symmetric(horizontal: 3.w),
-                decoration: BoxDecoration(
-                  color: isActive ? KorraColors.brand : const Color(0xFFEAECF0),
-                  borderRadius: BorderRadius.circular(100.r),
-                ),
-              );
-            }).toList(),
-          ),
-        ]
-      ],
-    );
-  }
 
   Widget _buildAlertBanner(String msg, IconData icon, Color bg, Color text) {
     return Container(
@@ -398,7 +185,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: bg.withOpacity(0.5)),
+        border: Border.all(color: bg.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [

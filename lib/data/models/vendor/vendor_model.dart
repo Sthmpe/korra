@@ -112,7 +112,7 @@ class Vendor {
       bvn: '',
       ninVerified: false,
       bvnVerified: false,
-      
+      status: status,
       storeName: s.storeName.trim(),
       presence: s.presence,
       categories: List<String>.from(s.categories),
@@ -131,7 +131,6 @@ class Vendor {
       twitter: s.twitter.trim(),
       otherLink: s.otherLink.trim(),
 
-      status: status,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -300,7 +299,7 @@ class Vendor {
         'bvnVerified': bvnVerified,
       }),
       
-      // Inject Socials
+       // Inject Socials
       'socials': socialsMap.isEmpty ? null : socialsMap,
 
       'status': status,

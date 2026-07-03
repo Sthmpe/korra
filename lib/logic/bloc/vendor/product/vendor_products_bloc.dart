@@ -152,6 +152,8 @@ class VendorProductsBloc
         'baseDuration': "$baseDays Days",
         'noticePeriod': "$noticeDays Days",
         'totalMaxTime': "$totalDays Days",
+        'allowReservation': event.allowReservation,
+        'isFeatured': event.isFeatured,
       };
 
       await vendors.addProductSecure(newProductMap);
@@ -205,6 +207,15 @@ class VendorProductsBloc
         'availableStock': event.stock, 
         'category': event.category,
         'images': finalImages,
+        'allowReservation': event.allowReservation,
+        'modelType': event.modelType.name,
+        'cancellationPolicy': event.cancellationPolicy,
+        'extensionsEnabled': event.extensionsEnabled,
+        'directDownPayment': event.directDownPayment,
+        'baseDuration': "${event.duration} Days",
+        'noticePeriod': "${event.noticePeriod} Days",
+        'totalMaxTime': "${event.duration + event.noticePeriod + (event.extensionsEnabled ? event.extensionPeriod : 0)} Days",
+        'isFeatured': event.isFeatured,
       };
 
       await vendors.updateProductSecure(

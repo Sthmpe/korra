@@ -24,6 +24,7 @@ import '../../presentation/customer/profile/limit_upgrade_screen.dart';
 import '../../presentation/customer/profile/my_qr_screen.dart';
 import '../../presentation/customer/profile/my_store_credit_screen.dart';
 import '../../presentation/customer/profile/my_vendors_screen.dart';
+import '../../presentation/customer/storefront/storefront_screen.dart';
 import '../../presentation/customer/profile/statements_screen.dart';
 import 'app_routes.dart';
 import 'auth_middleware.dart';
@@ -136,6 +137,16 @@ class CustomerPages {
       middlewares: [AuthMiddleware()],
     ),
 
+    // 💳 Pay Plan Input
+    GetPage(
+      name: Routes.customerPayPlan,
+      page: () => guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PayPlanInputScreen(plan: map['plan']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
     // 📄 Statements
     GetPage(
       name: Routes.customerStatements,
@@ -147,16 +158,6 @@ class CustomerPages {
           uid = (args as Map<String, dynamic>)['uid'];
         }
         return StatementsScreen(customerUid: uid);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 💳 Pay Plan Input
-    GetPage(
-      name: Routes.customerPayPlan,
-      page: () => guard((args) {
-        final map = args as Map<String, dynamic>;
-        return PayPlanInputScreen(plan: map['plan']);
       }),
       middlewares: [AuthMiddleware()],
     ),
@@ -253,6 +254,15 @@ class CustomerPages {
       name: Routes.customerHelp,
       page: () => const HelpCenterScreen(),
       middlewares: [AuthMiddleware()],
+    ),
+
+    // 🏪 Storefront (Publicly accessible, App Link compliant)
+    GetPage(
+      name: Routes.customerStorefront,
+      page: () {
+        final slug = Get.parameters['slug'] ?? '';
+        return StorefrontScreen(storeSlug: slug);
+      },
     ),
   ];
 }

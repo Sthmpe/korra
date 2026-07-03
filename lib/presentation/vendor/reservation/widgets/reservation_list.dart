@@ -41,7 +41,7 @@ class ReservationList extends StatelessWidget {
             Icon(Iconsax.box_remove, size: 48.sp, color: Colors.grey.shade300),
             SizedBox(height: 16.h),
             Text(
-              "No reservations found",
+              "No orders found",
               style: GoogleFonts.inter(color: Colors.grey.shade500),
             ),
           ],

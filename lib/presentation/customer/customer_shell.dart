@@ -7,6 +7,7 @@ import '../../logic/bloc/bottom_nav/bottom_nav_bloc.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_event.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_state.dart';
 import 'home/home_page.dart';
+import 'store/store_page.dart';
 import 'plans/plans_page.dart';
 import 'profile/profile_page.dart';
 import '../shared/widgets/korra_bottom_nav.dart';
@@ -37,6 +38,7 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
   final customerPageIcons = const [
     NavSpec('Home', Icons.home_outlined, Icons.home_rounded),
     NavSpec('Plans', Icons.receipt_long_outlined, Icons.receipt_long_rounded),
+    NavSpec('Stores', Icons.storefront_outlined, Icons.storefront_rounded),
     NavSpec('Profile', Icons.person_outline, Icons.person_rounded),
   ];
 
@@ -83,6 +85,7 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
             final pages = [
               HomePage(customerUid: widget.uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
               PlansPage(customerUid: widget.uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),),
+              StorePage(customerUid: widget.uid),
               ProfilePage(customerUid: widget.uid),
             ];
       
