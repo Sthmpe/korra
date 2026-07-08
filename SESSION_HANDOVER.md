@@ -404,421 +404,379 @@ flutter analyze lib/
 
 ---
 
-## 16. This Session — Exact Changes Made
+## 16. Compacted History — 3–5 July 2026 (all rounds summarized; full details live in git history)
 
-### Firebase Analytics Added to 10 BLoC/Cubit files:
+> This section replaces the old round-by-round log, which had grown past 1,000 lines. Nothing pending was dropped — see §17 for the live backlog. Future sessions: append SHORT dated updates below §18; when the file gets long again, re-compact the same way.
 
-| File | Events Added |
-|---|---|
-| `auth/role_login/role_login_bloc.dart` | `login_success` (email + google), `login_failed` |
-| `auth/signup_customer/signup_customer_bloc.dart` | `sign_up`, `signup_failed` |
-| `auth/signup_vendor/signup_vendor_bloc.dart` | `sign_up`, `signup_failed` |
-| `customer/plans/create_plan_bloc.dart` | `plan_preview_loaded`, `plan_created`, `plan_creation_failed` |
-| `customer/plans/pay_plan_bloc.dart` | `installment_paid`, `installment_payment_failed` |
-| `customer/plans/plan_action_bloc.dart` | `installment_paid`, `plan_cancelled` |
-| `customer/plans/plan_action_cubit.dart` | `plan_converted_to_store_credit`, `plan_extended` |
-| `customer/kyc/customer_kyc_bloc.dart` | `kyc_bvn_verified`, `kyc_nin_verified` |
-| `vendor/product/vendor_products_bloc.dart` | `product_added`, `product_deleted`, `products_deleted_bulk` |
-| `vendor/payout/payout_bloc.dart` | `payout_initiated`, `payout_failed` |
+### 3 July — Foundation & vendor-side session
+- **Terminology**: vendor "Reservations" tab → **"Orders"**; "Fulfilled/Fulfill" → **"Delivered/Deliver"**. `plans/` collection = layaway/installments ONLY; `orders/` collection = outright purchases (model: `OutrightOrder`, multi-item). `isOutright` getter removed from `Reservation`.
+- Firebase Analytics instrumented across all BLoCs (see §5). `plan_created` mirrors GA4 `purchase` schema.
+- Perf/architecture pass: `LazyIndexedStack` in both shells; `NotificationService` → GetX singleton; GoogleFonts family cached in `KorraTextStyles.inter`; repositories exposed via root `RepositoryProvider` and all screens converted to `context.read<...>()` (no repo constructor params anywhere); repos split into extension files; R8 full mode; routes split into `common_pages.dart` / `customer_pages.dart` / `vendor_pages.dart` for tree-shaking; unused assets moved to `unused_assets/`, `lottie` removed.
+- Massive widget decomposition: create-plan, plan-details (1,372 → ~340 lines), add/edit product, KYC shared fields (`lib/presentation/shared/widgets/kyc/`), vendor home, profile pages. **Standing rule: keep page files lean, decompose to `/widgets/`.**
+- `KorraHeader` back action uses native `Navigator.pop(context)`; header supports an expanding in-title search mode (used by vendor Orders page).
+- **Vendor Orders page**: horizontal `PageView` — panel 0 Reservations (`plans/`), panel 1 Outright Orders (`orders/`), switched by `orders_panel_switcher.dart`; `OutrightOrdersRepository` + `OutrightOrdersBloc`; detail sheets with delivery actions.
+- **Storefront fee policy**: reservations = 3.5% fee always on customer (non-configurable). Outright = merchant toggle `vendors/{uid}/store.absorbOutrightFee` (customer pays 3.5% capped ₦7,500, or merchant absorbs). Checkout/payout wiring for this is still backend TODO.
+- **Merchant marketing suite**: `vendor_visibility/{vendorId}` model (`topSellerCircles`, `mostVisitedCircles`, `isHighlighted`), campaigns CRUD (`campaigns` collection, 24h active, max 3, banner photo required, tag/caption char limits), reach cards, highlighted-store promo. Vendor Reviews tab streams `vendors/{uid}/reviews`.
+- **Customer storefront v1** (Plan E): `/store/:slug` named route, Stores tab added to shell (`Home, Plans, Stores, Profile`), masonry grid (`SliverMasonryGrid`), featured products (`isFeatured`/`campaignTag`/`discountedPrice` on product model + merchant switches), product details sheet, per-store Firestore carts (later replaced by local CartService), category circles, price sort.
+- ⚠️ **Firestore rules must be deployed from `firebase_rule.txt`** whenever new paths are added (my_vendors, carts, orders, reviews, campaigns, vendor_visibility) — otherwise PERMISSION_DENIED.
 
-### Startup & Build Performance Optimizations:
-- Created [lazy_indexed_stack.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/lazy_indexed_stack.dart) under shared widgets.
-- Fixed compilation parameter error in [lazy_indexed_stack.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/lazy_indexed_stack.dart) by mapping the `fit` parameter to `sizing` inside `IndexedStack`.
-- Refactored [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) and [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) to replace `IndexedStack` with `LazyIndexedStack` to optimize startup rendering and prevent all tab pages from building at launch.
-- Configured R8 Full Mode in [gradle.properties](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/gradle.properties) by adding `android.enableR8.fullMode=true` for optimal release code shrinking.
+### 4 July — Premium storefront overhaul (Rounds 1–4)
+- **Design language locked** (see `design.md` + deals_page.dart): borderless floating white cards on `KorraColors.surface`, 16–24r radii, `Colors.black.withValues(alpha: 0.05)` shadows (blur ~14, offset 0,5), Inter w800 headers, tinted chips, generous whitespace. **David dislikes border lines — avoid `Border.all` unless truly the best option.**
+- `StorefrontLazyImage`: blur placeholder + brand progress line + `memCacheWidth` downsizing + `Image.network` fallback on cache errors. Used everywhere images render.
+- Product cards: gallery cycling ONLY while hovered (web) or touch-held (mobile, raw `Listener` + live hit-testing — David rejected idle autoplay); lift on press; sold-out veil; low-stock chip. Split into `storefront_product_card.dart` + `storefront_card_image.dart`.
+- Parallax collapsing `SliverAppBar` with dark-brand glass logo card (`storefront_sliver_app_bar.dart`); glass icon buttons; custom positioned collapse title.
+- Stores tab: gradient hero header w/ floating search (`store_hero_header.dart`, faded watermark icons), rebuilt `discover_store_list_item.dart` (gradient-ring logo, 3 product thumbs, Visit Store CTA).
+- Details sheet + cart sheet premium rebuilds; **checkout confirm dialog**; purchase history sheet merges `plans` (RESERVATION chip) + `orders` (OUTRIGHT chip) streams.
+- **Freeze fixes applied** (from the Round 3 static investigation): plan-details `_dismissTopSheetIfAny` (pop only a covering sheet, never blind-pop) + `_showSnackbarSafely` (defer Get.snackbar past the transition); profile page stream cached + `listenWhen` on message/status; storefront pin listener cancelled in dispose. Findings #5 (NetCubit rebuilds) & #6 (global GestureDetector) were fixed 5 July / still open respectively.
+- **Demo marketplace** (`lib/data/demo/` — `DemoMarketplace.enabled` master switch, ids prefixed `demo`, in-memory ONLY, never written to Firebase): 30 named stores + deterministic products/campaigns/reviews/visibility/network. To remove demo mode: delete `lib/data/demo/` and the `DemoMarketplace.enabled` call sites (grep it). Never complete a demo reservation (would write a real plan).
+- **Hot Deals strip** on Stores tab (campaigns <24h joined to already-streamed vendors, tags only — no campaign titles) + shared `KorraCampaignTags` (config/constants/campaign_tags.dart; flash-like tags get solid bolt chip; merchant sheet uses same presets).
+- **Cart**: `CartService` persists to SharedPreferences (`korra_saved_carts_v2`, 7-day expiry); store balance ALWAYS applied first, wallet covers the rest; insufficient → black "Fund Wallet" CTA → bank details; `SignalBadgeDot` pulses on the Stores nav tab and cart-pending stores rank first with "In your cart" pill. Checkout is still UI-only (no orders write).
 
-### NotificationService Singleton Implementation:
-- Converted `NotificationService` in [notification_service.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/services/notification_service.dart) to extend `GetxService` and implement a static `to` getter.
-- Moved repository and UID parameters to the `initialize` method so that it does not require constructor arguments.
-- Managed single-registration of message handlers and listeners via `_listenersRegistered` boolean to avoid duplicate FCM initialization on page rebuilds.
-- Registered the service globally inside [bootstrap.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/bootstrap.dart) using `Get.put()`.
-- Updated [home_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/home_page.dart) and [home_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/home_page.dart) to call `NotificationService.to.initialize(...)` instead of instantiating new objects.
-
-### GoogleFonts Caching (Central Style Files Optimization):
-- Restructured [text_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/text_styles.dart) by resolving the `'Inter'` font family string once at class loading time via `GoogleFonts.inter().fontFamily!`.
-- Implemented `KorraTextStyles.inter(...)` helper method that returns a standard `TextStyle` using the cached font family name.
-- Replaced all inline `GoogleFonts.inter(...)` calls inside [text_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/text_styles.dart) and [input_styles.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/constants/input_styles.dart) with the new optimized `KorraTextStyles.inter(...)` helper. This eliminates dynamic GoogleFonts lookups and dynamic platform resolution on every widget rebuild.
-
-### Constructor Dependency Injection Cleanup (Architecture Refactoring):
-- Wrapped the root-level `GetMaterialApp` inside [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) in a flavor-specific `RepositoryProvider` (`CustomerRepository` or `VendorRepository`). This exposes the active repository via context globally across both shell routes and all dynamically pushed routes.
-- Refactored [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart), [statements_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/statements_screen.dart), and [edit_profile_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/edit_profile_screen.dart) to remove `CustomerRepository` from their constructors and class fields. They now fetch the repository instance directly from context using `context.read<CustomerRepository>()`.
-- Refactored [create_plan_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart), [plan_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_details_screen.dart), [plan_details_loader_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_details_loader_screen.dart), [pay_plan_input_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/pay_plan_input_screen.dart), and [change_password_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/change_password_screen.dart) (both customer and vendor versions) to resolve repositories from the widget build context rather than constructors, completely removing constructor parameters and arguments on navigation routes.
-- Fully completed Customer-side DI refactoring: removed `CustomerRepository` constructor parameters from [HomePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/home_page.dart), [PlansPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/plans_page.dart), [ProfilePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/profile_page.dart), [NotificationScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/home/notification_screen.dart), and [LimitUpgradeScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/limit_upgrade_screen.dart).
-- Cleaned up [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) (no longer passes `customerRepo` to tab pages), and updated route definitions in [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart) for `customerNotifications` and `customerLimitUpgrade` to drop repository route arguments.
-- Refactored [pay_confirmation_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/pay_confirmation_sheet.dart) to resolve `CustomerRepository` from context rather than constructor params/helper args.
-- Fully completed Vendor-side DI refactoring: removed `VendorRepository` constructor parameters from [VendorHomePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/home_page.dart), [VendorHomeBody](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/vendor_home_body.dart), [VendorVaultScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/widgets/vault_screen.dart), [VendorProductsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/products_page.dart), [AddProductPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart), [ProductDetailsScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_screen.dart), [ProductEditScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart), [PayoutSettingsScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/payout_settings_screen.dart), [VendorSettlementScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/vendor_settlement_screen.dart), [VendorProfilePage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/profile/profile_page.dart), and [ReservationsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart).
-- Cleaned up [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) (no longer passes `repo` to tab pages), and updated route definitions in [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart) for all vendor sub-pages (`vendorReservations`, `vendorAddProduct`, `vendorProductDetails`, `vendorEditProduct`, `vendorSettlement`, and `vendorPayoutSettings`) to drop repository route arguments, utilizing `context.read<VendorRepository>()` dynamically instead.
-- Cleaned up duplicate `db` field from both `CustomerRepository` and `VendorRepository`, unifying all Firestore queries onto the `firestore` property, and updated references accordingly (e.g. inside `create_plan_screen.dart`).
-- Replaced hardcoded `korraSecret` string constants inside `CustomerRepository` and `VendorRepository` with environment configuration (`dotenv.env['KORRA_SECRET_CODE']`).
-- Optimized `plans_page.dart` by removing duplicate `StreamBuilder<List<Plan>>` inside the AppBar and instead using `_cachedPlans` to serve list data to search delegate.
-- Decomposed `plans_page.dart` by extracting the private `_SkeletonCard` widget to a public `PlanSkeletonCard` widget under `widgets/plan_skeleton_card.dart`.
-- Flattened the nested `StreamBuilder` tree in `plans_page.dart` by replacing the outer customer profile stream builder with a background `StreamSubscription` in `initState` to prevent profile updates from triggering plans list reload cycles.
-- Decomposed `vendor_home_body.dart` by extracting the liveness failure blocker modal sheet to a public standalone `LivenessBlockerSheet` widget under [liveness_blocker_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/home/widgets/liveness_blocker_sheet.dart).
-- Decomposed `plan_details_screen.dart` by extracting status banners, completed pickup arrangements, financial progress tracking, timeline grace periods, target payment calculator details, metadata info grids, resolve sheets, conversion sheets, and sticky bottom action bars into separate reusable widgets, shrinking the file size from 1,372 lines to 337 lines.
-- Fixed a nesting compilation error in [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) where the conditional `isMerchant` RepositoryProvider block was accidentally placed inside the `_PremiumDesktopBlocker` widget class instead of the root `KorraApp` class.
-
-### Widget Performance Extraction (create_plan_screen.dart cleanup):
-- Extracted `_PenaltyExplainerSheet` to public widget `PenaltyExplainerSheet` in [penalty_explainer_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/penalty_explainer_sheet.dart).
-- Extracted `_buildFullPaymentSuccess` to public widget `FullPaymentSuccessCard` in [full_payment_success_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/full_payment_success_card.dart).
-- Extracted `_buildModelPill` to public widget `PlanModelPill` in [plan_model_pill.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_model_pill.dart).
-- Extracted `_buildDurationCard` to public widget `PlanDurationCard` in [plan_duration_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_duration_card.dart).
-- Extracted `_buildLiabilityDisclaimer` to public widget `PlanLiabilityDisclaimer` in [plan_liability_disclaimer.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plan_liability_disclaimer.dart).
-- Refactored [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) and [vendor_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/vendor_shell.dart) to replace `IndexedStack` with `LazyIndexedStack`.
-- Configured R8 Full Mode in [gradle.properties](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/gradle.properties).
-
-### Widget Performance & Cleanup:
-- Extracted `PlanLimitContainer`, `PlanImageCarousel`, `PlanPaymentModeToggle`, `PlanGoalSelector`, `PlanCadenceSelector`, `PlanCommitmentMessage`, `PlanBottomBar`, and `PlanLiabilityCheckbox` to public widgets.
-- Decomposed `vendor_home_body.dart` by extracting the `LivenessBlockerSheet`.
-- Decomposed `plan_details_screen.dart` into reusable modules (banners, pickup arrangements, financial progress, etc.).
-- Fixed nesting compilation error in [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart).
-- Decomposed `Add_product_page.dart` and `product_edit_screen.dart` by extracting shared widgets: `ProductLimitHeader`, `ProductModelTabs`, `ProductCategorySelectorSheet`, and `ProductInfoBox`.
-- Consolidated duplicated KYC code by creating 6 shared, flavor-agnostic fields (`KycBvnField`, `KycNinField`, `KycDobSelector`, `KycGenderSelector`, `KycPhoneSection`, and `KycPremiumInput`) under `lib/presentation/shared/widgets/kyc/` and integrated them into both customer and vendor KYC sheets, deleting over 1,200 lines of duplicated code.
-- Decomposed customer `pay_plan_input_screen.dart` by extracting its fee breakdown preview card to a standalone `PayPlanFeeSummary` widget.
-- Optimized customer `profile_page.dart` by extracting the `LevelUpSlotsRow` to a standalone widget with its own `StreamBuilder`.
-- Refactored vendor `profile_page.dart` to extract `StaticInfoRow` to a dedicated widget file.
-
-### Created:
-- `SESSION_HANDOVER.md` (this document) in project root
-
-
-### Widget Rebuild Optimizations (Phase 3.2):
-- Added `buildWhen` filters to `BlocBuilder` and `BlocConsumer` blocks across several screens and widgets:
-  - [AddProductPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart)
-  - [ProductEditScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart)
-  - [CreatePlanScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart)
-  - [ReservationsPage](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart) (deep properties comparison implemented for non-Equatable state)
-  - [PayoutScreen](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/payout/payout_screen_ui.dart)
-- Cleaned up obsolete Paystack-to-Monnify migration references across all documentation.
-
-### State Management Consolidation (Task B):
-- Consolidated `PlanActionBloc` and `PlanActionCubit` by transferring the enums `PlansTab` and `SortBy` directly to the top of [plan_action_cubit.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/customer/plans/plan_action_cubit.dart).
-- Decommissioned and emptied the unused [plan_action_bloc.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/customer/plans/plan_action_bloc.dart) to remove dead code.
-- Updated imports in [plans_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/plans_page.dart), [plans_filter_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/plans_filter_sheet.dart), and [segmented_tabs.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/segmented_tabs.dart) to resolve from the cubit file.
-
-### Print Cleanups (Task D):
-- Replaced all raw `print(...)` statements with standard `debugPrint(...)` in:
-  - [app_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_pages.dart)
-  - [vendor_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_repository.dart)
-  - [create_plan_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/create_plan_screen.dart)
-  - [profile_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/profile_page.dart) (commented print updated)
-
-### Static Analysis & Const Constructors (Task A):
-- Added `prefer_const_constructors` and `prefer_const_literals_to_create_immutables` rules to [analysis_options.yaml](file:///c:/Users/USER/Desktop/flutter_projects/korra/analysis_options.yaml).
-- Audited recently refactored widgets (e.g. KYC selectors, liveness blocker, plan summaries) to ensure constructor declarations and usage conform to `const`-safe requirements.
-
-### Vendor/Customer Repository Decomposing (Task A Extension):
-- Split `CustomerRepository` into `customer_auth_repository.dart` and `customer_profile_repository.dart` as extensions.
-- Split VendorRepository into vendor_auth_repository.dart, vendor_stats_repository.dart, and vendor_settings_repository.dart as extensions (including implementing the missing `changePassword` method in the auth extension).
-- Cleaned up duplicate/deprecated imports, unused local variables, and fields across both repository directories.
-- Consolidated duplicate `_formatDobForBvn` helper declarations into the centralized `formatDateOfBirthForBvn` helper in `date_formatters.dart` (cleaned up 4 duplicate implementations).
-- Fixed `catchError` handlers on both `verification_repository` files to return proper types (`then<void>((_) {})`).
-- Ran static analysis on `lib/data/repository/` and verified 0 warnings or errors.
-
-### AppBar StreamBuilder Optimizations (Task B):
-- Optimized the notification badge stream builder on both customer `HomePage` and `VendorHomePage` AppBars.
-- Moved the `StreamBuilder` inside the `Positioned` widget so that only the badge red dot rebuilds dynamically, preventing redundant rebuilds of the entire `IconButton` and its handlers.
-
-### APK Size Reduction & Modular Flavor-Routing (Phase 4):
-- Split monolithic `app_pages.dart` into `common_pages.dart`, `customer_pages.dart`, and `vendor_pages.dart` to separate routes and screen imports.
-- Updated `main_customer.dart` and `main_vendor.dart` to load respective flavor route files, allowing the tree-shaker to omit merchant screens in customer APKs and vice versa.
-- Converted `monnify.png` to WebP (`monnify.webp`) and updated all codebase references (`role_login_screen.dart`, `image_string.dart`).
-- Created `unused_assets/` at the root and moved all unused original png/json files there (`google-logo.png`, `korra_logo_icon.png`, `moniepoint.png`, `paystack.png`, `monnify.png`, and `payment_sucess.json`).
-- Audited Lottie animation packages, verified they are unused, removed `lottie` dependency from `pubspec.yaml`, and deleted empty assets directories.
-
-### Navigation Freeze Resolution & Pop Optimization:
-- Replaced custom `Get.back()` navigation calls with standard native `Navigator.pop(context)` in `KorraHeader` (the default back action) to guarantee full compatibility with predictive back gestures in Flutter 3.22/3.24.
-- Updated all occurrences of `Get.back()` in customer screens (`create_plan_screen.dart`, `limit_upgrade_screen.dart`, `notification_screen.dart`, `plan_details_loader_screen.dart`, `plan_details_screen.dart`, `change_password_screen.dart`, and `edit_profile_screen.dart`) to standard native pops, resolving routing stack corruption/freezing.
-- Cleaned up the `customer_failure_sheet.dart` UI buttons to natively dismiss modal sheets using standard `Navigator.pop(context)`.
-- Removed unused `get` package imports from modified profile screens to maintain zero warnings.
-
-### Web Optimization & Auth Service Fixes:
-- Safeguarded `GoogleSignIn.instance.signOut()` calls across `AuthService`, `CustomerAuthRepository`, and `VendorAuthRepository` with `kIsWeb` platform checks and a 2-second timeout fallback. This completely prevents the web app from getting stuck on unresolved native futures during startup/zombie checks or logout events.
-- Optimized `web/vercel.json` configurations by introducing high-performance edge-caching headers for CanvasKit WebAssembly modules and application assets (`/assets/(.*)` and `/canvaskit/(.*)`), boosting repeat page load speed on Vercel.
-- Created a comprehensive [design.md](file:///C:/Users/USER/Desktop/flutter_projects/korra/design.md) specification file in the root of the project, detailing the brand palette, typography scales, layout spacing, shape corners, component metrics, and micro-interactions for other design/developer agents.
-
-### Clipboard Product Scanner (Task F):
-- Converted [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart) to include a stateful lifecycle observer body (`_CustomerShellBody`) that watches for launch and app resume (`WidgetsBindingObserver`).
-- Implemented a secure [clipboard_scanner_helper.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/clipboard_scanner_helper.dart) utility:
-  * Automatically scans the device clipboard for standard Korra product code patterns (`^K-[A-Z0-9]{4}-[A-Z0-9]{7}$`).
-  * Fetches the product from Firestore and prompts a beautiful custom bottom sheet preview.
-  * Caches the scanned code to `SharedPreferences` to prevent repeat dialog popups for the same code.
-  * Automatically bypasses web instances (`kIsWeb`) to prevent browser popup interference.
-
-### Post-Auth Redirect Flow (Task G):
-- Updated [role_login_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/role_login/role_login_screen.dart) to check for a `redirect` parameter inside route arguments on login success.
-- New users are forwarded to customer/vendor signup screens with the `redirect` route passed along.
-- Existing users are routed to their target deep-link screen using a stack-safe dual transition (`Get.offAllNamed(shellRoute)` followed by `Get.toNamed(redirectRoute)`), ensuring proper back button behavior.
-- Integrated matching post-signup redirect handlers inside [signup_customer_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/signup_customer/signup_customer_screen.dart) and [signup_vendor_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/auth/signup_vendor/signup_vendor_screen.dart).
-
-### App Links & Universal Links Configuration (Task H):
-- Configured dynamic `appLinkHost` manifest placeholders per build flavor inside [build.gradle.kts](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/app/build.gradle.kts).
-- Added an auto-verifying `<intent-filter>` bound to `${appLinkHost}` inside [AndroidManifest.xml](file:///c:/Users/USER/Desktop/flutter_projects/korra/android/app/src/main/AndroidManifest.xml) to isolate routing behavior per flavor APK.
-- Created [Runner.entitlements](file:///c:/Users/USER/Desktop/flutter_projects/korra/ios/Runner/Runner.entitlements) listing both subdomains to enable iOS Associated Domains / Universal Links.
-- Generated unified configuration files [assetlinks.json](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/.well-known/assetlinks.json) and [apple-app-site-association](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/.well-known/apple-app-site-association) under the `web/.well-known/` directory to serve verified association signatures for both subdomains.
-
-### App Download Interstitial (Task I):
-- Created [app_download_interstitial.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/pwa/app_download_interstitial.dart) to show a download recommendation overlay on mobile web browsers (Android and iOS).
-- Utilized SharedPreferences to cache user dismissals so they are not prompted again during the active session.
-- Configured dynamic redirection links pointing to the Play Store closed test tracks per build flavor (`customer` vs `merchant`).
-- Integrated the rendering logic into the root stack builder of [korra_app.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/korra_app.dart) (currently commented out as requested).
-
-### Monnify, Clipboard, and Product Casing Bug Fixes (Task J):
-- **Monnify Init Fix**: Wrapped the `_initMonnify` call in [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart) inside `Future.delayed(Duration.zero)` to prevent synchronous `setState` build-time crashes when live keys are missing.
-- **Clipboard Timeout & Delay**: Added a 2-second delay and a 2-second `.timeout()` guard to `Clipboard.getData` inside [clipboard_scanner_helper.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/plans/widgets/clipboard_scanner_helper.dart) to prevent native channel hangs on launch.
-- **Product Code Normalization**: Updated the query in [plans_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/customer/plans_repository.dart) to automatically convert codes to uppercase (e.g., `K-SMTN-91F175A`) before querying Firestore. This ensures search matches succeed regardless of whether the customer typed or pasted it in lowercase, uppercase, or mixed-case.
-- **Monnify Web JS SDK Modal Overlay**:
-  * Injected the Monnify JS SDK script tag inside the HTML head of [index.customer.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.customer.html) and [web/index.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/index.html).
-  * Updated [bank_details_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/bank_details_screen.dart) to import `dart:js` and invoke `MonnifySDK.initialize` directly via JS interop when running on Web (`kIsWeb`).
-  * Passed the required `metadata: { customerUid: uid }` payload to ensure your Monnify webhook correctly associates successful transactions with the correct customer ID in Firebase.
-  * This keeps web payments inside the application overlay, preventing browser redirects and app reloads while ensuring Firestore updates stream in real-time.
-- **Vercel Caching Bypass for Environment Configurations**:
-  * Added a top-level rule to [vercel.json](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/vercel.json) to disable caching specifically for `.env` and `.env.prod` files (matching path `/assets/.env*`).
-  * This bypasses the default 1-year browser/CDN caching for web assets, ensuring customers instantly load newly updated API keys without requiring manual cache clears or incognito windows.
-- **Temporary Cache-Buster Script**:
-  * Injected a temporary cache-reset script inside [index.customer.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.customer.html), [index.merchant.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/index.merchant.html), and [web/index.html](file:///c:/Users/USER/Desktop/flutter_projects/korra/web/index.html).
-  * The script automatically unregisters old service workers and clears browser cache storage on the next page load for returning users.
-  * *Note: Recommend removing this script after a couple of days to restore standard offline caching benefits.*
-- **Automated Merchant Storefronts**:
-  * Added route constant `Routes.customerStorefront = '/store/:slug'` in [app_routes.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/app_routes.dart) and registered it in [customer_pages.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/config/routes/customer_pages.dart) for deep-linking compatibility.
-  * Implemented [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) displaying branded cover/banner, contact links, pin/unpin toggles, search, and category filtering.
-  * Integrated navigation inside [my_vendors_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/profile/my_vendors_screen.dart) to redirect users to their storefronts on card tap.
-  * Created [store_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/store/store_page.dart) and integrated it as the third navigation tab (Stores) in [customer_shell.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/customer_shell.dart), aligning bottom navigation order to `{ Home, Plans, Stores, Profile }`.
-  * Added dynamic product preview thumbnails inside the Explore Stores list item cards, displaying up to 3 featured products under each merchant.
-  * Configured [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) with a header back button, resolved the customer profile type casting exception when clicking product cards, and added a receipt button in the top right to stream purchase history created specifically with that merchant.
-- **Storefront Performance Optimization & Refactoring**:
-  * Decomposed large inline widget trees in `StorefrontScreen` and `StorePage` into standalone memory-efficient widgets under respective `/widgets/` subdirectories:
-    * [discover_store_list_item.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/store/widgets/discover_store_list_item.dart)
-    * [storefront_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_header.dart)
-    * [storefront_filter_bar.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_filter_bar.dart)
-    * [storefront_product_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_card.dart)
-    * [storefront_purchase_history_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_purchase_history_sheet.dart)
-  * Cleansed and streamlined [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) from >1000 lines down to ~400 lines to optimize CPU rendering cycles and memory usage.
-- **Merchant Product Installment Toggles & UI Enhancements**:
-  * Integrated an "Allow Installments (Reservation)" toggle switch into [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) and [product_edit_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart).
-  * Collapses/hides timeline selectors and model tabs when disabled, streamlining product listing.
-  * Mapped `allowReservation` through the BLoC layer (using `VendorProductsAdd` and `VendorProductsEdit` in `vendor_products_event.dart`) to persist the boolean state to Cloud Firestore.
-  * Resolved compile-time errors in `product_edit_screen.dart` and `products_page.dart` by adding `allowReservation` (with JSON mapping and props) to `ProductItem` model inside `vendor_products_state.dart`, and corrected `unselectedStyle` to `unselectedLabelStyle` on the custom TabBar indicator.
-  * Redesigned the product card in [product_list_item_premium.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_list_item_premium.dart) using clean, border-free containers, standard Material and `MdiIcons` (removing `iconsax`), a flat monospace product code text, and replaced the outright info icon with a clean shopping bag icon.
-  * Added top padding to the search bar inside [vendor_products_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/vendor_products_body.dart) for clean breathing room.
-- **Product Management Widgets Refactoring (Memory & Performance Optimization)**:
-  * Decomposed large inline widget trees in `AddProductPage`, `ProductEditScreen`, and `ProductDetailsScreen` into standalone, memory-efficient widgets under the `/widgets/` directory:
-    * [product_restriction_banner.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_restriction_banner.dart)
-    * [product_submit_area.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_submit_area.dart)
-    * [product_timeline_logic_box.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_timeline_logic_box.dart)
-    * [product_strict_settings_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_strict_settings_card.dart)
-    * [product_direct_settings_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_direct_settings_card.dart)
-    * [product_details_gallery.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_gallery.dart)
-    * [product_details_timeline.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_details_timeline.dart)
-  * Shrunk page controller/viewer sizes: `Add_product_page.dart` (~1300 to ~900 lines), `product_edit_screen.dart` (~1200 to ~700 lines), `product_details_screen.dart` (~500 to ~330 lines) to prevent unnecessary rebuild churn and CPU rendering overhead.
-  * Extracted image gallery slider index page tracking into a localized stateful widget (`ProductDetailsGallery`) to eliminate main details page rebuilds on slide actions.
-- **Storefront Contact Privacy & Link Sharing**:
-  * Introduced a **"Contact Phone (Business Line)"** setting inside [storefront_settings.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/storefront_settings.dart) with a phone prefix icon, alongside WhatsApp, Instagram, and Twitter (X) fields utilizing `FaIcon` (FontAwesome).
-  * Defaults to the verified personal number as a fallback.
-  * Enforced storefront slug uniqueness checking in `_saveSettings` to prevent duplicate slugs across merchants.
-  * Added a **"Share Store Link"** shortcut below the slug input using `share_plus` to allow quick sharing of the `https://korra.shop/store/{slug}` storefront link.
-  * Modified the repository [vendor_settings_repository.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_settings_repository.dart) and [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) to write and fetch this contact number.
-- **Product Details & Outright Purchases**:
-  * Tap gestures on storefront product cards now trigger a dynamic **Product Details Sheet** instead of redirecting directly to plans.
-  * Displays a green "Installment Plan Available" badge if installments are enabled, or a grey "Outright Purchase Only" badge if disabled.
-  * Configured card model tags to display **"OUTRIGHT"** if `allowReservation` is false.
-  * Implemented a **"Buy Outright"** action with confirmation. Executes a Firestore write batch to deduct the price from the customer's `availableBalance`, decrement the product's `availableStock`, and record the order as a completed plan with `modelType: 'outright'` and `status: 'completed'`.
-- **Unified Debug App Switcher Discarded**:
-  * Deleted `lib/main_debug.dart` as requested by the user, adhering strictly to target build configurations.
-- **Compilation Correctness & Deprecations Resolution**:
-  * Resolved the remaining compile error in [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) by defining `_showContactSheet` using `ContactSupportSheet`, and removed the unused `_blockMessage` field and its corresponding handler.
-  * Removed unused classes, imports, and methods across `product_details_screen.dart`, `Add_product_page.dart`, and `product_edit_screen.dart`.
-  * Replaced deprecated `withOpacity` calls with `.withValues(alpha: ...)` across details screens and timeline widgets.
-  * Corrected deprecated `activeColor` to `activeThumbColor` for Switch widgets.
-- **Outright Purchase Order Handling (Vendor-Side UI)**:
-  * Modified the `Reservation` model inside [reservation.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/reservation.dart) to parse and support `modelType` (e.g., `'outright'`), introducing an `isOutright` getter.
-  * Refactored [reservation_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/reservation_tile.dart) (list view item) to hide active saving progress percentages/progress bars for outright purchases, showing a solid green "Outright Purchase" status with 1.0 progress.
-  * Updated status badges on the list view tiles to show "Ready to Deliver" (for ready to fulfill state) or "Delivered" (for history state) when the order is an outright purchase.
-  * Updated [vendor_reservation_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/vendor_reservation_detail_sheet.dart) to show "Order Details", "Ready to Deliver / Order Delivered", "Mark as Delivered" actions, and contextualize the financial breakdown to hide outstanding balances for outright payments.
+### 5 July — Device-QA fixes + Reviews/Badges (Rounds 5–8)
+- **🚨 CRITICAL NAV RULE (cost us three bugs): EVERY navigation in this app must be a NAMED GetX route (`Get.toNamed`).** Anonymous `Get.to(() => Page())` throws "Null check operator used on a null value" (GetX 4.x + getPages). Raw `Navigator.push(MaterialPageRoute)` corrupts GetX gesture bookkeeping under Android predictive back → `'_userGesturesInProgress > 0'` assertion → wedged navigator → app renders but ignores ALL taps. Routes added: `Routes.customerDeals` (`/customer/deals`), `Routes.customerStoreReviews` (`/customer/store-reviews`).
+- **🚨 STREAM RULE**: never build a Firestore `.snapshots()` inline in `build` — every setState recreates it and the StreamBuilder blanks to `waiting`. Cache in state (see `_productStreamFor` in storefront_screen.dart, which also retains `_lastProductDocs` during page loads).
+- **🚨 BUTTON RULE**: the global theme sets ElevatedButton `minimumSize: Size.fromHeight(54)` → min width infinity. Any ElevatedButton inside a Row MUST override `minimumSize: Size.zero` (+ `tapTargetSize: shrinkWrap`) or it crashes with "BoxConstraints forces an infinite width".
+- RenderFlex overflows on his phone taught: never fixed `.h` heights around width-driven content — use `AspectRatio`, `Expanded`, `mainAxisSize.min`. Featured-strip product cards use `fixedHeight`/`expand` flags so the image flexes and price/name never clip.
+- Hot Deals strip = snapping `PageView` carousel (viewportFraction 0.72, 3.2s timer, loops to start, pauses on touch AND when route not current). Deals page paginated 6/page; Stores tab = lazy CustomScrollView slivers 10/page; storefront feed paginates 20/page. `RepaintBoundary` on carousel/deal/store cards.
+- **Storefront Filter & Sort sheet** (`storefront_filter_sheet.dart`): sort chips, campaign-deals-only toggle, customer-typed ₦ min/max (David explicitly chose NOT to auto-compute store min/max — avoids full catalog load).
+- **Ratings & Reviews**: always-visible rating line in storefront header → `StoreReviewsScreen` (summary card w/ distribution bars, 10/page, tolerant mapper: `comment` OR legacy `review`, num ratings). **Review composer** (`storefront_review_composer.dart`): purchase-gated (limit-1 checks on `orders` then `plans` by customerId+vendorId; demo always eligible), stars REQUIRED / comment OPTIONAL, one review per customer (doc id = uid at `vendors/{id}/reviews/{uid}`, set-merge), existing review shows "Do you want to change your review?" and edit mode blanks the old comment. Demo reviews save session-only via `DemoMarketplace.saveMyDemoReview`.
+- **Badges**: `store_badge.dart` — Top Seller (gold crown) / Most Visited (blue eye) / Highlighted (purple star); earned ALWAYS ranks above paid Highlighted; no customer-facing numbers; no badge → render nothing (absence ≠ penalty). Streams `vendor_visibility/{vendorId}`; demo via `visibilityFor`. Rendered in storefront header.
+- **"Recommended From Your Stores"** rail on Stores tab: STRICT boundary — only merchants in `customers/{uid}/my_vendors`, never discovery; only badge-holders shown, ranked earned-first; memoized visibility fetch. Real subscription/per-network computation drops into `badgesFromVisibility` later without UI rework.
+- David hand-edited store_badge.dart + storefront_reviews_section.dart to remove chip/card borders — intentional, keep.
 
 ---
 
-## 17. What to Do Next (Prioritized)
+## 17. 📌 LIVE TODO BACKLOG (everything still open as of 5 July 2026)
 
-### Short Term (Next 1–2 Sessions)
-1. **Shorebird OTA Integration**:
-   - Integrate **Shorebird** for push-to-device Over-The-Air (OTA) updates on Android and iOS (bypassing App Store/Play Store review delays for minor updates).
-2. **App Links & Deep Linking (Web & Mobile)**:
-   - **Cross-Platform Dual Domains**: Configure independent App Links / Universal Links for each app:
-     * **Customer App (`app.korra.com.ng`)**: Map App Link domains and associated `.well-known` configurations to the Customer app.
-     * **Merchant App (`business.korra.com.ng`)**: Map App Link domains and associated `.well-known` configurations to the Merchant app.
-     * *Note: When clicked on mobile, they deep-link directly into the respective native app. On desktop/browser, they fall back to the respective Web Apps.*
-   - **Post-Auth Redirect Flow**: Implement deep-link target caching (saving the destination route in memory/session storage if the user is unauthenticated). When a user gets blocked by route guards and completes signup/login, automatically redirect them to the originally requested deep-linked page (e.g. storefront or product form).
-   - **Clipboard Product Scanner (Customer App)**: Inspect clipboard on app launch. If a valid product code pattern is found, show a summary card/link sheet.
-   - **Flexible Share Options (Merchant App)**: Enable merchants to share either a direct App Link or the raw alphanumeric store code.
-   - **Form Direct Routing**: Deep link directly to the "Add Product" screen for merchants.
-3. **APK Size Reduction (Phase 4)**:
-   - Audit the `monnify_payment_sdk` size footprint.
-
-### Medium Term: Upcoming Korra Platform Extensions
-
-#### 1. Automated Merchant Storefronts & Links
-* **Shared Experience**: Automatically generate store-specific URLs (e.g., `korra.shop/store/merchant-name`) for social media bios.
-* **Isolated Multi-Store Shopping**: Users view one specific storefront at a time. No combined global catalog. Checkout is strictly isolated (customers pay for items from only one specific merchant at a time).
-
-#### 2. Product Setup & Reservation Quantity Locks
-* **Flexible Listing Choices**: Toggles during product setup to enable *Full Payment Only*, *Reservation Only*, or *Both*.
-* **Total Reservation Stock Limit**: Caps the total stock that can be locked in active customer reservation layouts simultaneously.
-* **Per-Customer Limits**: Default lock of 1 unit per plan transaction. Reserving more requires completing checkout and starting a new transaction layout.
-
-#### 3. Merchant Dashboard: Analytics & Metrics
-* **Saved Storefront Count**: Track how many customer profiles have pinned the merchant's store.
-* **Weekly Traffic Meter**: Display a rolling 7-day unique visitor traffic meter.
-
-#### 4. Hyper-Local Customer Leaderboards ("Top Sellers")
-* **Dynamic Rankings**: Localized rankings based strictly on saved/interacted merchants.
-* **Activation Thresholds**:
-  * *Fewer than 5 saved merchants*: Hidden from UI.
-  * *5 to 19 saved merchants*: Highlights exactly 1 Top Seller.
-  * *20 or more saved merchants*: Leaderboard showing top 5 to 10 sellers.
-
-#### 5. Post-Purchase Merchant Profile Reviews
-* **Merchant-Level Ratings**: Feedback and rating prompts triggered on order completion.
-* **Vendor Credibility Focus**: Reviews are attached directly to the merchant profile (evaluating trust and payment tracking rather than individual item features).
-
-#### 6. Merchant Marketing Campaigns (Broadcast Alerts)
-* **Local Broadcasts**: Dashboard tool for merchants to send promotional alerts to following buyers.
-* **Customer Controls**: Full settings page toggles for customers to mute promotional alerts or manage notifications per store.
-
-#### 7. Network Discovery & Safe Disconnection (With Store Balances)
-* **Store Code Search**: Alphanumeric store code lookups to find new merchants.
-* **Store Balance Safeguards**: Prevent dashboard removals / unfollows if active plan balances exist with that vendor, enforcing confirmation warnings.
-
-#### 8. Time-Capsule Wishlist with Purchase Prompts
-* **Date-Driven Wishlist**: Save items with target acquisition dates.
-* **Intelligent Alerts**: Automated reminder on the target date or warnings when stock drops low before the date.
-* **Installment Hook**: Prompts users to start a reservation plan instead of risking a stockout.
-
-### Long Term
-1. Wire up real biometric auth (`local_auth` package).
-2. Add BLoC unit tests.
-3. Set up CI/CD for automated APK builds.
+1. **Cart checkout backend**: real `orders` collection write (multi-item per `OutrightOrder`), server-side wallet + store-credit deduction (store balance first), `availableStock` decrement, honour `absorbOutrightFee`. Current confirm flow only clears the local cart.
+2. **Customer outright order details view** — purchase-history order entries have no tap destination.
+3. **Flash Deals countdown strip** on the storefront feed (`KorraCampaignTags.flashLike` already exists; countdown UI remains). Temu-style urgency.
+4. **Server-side product search** once catalogs outgrow client-side page filtering.
+5. **Firestore rules + composite index** for the customer-side `orders` query (customerId + vendorId).
+6. **Freeze finding #6**: global translucent `GestureDetector` in korra_app.dart (redundant gesture-arena work). (#5 NetCubit was fixed 5 July — see §18.)
+7. **Customer READ rules** for `campaigns` (Hot Deals strip degrades to demo-only if denied).
+8. **Demo cleanup** when demo phase ends: delete `lib/data/demo/` + `DemoMarketplace.enabled` call sites.
+9. **Server-side deals pagination** if `campaigns` grows well beyond ~30 active docs.
+10. **Customer WRITE rule** for `vendors/{id}/reviews/{uid}` (+ ideally server-side purchase validation) so real review submits work.
+11. **Real badge computation**: per-customer-network Top Seller / Most Visited + real Highlighted subscription check — both drop into `badgesFromVisibility`/`StoreBadgesRow` without UI changes.
+12. ~~Premium redesign: Plan Details~~ — ✅ DONE 5 July (see §18).
+13. **Premium redesign: customer Home page** (`lib/presentation/customer/home/`) in the deals_page design language; while in there, fix the Home tab rebuilding its plan carousel on every route change (ties to finding #6 + `Skipped 55–74 frames`).
+14. **Customer READ rules** for `vendor_visibility` and `vendors/{id}/reviews` (both degrade gracefully if denied).
+15. `flutter analyze` has not been run across these sessions (standing rule: ask David first).
 
 ---
 
-*Last updated: 3 July 2026. Update this document at the start of each new session with what changed.*
+## 18. Dated Updates (append below; keep entries SHORT)
 
----
+### 5 July 2026 — Round 9 (Freeze root-cause fix + Plan Details premium redesign + handover compacted)
 
-## 🛒 Orders Page — Architecture Decision (3 July 2026)
+**A. Navigation freezes (storefront / reviews / hot deals back) — root cause fixed at the platform level:**
+- [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml): `android:enableOnBackInvokedCallback` **true → false**. Android 13+ predictive back (`WindowOnBackDispatcher`) is fundamentally incompatible with GetX 4.x gesture bookkeeping — it was wedging the navigator on back gestures regardless of how routes were pushed. Only the predictive-back preview animation is lost. **Full rebuild (not hot reload) required for manifest changes.**
+- [net_cubit.dart](lib/logic/core/net/net_cubit.dart): connectivity listener no longer emits `checking` while state is `online` — every OS connectivity blip was rebuilding the ENTIRE app shell (the offline gate's BlocBuilder wraps the navigator). Probes now run silently when online; the "Reconnecting…" banner still shows when actually offline/recovering. (This closes freeze finding #5.)
 
-### What Changed — Terminology
-The vendor "Reservations" page and all related UI text has been renamed:
+**B. Plan Details premium redesign (backlog #12 — DONE):** deals_page design language, NO border lines anywhere, all sections in small widget files:
+- NEW [plan_detail_product_header.dart](lib/presentation/customer/plans/widgets/plan_detail_product_header.dart): floating 24r white card — image carousel (AspectRatio 4/3, dots pill), VendorHeader, title, brand-colored price, tinted model chip. Owns its own image-index state so swiping images no longer rebuilds the whole screen (was a setState on the screen).
+- [plan_details_screen.dart](lib/presentation/customer/plans/widgets/plan_details_screen.dart): slimmed to composition only (carousel/header builders removed), bg `KorraColors.surface`, 16.h card rhythm. All logic (stream, cubit, sheets, guarded pops) unchanged.
+- [plan_detail_financial_card.dart](lib/presentation/customer/plans/widgets/plan_detail_financial_card.dart): border → soft shadow; "Ownership Progress" w800 header + tinted % pill; Paid/Remaining columns; extension hint only when relevant.
+- [plan_detail_timeline_card.dart](lib/presentation/customer/plans/widgets/plan_detail_timeline_card.dart): fake border removed; tinted card + white circular icon bubble.
+- [plan_detail_next_payment_card.dart](lib/presentation/customer/plans/widgets/plan_detail_next_payment_card.dart): soft shadow, brandLight icon bubble. Logic untouched.
+- [plan_detail_info_grid.dart](lib/presentation/customer/plans/widgets/plan_detail_info_grid.dart): outer border + row divider borders removed → shadow card, "Plan Information" header, spacing-separated rows.
+- [plan_detail_status_banner.dart](lib/presentation/customer/plans/widgets/plan_detail_status_banner.dart): edge-to-edge bars → floating tinted 20r cards w/ icon bubble (overdue banner included).
+- [plan_detail_sticky_action.dart](lib/presentation/customer/plans/widgets/plan_detail_sticky_action.dart): rounded top corners 24r.
 
-| Old | New |
-|---|---|
-| Reservations (page title) | Orders |
-| Reservation Details | Order Details |
-| Ready to Fulfill | Ready to Deliver |
-| Mark as Fulfilled | Mark as Delivered |
-| Fulfilled (tab + badge) | Delivered |
-| No reservations found | No orders found |
-| Confirm Fulfillment | Confirm Delivery |
+**C. Handover compacted** per David: rounds 3–8 summarized into §16, live backlog consolidated into §17. Future updates go here, short.
 
-Files changed: `reservations_page.dart`, `reservation_status_tabs.dart`, `reservation_tile.dart`, `vendor_reservation_detail_sheet.dart`, `reservation_list.dart`, `reservation.dart` (removed `isOutright` getter).
+**Standing rules recap (do not break):** named GetX routes only; cache Firestore streams; ElevatedButton in a Row must override minimumSize; no border lines in UI unless truly best; small widget files; demo data never touches Firebase; ask before `flutter analyze`/background tasks; never assume existing code is wrong — ask David.
 
----
+### 5 July 2026 — Round 9b (Plans page crash fix + premium redesign)
 
-### Database Split — Agreed Architecture
+**A. `ProviderNotFoundException: Could not find Provider<LinkBloc>` on the Plans FAB — FIXED:** the `LinkBloc` was created by a `BlocProvider` inside `build`, but the FAB/bottom-sheet read it through the page's own `context`, which sits ABOVE that provider. [plans_page.dart](lib/presentation/customer/plans/plans_page.dart) now owns the bloc as a state field (`_linkBloc`, created in initState, closed in dispose); the `BlocListener` uses `bloc: _linkBloc` and the New Plan sheet gets `BlocProvider.value(value: _linkBloc)`. **Rule: never create a bloc in `build` and read it from the same build's context.**
 
-| Collection | Purpose |
-|---|---|
-| `plans/` | **Layaway/installment reservations ONLY** — one plan = one product, one customer |
-| `orders/` | **Outright purchases ONLY** — one order = one customer, multiple line items (TBD, not yet built) |
+**B. Plans page premium redesign (no border lines):** bg → `KorraColors.surface`; FAB → extended "New Plan" pill; [plan_card.dart](lib/presentation/customer/plans/widgets/plan_card.dart) border → 20r + 0.05 shadow, vendor initial in brand-tinted square, AutoPay chip borderless tinted pill, pending banner border removed, "View" OutlinedButton → soft grey tonal FilledButton; [segmented_tabs.dart](lib/presentation/customer/plans/widgets/segmented_tabs.dart) → floating white shadow pill on surface (border removed, chip animation 5ms → 200ms easeOut); [empty_state_card.dart](lib/presentation/customer/plans/widgets/empty_state_card.dart) → white shadow card with brand-tinted icon bubble; [plan_skeleton_card.dart](lib/presentation/customer/plans/widgets/plan_skeleton_card.dart) → borderless shadow card. All filtering/sorting/pagination logic untouched.
 
-> [!IMPORTANT]
-> The `isOutright` getter has been **removed** from `Reservation` model. The `plans` collection is now strictly for layaway. Outright purchases will have their own `OutrightOrder` model and `orders` Firestore collection.
+### 5 July 2026 — Round 9c (Home page premium redesign + shared balance-hide toggle)
 
----
+**A. Shared balance visibility (wallet card ↔ Bank Details):** NEW [balance_visibility.dart](lib/logic/services/balance_visibility.dart) — a persisted (`SharedPreferences`, key `korra_balance_visible`) `ValueNotifier<bool>`. [customer_wallet_card.dart](lib/presentation/customer/home/widgets/customer_wallet_card.dart) eye toggle now flips this global (visuals unchanged per David), and [bank_details_screen.dart](lib/presentation/customer/profile/bank_details_screen.dart) CURRENT BALANCE got its own eye icon bound to the same notifier — hide in one place hides in the other, both show `₦ ••••`, state survives restarts.
 
-### Orders Page — Swipe UX (NOT YET BUILT)
+**B. Home page redesign (wallet card intentionally untouched):** bg → `KorraColors.surface`; "Start a new plan" LinkInput + its inline validation/loading feedback now live inside one floating white card (feedback extracted to `_buildLinkStatus()`); empty-plans card → white shadow card with brand-tinted icon bubble (border removed); [activity_tile_pro.dart](lib/presentation/customer/home/widgets/activity_tile_pro.dart) bubbles → floating shadow cards (ghost borders removed, shadow deepens when expanded), tap-to-expand actions KEPT (David likes them) with a new rotating chevron affordance next to the timestamp, secondary action buttons → borderless brand-tinted tonal; [activity_timeline.dart](lib/presentation/customer/home/widgets/activity_timeline.dart) empty state → proper white card. Backlog #13 partially addressed (visual redesign done); the Home-tab rebuild-on-navigation perf item (finding #6 GestureDetector) is still open.
 
-The `ReservationsPage` (renamed Orders) will become a **horizontal PageView** with two panels:
+### 5 July 2026 — Round 9d (Home redesign REVERTED per David; balance sync kept)
 
-```
-Page 0 (default) — Reservations    ← from plans/ collection
-Page 1            — Outright Orders ← from orders/ collection (TBD)
-```
+David preferred his previous Home design. Reverted from Round 9c: Home bg back to white, LinkInput + inline link feedback back out of the floating card (feedback stays extracted as `_buildLinkStatus()` — visually identical to before), activity tiles back to their original ghost-border bubbles / OutlinedButton secondary action / no chevron, timeline empty state back to plain text. KEPT: the empty-reserve-plans card redesign (he approved it), the shared BalanceVisibility toggle (wallet ↔ Bank Details, persisted), and the Bank Details eye icon — but the balance there is now a plain left-aligned Text (the AnimatedSwitcher was centering the amount; that was the "shifted to center" bug he reported). **Design note: David wants Home kept as HIS design — don't restyle it again without being asked.**
 
-A custom `orders_panel_switcher.dart` swipe indicator sits at the top of the page to switch between panels. Full file breakdown is in `implementation_plan.md`.
+### 5 July 2026 — Round 9e (Profile cleanup + Level Up Slots redesign + logout loading)
 
-**Reservations panel status tabs:** New · Active · Ready to Deliver · Delivered · Closed
+**System-back freeze:** manifest already has `enableOnBackInvokedCallback="false"` (Round 9). ⚠️ A manifest change only applies after a FULL rebuild/reinstall (`flutter run` fresh build) — hot reload/restart does NOT apply it. David still saw the freeze; most likely tested pre-rebuild. If it persists after a real reinstall, capture logcat at the freeze moment.
 
-**Outright orders panel status tabs:** New · Ready to Deliver · Delivered · Cancelled
-*(No "Active" tab — outright purchases are paid instantly)*
+**Profile page** ([profile_page.dart](lib/presentation/customer/profile/profile_page.dart)):
+- Identity card: **My QR + Share removed**, Edit Profile is the single action ([identity_header_card.dart](lib/presentation/customer/profile/widgets/identity_header_card.dart) — onMyQr/onShare params deleted).
+- **Statements & receipts moved directly under Bank Details** in the wallet section.
+- **Change password row removed** (accounts use Google sign-in). Route/screen still exist, just unlinked.
+- **Logout now shows a blocking "Signing out…" dialog** (PopScope canPop:false) until the bloc finishes: success → `Get.offAllNamed` clears everything incl. the dialog; failure → guarded `_dismissLoadingDialogIfAny` (isCurrent check, never blind-pops) + error snackbar (`errorMessage ?? message`).
 
----
+**Level Up Slots screen** ([limit_upgrade_screen.dart](lib/presentation/customer/profile/limit_upgrade_screen.dart)) — premium rewrite, same tier logic (Starter 3 / Keeper 5@3 / Collector 10@10 / VIP ∞@25):
+- Carousel height is now `Expanded` (old fixed 460.h risked RenderFlex overflows on David's phone), real `AnimatedScale`/`AnimatedOpacity` on page change (old Tween had begin==end → never animated), page dots added.
+- Cards: gradient header w/ badge + tier name, ∞ shown for 999 slots, tinted status pills, 999-radius progress bar, no border lines; action bar rounded-top w/ shadow.
+- **Upgrade flow de-risked:** the old `showDialog` + double `Navigator.pop(context)` across an await (our known navigator-wedge pattern) replaced by an inline button spinner (`_upgrading`) + single guarded pop with mounted checks.
 
-### Storefront Fee Policy (Already Implemented)
+### Round 9f — 5 July 2026 (merchant campaign timer + storefront location + vendor profile)
+- **Deal Countdown Timer (merchant)**: `CampaignTimerSection` (new widget) in CreateCampaignSheet — toggle + start/end pickers (date+time, defaults now→+24h, max 30 days out). Independent of tag/discount. Validated in `_submitCampaign` (both set, end>start, end not past). Saved as `dealStartAt`/`dealEndAt` Timestamps.
+- **Campaign model**: `dealStartAt`/`dealEndAt` + `hasTimer`/`timerRunning`/`timerUpcoming`; `isActive` now respects `dealEndAt` (timed deals outlive the 24h default).
+- **Customer countdown**: new `DealCountdownBadge` (1s ticker, tabular figures; "STARTS IN…" dark pill / red "…LEFT" pill; renders nothing when closed/untimed). On `HotDealCard` (bottom-left) + `StoreDeal.timedCampaign` helper (running beats upcoming, newest first). Deals page card also prints the window "Sat 5 Jul, 3:00 PM → …".
+- **Storefront location**: new `StorefrontLocationRow` — borderless brandLight "Walk-in store" chip, tap expands address INLINE below (AnimatedSize, no sheet). Only when merchant provided an address. `StorefrontHeader` got `address` param; storefront_screen composes it from `location.{address,city,state}`.
+- **Vendor Edit Profile**: new `EditVendorProfileScreen` (route `Routes.vendorEditProfile`, registered in vendor_pages, arguments {'vendor': Vendor}). Locked personal fields (owner name/email/phone/store name) + editable Store Settings: description (200 chars), address, city, state → dot-path Firestore update on vendors/{uid}. Vendor model got `store.description` field.
+- **Vendor profile page**: Change password row REMOVED (Google sign-in). Edit → edit screen. Share ACTIVE (Share.share store link `https://korra.com.ng/store/{slug}`; slug fetched one-off, uid fallback). My QR ACTIVE → new `StoreQrSheet` bottom sheet (qr_flutter, encodes store link).
+- TODO: store slug generation/claim flow still pending ("we will on later" — link currently falls back to uid for merchants without a slug).
 
-Added to [storefront_settings.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/storefront_settings.dart):
+### Round 9g — 5 July 2026 (payout hide-balance, outright multi-select, storefront settings polish)
+- **Payout/withdraw screen**: `PayoutBalanceCard` now hides the amount — eye toggle on the gradient card, wired to the SAME shared `BalanceVisibility` ValueNotifier the customer wallet/bank-details use (hidden = "₦ ••••••", letterSpacing 3).
+- **Outright orders multi-select (UI ONLY — backend NOT connected, per David)**: `OutrightOrdersState.selectedIds` + `OutrightToggleSelection`/`OutrightSelectAll`/`OutrightClearSelection` events + bloc handlers; `OutrightOrderTile` got isSelected/isSelectionMode/onLongPress (green check circle, F0FDF4 fill — mirrors reservation tile); list wires long-press→select, tap toggles in selection mode; reservations_page shows a second dark bulk pill on tab 1 (`_buildOutrightBulkMenu`) — "Yes, Deliver" currently clears selection + info snackbar "coming soon — no orders were updated". TODO: connect bulk outright delivery write (reservation bulk `ResMarkFulfilled` remains fully functional).
+- **Storefront settings** (`storefront_settings.dart`): slug link domain fixed korra.shop → **korra.com.ng** (matches profile Share/QR); old logo-gated "Share Store Link" text replaced by borderless pill row under the slug field — brandLight **Share Store** + grey **View Store** (url_launcher, external browser). Twitter field → **TikTok** (`socials.tiktok`); `saveStorefrontSettings` repo param twitter→tiktok.
+- **Customer storefront chips**: now only WhatsApp, Instagram, TikTok, Call Us — Twitter and Email chips REMOVED (`StorefrontHeader` params email/twitter → tiktok).
 
-- **Reservations:** 3.5% fee always on customer — non-configurable, not shown in settings
-- **Outright:** Merchant can choose via toggle in Storefront Settings → "Outright Purchase Settings"
-  - **Customer Pays Fee** (default) → 3.5% (max ₦7,500) added to checkout total
-  - **I Absorb the Fee** → 3.5% (max ₦7,500) deducted from vendor payout
+### Round 10 — 5 July 2026 (PLAN — follow this list if picking up mid-round)
+David's batch, in his required order. Update this section as each lands (mark DONE + notes).
 
-Stored in Firestore at `vendors/{uid}/store.absorbOutrightFee` (bool).
-Read from `vendor_settings_repository.dart` → `saveStorefrontSettings()`.
+1. **Mute store (customer)** — mute toggle on the customer storefront. Muted = no notifications from that store in the customer's notification feed. Storage: `customers/{uid}.mutedStores` array of vendorIds (arrayUnion/arrayRemove) so future server-side campaign fan-out can check it too. Client: filter the notification stream against `mutedStores` (notifications must carry `vendorId` in metadata to be filterable — system/payment notifications are never filtered).
+2. **Suspended-store blocker (customer storefront)** — reuse the `vendor_compliance/{vendorId}` check from create-plan/pay (status `suspended`/`banned` blocks). Blocked store: customer sees only the first screen — scrolling locked, all interactions absorbed, premium overlay card: "This store is currently unavailable… suspended or restricted due to a policy/compliance issue. Contact the merchant if you believe this is an error." Only Back works.
+3. **Demo data cleanup (BEFORE app links, per David)** — delete `lib/data/demo/` and strip every `DemoMarketplace` reference in customer app (storefront_screen, storefront_header, store_page, hot_deals_strip, store_badge, recommended_stores_section, store_reviews_screen, storefront_cart_sheet) + anything demo in settings, both flavors.
+4. **Supabase backend: outright checkout** — NEW edge function (own folder under `supabase/functions/`) for the customer outright (pay-in-full) cart purchase. DB = Firebase, Supabase = edge functions only, Supabase bucket = images only. Fee rule: check merchant flag `store.absorbOutrightFee` — true: merchant absorbs fee (deduct from vendor credit), false: customer pays fee on top. Apply the platform rounding rule. Record payments/receipts the same shape as `plan-manager` (REFERENCE ONLY — do NOT edit plan-manager). Wire the function call into the customer repository/cart checkout. Do NOT touch other functions.
+5. **App links** — Android `intent-filter` (autoVerify) + iOS associated domains for `https://korra.com.ng/store/{slug}` → open the app on the storefront screen; assetlinks.json / apple-app-site-association served by the store website.
+6. **Store website (React)** — NEW root directory: SEO-indexable per-slug store pages at `korra.com.ng/store/{slug}`; bare `/store` redirects to the landing page. Reads vendors/products from Firebase. Also serves the app-link association files.
 
-> [!NOTE]
-> The checkout and payout logic must read `store.absorbOutrightFee` when processing an outright order payment. This wiring is **not yet done** — it's a customer-side + backend (Supabase Edge Function) concern for a future session.
+**Round 10 progress:**
+- (1) Mute store DONE — bell GlassIconButton in storefront app bar (left of cart); `customers/{uid}.mutedStores` arrayUnion/arrayRemove; `KorraNotification.vendorId` (top-level or metadata.vendorId); notification feed + unread badge count both skip muted vendors (`streamMutedStores` added to notification_repository). Server fan-out (future campaign notifications) must also check `mutedStores`.
+- (2) Suspension blocker DONE — new [storefront_suspended_overlay.dart](lib/presentation/customer/storefront/widgets/storefront_suspended_overlay.dart); storefront fetches `vendor_compliance/{vendorId}` once; status suspended/banned/restricted → scroll locked (NeverScrollable), AbsorbPointer over everything, blurred dark overlay + white card w/ publicMessage fallback copy + "Go back". 
+- (3) Demo cleanup DONE — `lib/data/demo/` deleted; DemoMarketplace stripped from storefront_screen, storefront_header, storefront_cart_sheet, store_reviews_screen, store_badge, recommended_stores_section, hot_deals_strip, store_page (+ unused `previews` plumbing in discover_store_list_item); vendor seeders removed ("Seed Demo Reviews & Orders", "Seed Demo Campaigns" + generators). KEPT: the "Clear Demo Data" banners in vendor reviews/campaigns — they only appear while `isMock` docs exist in Firestore, so David can purge leftovers, then they never show again.
+- (4) Outright checkout backend DONE — NEW edge function [supabase/functions/outright-checkout/index.ts](supabase/functions/outright-checkout/index.ts). Same Double-Lock (HMAC timestamp + Firebase token) as plan-manager; identity is the TOKEN, never a body uid. Server re-reads product prices (client only sends productId+quantity), checks stock, checks `vendor_compliance` (suspended/banned/blockPayments → throw same message as plan pay), reads `store.absorbOutrightFee`:
+    - absorb=true → merchant absorbs the fee (customer pays subtotal; fee comes out of vendorNet)
+    - absorb=false → customer pays subtotal + fee (3.5%, cap ₦7,500)
+    Rounding: reuses plan-manager's `to2DP` (charges round up) / `to2DP_Floor` (balances round down). Store balance consumed first, wallet covers rest. Writes: decrements stock, creates `orders/{id}` (status 'pending', the shape the vendor Outright Orders screen reads), customer `ledger_transactions` with full `receiptData` (same shape as installment receipts → existing receipt UI works), wallet decrement, `my_vendors` + vendor `customer_balances` store-credit mirrors, vendor `ledger_transactions` sale + `liabilities` redemption, `company_ledger`/`company_wallet` fee, vendor `activity_feed` + `monthly_stats`. Notifications: customer confirmation has NO vendorId in metadata (so a store mute never hides a payment confirmation); vendor gets a "New Outright Order" push. NOTE: did NOT touch plan-manager (reference only, per David).
+    Wiring: NEW [outright_checkout_repository.dart](lib/data/repository/customer/outright_checkout_repository.dart) extension `checkoutOutright({vendorId, items})` (exported from customer_repository.dart), returns `PaymentReceiptData`. [storefront_cart_sheet.dart](lib/presentation/customer/storefront/widgets/storefront_cart_sheet.dart) `_checkoutCart` now snapshots the cart, calls the function, and only clears the local cart on success (was a stub that cleared + fake snackbar). ⚠️ DEPLOY: `supabase functions deploy outright-checkout` — the function is NOT deployed yet.
+- (5) App Links (ANDROID ONLY — iOS intentionally excluded) DONE:
+    - iOS decision (David): NO iOS universal links. The store website detects iOS and redirects to the web app instead (customer → app.korra.com.ng, merchant → business.korra.com.ng). Do not add iOS associated-domains.
+    - Dart: NEW [deep_link_service.dart](lib/logic/services/deep_link_service.dart) using `app_links` (added to pubspec). Handles cold-start + warm links; accepts hosts korra.com.ng / www / app.korra.com.ng; routes `/store/{slug}` via `Get.toNamed('/store/$slug')`; bare `/store` ignored (website sends those to landing). Started in [main_customer.dart](lib/main_customer.dart) via post-frame callback (navigator must exist first). Customer app only — merchant app does not register storefront links.
+    - Android manifest: main manifest already had an `${appLinkHost}` autoVerify filter (customer=app.korra.com.ng, merchant=business.korra.com.ng). NEW customer-flavor manifest [android/app/src/customer/AndroidManifest.xml](android/app/src/customer/AndroidManifest.xml) merges an extra autoVerify filter onto `.MainActivity` for host `korra.com.ng`/`www.korra.com.ng` pathPrefix `/store`.
+    - ⚠️ TODO for David: `https://korra.com.ng/.well-known/assetlinks.json` must list the CUSTOMER app's package (`com.korra.shop` dev / `com.korra.shop.live` live) + release signing SHA-256. The website ships a placeholder assetlinks.json (see store site) — replace the fingerprint with `keytool -list -v -keystore <release-keystore>` output before autoVerify will pass.
+- (6) Store website (React/Next.js) DONE — NEW root dir [korra-store/](korra-store/). Chose **Next.js App Router** (React + SSR) because SEO indexing of dynamic `/store/{slug}` pages requires server rendering; a plain client React SPA would not be crawlable. Data read from Firestore **REST API** (no SDK bundle) using the public web config (project korra-prod-63687) — reads gated by Firestore rules.
+    - Routes: `/` landing; `/store` → 307 redirect to `/` (David's "bare /store = landing" rule, in next.config.js); `/store/[slug]` SSR store page (resolves vendor by `store.slug`, falls back to uid like the app) with `generateMetadata` (title/desc/canonical/OG/Twitter) + JSON-LD `Store`/`Offer` schema + product grid (approved products, discount-aware pricing). Suspended/banned/restricted stores (via `vendor_compliance`) render an "unavailable" notice only — mirrors the in-app gate. `not-found.js`, `robots.js`, `sitemap.js` (lists all store slugs) for SEO. ISR revalidate 300s so merchant edits show without redeploy.
+    - App-link plumbing: `public/.well-known/assetlinks.json` (served at `/.well-known/assetlinks.json`) with packages `com.korra.shop.live` + `com.korra.shop` — ⚠️ SHA-256 fingerprint is a PLACEHOLDER, David must paste the release-signing SHA256 (see korra-store/README.md). iOS/desktop: the "Continue in Korra" button ([OpenInApp.js](korra-store/app/store/[slug]/OpenInApp.js)) detects platform — Android tries the App Link then Play Store fallback; iOS/desktop redirect to app.korra.com.ng (NO iOS universal link, per David).
+    - ⚠️ Build not run here (sandbox had no network for `npm install`). David: `cd korra-store && npm install && npm run build`. Structure + non-JSX modules syntax-verified; assetlinks.json validated.
 
----
+**Round 10 — all six tasks landed. Remaining follow-ups for David:**
+1. Deploy edge function: `supabase functions deploy outright-checkout`.
+2. Firestore rules: allow public unauthenticated reads for the website (approved `products` + `vendors` store profile + `vendor_compliance`), and confirm `customers/{uid}.mutedStores` is writable by the owner.
+3. assetlinks.json: replace the placeholder SHA-256 with the real release fingerprint, then host korra-store at the korra.com.ng apex.
+4. `flutter pub get` already run (app_links added); do a full rebuild for the new Android customer-flavor manifest (App Links) + run the app.
+5. Server-side campaign fan-out (future) must check `mutedStores` before notifying.
 
-### Update: 3 July 2026 (Orders Page Swipe Architecture Implemented)
-We have fully implemented the Swipe UX / PageView architecture for the Orders screen:
-- **Model:** Created [OutrightOrder](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/outright_order.dart) with support for multi-item arrays, item mapping, total amount, and status helpers.
-- **Repository:** Created [OutrightOrdersRepository](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/outright_orders_repository.dart) to handle real-time streaming counts and pagination for the new `orders` collection.
-- **BLoC:** Implemented [OutrightOrdersBloc](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_bloc.dart) (and its [events](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_event.dart) / [states](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/bloc/vendor/outright_order/outright_orders_state.dart)) to manage tabs, search queries, pagination state, and delivery confirmation state.
-- **UI & Widgets:**
-  - [orders_panel_switcher.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/orders_panel_switcher.dart): Toggle switcher with animated selection slide.
-  - [reservations_panel.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/reservations_panel.dart) & [outright_orders_panel.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_orders_panel.dart): Decoupled widget pages under 500 lines.
-  - [outright_order_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_tile.dart) & [outright_order_list.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_list.dart): Paginated lists displaying order previews and items count.
-  - [outright_order_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_detail_sheet.dart): Details modal sheet showing line-item summary, customer contact channels (phone, WhatsApp using FontAwesome icon support), and action button.
-- **Integration:** Updated [reservations_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart) with `MultiBlocProvider` and `PageView` containing both panels.
-- **Search Header Redesign:** Converted [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart) to a stateful widget to support an expanding title bar search mode. Integrated this inside [reservations_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/reservations_page.dart), letting merchants click a search action icon in the header to filter orders dynamically as they type. Deleted the redundant full-width `ReservationSearchBar` inputs from both panel views to clean up screen real estate.
-- **Icons Standardization:** Standardized all UI icons across [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart), [outright_order_detail_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_detail_sheet.dart), [outright_order_list.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_list.dart), and [outright_order_tile.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/reservation/widgets/outright_order_tile.dart) to use standard Material `Icons` (such as `Icons.search`, `Icons.arrow_back`, `Icons.call`, `Icons.inbox_outlined`, `Icons.person_outline`, etc.) in place of `Iconsax` to keep UI consistent and lightweight.
-- **Search Input Size Tuning:** Wrapped the text field inside a light-grey search pill container (`height: 36.h`, `borderRadius: 8.r`) in [korra_header.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/shared/widgets/korra_header.dart) with `isDense: true` and internal search/clear icons. This makes the search input look extremely clean, compact, and native to the title bar, eliminating any oversized layout issues.
-- **Store Ratings & Reviews:** Implemented the rating summary and list of customer feedback within the Store page tab bar:
-  - **Data Model:** Created [VendorReview](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/vendor_review.dart) model.
-  - **Repository:** Created [VendorReviewsRepository](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/repository/vendors/vendor_reviews_repository.dart) extension on `VendorRepository` to stream customer reviews from `vendors/{uid}/reviews` ordered by date.
-  - **UI & Widgets:** Built [vendor_reviews_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/vendor_reviews_body.dart) displaying average rating score, star percentage progress bars, and scrollable review feed.
-  - **Integration:** Modified [products_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/products_page.dart) to check for `kIsWeb` dynamically. In mobile app mode, it instantiates 3 tabs (Products, Storefront, Reviews) and changes header title to "Ratings & Reviews" on the third tab. In web mode, it collapses back to 2 tabs.
-- **Firestore Security Rules:** Updated [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to include read/write permissions for the `orders` collection and the `vendors/{uid}/reviews` subcollection, resolving the `PERMISSION_DENIED` errors on both reviews and outright orders.
-- **Mock Data Seeding Actions:** Integrated a seeding system to quickly insert mock/demo reviews and outright orders for testing (with a `isMock: true` flag), and a corresponding "Clear Demo Data" warning banner at the top of the reviews screen for easy cleanup.
-- **Store Campaigns & Visibility (Plan D):** Added marketing suite:
-  - **Isolated Visibility Model:** Built [VendorVisibility](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/vendor/vendor_visibility.dart) to store Top Seller / Most Visited reach stats and Highlighted status without modifying the core `Vendor` model.
-  - **Firestore Rules:** Updated [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to permit read/write on campaigns and visibility.
-  - **Campaigns Main Body:** [vendor_campaigns_body.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/vendor_campaigns_body.dart) (under 250 lines) managing list views.
-  - **Decomposed UI Sub-Widgets:** 
-    - [campaign_reach_cards.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/campaign_reach_cards.dart): Renders analytics stats (renamed "orders volume" instead of plans).
-    - [highlighted_store_promo.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/highlighted_store_promo.dart): Borderless card using local state switch to avoid page refreshes.
-    - [campaign_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/campaign_card.dart): Shows 24h active/expired badges, 1-line caption, tags, and product lists.
-    - [create_campaign_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart): Bottom sheet form with character validations (20 for title/tags, 40 for caption), compulsory banner photo, and 3-active campaigns limit check.
-    - [product_selector_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/campaigns/product_selector_page.dart): Selection page listing in-stock inventory products in an e-commerce grid.
-- **Rules updates:** Added delete rules to orders MATCH block inside [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to enable mock order deletes.
-- **Customer Storefront Redesign (Plan E):** Implemented Pinterest/Temu UI:
-  - **Pin/Unpin Permission Fix:** Fixed customer Firestore rules in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) by updating `/customers/{uid}/my_vendors/{vendorId}` rules to allow write access to resolving pin failures.
-  - **Featuring Properties:** Added `isFeatured`, `campaignTag`, and `discountedPrice` to [product_model.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/data/models/product_model.dart) with full mapping logic.
-  - **Merchant Featuring Switches:** Added the "Feature this product" switch to both [Add_product_page.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/Add_product_page.dart) and [product_edit_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/vendor/product/widgets/product_edit_screen.dart).
-  - **Horizontal Featured Carousel:** Implemented a horizontal scrolling list view for featured products on the customer storefront.
-  - **Pinterest Staggered Masonry Grid:** Replaced rigid grid layouts with a staggered masonry style (`SliverMasonryGrid.count`) inside [storefront_screen.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/storefront_screen.dart) and implemented dynamic card aspect ratios based on product ID hashes in [storefront_product_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_card.dart) to deliver genuine staggered grid heights.
-  - **Persistent Multi-Store Shopping Cart:** Created [storefront_cart_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_cart_sheet.dart) supporting quantity controls, item removals, subtotal tracking, and batch outright purchase checkouts. Carts are persisted per-store in Firestore under `/customers/{customerId}/carts/{vendorId}` so they sync across devices and sessions. Added a shopping bag badge button in the storefront header.
-  - **Details Sheet Carousel & Quantities:** Redesigned the product details sheet to show a swipable horizontal `PageView.builder` image carousel with page indicators, a quantity adjuster row, and an **"Add to Cart"** button.
-  - **Shein/Temu Circular Category Cards:** Upgraded storefront category filters in [storefront_filter_bar.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_filter_bar.dart) to display circular collection cards with representative icons instead of simple text chips.
-  - **Price Sorting Filter:** Added a sleek Price Sorting toggle chip (`Default` / `Price: Low to High` / `Price: High to Low`) in the filter bar which applies responsive in-memory sorting to the feed.
-  - **Store Ratings & Customer Reviews Feed:** Added a stream listener in the header to display the store's average stars and review count, and moved the reviews list to open inside a dedicated reviews modal sheet when clicking on the `4.4 ★★★★☆ reviews >` rating line under the store name.
-  - **Dev Seeder & Rules Updates:** Updated write permissions for `/products/{productId}` in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to allow seeding from the app. Seeder seeds 4 mock merchants and 12 detailed products (with multiple images for swiping).
-  - **Active Selection Borders Removed:** Active category collections and price sort toggle filter chips now remove their outline borders entirely when selected to offer a cleaner look.
-  - **Visual Spacing & Icons:** Balanced search bar spacing and added proportional padding around the "Shop by Collection" header. Upgraded the shopping bag app bar icon to a solid, bold `Icons.shopping_bag_rounded` for maximum visibility.
-  - **CRITICAL NOTE ON FIREBASE RULES DEPLOYMENT:** Since the cart uses a new Firestore path `/customers/{uid}/carts/{vendorId}` and pinning uses `/customers/{uid}/my_vendors/{vendorId}`, you **MUST** deploy the updated security rules in [firebase_rule.txt](file:///c:/Users/USER/Desktop/flutter_projects/korra/firebase_rule.txt) to your Firebase backend. If you don't copy-paste these rules into the Firestore Rules tab on your Firebase Console, the database will return `PERMISSION_DENIED` and cart operations/pinning will fail.
-  - **Dynamic Checkout Processing Fee:** Added live checkout fee calculation to [storefront_cart_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_cart_sheet.dart) checking the merchant's `absorbOutrightFee` setting. If the merchant pushes the fee to the customer, we charge a **3.5% fee** (up to a max of **₦7,500**) and display it clearly. If absorbed, it displays **₦0 (absorbed by merchant)**. The checkout footer total is now labelled **Paying Now** instead of total amount due.
-  - **In-Memory Fallback Products:** Created [mock_marketplace_data.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/mock_marketplace_data.dart) and made `rawDoc` parameters optional on [storefront_product_card.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_card.dart) and [storefront_product_details_sheet.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/presentation/customer/storefront/widgets/storefront_product_details_sheet.dart). If the Firestore products collection is empty (e.g. database has not been seeded), the catalog automatically loads mock products locally, allowing you to test shopping and checkout flows offline.
-  - **Offline Gate Layout Crash Fix:** Resolved a startup crash (`BoxConstraints forces an infinite height`) in [korra_offline_gate.dart](file:///c:/Users/USER/Desktop/flutter_projects/korra/lib/logic/core/net/korra_offline_gate.dart) by lifting `ModalBarrier` from the sliding bottom sheet inner Stack to the outer finite Stack.
+### Round 10b — 5 July 2026 (corrections + visibility/campaign backends)
+David corrections after review:
+- **Website is browse-first, pay-in-app.** The earlier "redirect to app" CTA was wrong. Browsing a store + products on the website is fully open (no login). The app/web-app hand-off happens ONLY at pay intent (reserve/checkout). Fixed: store page CTA is "Reserve on Korra" ([OpenInApp.js](korra-store/app/store/[slug]/OpenInApp.js)); Android → App Link then Play Store; iOS/desktop → app.korra.com.ng. No web checkout by design.
+- **Store site owns ONLY /store/\*.** David already has a live landing at the apex. Deleted the landing page I'd made (`korra-store/app/page.js`); bare `/store` still redirects to `/` (the existing landing via reverse proxy). README updated with the proxy/rewrite requirement.
+- **Store page reskinned to match the app**: cover + glass logo card, Top Seller/Most Visited/Highlighted badges (from `vendor_visibility`), rating line (from reviews), walk-in location, contact chips (WhatsApp/Instagram/TikTok/Call), featured strip + product grid, JSON-LD now includes aggregateRating. New firestore helpers: `fetchVisibility`, `fetchReviewSummary` (subcollection runQuery via parentPath).
 
+**Backend — Top Seller / Most Visited (were demo-only, now real):**
+- The badges read `vendor_visibility/{id}` (`topSellerCircles`/`mostVisitedCircles`/`isHighlighted`); values were ONLY ever written by the deleted demo seeder → would be 0 for everyone now.
+- App: NEW visit tracking — [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) `_recordVisit()` increments `vendor_metrics/{vendorId}` (`visitsTotal`, `daily.{yyyy-MM-dd}`, `lastVisitAt`), once per store per app session (static `_countedVisits` set), fire-and-forget.
+- NEW scheduled fn [supabase/functions/compute-visibility/index.ts](supabase/functions/compute-visibility/index.ts): cron (Bearer CRON_SECRET). Ranks stores by rolling-30d visits (`vendor_metrics`) → Most Visited, and by `vendor_stats.totalEarnings` → Top Seller (top 20 each, min thresholds), writes `vendor_visibility` merge:true (preserves isHighlighted), resets non-qualifiers to 0 so lost badges clear. ⚠️ Needs: a Firestore collectionGroup index is NOT required here (plain collection scans); schedule it (e.g. hourly) via your cron; `totalEarnings` is all-time (note: refine to a rolling window later if you want recency).
+- Highlighted badge: left to the existing merchant highlight promo to set `isHighlighted` (not touched here).
 
+**Backend — Campaign delivery (was client-only Hot Deals):**
+- `createCampaign` only wrote a `campaigns` doc; nothing notified followers.
+- NEW fn [supabase/functions/campaign-broadcast/index.ts](supabase/functions/campaign-broadcast/index.ts): Double-Lock (HMAC + Firebase token); merchant can only broadcast their own store (uid===vendorId). Finds followers via `collectionGroup('my_vendors').where('vendorId','==',vendorId)`, loads each customer (chunked getAll), SKIPS anyone with the store in `mutedStores`, writes an in-app notification (type 'campaign', vendorId in top-level + metadata so it's mute-filterable client-side) and fires a multicast FCM push (500/chunk). Returns {followers, reached, muted, pushed}.
+- Wired: [vendor_campaigns_repository.dart](lib/data/repository/vendors/vendor_campaigns_repository.dart) `createCampaign` now creates the doc then `unawaited(_broadcastCampaign(...))` — fire-and-forget with double-lock invoke; a broadcast failure never surfaces as "campaign failed".
+- ⚠️ Needs: a Firestore **collectionGroup index on `my_vendors.vendorId`** (Firestore will print the create-index link on first call). Deploy `campaign-broadcast`.
+
+**Round 10b deploy checklist for David:**
+1. `supabase functions deploy compute-visibility campaign-broadcast` (+ outright-checkout from 10a).
+2. Schedule `compute-visibility` on your cron (Bearer CRON_SECRET), e.g. hourly.
+3. Create the collectionGroup index for `my_vendors.vendorId` (link appears on first campaign-broadcast call, or add to firestore.indexes.json).
+4. Firestore rules: allow owner writes to `customers/{uid}.mutedStores`; allow `vendor_metrics/{id}` increment writes by signed-in customers; keep public reads for the website (vendors/products/vendor_visibility/reviews/vendor_compliance).
+5. Deploy korra-store behind a proxy so korra.com.ng/store/* hits it and / stays on the existing landing.
+
+### Round 10c — 5 July 2026 (website goes through Supabase, not Firestore; responsive + animation)
+- **Data path changed per David**: the website no longer reads Firestore directly. NEW public edge fn [supabase/functions/store-api/index.ts](supabase/functions/store-api/index.ts) (admin SDK, GET, called with the Supabase anon key). Returns a locked-down public payload: `{ store{name,desc,logo,cover,walkIn,phone,socials}, blocked, blockedMessage, visibility{topSeller,mostVisited,highlighted}, reviews{average,count}, products[], nextCursor }`. Actions: `?slug=` (full load), `?slug=&cursor=` (next products page — orderBy documentId, no custom index needed), `?action=slugs` (sitemap). This keeps Firestore rules FULLY LOCKED — no public read exposure at all; the site can only read, changes happen in the app.
+- **Website rewired**: deleted `lib/firestore.js`; NEW [lib/api.js](korra-store/lib/api.js) calls store-api. `lib/config.js` now holds SUPABASE_URL + anon key (defaults to your project). Store page does ONE `fetchStore(slug)`. Lazy pagination via NEW client [ProductGrid.js](korra-store/app/store/[slug]/ProductGrid.js) → NEW server route [app/api/products/route.js](korra-store/app/api/products/route.js) (keeps the key server-side) → store-api cursor. Sitemap uses api.js.
+- **Responsive + app-like motion**: cover/logo/grid scale from small phones (2-col, shorter cover, hidden CTA copy) to desktop (300px cover, wider cards); product cards fade/rise in on mount with staggered delay, hover lift + image zoom, spinner on infinite-scroll; `prefers-reduced-motion` respected.
+- **DEPLOY**: `supabase functions deploy store-api`. Website `.env.local` needs SUPABASE_URL + SUPABASE_ANON_KEY (already in .env.example). Firestore public-read rules are NO LONGER needed for the site (admin SDK reads server-side) — you can keep rules locked.
+
+**PENDING (needs David) — "carry selected product" + finish the thought:**
+- David wants: tapping a product on the website opens the app ON THAT product, and if not signed in the app blocks with sign-in then RESUMES to that product (state maintained). Status: the app already maintains state for product→plan after login (`_navigateToProductPlan` redirects to login with redirectArgs → customerCreatePlan). Still TODO: (a) website product cards deep-link to `/store/{slug}?product={id}`; (b) DeepLinkService parse `product` query param; (c) StorefrontScreen accept an initialProductId and auto-open that product sheet after load. NOT built yet — confirm exact UX (does a product tap on the web jump straight to the app, or show details on the web first?) before building, since it touches GetX nav (freeze-sensitive). David's message ended mid-sentence ("and also…") — more requirements pending.
+
+### Round 10d — 5 July 2026 (website = full app-parity storefront: cart, product details, installment+outright, flash deals)
+David clarified: the website is NOT reservation-only and must LOOK/FUNCTION like the app storefront (same layout, flash deals, icons, colors, Inter typography), desktop just re-laid-out with the same premium feel. Flow: browse (open) → tap product → details → **Add to Cart** OR **Pay Installment**; installment hands to app create-plan; cart → checkout with store-balance/wallet **masked** → **Proceed to Payment / outright** hands to app. Payment ALWAYS happens in the app.
+
+**store-api extended**: `publicProduct` now returns code, description, availableStock, allowReservation, modelType, up to 6 images; full load also returns `deals` = active/upcoming timed campaigns ({productIds, startAt, endAt, discountType, discountValue, title, tag}) so the site shows the same flash-deal countdowns as the app.
+
+**Website rebuilt to app parity** (all new under korra-store/):
+- Typography: Inter via `next/font/google` (matches GoogleFonts.inter). Colors/brand unchanged.
+- [components/Icons.js](korra-store/components/Icons.js) — inline-SVG Iconsax-style set.
+- [components/DealCountdown.js](korra-store/components/DealCountdown.js) — 1s ticker flash-deal badge (running red / upcoming dark), tabular figures — mirrors app DealCountdownBadge.
+- [components/Storefront.js](korra-store/components/Storefront.js) (client) — filter bar (search + category chips + price sort), featured strip, product grid w/ discount % + deal badges, infinite scroll (via /api/products), floating cart FAB with live count, opens the two modals. Deal→product mapping (running beats upcoming).
+- [components/ProductModal.js](korra-store/components/ProductModal.js) — image gallery + thumbs, price/discount, stock, quantity stepper, **Add to Cart** (web cart) + **Pay Installment** (→ `handoffToApp(action:'installment', productId)`).
+- [components/CartModal.js](korra-store/components/CartModal.js) — cart items w/ qty steppers, **masked** Store Balance + Wallet rows ("₦ ••••••" — those live in the app/account), subtotal + "fee calculated in app", **Proceed to Payment** (→ `handoffToApp(action:'outright', cartIds)`).
+- [lib/cart.js](korra-store/lib/cart.js) — localStorage web cart (mirrors app CartService: add/updateQty/remove/clear + pub/sub).
+- [lib/handoff.js](korra-store/lib/handoff.js) — platform hand-off: Android → App Link (`/store/{slug}?product=&cart=&action=`) w/ Play Store fallback; iOS/desktop → customer web app w/ same params. Payment never happens on the site.
+- [page.js](korra-store/app/store/[slug]/page.js) still SSRs the header (cover, logo, badges, rating, walk-in, chips) + JSON-LD for SEO; the client `<Storefront>` hydrates on top (its initial render is server-rendered too, so products are in the crawlable HTML). Deleted the old OpenInApp.js + ProductGrid.js.
+- CSS: added filter bar, card discount/deal badges, cart FAB, bottom-sheet modals, qty steppers, masked rows, and desktop layout (@900px centered premium column, larger cover/cards, centered modals; @1200px max-width).
+
+**App side — receives the deep-link intent** (carry state):
+- [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart): new `initialProductId`; on open it fetches `products/{id}` and auto-opens that product's details sheet (post-frame, guarded once) — shopper resumes exactly where they were on the web. Sign-in + post-login return to create-plan is ALREADY handled by the existing `_navigateToProductPlan` redirect flow, so "block with sign-in then maintain state" works end to end for installment.
+- [customer_pages.dart](lib/config/routes/customer_pages.dart): storefront route reads `Get.parameters['product']`.
+- [deep_link_service.dart](lib/logic/services/deep_link_service.dart): parses `?product=` and `?action=` and forwards them to the route.
+
+**Still TODO (app side, noted — not blocking the site):**
+- Outright web cart → app: the hand-off passes `?cart=id1,id2` but the app does NOT yet prefill its cart from that param (opens the store page). If you want the exact cart to carry over, add cart-prefill in StorefrontScreen from `Get.parameters['cart']`. For now the shopper re-confirms items in the app.
+- `?action=installment` opens the product sheet (user taps Pay Installment); it does not auto-jump straight into create-plan. Fine per "it takes them to the app", but could be auto-triggered later.
+
+**Deploy/test (Round 10d):** `supabase functions deploy store-api` (redeploy — deals added). Then `cd korra-store && npm install && npm run dev`, open `/store/{slug}`: browse, open a product, add to cart, open cart (balances masked), Proceed to Payment / Pay Installment → hand-off. `next/font` fetches Inter at build (needs network on your machine). Full Flutter rebuild to pick up the deep-link product param.
+
+### Round 11 — 6 July 2026 (merchant: outright bulk delivery + selection gating + combined home KPIs)
+David: reservations selection is the reference (unchanged). Fixes are outright-only + KPI redesign.
+- **Outright selection gating** ([outright_order_list.dart](lib/presentation/vendor/reservation/widgets/outright_order_list.dart)): only **New (pending) + Ready-to-Deliver** orders are selectable. Delivered/cancelled can't be long-pressed or toggled (`canSelect = item.isPending || item.isReadyToDeliver`). Tapping an ineligible order in selection mode does nothing; outside selection mode it opens details. Bulk-menu **Select All** now selects only eligible visible orders (reservations_page.dart).
+- **Outright bulk delivery CONNECTED** (was stubbed "coming soon"). NEW `OutrightBulkMarkDelivered(ids)` event + `_onBulkMarkDelivered` handler in the outright bloc — loops the existing `repo.markOutrightOrderDelivered(id)` (same backend write as single delivery), sets `deliveryStatus.loading` (FAB shows spinner, tap disabled), then clears selection + `OutrightOrdersRefresh`. Confirm dialog now fires the real event + "Marking N order(s) as delivered…" snackbar.
+- **Home KPIs now reservations + outright** ([vendor_kpi_block.dart](lib/presentation/vendor/home/widgets/vendor_kpi_block.dart) + [vendor_home_body.dart](lib/presentation/vendor/home/vendor_home_body.dart)): 4 tiles — **Ready to Deliver** = reservation `readyForPickup` + outright `readyToDeliver` (combined, both fully paid); **New Orders** = outright `pending`; **Ongoing** = reservation `ongoing`; **New Reservations** = reservation `newRes`. Home body nests `streamCounts` (reservation) + `streamOutrightCounts` (outright). Navigation: Ready/Ongoing/New Reservations → reservations panel (panel 0) at the right tab; New Orders → **outright panel** (panel 1) at the New tab.
+- **ReservationsPage** gained `initialPanel` (0 reservations / 1 outright) + `initialOutrightFilter`; route [vendor_pages.dart](lib/config/routes/vendor_pages.dart) passes `panel` + `outrightFilter` args so a KPI can deep-link straight into the outright panel/tab.
+
+### Round 12 — 6 July 2026 (reservations select-render fix + website app-parity redesign)
+- **Reservations bulk-select was invisible** (long-press showed the FAB but tiles didn't turn green/checked): [reservations_panel.dart](lib/presentation/vendor/reservation/widgets/reservations_panel.dart) `buildWhen` didn't watch `selectedIds` (the outright panel already did). Added `if (!identical(previous.selectedIds, current.selectedIds)) return true;`. Toggle creates a fresh Set so identity check fires. FIXED.
+- **Website redesigned to match the app storefront** (korra-store/):
+  - Header: sticky **StoreBar** shows the STORE logo + **store name** (not "Korra") so the name stays fixed on scroll, plus a small Korra attribution mark. Logo copied from `assets/images/korra_logo_icon.webp` → `korra-store/public/korra-logo.webp`. Footer "Powered by Korra".
+  - Typography: Inter via `next/font` exposed as `--font-inter`; base font reduced (`html{font-size:15px}` mobile / 16px desktop) — fonts were too big.
+  - Desktop padding tightened (container 28px sides, smaller section gaps) and **product grid is uniform** (`display:grid`, aspect-ratio:1 images) while **mobile stays staggered masonry** (`column-count:2`, natural image heights) — per David.
+  - New sections mirroring the app: **⚡ Flash Deals** horizontal strip (products with a running timed campaign + live countdown), **★ Featured** strip, **Shop by Collection** circular category icons, **Filter & Sort** row, and a **Ratings & Reviews** section (store-api now returns `reviews.recent` — top 6 commented reviews).
+  - **Walk-in store** is now tap-to-expand inline ([WalkIn.js](korra-store/components/WalkIn.js)) like the app.
+  - Product cards: hover **cycles the image gallery** + lifts, a **quick-add (+)** button reveals on hover (always visible on touch), discount %, sold-out veil, low-stock nudge, deal countdown — matching StorefrontProductCard. No pin (per David).
+  - store-api extended: product fields (code/description/stock/etc.), active `deals`, and `reviews.recent`. ⚠️ Redeploy `store-api`.
+  - ⚠️ Not run here (no network): `cd korra-store && npm install && npm run build`. `next/font` fetches Inter at build.
+
+### Round 13 — 6 July 2026 (SEO/OG polish + checkout "how it works")
+- **Per-store SEO/OG finalised** ([app/store/[slug]/page.js](korra-store/app/store/[slug]/page.js) `generateMetadata`):
+  - Title → **`{Store Name} · Shop on Korra`** (set as `title.absolute` so the layout's `%s · Korra` template doesn't double up).
+  - Meta description (Google) → merchant's own description, else **`Discover {Store Name}'s products on Korra.`**
+  - OG/Twitter share description → merchant's own description, else **`Discover amazing deals on {Store Name} — powered by Korra.`**
+  - **OG image now always present**: merchant `coverUrl` → `logoUrl` → **branded fallback** `OG_FALLBACK_IMAGE`. Twitter card forced to `summary_large_image`. So every shared store link previews with an image.
+  - Fallback image `korra_logo_icon_og.jpeg` moved from repo root → [korra-store/public/](korra-store/public/); exposed as absolute `${SITE_URL}/korra_logo_icon_og.jpeg` via new `OG_FALLBACK_IMAGE` in [lib/config.js](korra-store/lib/config.js). JSON-LD `image` uses the same fallback chain.
+  - (Already in place, unchanged: canonical URL, `robots index,follow` + auto-noindex for suspended stores, JSON-LD `Store`+`Offer`+`AggregateRating`, `sitemap.xml`, `robots.txt`.)
+- **Header/footer simplified** (page.js): removed the small Korra mark from the sticky StoreBar (header now = store logo + store name only); footer trimmed to just **"Powered by Korra"** + logo. Removed now-unused `.storebar-korra` CSS.
+- **"How Korra installment works" on the product details** ([ProductModal.js](korra-store/components/ProductModal.js)): a collapsible behind a **`!` circle** toggle, shown **only when the product offers Pay Installment** (`canReserve`) — not in the cart. 3 steps (Reserve → Pay at your pace → Get your item, using the real `{store name}` passed via new `storeName` prop from [Storefront.js](korra-store/components/Storefront.js)) + note that unfinished/closed plans convert paid funds to store balance for future use with that store. New `.hiw*` styles in [globals.css](korra-store/app/globals.css).
+- ⚠️ Still: redeploy `store-api`, and `cd korra-store && npm install && npm run build` on a networked machine.
+
+### Round 14 - 6 July 2026 (big batch: webstore polish, app parity, campaigns, AI review, delete store, share)
+David asked for one large batch. No em dashes anywhere (snackbars, code, this file). Working through in order, checking items off as done.
+
+WEBSTORE (korra-store, Next.js):
+- [x] 14.1 Fix DealCountdown hydration mismatch (server rendered time vs client time differed, e.g. "23:31:58 LEFT" vs "23:31:56 LEFT"). Gate the ticking render behind a mounted flag so SSR and first client paint agree.
+- [x] 14.2 Removed the "+" quick-add button from product cards ([Storefront.js](korra-store/components/Storefront.js), dropped the `Plus` import and `onAdd` plumbing).
+- [x] 14.3 Flash Deals and Featured stay as HORIZONTAL rails (David clarified: keep horizontal, just show fewer). Capped at 4 items; "View all" shows only when there are more than 4 and scrolls back to the full product grid. Emojis removed from the titles ("Flash Deals" / "Featured").
+- [x] 14.4 Removed the store name from the sticky header ([page.js](korra-store/app/store/[slug]/page.js) StoreBar now shows only the logo + Open app).
+- [x] 14.5 Flash timer legibility: `.deal-badge` font 10px to 12px, tighter icon/text alignment (`line-height:1`, svg nudge), Timer icon 12 to 13. Countdown direction was already correct; the visible "going up" was the hydration bug in 14.1.
+- [x] 14.6 Reviews now mirror the app: the rating line in the store header (under the cover) is tappable and links to a new web-only reviews page [app/store/[slug]/reviews/page.js](korra-store/app/store/[slug]/reviews/page.js) (rating summary + recent reviews, "Back to store"). Removed the old bottom-of-page Reviews block and the Reviews.js usage. NOTE: store-api only returns the 6 most recent reviews, so the reviews page shows those with a "showing most recent" note; add a paged reviews action to store-api later for the full list.
+- [x] 14.7 Filter and sort now matches the app: a "Filter & Sort" label plus a Filters pill (Sliders icon + active count badge) that opens a bottom sheet with Sort by price (Recommended / Low to High / High to Low) and a "Show deals only" toggle. Grid respects both.
+- [x] 14.x Cart fix: the close button was covering the item-count badge. Added right padding to `.cart-head` so the count clears the close button.
+- [x] 14.6b Reviews page rebuilt: now shows the average, star row, and a per-star RATING BARS distribution, plus the recent reviews list (with or without a written comment). Reduced the big top padding under the app bar. The store name is sticky at the top of the reviews page. store-api `reviewSummary` now returns `distribution` (per-star counts) and includes all recent reviews (not just commented ones). IMPORTANT: reviews were "not showing" because the deployed store-api predates `reviews.recent` and only returned commented reviews. MUST redeploy store-api for the reviews page to populate.
+- [x] 14.3b Rail cards (Flash Deals / Featured) no longer show the "Only N left" low-stock line (kept only on the main grid cards). Hover image switch already works on rail cards when a product has 2+ images.
+- [x] 14.7b Filters pill: removed the border it showed in the active state (now just the brand tint fill).
+- [x] 14.4b David asked for the store name back in the sticky header after all (undoing part of 14.4). [page.js](korra-store/app/store/[slug]/page.js) StoreBar: added `<h1 className="storebar-name">{store.name}</h1>` back next to the logo. Made it the page's H1 (semantic, good for SEO) since the big name below the cover is now gone.
+- [x] 14.4c Removed the big `h1.store-name` that sat above the reviews link under the cover photo (now redundant with the sticky header name). `store-head-text` now holds just the rating/reviews link.
+- [x] 14.6c Fixed reviews page store name shifted to the right: `.reviews-bar` (back button + name) was inheriting `justify-content: space-between` from the shared `.storebar-inner` class with only 2 children, which shoved the name to the far right. Added `justify-content: flex-start` on `.reviews-bar` to override it.
+- [x] 14.3c Flash Deals / Featured rail cap raised from 4 to 6 (`STRIP_MAX = 6` in [Storefront.js](korra-store/components/Storefront.js)); "View all" only shows past 6.
+- [x] 14.8 Pagination confirmed present: IntersectionObserver sentinel + `/api/products?slug=&cursor=` -> store-api `nextCursor`. Works.
+- [x] 14.9 / 14.20 Per-product SSR page + share, done on both web and app. New route [app/store/[slug]/p/[productId]/page.js](korra-store/app/store/[slug]/p/[productId]/page.js): its own `generateMetadata` (title, description, canonical, OG/Twitter image from the product's own photo, falling back to store cover/logo/branded default), a `Product` JSON-LD block, and renders `Storefront` with `initialProductId`/`initialProductData` so the product modal auto-opens on load. [store-api](supabase/functions/store-api/index.ts) gained `GET ?slug=&productId=` returning `{ store, product }` for a single item (NEEDS DEPLOY). [Storefront.js](korra-store/components/Storefront.js) seeds `modalProduct` from that on mount. [ProductModal.js](korra-store/components/ProductModal.js) got a Share icon button (Web Share API, falls back to clipboard copy with a small toast) linking to `productUrl(slug, productId)` (new helper in [lib/config.js](korra-store/lib/config.js)).
+  App side: [StorefrontProductDetailsSheet](lib/presentation/customer/storefront/widgets/storefront_product_details_sheet.dart) got a share icon overlaid on the image carousel (only when `storeSlug` is passed in), using `share_plus` to share `https://korra.com.ng/store/{slug}/p/{productId}`. [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) now passes `storeSlug: widget.storeSlug` into the sheet. [DeepLinkService](lib/logic/services/deep_link_service.dart) updated to also parse that `/p/{id}` path form (previously only understood `?product=`) so tapping a shared product link on a phone with the app installed opens straight to that product; no AndroidManifest change needed since the existing intent-filter matches the whole host with no path restriction.
+- [x] 14.10 Search bar moved ABOVE the Flash Deals / Featured strips (own `.searchbar-top` block; collections + sort stay in the filter bar below).
+
+MERCHANT APP:
+- [x] 14.11 Campaigns tab enabled on the merchant web app. [products_page.dart](lib/presentation/vendor/product/products_page.dart) previously hid both Reviews and Campaigns behind `if (!kIsWeb)`; Campaigns is now shown on web too (Reviews stays app-only for now). Reworked `_tabController` length and the header-title lookup into a single `_tabTitles` list so the title stays correct regardless of which tabs are actually present. While enabling this, found and fixed a real web crash: the campaign banner photo preview used `Image.file(File(xfile.path))`, which throws on web since an `XFile`'s path there is a blob URL, not a real file path (same issue [image_upload_box.dart](lib/presentation/vendor/product/widgets/image_upload_box.dart) already works around for product photos). [create_campaign_sheet.dart](lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart) now branches `kIsWeb ? Image.network(path) : Image.file(File(path))` for that preview; the actual upload (`repo.uploadToSupabase`) already handled both platforms correctly.
+- [x] 14.12 Campaign price preview in [create_campaign_sheet.dart](lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart) now renders ONE representative product's before/after price plus a "Same discount applies to the other N selected products" note, instead of one row per selected product. Added a `_zeroPriceProducts` getter and a red warning banner (covers both percentage and flat-amount discount types) listing any selected product whose price would round down to ₦0, so the merchant is warned before launching.
+- [x] 14.13 Campaign banner photo picker preview height fixed from 110.h to 120.h in [create_campaign_sheet.dart](lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart), matching the banner height [CampaignCard](lib/presentation/vendor/product/widgets/campaigns/campaign_card.dart) actually renders at (120.h) in the Campaigns tab, so the picker preview isn't misleading about the final crop.
+
+CUSTOMER APP:
+- [x] 14.14 Fixed "Visit count failed ... permission-denied". The app wrote `vendor_metrics` directly (rules locked). Now it calls a new [record-visit](supabase/functions/record-visit/index.ts) edge function (admin SDK increments visitsTotal + daily[today] + lastVisitAt). [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) `_recordVisit` now invokes the function (try/catch, fire-and-forget) instead of the Firestore write. NEEDS DEPLOY of record-visit (this is also 14.25).
+- [x] 14.15 Campaign notification image fixed (concrete, verified bug): the app's foreground FCM handler ([notification_service.dart](lib/logic/services/notification_service.dart) `_setupInteractedMessage`) reads `message.data['image']` to build the BigPictureStyle, but `campaign-broadcast` never sent that key, only stored `metadata.image` in the Firestore doc for the in-app list. Fixed [campaign-broadcast](supabase/functions/campaign-broadcast/index.ts): push payload now includes `data.image` and `android.notification.imageUrl` (rich image on background/terminated pushes too). Also [KorraNotification](lib/data/models/customer/korra_notification.dart) never parsed `metadata.image` at all, so the in-app Notifications list couldn't show it either — added an `imageUrl` field, and [notification_screen.dart](lib/presentation/customer/home/notification_screen.dart) now renders the real campaign photo as the tile thumbnail (falls back to an icon on load error), plus a proper `campaign` icon/color case. NEEDS DEPLOY of campaign-broadcast.
+  NOTE on "campaign not showing in app": traced [hot_deals_strip.dart](lib/presentation/customer/store/widgets/hot_deals_strip.dart) — it only renders on the Stores tab (not Home), requires the campaign's vendor to be present in the already-loaded `vendorsById` map (all non-banned vendors, so should be fine) and requires `campaign.isActive` (untimed campaigns expire 24h after `sentAt`; timed ones need `dealEndAt` in the future). No concrete bug found beyond that; flagging as an architecture note rather than a fix — if it keeps happening, check that the campaign's `sentAt`/`dealStartAt`/`dealEndAt` are actually set correctly at creation time in the merchant app.
+- [x] 14.16 Campaign countdown timer added in-app, reusing the existing [DealCountdownBadge](lib/presentation/customer/store/widgets/deal_countdown_badge.dart) (already built for Hot Deals cards). [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) now streams this store's `campaigns` (`_campaignsStreamFor`), builds a productId to Campaign `dealMap` (`_buildDealMap`, running beats upcoming), and passes the matching deal to: (a) [StorefrontCardImage](lib/presentation/customer/storefront/widgets/storefront_card_image.dart) via a new `deal` prop on [StorefrontProductCard](lib/presentation/customer/storefront/widgets/storefront_product_card.dart), shown bottom-left on both the Featured strip and the masonry grid; (b) [StorefrontProductDetailsSheet](lib/presentation/customer/storefront/widgets/storefront_product_details_sheet.dart) via a new `deal` prop, shown under the price block. `_showProductDetailsSheet` gained an optional 3rd `Campaign? deal` param.
+- [x] 14.17 AI review summary box wired into the customer feedback screen. New [AiReviewSummaryBox](lib/presentation/customer/storefront/widgets/ai_review_summary_box.dart) widget calls the `ai-review-summary` function on mount, shows a loading state then either the summary or "AI currently unavailable", is collapsible (chevron toggle) and closeable (X dismisses it for that screen visit). Added as the first header item in [store_reviews_screen.dart](lib/presentation/customer/storefront/store_reviews_screen.dart) `_buildBody`, above the review composer and rating summary card. NEEDS DEPLOY of ai-review-summary (14.24) to actually return data instead of erroring silently to "unavailable".
+- [x] 14.18 Radio style indicator (the existing broadcasting [SignalBadgeDot](lib/presentation/shared/widgets/signal_badge_dot.dart) ripple, previously cart-only) now also fires for a live campaign. [store_page.dart](lib/presentation/customer/store/store_page.dart) added a `_campaignsStream` (last 100 campaigns) and computes `activeCampaignVendorIds` from `Campaign.isActive`; wrapped the existing cart `ValueListenableBuilder` in a `StreamBuilder` for it. [DiscoverStoreListItem](lib/presentation/customer/store/widgets/discover_store_list_item.dart) gained a `hasActiveCampaign` flag: shows the same dot as an unfinished cart, plus a distinct "Live deal" pill (cart's "In your cart" pill still wins if both apply on the same store).
+- [x] 14.19 Delete store added to the existing "My Merchants" list ([my_vendors_screen.dart](lib/presentation/customer/profile/my_vendors_screen.dart), the customer's directory of stores they've interacted with). `_VendorCard` became a `StatefulWidget` with a trash icon on each card. Tap checks, in order: store balance > 0 blocks with a reason dialog (Close only, no delete option); an active plan (`plans` where `customerId`+`vendorId`+`status == active`) blocks the same way; otherwise a confirm dialog warns it permanently removes the store and can't be undone, then deletes the `customers/{uid}/my_vendors/{vendorId}` doc and removes the card from the list via a new `onDeleted` callback plumbed from `MyVendorsScreen`.
+- [x] 14.20 Done together with 14.9 above.
+- [x] 14.21 Search bar moved above the Featured strip in the app's per-store storefront too. Extracted the search field out of [StorefrontFilterBar](lib/presentation/customer/storefront/widgets/storefront_filter_bar.dart) into a standalone `StorefrontSearchField` widget; `StorefrontFilterBar` gained a `hideSearch` flag. [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) `_buildProductSlivers` now renders `StorefrontSearchField` first, then Featured, then `StorefrontFilterBar(hideSearch: true)` (collections + sort) right before the grid — same split as the website.
+- [x] 14.22 Level Up Slots made more gamified, no new dependencies. [limit_upgrade_screen.dart](lib/presentation/customer/profile/limit_upgrade_screen.dart): tier progress bars now animate their fill in on render (`TweenAnimationBuilder`, "charging up" instead of static), the two header stats tick up from 0 on load, swiping tiers gives a light haptic (`HapticFeedback.selectionClick`), a tier the customer already qualifies for but hasn't claimed now shows a distinct "READY TO UPGRADE" pill in the tier's color instead of the same muted "UNLOCKED" state as an already-passed tier, and a successful upgrade fires a heavier haptic plus a brief home-grown confetti burst (new `_ConfettiBurst`/`_ConfettiPainter`, a `CustomPainter` shower of fading circles) rendered inline in the same screen's `Stack` before the existing single `Navigator.pop`, so the known navigator-wedge risk from popping across an await stays avoided.
+- [x] 14.23 Em dash sweep done. Cross referenced every file using `showAppSnackbar`/`SnackBar`/`ScaffoldMessenger` against every file containing an em dash and found one real snackbar hit: the mute/unmute message in [storefront_screen.dart](lib/presentation/customer/storefront/storefront_screen.dart) `_toggleMute` ("Muted, you won't get notifications..."), fixed with periods. Also swept other user-facing (non-comment) strings with em dashes found the same way: the insufficient-funds banner in [storefront_cart_balances.dart](lib/presentation/customer/storefront/widgets/storefront_cart_balances.dart), the empty-deals message in [deals_page.dart](lib/presentation/customer/store/deals_page.dart), and the product share caption in [share_link_sheet.dart](lib/presentation/vendor/product/widgets/share_link_sheet.dart). Left the single `"—"` empty-value placeholder in [edit_vendor_profile_screen.dart](lib/presentation/vendor/profile/edit_vendor_profile_screen.dart) alone since it is a dash-as-placeholder UI convention, not prose. Remaining em dashes across the codebase are all inside `//`/`///` code comments, out of scope for this task.
+
+SUPABASE:
+- [x] 14.24 AI review summarizer edge function created at [supabase/functions/ai-review-summary/index.ts](supabase/functions/ai-review-summary/index.ts). Stub returns `{ available:false, summary:null, message:"AI currently unavailable" }` (200 so the box renders gracefully; client treats any non-2xx/throw as unavailable too). Keep the same response shape when the real model lands. NEEDS DEPLOY. App wiring is 14.17.
+- [x] 14.25 Storefront visit tracking function created: [record-visit](supabase/functions/record-visit/index.ts). NEEDS DEPLOY.
+- [x] 14.26 campaign-broadcast now carries the campaign image end to end (push `data.image` + `android.notification.imageUrl`, plus the existing Firestore `metadata.image` for in-app). Done together with 14.15. NEEDS DEPLOY.
+
+FULL DEPLOYMENT GUIDE (updated 8 July 2026 — confirmed: korra.com.ng landing page is on Vercel already).
+Every URL below (Play Store link, CUSTOMER_WEBAPP, MERCHANT_WEBAPP, ANDROID_PLAY_URL) is an env var / `lib/config.js` constant, not hardcoded — swapping any of them later (e.g. plugging in the real Play Store listing once it's live) is a config change, never a code change, on either the app or the website.
+
+--- PART A: korra.com.ng root (landing) + /store/* -> korra-store ---
+Both projects are on Vercel, so this is a rewrite, not a DNS change.
+1. Deploy korra-store as its own Vercel project: `cd korra-store && vercel --prod` (or connect the GitHub repo in the Vercel dashboard). Set its env vars in that project's Vercel settings: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL=https://korra.com.ng`. It'll get a URL like `korra-store.vercel.app` — confirm it works standalone first (`korra-store.vercel.app/store/david-store`).
+2. In the LANDING PAGE's Vercel project (the one already serving korra.com.ng), add a `vercel.json` at its root (or merge into an existing one):
+   ```json
+   {
+     "rewrites": [
+       { "source": "/store", "destination": "https://korra-store.vercel.app/store" },
+       { "source": "/store/:path*", "destination": "https://korra-store.vercel.app/store/:path*" }
+     ]
+   }
+   ```
+   Redeploy the landing project for this to take effect. Everything else on korra.com.ng (the homepage, any other landing routes) is untouched — only `/store` and `/store/*` proxy out.
+3. Sitemap/robots: do NOT blanket-proxy `/sitemap.xml` or `/robots.txt` to the store app — that would replace the landing page's own sitemap. Instead add one more rewrite so the store's sitemap is reachable under its own name: `{ "source": "/store-sitemap.xml", "destination": "https://korra-store.vercel.app/sitemap.xml" }`, then add a second `Sitemap:` line to the landing page's own `robots.txt` pointing at `https://korra.com.ng/store-sitemap.xml`. If the landing page currently has NO sitemap/robots.txt of its own, simpler: just proxy `/sitemap.xml` and `/robots.txt` straight to the store app instead.
+4. `.well-known/assetlinks.json` and `.well-known/apple-app-site-association` (Android App Links / iOS Universal Links verification) MUST be served from the domain root (`korra.com.ng/.well-known/...`), which is the LANDING project, not korra-store (proxying `/store/*` doesn't cover `/.well-known/*`). Copy the two files already in this repo at `web/.well-known/assetlinks.json` and `web/.well-known/apple-app-site-association` into the landing project's `public/.well-known/` folder verbatim and redeploy it. (There's also a stale copy at `korra-store/public/.well-known/assetlinks.json` from an earlier attempt — harmless since it's unreachable at the root once `/store/*` is the only proxied path, but fine to leave or delete.)
+5. Verify: load `korra.com.ng/store/david-store` (should render the storefront, not "Store not found"), `korra.com.ng/store-sitemap.xml` (or `/sitemap.xml` if you went the simple route), `korra.com.ng/.well-known/assetlinks.json`, and paste a store URL into the Facebook Sharing Debugger + Twitter Card Validator to confirm the OG preview picks up the product/store image.
+Note: local `next dev` first-compile slowness (60-90s) is normal; the Vercel production build is pre-built and serves fast.
+
+--- PART B: app.korra.com.ng -> Flutter CUSTOMER web build ---
+This is the one that's currently stale (still serving an old react-router app, per your last test) — this is the fix.
+1. Build: `flutter build web --release -t lib/main_customer.dart --dart-define=IS_LIVE=true --no-tree-shake-icons`. Output lands in `build/web/`.
+2. Deploy that folder: `cd build/web && vercel --prod`. If `build/web/.vercel` already links to a project (it has a `.vercel` folder checked in from a prior deploy), this pushes straight to whichever project that's linked to — open the Vercel dashboard FIRST and confirm that project's assigned domain is actually `app.korra.com.ng` before running this, since a mismatch here is almost certainly why the redeploy "didn't take" last time.
+3. Confirm the domain alias: in Vercel, Project Settings -> Domains -> `app.korra.com.ng` should point at this exact project. If it's attached to a different/old project (the react-router one), either move the domain onto the new project or delete/replace the old project's deployment.
+4. Verify: open `app.korra.com.ng` in an incognito window (bypasses cache), check the Network tab loads `main.dart.js` (not an `index-[hash].js`), then test `app.korra.com.ng/store/david-store?product={id}&action=installment` directly — it should show the splash/home briefly then land on that product's installment flow.
+
+--- PART C: business.korra.com.ng -> Flutter MERCHANT web build ---
+Same shape as Part B, different target and domain.
+1. `flutter build web --release -t lib/main_vendor.dart --dart-define=IS_LIVE=true --no-tree-shake-icons`.
+2. `cd build/web && vercel --prod` — but note `build/web` is shared/overwritten by whichever flavor you last built (see caveat below), so build+deploy the merchant flavor as its own step right after, don't try to deploy both from one build.
+3. Confirm `business.korra.com.ng` is aliased to this project the same way as Part B step 3.
+Caveat found while testing this session: `web/index.html` (the shared source template for BOTH flavors) is currently hardcoded with `<title>Korra Business</title>` and a comment marking it merchant-only. Since `flutter build web` always copies the ONE `web/` folder regardless of `-t` target, the CUSTOMER build currently inherits the merchant's tab title too (favicon itself is fine, both flavors use the same `korra_logo_icon.webp`). Cosmetic only, not a routing/functional issue, but flag if you want it split per-flavor (would need a small pre-build script swapping index.html/manifest.json per flavor, or accept "Korra Business" title on both for now).
+
+--- PART D: Android app -> Play Store ---
+1. Build the signed bundle: `flutter build appbundle --flavor customer -t lib/main_customer.dart --release --dart-define=IS_LIVE=true` (and the `merchant`/`main_vendor.dart` equivalent for the business app — these are two separate Play Store listings, two separate packages per `assetlinks.json` above: `com.korra.shop` / `com.korra.shop.live` for customer, `com.korra.business` / `com.korra.business.live` for merchant).
+2. Output: `build/app/outputs/bundle/customerRelease/app-customer-release.aab` (path varies slightly by flavor name — check the actual output path Flutter prints at the end of the build).
+3. Play Console (first time): create the app listing (Play Console -> Create app), fill store listing (screenshots, description, privacy policy URL, content rating questionnaire, data safety form), upload the `.aab` under a release track. Start with **Internal testing** or **Closed testing** track, not straight to Production, so you can install/verify before it's public.
+4. Once verified, promote the release to Production. First-time review can take a few days; updates are usually faster.
+5. Once live, update `ANDROID_PLAY_URL` in `korra-store/lib/config.js` (or set `NEXT_PUBLIC_ANDROID_PLAY_URL` in the website's Vercel env vars) to the real `https://play.google.com/store/apps/details?id=com.korra.shop.live` listing URL, redeploy the website. That's the only change needed — `handoff.js` already reads it as a config value.
+
+--- PART E: iOS app -> App Store (flagged, not actioned) ---
+Needs a Mac + Xcode + an active Apple Developer Program membership to build/sign/upload (`flutter build ipa`, then Transporter or Xcode Organizer to App Store Connect) — none of that is possible from this Windows dev environment. `ios/` in this repo has the project scaffolding ready; when you have Mac access, the Flutter build/signing steps are the standard `flutter build ipa --flavor customer -t lib/main_customer.dart --release` per flavor, then upload via App Store Connect. Revisit this when it's actually next, no point detailing further until there's a Mac in the loop.
+
+--- PART F: Supabase Edge Functions still pending deploy ---
+`supabase functions deploy store-api` (product-level OG lookup, reviews distribution), `supabase functions deploy record-visit`, `supabase functions deploy ai-review-summary`, `supabase functions deploy campaign-broadcast` (campaign push image). Can bundle as `supabase functions deploy store-api record-visit ai-review-summary campaign-broadcast` in one command if the CLI is already logged into the right project.
+
+### 8 July 2026 — Campaign lifecycle: manual delete replaces the 24h auto-expiry
+Found while answering "does a campaign clear after 24 hours": it half-did. The OLD `Campaign.isActive` made untimed campaigns stop showing as "active" (Hot Deals, ACTIVE/EXPIRED badge) after 24h, but NOTHING ever reset the `campaignTag`/`discountedPrice` it had written onto the target products at creation time — those stuck on the product forever. David asked to drop the 24h auto-expiry entirely and let merchants delete campaigns manually instead, multi-select included.
+- [Campaign.isActive](lib/data/models/vendor/campaign_model.dart): untimed campaigns now stay `true` (active) until deleted. Timed campaigns (`hasTimer`) unchanged, still expire at their explicit merchant-chosen `dealEndAt`.
+- [VendorCampaignsRepository](lib/data/repository/vendors/vendor_campaigns_repository.dart): new `deleteCampaign`/`deleteCampaigns(List<Campaign>)`. Deletes the campaign doc(s) in one batch (guaranteed to exist), then reverts `campaignTag`/`discountedPrice` on every targeted product one at a time with individual try/catch (NOT a batch — `update()` throws NOT_FOUND on a since-deleted product, which would otherwise sink the whole batch including the campaign deletes that already succeeded). Known simplification, flagged in a code comment: if two campaigns targeted the same product, deleting the older one still clears whatever the newer one set too — there's no per-product "which campaign currently owns this discount" tracking.
+- [create_campaign_sheet.dart](lib/presentation/vendor/product/widgets/campaigns/create_campaign_sheet.dart): the "max 3 active campaigns" creation gate no longer windows by `sentAt > 24h ago` (that's meaningless now) — it just counts all of the vendor's campaigns; delete one to free a slot. Updated the limit-reached snackbar copy to say so instead of "expire after 24 hours".
+- [CampaignCard](lib/presentation/vendor/product/widgets/campaigns/campaign_card.dart): gained `selectionMode`/`selected`/`onTap`/`onLongPress`/`onDeleteTap`. Long-press enters selection mode; a checkbox circle overlays top-right in selection mode, a quick trash icon overlays there otherwise.
+- [VendorCampaignsBody](lib/presentation/vendor/product/widgets/vendor_campaigns_body.dart): converted from `StatelessWidget` to hold selection state. Header row swaps between the normal "Sent Campaigns (N)" + New Campaign + a new "Select" text button, and (in selection mode) "N selected" + Cancel + a red Delete button. Both single delete (trash icon) and bulk delete (toolbar) go through the same `_confirmDelete` dialog, which explains the price/tag revert and can't-be-undone before calling the repository.
+
+### 8 July 2026 — Product pages added to the sitemap (Google Images gap)
+Individual product pages (`/store/{slug}/p/{id}`, added earlier for 14.9/14.20) had good OG/JSON-LD tags but were undiscoverable — not in `sitemap.xml`, and the product opens as a client-side modal on the store page rather than a real `<a href>`, so nothing pointed a crawler at them. Fixed the sitemap side (the on-page-link side is still open if wanted later, not built this round).
+- [store-api](supabase/functions/store-api/index.ts): new `GET ?action=product-urls` → `{ urls: [{slug, productId}, ...] }` for every `status:'approved'` product across every vendor (resolves each product's `vendorId` to its store slug via one `vendors` projection query, capped at 5000 products / 2000 vendors). NEEDS DEPLOY (on top of the productId lookup from 14.9, already pending).
+- [lib/api.js](korra-store/lib/api.js): new `fetchAllProductUrls()`.
+- [sitemap.js](korra-store/app/sitemap.js): now merges product URLs (via `productUrl(slug, productId)`) into the sitemap alongside store URLs, `weekly`/priority 0.6.
+
+### 8 July 2026 — Campaign "opens" counter was dead, now wired to store visits
+David: "the campaign visit is not working, I visited a campaign, it did not show — if they just click on the merchant store in the app we count it as a campaign visit." Traced `Campaign.openCount`: it's read everywhere (`campaign_card.dart` shows "N opens") and initialized to 0 at creation, but literally nothing in the app or any Supabase function ever incremented it — dead counter, always "0 opens".
+- [record-visit](supabase/functions/record-visit/index.ts): now, in the same call the app already fires on every real store visit, also looks up that vendor's campaigns and increments `openCount` on every currently-active one (mirrors `Campaign.isActive`: untimed campaigns always count, timed ones only while `dealEndAt` is still in the future). Wrapped in its own try/catch so a campaign-bump failure can't affect the visit count that was already written. NEEDS DEPLOY (same function as the visit-count fix from earlier — one deploy covers both once you redeploy record-visit).
+- Also confirmed and intentionally left alone per David: when a merchant creates a new campaign that targets a product already tagged by an older campaign, the newer campaign's `campaignTag`/`discountedPrice` simply overwrites the product's fields (there's one `campaignTag` per product, not a history) — this was already documented as a known simplification when campaign delete was built earlier today, and David confirmed it's fine as-is.
+
+### 8 July 2026 — App product share now embeds a screenshot, not just a link
+Mirrors what [share_link_sheet.dart](lib/presentation/vendor/product/widgets/share_link_sheet.dart) already does for the merchant app (capture a widget to PNG via `RepaintBoundary.toImage`, share as an image file), but reuses the ACTUAL product details UI instead of a separately designed flyer card, per David: "take a screenshot of the product part... capture up to the part where it says installment plan available."
+- [storefront_product_details_sheet.dart](lib/presentation/customer/storefront/widgets/storefront_product_details_sheet.dart): wrapped the image carousel through the payment-availability banner (name, price, deal countdown, stock chips, banner — stops before description/quantity/actions) in a `RepaintBoundary` keyed by `_shareCaptureKey`. `_shareProduct` now captures that region to a PNG (`pixelRatio: 3.0`), saves to a temp file, and shares it via `SharePlus.instance.share(ShareParams(files: [...], text: caption))` (updated off the deprecated `Share.share` static while touching this). Wrapped in try/catch, if capture fails for any reason it falls back to the original text-only share — David explicitly said not to worry if it's not possible, so a fallback rather than a hard requirement.

@@ -42,10 +42,41 @@ class OutrightOrdersSearchChanged extends OutrightOrdersEvent {
   List<Object?> get props => [query];
 }
 
+// --- Multi-select (bulk mark-as-delivered; backend write not connected yet) ---
+
+class OutrightToggleSelection extends OutrightOrdersEvent {
+  final String orderId;
+  const OutrightToggleSelection(this.orderId);
+
+  @override
+  List<Object?> get props => [orderId];
+}
+
+class OutrightSelectAll extends OutrightOrdersEvent {
+  final List<String> orderIds;
+  const OutrightSelectAll(this.orderIds);
+
+  @override
+  List<Object?> get props => [orderIds];
+}
+
+class OutrightClearSelection extends OutrightOrdersEvent {
+  const OutrightClearSelection();
+}
+
 class OutrightOrderMarkDelivered extends OutrightOrdersEvent {
   final String orderId;
   const OutrightOrderMarkDelivered(this.orderId);
 
   @override
   List<Object?> get props => [orderId];
+}
+
+/// Bulk mark-as-delivered for the selected outright orders.
+class OutrightBulkMarkDelivered extends OutrightOrdersEvent {
+  final List<String> orderIds;
+  const OutrightBulkMarkDelivered(this.orderIds);
+
+  @override
+  List<Object?> get props => [orderIds];
 }

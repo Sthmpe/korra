@@ -1,15 +1,34 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../config/constants/colors.dart';
-import '../../../config/constants/sizes.dart';
-import '../../../config/routes/app_routes.dart';
+import '../../../data/models/vendor/campaign_model.dart';
+import '../storefront/widgets/cart_service.dart';
 import 'widgets/discover_store_list_item.dart';
-import '../storefront/widgets/mock_marketplace_data.dart';
+import 'widgets/hot_deals_strip.dart';
+import 'widgets/recommended_stores_section.dart';
+import 'widgets/store_hero_header.dart';
+
+/// Unified row model so Firestore merchants and demo stores render through
+/// the same list item.
+class _StoreEntry {
+  final String id;
+  final String name;
+  final String description;
+  final String logoUrl;
+  final String slug;
+
+  const _StoreEntry({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.logoUrl,
+    required this.slug,
+  });
+}
 
 class StorePage extends StatefulWidget {
   final String customerUid;
@@ -21,14 +40,54 @@ class StorePage extends StatefulWidget {
 }
 
 class _StorePageState extends State<StorePage> {
+  static const int _pageSize = 10;
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late final Stream<QuerySnapshot> _vendorsStream;
+
+  /// Recent campaigns, used to flag stores with a live deal right now (the
+  /// broadcasting dot on the Stores tab, same signal as an unfinished cart).
+  late final Stream<QuerySnapshot> _campaignsStream;
+
   String _searchQuery = '';
+
+  // Store rows render in pages: the cap grows as the customer scrolls.
+  int _storeLimit = _pageSize;
+  int _totalEntries = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cached once — recreating a Firestore stream on every rebuild resets
+    // the list to its loading state and re-reads the whole query.
+    _vendorsStream = _firestore
+        .collection('vendors')
+        .where('status', isNotEqualTo: 'banned')
+        .snapshots();
+    _campaignsStream = _firestore
+        .collection('campaigns')
+        .orderBy('sentAt', descending: true)
+        .limit(100)
+        .snapshots();
+    _scrollController.addListener(_maybeLoadMore);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 600 &&
+        _storeLimit < _totalEntries) {
+      setState(() => _storeLimit += _pageSize);
+    }
   }
 
   @override
@@ -38,106 +97,35 @@ class _StorePageState extends State<StorePage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🏷️ PAGE TITLE & HEADER
-          Padding(
-            padding: EdgeInsets.fromLTRB(16.w, 20.h, 16.w, 12.h),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Stores",
-                  style: GoogleFonts.inter(
-                    fontSize: 24.sp,
-                    fontWeight: FontWeight.w800,
-                    color: KorraColors.textDark,
-                  ),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  "Discover and browse your favorite merchants",
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w400,
-                    color: KorraColors.textBody,
-                  ),
-                ),
-              ],
-            ),
+          // 🏷️ PREMIUM GRADIENT HERO + FLOATING SEARCH
+          StoreHeroHeader(
+            searchController: _searchController,
+            searchQuery: _searchQuery,
+            onSearchChanged: (val) => setState(() {
+              _searchQuery = val;
+              _storeLimit = _pageSize; // new search → back to page one
+            }),
+            onClearSearch: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+                _storeLimit = _pageSize;
+              });
+            },
           ),
+          // Breathing room for the search bar overlapping the hero edge
+          SizedBox(height: 38.h),
 
-          // 🔍 GLOBAL STORE SEARCH INPUT
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            child: Container(
-              height: 48.h,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: KorraColors.borderLight),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.015),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 12.w),
-              child: Row(
-                children: [
-                  Icon(Iconsax.search_normal, size: 20.sp, color: KorraColors.textHint),
-                  SizedBox(width: 8.w),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: InputDecoration(
-                        hintText: "Search store name or store code...",
-                        hintStyle: GoogleFonts.inter(fontSize: 14.sp, color: KorraColors.textHint),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                      style: GoogleFonts.inter(fontSize: 14.sp, color: KorraColors.textDark),
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    GestureDetector(
-                      onTap: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                      child: Icon(Icons.close, size: 18.sp, color: KorraColors.textHint),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🌐 DISCOVER MERCHANTS SECTION
-                  _buildDiscoverStoresSection(),
-                  SizedBox(height: 24.h),
-                ],
-              ),
-            ),
-          ),
+          Expanded(child: _buildDiscoverStores()),
         ],
       ),
     );
   }
 
-  // 2. DISCOVER STORES SECTION
-  Widget _buildDiscoverStoresSection() {
+  // DISCOVER STORES — one lazy CustomScrollView; rows build on demand only.
+  Widget _buildDiscoverStores() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('vendors')
-          .where('status', isNotEqualTo: 'banned')
-          .snapshots(),
+      stream: _vendorsStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Padding(
@@ -147,96 +135,162 @@ class _StorePageState extends State<StorePage> {
         }
 
         final docs = snapshot.data?.docs ?? [];
-        final bool useMock = docs.isEmpty;
+        final query = _searchQuery.toLowerCase();
 
-        final List<Map<String, dynamic>> mockFiltered = [];
-        if (useMock) {
-          final query = _searchQuery.toLowerCase();
-          for (final vendor in MockMarketplaceData.mockVendors) {
-            final storeMap = vendor['store'] as Map<String, dynamic>? ?? {};
-            final name = (storeMap['storeName'] ?? '').toString().toLowerCase();
-            final slug = (storeMap['slug'] ?? '').toString().toLowerCase();
-            final vendorId = vendor['uid'].toString().toLowerCase();
-            if (name.contains(query) || slug.contains(query) || vendorId.contains(query)) {
-              mockFiltered.add(vendor);
-            }
-          }
-        }
+        // Vendor data by id — lets the Hot Deals strip resolve store
+        // names/slugs for real campaigns without extra Firestore reads.
+        final vendorsById = <String, Map<String, dynamic>>{
+          for (final doc in docs) doc.id: doc.data() as Map<String, dynamic>? ?? {},
+        };
 
-        // Apply local search filter
-        final filteredDocs = docs.where((doc) {
+        // Real merchants (search-filtered)
+        final entries = <_StoreEntry>[];
+        for (final doc in docs) {
           final data = doc.data() as Map<String, dynamic>? ?? {};
           final storeMap = data['store'] as Map<String, dynamic>? ?? {};
 
-          final name = (storeMap['storeName'] ?? '').toString().toLowerCase();
-          final slug = (storeMap['slug'] ?? '').toString().toLowerCase();
-          final code = (storeMap['storeCode'] ?? '').toString().toLowerCase(); // Support unique code lookup
-          final vendorId = doc.id.toLowerCase();
+          final name = (storeMap['storeName'] ?? '').toString();
+          final slug = (storeMap['slug'] ?? '').toString();
+          final code = (storeMap['storeCode'] ?? '').toString().toLowerCase();
+          final vendorId = doc.id;
 
-          final query = _searchQuery.toLowerCase();
-          return name.contains(query) || slug.contains(query) || code.contains(query) || vendorId.contains(query);
-        }).toList();
+          final matches = name.toLowerCase().contains(query) ||
+              slug.toLowerCase().contains(query) ||
+              code.contains(query) ||
+              vendorId.toLowerCase().contains(query);
+          if (!matches) continue;
 
-        final totalCount = useMock ? mockFiltered.length : filteredDocs.length;
+          entries.add(_StoreEntry(
+            id: vendorId,
+            name: name.isEmpty ? 'Unknown Merchant' : name,
+            description: (storeMap['description'] ?? 'No store description available.').toString(),
+            logoUrl: (storeMap['logoUrl'] ?? '').toString(),
+            slug: slug.isEmpty ? vendorId : slug,
+          ));
+        }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-              child: Text(
-                _searchQuery.isEmpty ? "Explore Stores" : "Search Results ($totalCount)",
-                style: GoogleFonts.inter(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w700,
-                  color: KorraColors.textDark,
+        // Stores with an unfinished checkout rank first (live via cart notifier).
+        return StreamBuilder<QuerySnapshot>(
+          stream: _campaignsStream,
+          builder: (context, campaignSnapshot) {
+            final activeCampaigns = (campaignSnapshot.data?.docs ?? const [])
+                .map(Campaign.fromFirestore)
+                .where((c) => c.isActive);
+            final activeCampaignVendorIds = activeCampaigns.map((c) => c.vendorId).toSet();
+
+            return ValueListenableBuilder<Map<String, List<CartItem>>>(
+              valueListenable: CartService.instance.cartsNotifier,
+              builder: (context, carts, _) {
+                final pendingIds = carts.keys.toSet();
+                final ordered = [
+                  ...entries.where((e) => pendingIds.contains(e.id)),
+                  ...entries.where((e) => !pendingIds.contains(e.id)),
+                ];
+
+            _totalEntries = ordered.length;
+            final shown = _storeLimit < ordered.length ? _storeLimit : ordered.length;
+            final hasMore = shown < ordered.length;
+
+            return CustomScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // 🔥 Auto-playing deals carousel (hidden while searching)
+                if (_searchQuery.isEmpty)
+                  SliverToBoxAdapter(child: HotDealsStrip(vendorsById: vendorsById)),
+
+                // 🏅 Badge-holding merchants from the customer's own network
+                if (_searchQuery.isEmpty)
+                  SliverToBoxAdapter(
+                    child: RecommendedStoresSection(
+                      customerUid: widget.customerUid,
+                      vendorsById: vendorsById,
+                    ),
+                  ),
+
+                // Section header + live count pill
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 12.h),
+                    child: Row(
+                      children: [
+                        Text(
+                          _searchQuery.isEmpty ? "Explore Stores" : "Search Results",
+                          style: GoogleFonts.inter(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w800,
+                            color: KorraColors.textDark,
+                          ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.5.h),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF4ED),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            "${ordered.length}",
+                            style: GoogleFonts.inter(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w800,
+                              color: KorraColors.brand,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            if (totalCount == 0)
-              _buildSearchEmptyState()
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                itemCount: totalCount,
-                itemBuilder: (context, index) {
-                  final String vendorId;
-                  final String name;
-                  final String description;
-                  final String logoUrl;
-                  final String slug;
 
-                  if (useMock) {
-                    final vendor = mockFiltered[index];
-                    vendorId = vendor['uid'];
-                    final storeMap = vendor['store'] as Map<String, dynamic>? ?? {};
-                    name = storeMap['storeName'] ?? 'Unknown Merchant';
-                    description = storeMap['description'] ?? 'No store description available.';
-                    logoUrl = storeMap['logoUrl'] ?? '';
-                    slug = storeMap['slug'] ?? vendorId;
-                  } else {
-                    final doc = filteredDocs[index];
-                    vendorId = doc.id;
-                    final vendorData = doc.data() as Map<String, dynamic>? ?? {};
-                    final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
-                    name = storeMap['storeName'] ?? 'Unknown Merchant';
-                    description = storeMap['description'] ?? 'No store description available.';
-                    logoUrl = storeMap['logoUrl'] ?? '';
-                    slug = storeMap['slug'] ?? vendorId;
-                  }
+                if (ordered.isEmpty)
+                  SliverToBoxAdapter(child: _buildSearchEmptyState())
+                else
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w),
+                    sliver: SliverList.builder(
+                      itemCount: shown,
+                      itemBuilder: (context, index) {
+                        final entry = ordered[index];
+                        return RepaintBoundary(
+                          child: DiscoverStoreListItem(
+                            vendorId: entry.id,
+                            name: entry.name,
+                            description: entry.description,
+                            logoUrl: entry.logoUrl,
+                            slug: entry.slug,
+                            hasPendingCart: pendingIds.contains(entry.id),
+                            hasActiveCampaign: activeCampaignVendorIds.contains(entry.id),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
 
-                  return DiscoverStoreListItem(
-                    vendorId: vendorId,
-                    name: name,
-                    description: description,
-                    logoUrl: logoUrl,
-                    slug: slug,
-                  );
-                },
-              ),
-          ],
+                // Load-more spinner while more pages remain
+                if (hasMore)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 18.h),
+                      child: Center(
+                        child: SizedBox(
+                          height: 22.w,
+                          width: 22.w,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: KorraColors.brand,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                SliverToBoxAdapter(child: SizedBox(height: 24.h)),
+              ],
+            );
+              },
+            );
+          },
         );
       },
     );

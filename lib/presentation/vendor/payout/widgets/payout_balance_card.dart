@@ -6,6 +6,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/utils/currency_formatters.dart';
 import '../../../../logic/bloc/vendor/payout/payout_state.dart';
+import '../../../../logic/services/balance_visibility.dart';
 
 class PayoutBalanceCard extends StatelessWidget {
   final PayoutState state;
@@ -14,7 +15,9 @@ class PayoutBalanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Access the balance directly from your state
-    final balance = state.withdrawableBalance; 
+    final balance = state.withdrawableBalance;
+    // Same app-wide switch as everywhere else money shows
+    BalanceVisibility.ensureLoaded();
 
     return Container(
       width: double.infinity,
@@ -83,17 +86,40 @@ class PayoutBalanceCard extends StatelessWidget {
               ),
               
               SizedBox(height: 12.h),
-              
-              // Balance Text
-              Text(
-                '₦${formatToCurrency(balance)}',
-                style: GoogleFonts.inter(
-                  fontSize: 32.sp,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -1.0,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+
+              // Balance Text + eye toggle (hide/show, synced app-wide)
+              ValueListenableBuilder<bool>(
+                valueListenable: BalanceVisibility.visible,
+                builder: (context, isVisible, _) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isVisible ? '₦${formatToCurrency(balance)}' : '₦ ••••••',
+                          style: GoogleFonts.inter(
+                            fontSize: 32.sp,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: isVisible ? -1.0 : 3.0,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: BalanceVisibility.toggle,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: EdgeInsets.all(6.r),
+                          child: Icon(
+                            isVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: Colors.white.withOpacity(0.85),
+                            size: 22.sp,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),

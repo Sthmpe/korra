@@ -42,14 +42,24 @@ class NotificationScreen extends StatelessWidget {
           )
         ],
       ),
-      body: StreamBuilder<List<KorraNotification>>(
+      // Muted stores stream sits outside the feed stream so a mute/unmute
+      // elsewhere reflects here live without re-querying notifications.
+      body: StreamBuilder<List<String>>(
+        stream: repo.streamMutedStores(uid),
+        builder: (context, mutedSnapshot) {
+          final muted = mutedSnapshot.data ?? const <String>[];
+          return StreamBuilder<List<KorraNotification>>(
         stream: repo.streamNotifications(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: KorraColors.brand));
           }
 
-          final notifications = snapshot.data ?? [];
+          // Notifications from muted stores are hidden; system/payment
+          // notifications carry no vendorId and always show.
+          final notifications = (snapshot.data ?? [])
+              .where((n) => n.vendorId == null || !muted.contains(n.vendorId))
+              .toList();
 
           // ✅ Matched Vendor: Empty State UI
           if (notifications.isEmpty) {
@@ -114,6 +124,11 @@ class NotificationScreen extends StatelessWidget {
                   iconColor = Colors.red.shade700;
                   iconBg = Colors.red.shade50;
                   break;
+                case 'campaign':
+                  icon = Iconsax.discount_shape;
+                  iconColor = KorraColors.brand;
+                  iconBg = const Color(0xFFFFF4ED);
+                  break;
                 default:
                   icon = Iconsax.info_circle;
                   iconColor = Colors.grey.shade700;
@@ -142,16 +157,36 @@ class NotificationScreen extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ✅ Matched Vendor: Icon Box
-                    Container(
-                      width: 40.w,
-                      height: 40.w,
-                      decoration: BoxDecoration(
-                        color: iconBg,
-                        borderRadius: BorderRadius.circular(10.r),
-                      ),
-                      child: Icon(icon, size: 20.sp, color: iconColor),
-                    ),
+                    // ✅ Matched Vendor: Icon Box — campaign notifications show
+                    // the actual campaign photo instead of a generic icon.
+                    notif.imageUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10.r),
+                            child: Image.network(
+                              notif.imageUrl!,
+                              width: 40.w,
+                              height: 40.w,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 40.w,
+                                height: 40.w,
+                                decoration: BoxDecoration(
+                                  color: iconBg,
+                                  borderRadius: BorderRadius.circular(10.r),
+                                ),
+                                child: Icon(icon, size: 20.sp, color: iconColor),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 40.w,
+                            height: 40.w,
+                            decoration: BoxDecoration(
+                              color: iconBg,
+                              borderRadius: BorderRadius.circular(10.r),
+                            ),
+                            child: Icon(icon, size: 20.sp, color: iconColor),
+                          ),
                     SizedBox(width: 14.w),
 
                     // Content
@@ -211,6 +246,8 @@ class NotificationScreen extends StatelessWidget {
               );
             },
           );
+        },
+      );
         },
       ),
     );

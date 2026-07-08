@@ -100,7 +100,7 @@ extension VendorSettingsExtension on VendorRepository {
     required String coverUrl,
     required String whatsappGroup,
     required String instagram,
-    required String twitter,
+    required String tiktok,
     required String contactPhone,
     required bool absorbOutrightFee,
   }) async {
@@ -118,7 +118,7 @@ extension VendorSettingsExtension on VendorRepository {
         'socials': {
           'whatsappGroup': whatsappGroup,
           'instagram': instagram,
-          'twitter': twitter,
+          'tiktok': tiktok,
         },
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

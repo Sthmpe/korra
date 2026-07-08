@@ -24,6 +24,9 @@ import '../../presentation/customer/profile/limit_upgrade_screen.dart';
 import '../../presentation/customer/profile/my_qr_screen.dart';
 import '../../presentation/customer/profile/my_store_credit_screen.dart';
 import '../../presentation/customer/profile/my_vendors_screen.dart';
+import '../../presentation/customer/store/deals_page.dart';
+import '../../presentation/customer/store/widgets/hot_deals_strip.dart' show StoreDeal;
+import '../../presentation/customer/storefront/store_reviews_screen.dart';
 import '../../presentation/customer/storefront/storefront_screen.dart';
 import '../../presentation/customer/profile/statements_screen.dart';
 import 'app_routes.dart';
@@ -261,7 +264,32 @@ class CustomerPages {
       name: Routes.customerStorefront,
       page: () {
         final slug = Get.parameters['slug'] ?? '';
-        return StorefrontScreen(storeSlug: slug);
+        // Optional ?product={id} from a website deep link → auto-open it.
+        final productId = Get.parameters['product'];
+        return StorefrontScreen(storeSlug: slug, initialProductId: productId);
+      },
+    ),
+
+    // 🔥 Hot Deals "View all" (named route — anonymous pushes corrupt GetX's
+    // back-gesture bookkeeping and freeze the app on pop)
+    GetPage(
+      name: Routes.customerDeals,
+      page: () {
+        final map = Get.arguments as Map<String, dynamic>? ?? {};
+        final deals = (map['deals'] as List?)?.cast<StoreDeal>() ?? const <StoreDeal>[];
+        return DealsPage(deals: deals);
+      },
+    ),
+
+    // ⭐ Store Ratings & Reviews
+    GetPage(
+      name: Routes.customerStoreReviews,
+      page: () {
+        final map = Get.arguments as Map<String, dynamic>? ?? {};
+        return StoreReviewsScreen(
+          vendorId: (map['vendorId'] ?? '').toString(),
+          storeName: (map['storeName'] ?? 'Store').toString(),
+        );
       },
     ),
   ];

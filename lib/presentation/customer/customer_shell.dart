@@ -7,6 +7,7 @@ import '../../logic/bloc/bottom_nav/bottom_nav_bloc.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_event.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_state.dart';
 import 'home/home_page.dart';
+import 'storefront/widgets/cart_service.dart';
 import 'store/store_page.dart';
 import 'plans/plans_page.dart';
 import 'profile/profile_page.dart';
@@ -46,6 +47,9 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Restore saved carts (and purge >1 week old ones) so the Stores tab
+    // signal badge can nudge unfinished checkouts.
+    CartService.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkClipboard();
     });
@@ -101,13 +105,18 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
                   ],
                 ),
               ),
-              bottomNavigationBar: KorraBottomNav(
-                currentIndex: state.index,
-                pageIcons: customerPageIcons,
-                onTap: (i) {
+              bottomNavigationBar: ValueListenableBuilder(
+                valueListenable: CartService.instance.cartsNotifier,
+                builder: (context, carts, _) => KorraBottomNav(
+                  currentIndex: state.index,
+                  pageIcons: customerPageIcons,
+                  // Animated signal on the Stores tab while any cart is unfinished
+                  signalBadges: carts.isNotEmpty ? const {2} : const {},
+                  onTap: (i) {
                     FocusManager.instance.primaryFocus?.unfocus();
                     navBloc.add(BottomNavChanged(i));
-                },
+                  },
+                ),
               ),
             );
           },

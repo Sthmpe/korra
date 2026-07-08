@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -6,68 +8,228 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import 'widgets/marketplace_seeder_util.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/customer_model.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../../data/models/product_model.dart';
+import '../../../../data/models/vendor/campaign_model.dart';
 import '../../shared/widgets/korra_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 
+import 'widgets/storefront_cart_button.dart';
 import 'widgets/storefront_cart_sheet.dart';
 import 'widgets/storefront_filter_bar.dart';
+import 'widgets/storefront_filter_sheet.dart';
 import 'widgets/storefront_header.dart';
 import 'widgets/storefront_product_card.dart';
 import 'widgets/storefront_purchase_history_sheet.dart';
 import 'widgets/storefront_product_details_sheet.dart';
+import 'widgets/storefront_sliver_app_bar.dart';
+import 'widgets/storefront_suspended_overlay.dart';
 import 'widgets/cart_service.dart';
-import 'widgets/mock_marketplace_data.dart';
 
-class VendorFetchResult {
+/// Lightweight vendor lookup result (slug or uid resolved to one shape).
+class StorefrontVendor {
   final String id;
   final Map<String, dynamic> data;
+  final DocumentSnapshot? doc;
 
-  VendorFetchResult({required this.id, required this.data});
+  const StorefrontVendor({required this.id, required this.data, this.doc});
 }
 
 class StorefrontScreen extends StatefulWidget {
   final String storeSlug;
 
-  const StorefrontScreen({super.key, required this.storeSlug});
+  /// When the app is opened from a website product link
+  /// (korra.com.ng/store/{slug}?product={id}), the storefront auto-opens that
+  /// product so the shopper lands exactly where they were on the web.
+  final String? initialProductId;
+
+  const StorefrontScreen({
+    super.key,
+    required this.storeSlug,
+    this.initialProductId,
+  });
 
   @override
   State<StorefrontScreen> createState() => _StorefrontScreenState();
 }
 
 class _StorefrontScreenState extends State<StorefrontScreen> {
+  static const int _pageSize = 20;
+
+  // Stores already counted this app session — one visit per store per launch,
+  // so scrolling in and out of a store doesn't inflate "Most Visited".
+  static final Set<String> _countedVisits = {};
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  late Future<VendorFetchResult?> _vendorFuture;
+  late Future<StorefrontVendor?> _vendorFuture;
   final TextEditingController _searchController = TextEditingController();
-  
+  final ScrollController _scrollController = ScrollController();
+
   String _searchQuery = '';
   String _selectedCategory = 'All';
   String _priceSort = 'none';
+  bool _dealsOnly = false;
+  double? _minPrice;
+  double? _maxPrice;
   bool _isPinned = false;
+  bool _isMuted = false;
+  StreamSubscription<DocumentSnapshot>? _pinSubscription;
+
+  // Trust & compliance lock — same source as create-plan/pay checks
+  // (vendor_compliance/{vendorId}). While blocked the customer only sees the
+  // first screen: no scrolling, no taps, just the suspension overlay.
+  String _complianceStatus = 'active';
+  String? _complianceMessage;
+
+  bool get _storeBlocked => const {'suspended', 'banned', 'restricted'}
+      .contains(_complianceStatus);
+
+  // Pagination: the product stream is capped at [_productLimit] docs and the
+  // cap grows as the customer scrolls near the bottom (lazy loading).
+  int _productLimit = _pageSize;
+  int _loadedCount = 0;
+
+  // Cached product stream — rebuilding it on every setState (search, filter,
+  // sort) resets the StreamBuilder to "waiting" and blanks the feed mid-scroll.
+  // Recreated only when the vendor or the page cap actually changes.
+  Stream<QuerySnapshot>? _productStream;
+  String _streamVendorId = '';
+  int _streamLimit = 0;
+  List<QueryDocumentSnapshot> _lastProductDocs = const [];
+
+  // Guards the one-time auto-open of a deep-linked product.
+  bool _openedInitialProduct = false;
 
   @override
   void initState() {
     super.initState();
     _vendorFuture = _fetchVendorBySlug(widget.storeSlug);
+    _scrollController.addListener(_maybeLoadMoreProducts);
+
+    // Deep-linked product (from the website): fetch it and open its sheet once
+    // the first frame is up, so the shopper resumes exactly where they were.
+    if (widget.initialProductId != null && widget.initialProductId!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialProduct());
+    }
+  }
+
+  Future<void> _openInitialProduct() async {
+    if (_openedInitialProduct) return;
+    _openedInitialProduct = true;
+    try {
+      final doc = await _firestore
+          .collection('products')
+          .doc(widget.initialProductId)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final product = Product.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      _showProductDetailsSheet(product, doc);
+    } catch (e) {
+      debugPrint("Could not open deep-linked product: $e");
+    }
   }
 
   @override
   void dispose() {
+    _pinSubscription?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<VendorFetchResult?> _fetchVendorBySlug(String slug) async {
+  StorefrontFilters get _currentFilters => StorefrontFilters(
+        priceSort: _priceSort,
+        dealsOnly: _dealsOnly,
+        minPrice: _minPrice,
+        maxPrice: _maxPrice,
+      );
+
+  Future<void> _openFilterSheet() async {
+    final result = await StorefrontFilterSheet.show(context, _currentFilters);
+    if (result == null || !mounted) return;
+    setState(() {
+      _priceSort = result.priceSort;
+      _dealsOnly = result.dealsOnly;
+      _minPrice = result.minPrice;
+      _maxPrice = result.maxPrice;
+    });
+  }
+
+  Stream<QuerySnapshot> _productStreamFor(String vendorId) {
+    if (_productStream == null ||
+        _streamVendorId != vendorId ||
+        _streamLimit != _productLimit) {
+      _streamVendorId = vendorId;
+      _streamLimit = _productLimit;
+      _productStream = _firestore
+          .collection('products')
+          .where('vendorId', isEqualTo: vendorId)
+          .where('status', isEqualTo: 'approved')
+          .limit(_productLimit)
+          .snapshots();
+    }
+    return _productStream!;
+  }
+
+  // This store's campaigns — used to show live deal countdowns on product
+  // cards and in the product details sheet. Cached like the product stream.
+  Stream<QuerySnapshot>? _campaignsStream;
+  String _campaignsVendorId = '';
+
+  Stream<QuerySnapshot> _campaignsStreamFor(String vendorId) {
+    if (_campaignsStream == null || _campaignsVendorId != vendorId) {
+      _campaignsVendorId = vendorId;
+      _campaignsStream = _firestore
+          .collection('campaigns')
+          .where('vendorId', isEqualTo: vendorId)
+          .snapshots();
+    }
+    return _campaignsStream!;
+  }
+
+  /// productId -> the campaign whose countdown to show: a running timer
+  /// beats an upcoming one; ties go to the newest campaign.
+  Map<String, Campaign> _buildDealMap(List<QueryDocumentSnapshot> campaignDocs) {
+    final map = <String, Campaign>{};
+    for (final doc in campaignDocs) {
+      try {
+        if (doc.data() is! Map<String, dynamic>) continue;
+        final campaign = Campaign.fromFirestore(doc);
+        if (!campaign.hasTimer) continue;
+        for (final pid in campaign.productIds) {
+          final existing = map[pid];
+          if (existing == null) {
+            map[pid] = campaign;
+          } else if (campaign.timerRunning && !existing.timerRunning) {
+            map[pid] = campaign;
+          }
+        }
+      } catch (e) {
+        debugPrint('Skipping malformed campaign ${doc.id}: $e');
+      }
+    }
+    return map;
+  }
+
+  void _maybeLoadMoreProducts() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final nearBottom = position.pixels >= position.maxScrollExtent - 400;
+    // Only grow the limit once the current page has fully arrived
+    if (nearBottom && _loadedCount >= _productLimit) {
+      setState(() => _productLimit += _pageSize);
+    }
+  }
+
+  Future<StorefrontVendor?> _fetchVendorBySlug(String slug) async {
     try {
       final slugQuery = await _firestore
           .collection('vendors')
@@ -78,35 +240,31 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
       if (slugQuery.docs.isNotEmpty) {
         final doc = slugQuery.docs.first;
         _checkPinStatus(doc.id);
-        return VendorFetchResult(id: doc.id, data: doc.data() as Map<String, dynamic>? ?? {});
+        _loadMuteStatus(doc.id);
+        _checkCompliance(doc.id);
+        _recordVisit(doc.id);
+        return StorefrontVendor(
+          id: doc.id,
+          data: doc.data(),
+          doc: doc,
+        );
       }
 
       final uidQuery = await _firestore.collection('vendors').doc(slug).get();
       if (uidQuery.exists) {
         _checkPinStatus(uidQuery.id);
-        return VendorFetchResult(id: uidQuery.id, data: uidQuery.data() as Map<String, dynamic>? ?? {});
+        _loadMuteStatus(uidQuery.id);
+        _checkCompliance(uidQuery.id);
+        _recordVisit(uidQuery.id);
+        return StorefrontVendor(
+          id: uidQuery.id,
+          data: uidQuery.data() as Map<String, dynamic>? ?? {},
+          doc: uidQuery,
+        );
       }
     } catch (e) {
       debugPrint("Error fetching vendor: $e");
     }
-
-    // Local Fallback!
-    try {
-      final mockVendor = MockMarketplaceData.mockVendors.firstWhere(
-        (v) {
-          final storeMap = v['store'] as Map<String, dynamic>? ?? {};
-          final sSlug = (storeMap['slug'] as String? ?? '').toLowerCase();
-          final uid = (v['uid'] as String? ?? '').toLowerCase();
-          return sSlug == slug.toLowerCase() || uid == slug.toLowerCase();
-        },
-        orElse: () => {},
-      );
-
-      if (mockVendor.isNotEmpty) {
-        return VendorFetchResult(id: mockVendor['uid'], data: mockVendor);
-      }
-    } catch (_) {}
-
     return null;
   }
 
@@ -114,7 +272,10 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    _firestore
+    // Keep the subscription so it is cancelled in dispose — it used to leak
+    // one live Firestore listener per storefront visit.
+    _pinSubscription?.cancel();
+    _pinSubscription = _firestore
         .collection('customers')
         .doc(user.uid)
         .collection('my_vendors')
@@ -127,6 +288,82 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
         });
       }
     });
+  }
+
+  /// Records one storefront visit per store per app session. Feeds the
+  /// "Most Visited" badge — a scheduled backend (compute-visibility) ranks
+  /// stores by their rolling visit totals. Fire-and-forget: a failed count
+  /// must never block the storefront.
+  Future<void> _recordVisit(String vendorId) async {
+    if (_countedVisits.contains(vendorId)) return;
+    _countedVisits.add(vendorId);
+
+    // Firestore rules are locked, so the count goes through the record-visit
+    // edge function (admin SDK) instead of a direct write. Fire-and-forget.
+    try {
+      await Supabase.instance.client.functions
+          .invoke('record-visit', body: {'vendorId': vendorId});
+    } catch (e) {
+      _countedVisits.remove(vendorId); // allow a retry next open
+      debugPrint("Visit count failed for $vendorId: $e");
+    }
+  }
+
+  Future<void> _checkCompliance(String vendorId) async {
+    try {
+      final doc =
+          await _firestore.collection('vendor_compliance').doc(vendorId).get();
+      if (!doc.exists || !mounted) return;
+      final data = doc.data()!;
+      setState(() {
+        _complianceStatus = data['status']?.toString() ?? 'active';
+        _complianceMessage = data['publicMessage']?.toString();
+      });
+    } catch (e) {
+      debugPrint("Error checking store compliance: $e");
+    }
+  }
+
+  /// One-off read — mute state lives in `customers/{uid}.mutedStores` so the
+  /// backend campaign fan-out can honour it too. Toggling updates locally.
+  Future<void> _loadMuteStatus(String vendorId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await _firestore.collection('customers').doc(user.uid).get();
+      final muted = List<String>.from((doc.data()?['mutedStores'] ?? []) as List);
+      if (mounted) setState(() => _isMuted = muted.contains(vendorId));
+    } catch (e) {
+      debugPrint("Error loading mute status: $e");
+    }
+  }
+
+  Future<void> _toggleMute(String vendorId, String storeName) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      showAppSnackbar("Please log in to manage store notifications.", SnackbarType.info);
+      return;
+    }
+
+    final muting = !_isMuted;
+    setState(() => _isMuted = muting);
+    try {
+      await _firestore.collection('customers').doc(user.uid).set({
+        'mutedStores': muting
+            ? FieldValue.arrayUnion([vendorId])
+            : FieldValue.arrayRemove([vendorId]),
+      }, SetOptions(merge: true));
+      showAppSnackbar(
+        muting
+            ? "Muted. You won't get notifications from $storeName."
+            : "Unmuted. Notifications from $storeName are back on.",
+        SnackbarType.success,
+      );
+    } catch (e) {
+      if (mounted) setState(() => _isMuted = !muting); // roll back
+      debugPrint("Error toggling mute: $e");
+      showAppSnackbar("Could not update notifications. Please try again.", SnackbarType.error);
+    }
   }
 
   Future<void> _togglePin(String vendorId) async {
@@ -195,7 +432,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<VendorFetchResult?>(
+    return FutureBuilder<StorefrontVendor?>(
       future: _vendorFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -214,9 +451,9 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
           );
         }
 
-        final vendorDoc = snapshot.data!;
-        final vendorId = vendorDoc.id;
-        final vendorData = vendorDoc.data;
+        final vendor = snapshot.data!;
+        final vendorId = vendor.id;
+        final vendorData = vendor.data;
 
         final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
         final personalMap = vendorData['personal'] as Map<String, dynamic>? ?? {};
@@ -227,129 +464,162 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
         final logoUrl = storeMap['logoUrl'] ?? '';
         final coverUrl = storeMap['coverUrl'] ?? '';
         final phone = storeMap['contactPhone'] ?? personalMap['phone'] ?? '';
-        final email = personalMap['email'] ?? '';
+
+        // Walk-in address: only shown when the merchant filled it in settings
+        final locationMap = vendorData['location'] as Map<String, dynamic>? ?? {};
+        final walkInAddress = [
+          (locationMap['address'] ?? '').toString().trim(),
+          (locationMap['city'] ?? '').toString().trim(),
+          (locationMap['state'] ?? '').toString().trim(),
+        ].where((part) => part.isNotEmpty).join(', ');
 
         final whatsapp = socialsMap['whatsappGroup'];
         final instagram = socialsMap['instagram'];
-        final twitter = socialsMap['twitter'];
+        final tiktok = socialsMap['tiktok'];
+
+        final blocked = _storeBlocked;
 
         return Scaffold(
           backgroundColor: KorraColors.surface,
-          appBar: KorraHeader(
-            title: storeName,
-            showLeadingIcon: true,
-            trailingActions: [
-              IconButton(
-                icon: Icon(Icons.playlist_add_rounded, size: 22.sp, color: Colors.grey.shade600),
-                onPressed: () => seedMockMarketplace(context, _auth.currentUser?.uid ?? ''),
-                tooltip: "Seed Mock Marketplace",
-              ),
-              ValueListenableBuilder<Map<String, List<CartItem>>>(
-                valueListenable: CartService.instance.cartsNotifier,
-                builder: (context, carts, _) {
-                  final items = carts[vendorId] ?? [];
-                  final count = items.fold(0, (sum, item) => sum + item.quantity);
-
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.shopping_bag_rounded, size: 24.sp, color: const Color(0xFFA54600)),
-                        onPressed: () => _showCartSheet(vendorId, storeName),
-                        tooltip: "View Cart",
-                      ),
-                      if (count > 0)
-                        Positioned(
-                          top: 4.h,
-                          right: 4.w,
-                          child: Container(
-                            padding: EdgeInsets.all(3.w),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: BoxConstraints(
-                              minWidth: 18.w,
-                              minHeight: 18.w,
-                            ),
-                            child: Center(
-                              child: Text(
-                                count.toString(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-              IconButton(
-                icon: Icon(Iconsax.receipt_item, size: 22.sp, color: Colors.grey.shade700),
-                onPressed: () => _showPurchaseHistorySheet(vendorId, storeName),
-                tooltip: "Purchase History",
-              ),
-            ],
-          ),
-          body: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+          body: Stack(
+            children: [
+              // Frozen while blocked: touches absorbed, scrolling disabled —
+              // the customer keeps only the first screen behind the overlay.
+              AbsorbPointer(
+                absorbing: blocked,
+                child: CustomScrollView(
+            controller: _scrollController,
+            physics: blocked
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(),
             slivers: [
-              // Branded Cover Banner & Store details header
+              // Parallax cover photo collapsing into a pinned app bar,
+              // with a glassmorphic logo card floating over the cover.
+              StorefrontSliverAppBar(
+                storeName: storeName,
+                logoUrl: logoUrl,
+                coverUrl: coverUrl,
+                actions: [
+                  GlassIconButton(
+                    icon: _isMuted ? Icons.notifications_off_outlined : Iconsax.notification,
+                    onPressed: () => _toggleMute(vendorId, storeName),
+                    tooltip: _isMuted ? "Unmute store" : "Mute store",
+                  ),
+                  SizedBox(width: 4.w),
+                  StorefrontCartButton(
+                    vendorId: vendorId,
+                    onPressed: () => _showCartSheet(vendorId, storeName),
+                  ),
+                  SizedBox(width: 4.w),
+                  GlassIconButton(
+                    icon: Iconsax.receipt_item,
+                    onPressed: () => _showPurchaseHistorySheet(vendorId, storeName),
+                    tooltip: "Purchase History",
+                  ),
+                ],
+              ),
+
+              // Store details header (rating, pin, description, contacts)
               SliverToBoxAdapter(
                 child: StorefrontHeader(
                   vendorId: vendorId,
                   storeName: storeName,
                   description: description,
-                  logoUrl: logoUrl,
-                  coverUrl: coverUrl,
+                  address: walkInAddress,
                   phone: phone,
-                  email: email,
                   whatsapp: whatsapp,
                   instagram: instagram,
-                  twitter: twitter,
+                  tiktok: tiktok,
                   isPinned: _isPinned,
                   onPinToggle: () => _togglePin(vendorId),
                   onLaunchSocial: _launchSocial,
                 ),
               ),
 
-              // Product Feed Selector and Search Filters
+              // Product Feed — paginated Firestore stream. Nested inside the
+              // store's campaigns stream so cards can show a live deal
+              // countdown (StreamBuilder is transparent to the sliver
+              // protocol — only the innermost builder's return matters).
               StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection('products')
-                    .where('vendorId', isEqualTo: vendorId)
-                    .where('status', isEqualTo: 'approved')
-                    .snapshots(),
-                builder: (context, productSnapshot) {
-                  if (productSnapshot.connectionState == ConnectionState.waiting) {
-                    return const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(child: CircularProgressIndicator(color: KorraColors.brand)),
+                  stream: _campaignsStreamFor(vendorId),
+                  builder: (context, campaignSnapshot) {
+                    final dealMap = _buildDealMap(campaignSnapshot.data?.docs ?? []);
+                    return StreamBuilder<QuerySnapshot>(
+                  stream: _productStreamFor(vendorId),
+                  builder: (context, productSnapshot) {
+                    // Keep the previous page on screen while a bigger page (or
+                    // the first page) streams in — never blank an active feed.
+                    final liveDocs = productSnapshot.data?.docs;
+                    if (liveDocs == null && _lastProductDocs.isEmpty) {
+                      return const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: CircularProgressIndicator(color: KorraColors.brand)),
+                      );
+                    }
+
+                    final docs = liveDocs ?? _lastProductDocs;
+                    if (liveDocs != null) {
+                      _lastProductDocs = liveDocs;
+                      _loadedCount = liveDocs.length;
+                    }
+                    // A full page means there may be more products behind the cap
+                    final hasMore = docs.length >= _productLimit;
+                    final products = docs
+                        .map((doc) => Product.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+                        .toList();
+
+                    return _buildProductSlivers(
+                      products: products,
+                      docs: docs,
+                      hasMore: hasMore,
+                      storeName: storeName,
+                      dealMap: dealMap,
                     );
-                  }
+                  },
+                );
+                  },
+                ),
+            ],
+                ),
+              ),
 
-                  final docs = productSnapshot.data?.docs ?? [];
-                  final dbProducts = docs
-                      .map((doc) => Product.fromMap(doc.data() as Map<String, dynamic>, doc.id))
-                      .toList();
-                  final products = dbProducts.isNotEmpty
-                      ? dbProducts
-                      : MockMarketplaceData.getProductsForVendor(vendorId);
+              if (blocked)
+                StorefrontSuspendedOverlay(
+                  storeName: storeName,
+                  message: _complianceMessage,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-                  // Get unique categories
+  /// Product feed slivers: featured strip, filter bar, masonry grid and the
+  /// load-more spinner.
+  Widget _buildProductSlivers({
+    required List<Product> products,
+    required List<DocumentSnapshot> docs,
+    required bool hasMore,
+    required String storeName,
+    Map<String, Campaign> dealMap = const {},
+  }) {
+    // Get unique categories
                   final categories = {'All', ...products.map((p) => p.category)};
 
-                  // Filter products based on search query and category
+                  // Filter products: search, category, deals-only, price range
                   final filteredProducts = products.where((p) {
                     final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                         p.code.toLowerCase().contains(_searchQuery.toLowerCase());
                     final matchesCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
-                    return matchesSearch && matchesCategory;
+                    final matchesDeals = !_dealsOnly ||
+                        (p.campaignTag != null && p.campaignTag!.trim().isNotEmpty);
+                    final effectivePrice = (p.discountedPrice != null && p.discountedPrice! > 0)
+                        ? p.discountedPrice!
+                        : p.price;
+                    final matchesPrice = (_minPrice == null || effectivePrice >= _minPrice!) &&
+                        (_maxPrice == null || effectivePrice <= _maxPrice!);
+                    return matchesSearch && matchesCategory && matchesDeals && matchesPrice;
                   }).toList();
 
                   // Sort products if priceSort is active
@@ -371,6 +641,17 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
                   return SliverMainAxisGroup(
                     slivers: [
+                      // Search bar sits above Featured/Flash strips (matches
+                      // the website); collections + sort stay by the grid.
+                      SliverToBoxAdapter(
+                        child: StorefrontSearchField(
+                          searchController: _searchController,
+                          searchQuery: _searchQuery,
+                          onSearchChanged: (val) => setState(() => _searchQuery = val),
+                          storeName: storeName,
+                        ),
+                      ),
+
                       // Featured Products horizontal scroll view (Pinterest push)
                       if (featuredProducts.isNotEmpty && _selectedCategory == 'All' && _searchQuery.isEmpty) ...[
                         SliverToBoxAdapter(
@@ -411,7 +692,11 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
                                           child: StorefrontProductCard(
                                             product: product,
                                             rawDoc: rawDoc,
-                                            onTap: _showProductDetailsSheet,
+                                            onTap: (p, doc) => _showProductDetailsSheet(p, doc, dealMap[p.id]),
+                                            // Fixed-height strip: image flexes,
+                                            // name/price always visible.
+                                            fixedHeight: true,
+                                            deal: dealMap[product.id],
                                           ),
                                         ),
                                       );
@@ -438,6 +723,9 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
                           storeName: storeName,
                           priceSort: _priceSort,
                           onPriceSortChanged: (sort) => setState(() => _priceSort = sort),
+                          onOpenFilters: _openFilterSheet,
+                          activeFilterCount: _currentFilters.activeCount,
+                          hideSearch: true,
                         ),
                       ),
 
@@ -460,25 +748,37 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
                                   return StorefrontProductCard(
                                     product: product,
                                     rawDoc: rawDoc,
-                                    onTap: _showProductDetailsSheet,
+                                    onTap: (p, doc) => _showProductDetailsSheet(p, doc, dealMap[p.id]),
+                                    deal: dealMap[product.id],
                                   );
                                 },
                                 childCount: filteredProducts.length,
                               ),
                             ),
+
+                      // Lazy-load indicator: visible while more pages remain
+                      if (hasMore && filteredProducts.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20.h),
+                            child: Center(
+                              child: SizedBox(
+                                height: 22.w,
+                                width: 22.w,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: KorraColors.brand,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   // 🛍️ PRODUCT DETAILS BOTTOM SHEET
-  void _showProductDetailsSheet(Product product, DocumentSnapshot? rawDoc) {
+  void _showProductDetailsSheet(Product product, DocumentSnapshot? rawDoc, [Campaign? deal]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -496,6 +796,8 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
             return StorefrontProductDetailsSheet(
               product: product,
               rawDoc: rawDoc,
+              deal: deal,
+              storeSlug: widget.storeSlug,
               scrollController: scrollController,
               onAddToCart: (prod, qty) {
                 _addToCart(prod, qty);

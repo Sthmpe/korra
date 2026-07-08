@@ -3,12 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'signal_badge_dot.dart';
+
 class KorraBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final List<NavSpec> pageIcons;
   final Map<int, int> countBadges;
   final Set<int> dotBadges;
+
+  /// Tabs that show the animated "broadcasting" red dot (expanding signal
+  /// rings) — stronger nudge than [dotBadges], e.g. an abandoned cart.
+  final Set<int> signalBadges;
 
   const KorraBottomNav({
     super.key,
@@ -17,6 +23,7 @@ class KorraBottomNav extends StatelessWidget {
     required this.pageIcons,
     this.countBadges = const {},
     this.dotBadges = const {},
+    this.signalBadges = const {},
   }) : assert(pageIcons.length >= 2);
 
   static const _brand = Color(0xFFA54600);
@@ -57,7 +64,8 @@ class KorraBottomNav extends StatelessWidget {
                       final selected = i == currentIndex;
                       final spec = pageIcons[i];
                       final badge = countBadges[i] ?? 0;
-                      final showDot = dotBadges.contains(i);
+                      final showSignal = signalBadges.contains(i);
+                      final showDot = dotBadges.contains(i) && !showSignal;
 
                       return Expanded(
                         child: GestureDetector(
@@ -87,6 +95,14 @@ class KorraBottomNav extends StatelessWidget {
                                         color: selected ? _brand : _inactiveColor,
                                       ),
                                     ),
+
+                                    // Signal Badge (animated nudge, e.g. saved cart)
+                                    if (showSignal)
+                                      Positioned(
+                                        right: -10.w,
+                                        top: -10.h,
+                                        child: SignalBadgeDot(size: 8.w),
+                                      ),
 
                                     // Dot Badge (Notification)
                                     if (showDot)

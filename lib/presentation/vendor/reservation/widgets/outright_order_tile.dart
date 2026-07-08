@@ -11,11 +11,17 @@ import '../../../../data/models/vendor/outright_order.dart';
 class OutrightOrderTile extends StatelessWidget {
   final OutrightOrder order;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelected;
+  final bool isSelectionMode;
 
   const OutrightOrderTile({
     super.key,
     required this.order,
     required this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isSelectionMode = false,
   });
 
   @override
@@ -30,15 +36,16 @@ class OutrightOrderTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         margin: EdgeInsets.only(bottom: 12.h, left: 16.w, right: 16.w),
         padding: EdgeInsets.all(12.r),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: const Color(0xFFF2F4F7),
-            width: 1.0,
+            color: isSelected ? const Color(0xFF1DB954) : const Color(0xFFF2F4F7),
+            width: isSelected ? 0.001 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
@@ -74,7 +81,25 @@ class OutrightOrderTile extends StatelessWidget {
                               letterSpacing: 0.5,
                             ),
                           ),
-                          _buildStatusBadge(),
+                          if (isSelectionMode)
+                            Container(
+                              margin: EdgeInsets.only(right: 4.w),
+                              width: 22.w,
+                              height: 22.w,
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF1DB954) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12.r),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF1DB954) : Colors.grey.shade300,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: isSelected
+                                  ? Icon(Icons.check, size: 16.sp, color: Colors.white)
+                                  : null,
+                            )
+                          else
+                            _buildStatusBadge(),
                         ],
                       ),
                       SizedBox(height: 4.h),

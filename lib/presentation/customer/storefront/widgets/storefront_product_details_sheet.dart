@@ -1,21 +1,41 @@
 // lib/presentation/customer/storefront/widgets/storefront_product_details_sheet.dart
 
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/product_model.dart';
+import '../../../../data/models/vendor/campaign_model.dart';
+import '../../store/widgets/deal_countdown_badge.dart';
+import 'storefront_details_carousel.dart';
 
+/// Premium product details bottom sheet: swipable lazy carousel, price block
+/// with discount treatment, availability chips, quantity stepper and the
+/// Add to Cart / Pay Installments action pair.
 class StorefrontProductDetailsSheet extends StatefulWidget {
   final Product product;
   final DocumentSnapshot? rawDoc;
   final ScrollController scrollController;
   final Function(Product, int) onAddToCart;
   final Function(DocumentSnapshot?) onPayInstallments;
+
+  /// The store's running/upcoming timed campaign for this product, if any.
+  final Campaign? deal;
+
+  /// The store's slug, used to build the shareable product deep link
+  /// (https://korra.com.ng/store/{slug}/p/{productId}). Null hides Share.
+  final String? storeSlug;
 
   const StorefrontProductDetailsSheet({
     super.key,
@@ -24,6 +44,8 @@ class StorefrontProductDetailsSheet extends StatefulWidget {
     required this.scrollController,
     required this.onAddToCart,
     required this.onPayInstallments,
+    this.deal,
+    this.storeSlug,
   });
 
   @override
@@ -32,11 +54,49 @@ class StorefrontProductDetailsSheet extends StatefulWidget {
 
 class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetailsSheet> {
   int _selectedQuantity = 1;
-  int _carouselIndex = 0;
+
+  /// Wraps the carousel-through-availability-banner region so it can be
+  /// captured as an image on share (see [_shareProduct]).
+  final GlobalKey _shareCaptureKey = GlobalKey();
+
+  Future<void> _shareProduct() async {
+    final slug = widget.storeSlug;
+    if (slug == null) return;
+    final url = "https://korra.com.ng/store/$slug/p/${widget.product.id}";
+    final caption = "${widget.product.name} on Korra\n$url";
+
+    // Best effort: embed a screenshot of the product card (image through the
+    // installment-availability banner) alongside the link. Falls back to a
+    // plain text share if capture fails for any reason.
+    try {
+      await Future.delayed(const Duration(milliseconds: 100));
+      final boundary =
+          _shareCaptureKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) throw Exception("capture target not ready");
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final directory = await getTemporaryDirectory();
+      final imageFile = await File('${directory.path}/korra_${widget.product.id}.png').create();
+      await imageFile.writeAsBytes(pngBytes);
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(imageFile.path)], text: caption),
+      );
+    } catch (e) {
+      debugPrint("Product image share failed, falling back to text-only: $e");
+      await SharePlus.instance.share(ShareParams(text: caption));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final product = widget.product;
     final currencyFormat = NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
+    final hasDiscount = product.discountedPrice != null && product.discountedPrice! > 0;
+    final inStock = product.availableStock > 0;
 
     return SingleChildScrollView(
       controller: widget.scrollController,
@@ -45,306 +105,260 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Drag handle
           Center(
             child: Container(
-              width: 36.w,
+              width: 40.w,
               height: 4.h,
               decoration: BoxDecoration(
                 color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2.r),
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 14.h),
 
-          // Swipable Image Carousel
-          Container(
-            height: 240.h,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: KorraColors.borderLight),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16.r),
-              child: widget.product.images.isEmpty
-                  ? Icon(Iconsax.image, size: 40.sp, color: Colors.grey)
-                  : Stack(
-                      children: [
-                        PageView.builder(
-                          itemCount: widget.product.images.length,
-                          onPageChanged: (index) {
-                            setState(() {
-                              _carouselIndex = index;
-                            });
-                          },
-                          itemBuilder: (context, index) {
-                            return Image.network(
-                              widget.product.images[index],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(Iconsax.image, size: 40.sp, color: Colors.grey),
-                            );
-                          },
-                        ),
-                        if (widget.product.images.length > 1)
-                          Positioned(
-                            bottom: 12.h,
-                            right: 12.w,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(12.r),
-                              ),
-                              child: Text(
-                                "${_carouselIndex + 1} / ${widget.product.images.length}",
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-            ),
-          ),
-          SizedBox(height: 16.h),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Everything from the carousel through the availability banner is
+          // wrapped for share-image capture (see _shareProduct).
+          RepaintBoundary(
+            key: _shareCaptureKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+          // Swipable lazy image carousel + share action
+          Stack(
             children: [
-              Expanded(
-                child: Text(
-                  widget.product.name,
-                  style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w800,
-                    color: KorraColors.textDark,
-                  ),
+              StorefrontDetailsCarousel(product: product),
+              if (widget.storeSlug != null)
+                Positioned(
+                  top: 4.h,
+                  right: 4.w,
+                  child: _ShareButton(onTap: _shareProduct),
                 ),
-              ),
-              if (widget.product.discountedPrice != null && widget.product.discountedPrice! > 0) ...[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          currencyFormat.format(widget.product.discountedPrice),
-                          style: GoogleFonts.inter(
-                            fontSize: 18.sp,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFFA54600),
-                          ),
-                        ),
-                        SizedBox(width: 6.w),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFECDCA),
-                            borderRadius: BorderRadius.circular(4.r),
-                          ),
-                          child: Text(
-                            "-${((widget.product.price - widget.product.discountedPrice!) / widget.product.price * 100).round()}%",
-                            style: GoogleFonts.inter(
-                              fontSize: 9.sp,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFFB42318),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      currencyFormat.format(widget.product.price),
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade400,
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ),
-                  ],
-                )
-              ] else ...[
-                Text(
-                  currencyFormat.format(widget.product.price),
-                  style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFA54600),
-                  ),
-                ),
-              ],
             ],
+          ),
+          SizedBox(height: 16.h),
+
+          // Name
+          Text(
+            product.name,
+            style: GoogleFonts.inter(
+              fontSize: 19.sp,
+              fontWeight: FontWeight.w800,
+              color: KorraColors.textDark,
+              height: 1.25,
+            ),
           ),
           SizedBox(height: 8.h),
 
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF4ED),
-              borderRadius: BorderRadius.circular(6.r),
-            ),
-            child: Text(
-              widget.product.category.toUpperCase(),
+          // Price block
+          if (hasDiscount)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  currencyFormat.format(product.discountedPrice),
+                  style: GoogleFonts.inter(
+                    fontSize: 22.sp,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFFA54600),
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 3.h),
+                  child: Text(
+                    currencyFormat.format(product.price),
+                    style: GoogleFonts.inter(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade400,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Container(
+                  margin: EdgeInsets.only(bottom: 3.h),
+                  padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.5.h),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3F2),
+                    borderRadius: BorderRadius.circular(4.r),
+                  ),
+                  child: Text(
+                    "-${((product.price - product.discountedPrice!) / product.price * 100).round()}% OFF",
+                    style: GoogleFonts.inter(
+                      fontSize: 9.5.sp,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFB42318),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(
+              currencyFormat.format(product.price),
               style: GoogleFonts.inter(
-                fontSize: 10.sp,
-                fontWeight: FontWeight.w700,
+                fontSize: 22.sp,
+                fontWeight: FontWeight.w900,
                 color: const Color(0xFFA54600),
               ),
             ),
+
+          // Live countdown for a merchant-timed deal on this product
+          if (widget.deal != null && widget.deal!.hasTimer) ...[
+            SizedBox(height: 8.h),
+            DealCountdownBadge(campaign: widget.deal!),
+          ],
+          SizedBox(height: 12.h),
+
+          // Category + stock chips
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              _chip(
+                label: product.category.toUpperCase(),
+                bg: const Color(0xFFFFF4ED),
+                fg: const Color(0xFFA54600),
+              ),
+              if (!inStock)
+                _chip(label: "OUT OF STOCK", bg: const Color(0xFFFEF3F2), fg: const Color(0xFFB42318))
+              else if (product.availableStock < 5)
+                _chip(
+                  label: "ONLY ${product.availableStock} LEFT",
+                  bg: const Color(0xFFFFF4ED),
+                  fg: const Color(0xFFB95000),
+                )
+              else
+                _chip(
+                  label: "IN STOCK · ${product.availableStock}",
+                  bg: KorraColors.successBg,
+                  fg: KorraColors.successFg,
+                ),
+            ],
           ),
           SizedBox(height: 16.h),
 
+          // Payment availability banner
           Container(
             padding: EdgeInsets.all(12.r),
             decoration: BoxDecoration(
-              color: widget.product.allowReservation ? const Color(0xFFECFDF3) : const Color(0xFFF2F4F7),
+              color: product.allowReservation ? const Color(0xFFECFDF3) : const Color(0xFFF2F4F7),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
               children: [
                 Icon(
-                  widget.product.allowReservation ? Iconsax.shield_tick : Iconsax.info_circle,
-                  color: widget.product.allowReservation ? KorraColors.settleGreen : Colors.grey.shade600,
+                  product.allowReservation ? Iconsax.shield_tick : Iconsax.info_circle,
+                  color: product.allowReservation ? KorraColors.settleGreen : Colors.grey.shade600,
                   size: 20.sp,
                 ),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
-                    widget.product.allowReservation
+                    product.allowReservation
                         ? "Installment Plan Available (Reserve this item now)"
                         : "Outright Purchase Only (Installment plans disabled for this item)",
                     style: GoogleFonts.inter(
                       fontSize: 11.5.sp,
                       fontWeight: FontWeight.w700,
-                      color: widget.product.allowReservation ? const Color(0xFF027A48) : Colors.grey.shade800,
+                      color: product.allowReservation ? const Color(0xFF027A48) : Colors.grey.shade800,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 16.h),
+              ],
+            ),
+          ),
+          SizedBox(height: 18.h),
 
+          // Description
           Text(
             "Description",
             style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w800, color: KorraColors.textDark),
           ),
           SizedBox(height: 6.h),
           Text(
-            widget.product.description.isNotEmpty ? widget.product.description : "No description provided for this item.",
-            style: GoogleFonts.inter(fontSize: 13.sp, color: KorraColors.textBody, height: 1.4),
+            product.description.isNotEmpty ? product.description : "No description provided for this item.",
+            style: GoogleFonts.inter(fontSize: 13.sp, color: KorraColors.textBody, height: 1.45),
           ),
-          SizedBox(height: 24.h),
+          SizedBox(height: 22.h),
 
-          Row(
-            children: [
-              Icon(Iconsax.box, size: 16.sp, color: KorraColors.textHint),
-              SizedBox(width: 6.w),
-              Text(
-                widget.product.availableStock > 0 ? "${widget.product.availableStock} items in stock" : "Out of stock",
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w600,
-                  color: widget.product.availableStock > 0 ? KorraColors.textMuted : Colors.red,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 24.h),
-
-          // Quantity Selector Row
-          if (widget.product.availableStock > 0) ...[
+          // Quantity stepper
+          if (inStock) ...[
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Select Quantity",
+                  "Quantity",
                   style: GoogleFonts.inter(
                     fontSize: 13.5.sp,
                     fontWeight: FontWeight.w700,
                     color: KorraColors.textDark,
                   ),
                 ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () {
-                    if (_selectedQuantity > 1) {
-                      setState(() {
-                        _selectedQuantity--;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: EdgeInsets.all(5.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(6.r),
-                      border: Border.all(color: const Color(0xFFEAECF0)),
-                    ),
-                    child: Icon(Icons.remove, size: 16.sp, color: Colors.grey.shade700),
+                Container(
+                  padding: EdgeInsets.all(4.w),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F5F7),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  child: Text(
-                    _selectedQuantity.toString(),
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w800,
-                      color: KorraColors.textDark,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    if (_selectedQuantity < widget.product.availableStock) {
-                      setState(() {
-                        _selectedQuantity++;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: EdgeInsets.all(5.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(6.r),
-                      border: Border.all(color: const Color(0xFFEAECF0)),
-                    ),
-                    child: Icon(Icons.add, size: 16.sp, color: Colors.grey.shade700),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _stepperButton(
+                        icon: Icons.remove,
+                        enabled: _selectedQuantity > 1,
+                        onTap: () => setState(() => _selectedQuantity--),
+                      ),
+                      Container(
+                        constraints: BoxConstraints(minWidth: 40.w),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _selectedQuantity.toString(),
+                          style: GoogleFonts.inter(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w800,
+                            color: KorraColors.textDark,
+                          ),
+                        ),
+                      ),
+                      _stepperButton(
+                        icon: Icons.add,
+                        enabled: _selectedQuantity < product.availableStock,
+                        onTap: () => setState(() => _selectedQuantity++),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            SizedBox(height: 32.h),
+            SizedBox(height: 24.h),
           ],
 
-          // Bottom actions: Add to Cart & Pay Installments
+          // Actions: Add to Cart & Pay Installments
           Row(
             children: [
               Expanded(
                 child: SizedBox(
-                  height: 48.h,
-                  child: OutlinedButton(
-                    onPressed: widget.product.availableStock > 0
-                        ? () => widget.onAddToCart(widget.product, _selectedQuantity)
+                  height: 52.h,
+                  child: OutlinedButton.icon(
+                    onPressed: inStock
+                        ? () => widget.onAddToCart(product, _selectedQuantity)
                         : null,
+                    icon: Icon(Iconsax.shopping_bag, size: 17.sp, color: const Color(0xFFA54600)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFA54600)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.r),
-                      ),
+                      side: const BorderSide(color: Color(0xFFA54600), width: 1.2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                     ),
-                    child: Text(
+                    label: Text(
                       "Add to Cart",
                       style: GoogleFonts.inter(
-                        fontSize: 13.sp,
+                        fontSize: 13.5.sp,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFFA54600),
                       ),
@@ -352,25 +366,23 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
                   ),
                 ),
               ),
-              if (widget.product.allowReservation) ...[
+              if (product.allowReservation) ...[
                 SizedBox(width: 12.w),
                 Expanded(
                   child: SizedBox(
-                    height: 48.h,
-                    child: ElevatedButton(
-                      onPressed: widget.product.availableStock > 0
-                          ? () => widget.onPayInstallments(widget.rawDoc)
-                          : null,
+                    height: 52.h,
+                    child: ElevatedButton.icon(
+                      onPressed: inStock ? () => widget.onPayInstallments(widget.rawDoc) : null,
+                      icon: Icon(Iconsax.calendar_tick, size: 17.sp, color: Colors.white),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFA54600),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10.r),
-                        ),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                       ),
-                      child: Text(
+                      label: Text(
                         "Pay Installments",
                         style: GoogleFonts.inter(
-                          fontSize: 13.sp,
+                          fontSize: 13.5.sp,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
@@ -381,7 +393,84 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
               ],
             ],
           ),
+          SizedBox(height: 8.h),
         ],
+      ),
+    );
+  }
+
+  Widget _chip({required String label, required Color bg, required Color fg}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6.r),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: fg),
+      ),
+    );
+  }
+
+  Widget _stepperButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        height: 32.w,
+        width: 32.w,
+        decoration: BoxDecoration(
+          color: enabled ? Colors.white : Colors.transparent,
+          shape: BoxShape.circle,
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(
+          icon,
+          size: 16.sp,
+          color: enabled ? KorraColors.textDark : Colors.grey.shade400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular glass share button overlaid on the product image carousel.
+class _ShareButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ShareButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34.w,
+        height: 34.w,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(Iconsax.export_3, size: 16.sp, color: KorraColors.textDark),
       ),
     );
   }

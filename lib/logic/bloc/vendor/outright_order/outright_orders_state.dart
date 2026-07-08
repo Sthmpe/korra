@@ -19,6 +19,10 @@ class OutrightOrdersState {
 
   final DeliveryStatus deliveryStatus;
 
+  // Multi-select (bulk mark-as-delivered). UI only for now — the bulk
+  // delivery backend write is NOT connected yet (David, 5 July 2026).
+  final Set<String> selectedIds;
+
   OutrightOrdersState({
     this.loading = false,
     this.visible = const [],
@@ -30,6 +34,7 @@ class OutrightOrdersState {
     this.countDelivered = 0,
     this.countCancelled = 0,
     this.deliveryStatus = DeliveryStatus.initial,
+    this.selectedIds = const {},
   });
 
   factory OutrightOrdersState.initial(OutrightOrderStatus initialFilter) {
@@ -47,6 +52,7 @@ class OutrightOrdersState {
     int? countDelivered,
     int? countCancelled,
     DeliveryStatus? deliveryStatus,
+    Set<String>? selectedIds,
   }) {
     return OutrightOrdersState(
       loading: loading ?? this.loading,
@@ -59,6 +65,7 @@ class OutrightOrdersState {
       countDelivered: countDelivered ?? this.countDelivered,
       countCancelled: countCancelled ?? this.countCancelled,
       deliveryStatus: deliveryStatus ?? DeliveryStatus.initial,
+      selectedIds: selectedIds ?? this.selectedIds,
     );
   }
 }

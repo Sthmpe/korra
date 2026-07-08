@@ -18,7 +18,7 @@ import 'campaigns/highlighted_store_promo.dart';
 import 'campaigns/campaign_card.dart';
 import 'campaigns/create_campaign_sheet.dart';
 
-class VendorCampaignsBody extends StatelessWidget {
+class VendorCampaignsBody extends StatefulWidget {
   final String vendorId;
 
   const VendorCampaignsBody({
@@ -27,7 +27,82 @@ class VendorCampaignsBody extends StatelessWidget {
   });
 
   @override
+  State<VendorCampaignsBody> createState() => _VendorCampaignsBodyState();
+}
+
+class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _enterSelection(String campaignId) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(campaignId);
+    });
+  }
+
+  void _toggleSelected(String campaignId) {
+    setState(() {
+      if (_selectedIds.contains(campaignId)) {
+        _selectedIds.remove(campaignId);
+      } else {
+        _selectedIds.add(campaignId);
+      }
+      if (_selectedIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _cancelSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _confirmDelete(BuildContext context, List<Campaign> targets) async {
+    final plural = targets.length > 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(plural ? "Delete ${targets.length} campaigns?" : "Delete this campaign?"),
+        content: Text(
+          plural
+              ? "This ends ${targets.length} campaigns now and reverts any discounted price and tag they applied to their products. This can't be undone."
+              : "This ends the campaign now and reverts any discounted price and tag it applied to its products. This can't be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete", style: TextStyle(color: Color(0xFFB42318), fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await context.read<VendorRepository>().deleteCampaigns(targets);
+      if (context.mounted) {
+        showAppSnackbar(
+          plural ? "${targets.length} campaigns deleted." : "Campaign deleted.",
+          SnackbarType.success,
+        );
+        _cancelSelection();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showAppSnackbar("Could not delete campaign(s). Please try again.", SnackbarType.error);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final vendorId = widget.vendorId;
     final repository = context.read<VendorRepository>();
 
     return StreamBuilder<List<Campaign>>(
@@ -75,45 +150,106 @@ class VendorCampaignsBody extends StatelessWidget {
               ),
             ),
 
-            // 2. Section Header & Launch Campaign Action
+            // 2. Section Header — either the normal title + New Campaign +
+            // Select entry point, or the selection toolbar (count + Delete).
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Sent Campaigns (${campaigns.length})',
-                      style: GoogleFonts.inter(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w700,
-                        color: KorraColors.textDark,
+                child: _selectionMode
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${_selectedIds.length} selected',
+                            style: GoogleFonts.inter(
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w700,
+                              color: KorraColors.textDark,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: _cancelSelection,
+                                child: Text(
+                                  "Cancel",
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.grey.shade600),
+                                ),
+                              ),
+                              SizedBox(width: 4.w),
+                              ElevatedButton.icon(
+                                onPressed: _selectedIds.isEmpty
+                                    ? null
+                                    : () => _confirmDelete(
+                                          context,
+                                          campaigns.where((c) => _selectedIds.contains(c.id)).toList(),
+                                        ),
+                                icon: Icon(Icons.delete_outline, size: 16.sp),
+                                label: Text(
+                                  "Delete",
+                                  style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  backgroundColor: const Color(0xFFB42318),
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Sent Campaigns (${campaigns.length})',
+                            style: GoogleFonts.inter(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w700,
+                              color: KorraColors.textDark,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              if (campaigns.isNotEmpty)
+                                TextButton(
+                                  onPressed: () => setState(() => _selectionMode = true),
+                                  child: Text(
+                                    "Select",
+                                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: const Color(0xFFA54600)),
+                                  ),
+                                ),
+                              ElevatedButton.icon(
+                                onPressed: () => _openCreateCampaignForm(context),
+                                icon: Icon(Icons.add, size: 16.sp),
+                                label: Text(
+                                  "New Campaign",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.sp,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  backgroundColor: const Color(0xFFA54600),
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.r),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _openCreateCampaignForm(context),
-                      icon: Icon(Icons.add, size: 16.sp),
-                      label: Text(
-                        "New Campaign",
-                        style: GoogleFonts.inter(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        backgroundColor: const Color(0xFFA54600),
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.r),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
 
@@ -177,7 +313,14 @@ class VendorCampaignsBody extends StatelessWidget {
                       final campaign = campaigns[index];
                       return Padding(
                         padding: EdgeInsets.only(bottom: 16.h),
-                        child: CampaignCard(campaign: campaign),
+                        child: CampaignCard(
+                          campaign: campaign,
+                          selectionMode: _selectionMode,
+                          selected: _selectedIds.contains(campaign.id),
+                          onTap: () => _toggleSelected(campaign.id),
+                          onLongPress: () => _enterSelection(campaign.id),
+                          onDeleteTap: () => _confirmDelete(context, [campaign]),
+                        ),
                       );
                     },
                     childCount: campaigns.length,
@@ -228,25 +371,6 @@ class VendorCampaignsBody extends StatelessWidget {
                 color: Colors.grey.shade500,
               ),
             ),
-            SizedBox(height: 24.h),
-            ElevatedButton.icon(
-              onPressed: () => _seedMockData(context),
-              icon: Icon(Icons.playlist_add_rounded, size: 18.sp),
-              label: Text(
-                "Seed Demo Campaigns",
-                style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                backgroundColor: const Color(0xFFA54600),
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.r),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -261,90 +385,8 @@ class VendorCampaignsBody extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(KorraSizes.sheetRadius.r)),
       ),
-      builder: (context) => CreateCampaignSheet(vendorId: vendorId),
+      builder: (context) => CreateCampaignSheet(vendorId: widget.vendorId),
     );
-  }
-
-  Future<void> _seedMockData(BuildContext context) async {
-    final firestore = FirebaseFirestore.instance;
-    final batch = firestore.batch();
-
-    final productTitles = [
-      "Premium Wireless Earbuds",
-      "Protective Silicone Case",
-      "Fast Charging USB-C Adapter",
-      "Tempered Glass Screen Protector",
-      "Magnetic Car Phone Mount",
-      "Leather Card Holder Wallet",
-      "Portable Power Bank 10k mAh"
-    ];
-
-    final tags = ['New Arrival', 'Flash Sale', 'Best Price', 'Limited Stock', 'Weekend Special'];
-
-    final campaignTitles = [
-      "🔥 Flash Sale!",
-      "✨ Just Arrived",
-      "💰 Big Discount",
-      "🛍️ New Stock",
-      "🌟 Weekend Deal",
-      "⚡ Almost Gone"
-    ];
-
-    final captions = [
-      "Get up to 30% off our best products today!",
-      "Premium items restocked and ready for you.",
-      "Fast checkout with easy reservation online.",
-      "High quality inventory available right now.",
-      "Check out today's flash sale for deals.",
-      "Limited stock left, buy yours today!"
-    ];
-
-    // 1. Seed 12 Mock Campaigns
-    final campaignsRef = firestore.collection('campaigns');
-    for (int i = 0; i < 12; i++) {
-      final tag = tags[i % tags.length];
-      final title = campaignTitles[i % campaignTitles.length];
-      final caption = captions[i % captions.length];
-      final prodTitle = productTitles[i % productTitles.length];
-
-      final DateTime sentAt = i < 2 
-          ? DateTime.now().subtract(Duration(hours: i * 4))
-          : DateTime.now().subtract(Duration(hours: i * 12 + 25));
-
-      final doc = campaignsRef.doc();
-      batch.set(doc, {
-        'vendorId': vendorId,
-        'productIds': ['mock_prod_${i % 7}'],
-        'productTitles': [prodTitle],
-        'tag': tag,
-        'title': title,
-        'caption': caption,
-        'imageUrl': 'https://picsum.photos/400/200?random=$i',
-        'sentAt': Timestamp.fromDate(sentAt),
-        'openCount': (i * 3) + 2,
-        'isMock': true,
-        'discountType': i % 3 == 0 ? 'percentage' : 'none',
-        'discountValue': i % 3 == 0 ? 20.0 : 0.0,
-      });
-    }
-
-    // 2. Set mock analytics in vendor_visibility doc
-    final visibilityRef = firestore.collection('vendor_visibility').doc(vendorId);
-    batch.set(visibilityRef, {
-      'topSellerCircles': 214,
-      'mostVisitedCircles': 48,
-    }, SetOptions(merge: true));
-
-    try {
-      await batch.commit();
-      if (context.mounted) {
-        showAppSnackbar("Successfully seeded mock campaigns and visibility reach stats!", SnackbarType.success);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showAppSnackbar("Failed to seed mock campaigns: $e", SnackbarType.error);
-      }
-    }
   }
 
   Future<void> _clearMockData(BuildContext context) async {
@@ -354,7 +396,7 @@ class VendorCampaignsBody extends StatelessWidget {
     try {
       final query = await firestore
           .collection('campaigns')
-          .where('vendorId', isEqualTo: vendorId)
+          .where('vendorId', isEqualTo: widget.vendorId)
           .where('isMock', isEqualTo: true)
           .get();
 
@@ -363,7 +405,7 @@ class VendorCampaignsBody extends StatelessWidget {
       }
 
       // Reset visibility stats
-      final visibilityRef = firestore.collection('vendor_visibility').doc(vendorId);
+      final visibilityRef = firestore.collection('vendor_visibility').doc(widget.vendorId);
       batch.set(visibilityRef, {
         'topSellerCircles': 0,
         'mostVisitedCircles': 0,

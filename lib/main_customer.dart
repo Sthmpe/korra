@@ -9,6 +9,7 @@ import 'korra_app.dart'; // ✅ Uses your existing KorraApp
 import 'logic/core/net/net_cubit.dart';
 import 'logic/core/update/update_cubit.dart';
 import 'logic/services/auth_service.dart';
+import 'logic/services/deep_link_service.dart';
 
 void main() async {
   // 🚀 Capture the flag from the terminal command
@@ -43,4 +44,10 @@ void main() async {
       ),
     ),
   );
+
+  // 🔗 App Links: route korra.com.ng/store/{slug} → storefront. Started after
+  // the first frame so the GetX navigator exists before we route.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    DeepLinkService.instance.start();
+  });
 }

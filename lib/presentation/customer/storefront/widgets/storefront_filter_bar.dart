@@ -20,6 +20,15 @@ class StorefrontFilterBar extends StatelessWidget {
   final String priceSort; // 'none' | 'asc' | 'desc'
   final Function(String) onPriceSortChanged;
 
+  /// Opens the Filter & Sort bottom sheet; [activeFilterCount] shows how many
+  /// filters (sort / deals-only / price range) are currently applied.
+  final VoidCallback? onOpenFilters;
+  final int activeFilterCount;
+
+  /// When the search field is already rendered elsewhere (above the Featured
+  /// strip, via [StorefrontSearchField]), skip it here so it's not duplicated.
+  final bool hideSearch;
+
   const StorefrontFilterBar({
     super.key,
     required this.searchController,
@@ -31,6 +40,9 @@ class StorefrontFilterBar extends StatelessWidget {
     required this.storeName,
     required this.priceSort,
     required this.onPriceSortChanged,
+    this.onOpenFilters,
+    this.activeFilterCount = 0,
+    this.hideSearch = false,
   });
 
   // Resolve representative category icons/illustrations
@@ -62,70 +74,13 @@ class StorefrontFilterBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Search Input Field ("Search product in [Store Name]")
-        Padding(
-          padding: EdgeInsets.fromLTRB(16.w, 10.h, 16.w, 16.h),
-          child: Container(
-            height: 46.h,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(10.r),
-                bottomLeft: Radius.circular(10.r),
-                topRight: Radius.circular(16.r),
-                bottomRight: Radius.circular(16.r),
-              ),
-              border: Border.all(color: KorraColors.borderLight),
-            ),
-            child: Row(
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12.w),
-                  child: Icon(Iconsax.search_normal_1, size: 18.sp, color: KorraColors.textHint),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: onSearchChanged,
-                    style: GoogleFonts.inter(
-                      fontSize: 13.5.sp,
-                      color: KorraColors.textDark,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: "Search product in $storeName...",
-                      hintStyle: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        color: KorraColors.textHint,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(10),
-                          bottomLeft: Radius.circular(10),
-                          topRight: Radius.circular(0),
-                          bottomRight: Radius.circular(0),
-                        ),
-                      ),
-                      contentPadding: EdgeInsets.only(bottom: 2.h),
-                    ),
-                  ),
-                ),
-                if (searchQuery.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      searchController.clear();
-                      onSearchChanged('');
-                    },
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12.w),
-                      child: Icon(Icons.close, size: 18.sp, color: KorraColors.textHint),
-                    ),
-                  ),
-              ],
-            ),
+        if (!hideSearch)
+          StorefrontSearchField(
+            searchController: searchController,
+            searchQuery: searchQuery,
+            onSearchChanged: onSearchChanged,
+            storeName: storeName,
           ),
-        ),
 
         // Shein/Temu Circular Category items row
         if (categories.length > 1) ...[
@@ -197,60 +152,69 @@ class StorefrontFilterBar extends StatelessWidget {
           SizedBox(height: 8.h),
         ],
 
-        // Sleek Price Sort toggle bar
+        // Filter & Sort bar — opens the bottom sheet (sort, deals, price range)
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Filter & Sort",
+                priceSort == 'none'
+                    ? "Filter & Sort"
+                    : (priceSort == 'asc' ? "Sorted: Low to High" : "Sorted: High to Low"),
                 style: GoogleFonts.inter(
                   fontSize: 11.sp,
                   fontWeight: FontWeight.w800,
-                  color: Colors.grey.shade500,
+                  color: priceSort == 'none' ? Colors.grey.shade500 : const Color(0xFFA54600),
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  if (priceSort == 'none') {
-                    onPriceSortChanged('asc');
-                  } else if (priceSort == 'asc') {
-                    onPriceSortChanged('desc');
-                  } else {
-                    onPriceSortChanged('none');
-                  }
-                },
+                onTap: onOpenFilters,
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
                   decoration: BoxDecoration(
-                    color: priceSort != 'none' ? const Color(0xFFFFF4ED) : const Color(0xFFF9FAFB),
+                    color: activeFilterCount > 0 ? const Color(0xFFFFF4ED) : const Color(0xFFF9FAFB),
                     borderRadius: BorderRadius.circular(20.r),
-                    border: priceSort != 'none'
-                        ? null
-                        : Border.all(
-                            color: const Color(0xFFEAECF0),
-                          ),
+                    border: activeFilterCount > 0
+                        ? Border.all(color: const Color(0xFFFFD6B2))
+                        : Border.all(color: const Color(0xFFEAECF0)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.swap_vert_rounded,
+                        Iconsax.setting_4,
                         size: 14.sp,
-                        color: priceSort != 'none' ? const Color(0xFFA54600) : Colors.grey.shade700,
+                        color: activeFilterCount > 0 ? const Color(0xFFA54600) : Colors.grey.shade700,
                       ),
-                      SizedBox(width: 4.w),
+                      SizedBox(width: 5.w),
                       Text(
-                        priceSort == 'none'
-                            ? "Price: Default"
-                            : (priceSort == 'asc' ? "Price: Low to High" : "Price: High to Low"),
+                        "Filters",
                         style: GoogleFonts.inter(
                           fontSize: 10.5.sp,
                           fontWeight: FontWeight.w700,
-                          color: priceSort != 'none' ? const Color(0xFFA54600) : KorraColors.textDark,
+                          color: activeFilterCount > 0 ? const Color(0xFFA54600) : KorraColors.textDark,
                         ),
                       ),
+                      if (activeFilterCount > 0) ...[
+                        SizedBox(width: 5.w),
+                        Container(
+                          padding: EdgeInsets.all(4.5.r),
+                          decoration: const BoxDecoration(
+                            color: KorraColors.brand,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            "$activeFilterCount",
+                            style: GoogleFonts.inter(
+                              fontSize: 8.5.sp,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -260,6 +224,91 @@ class StorefrontFilterBar extends StatelessWidget {
         ),
         const Divider(color: Color(0xFFF2F4F7)),
       ],
+    );
+  }
+}
+
+/// The "Search product in [Store Name]" field, standalone so it can render
+/// above the Featured/Flash strips while the rest of [StorefrontFilterBar]
+/// (collections, sort) stays down by the product grid.
+class StorefrontSearchField extends StatelessWidget {
+  final TextEditingController searchController;
+  final String searchQuery;
+  final Function(String) onSearchChanged;
+  final String storeName;
+
+  const StorefrontSearchField({
+    super.key,
+    required this.searchController,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.storeName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 10.h, 16.w, 16.h),
+      child: Container(
+        height: 46.h,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(10.r),
+            bottomLeft: Radius.circular(10.r),
+            topRight: Radius.circular(16.r),
+            bottomRight: Radius.circular(16.r),
+          ),
+          border: Border.all(color: KorraColors.borderLight),
+        ),
+        child: Row(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12.w),
+              child: Icon(Iconsax.search_normal_1, size: 18.sp, color: KorraColors.textHint),
+            ),
+            Expanded(
+              child: TextField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                style: GoogleFonts.inter(
+                  fontSize: 13.5.sp,
+                  color: KorraColors.textDark,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: "Search product in $storeName...",
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    color: KorraColors.textHint,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                      bottomLeft: Radius.circular(10),
+                      topRight: Radius.circular(0),
+                      bottomRight: Radius.circular(0),
+                    ),
+                  ),
+                  contentPadding: EdgeInsets.only(bottom: 2.h),
+                ),
+              ),
+            ),
+            if (searchQuery.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  searchController.clear();
+                  onSearchChanged('');
+                },
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12.w),
+                  child: Icon(Icons.close, size: 18.sp, color: KorraColors.textHint),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

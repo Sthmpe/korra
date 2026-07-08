@@ -8,9 +8,11 @@ import 'package:iconsax/iconsax.dart';
 
 // REPO & LOGIC
 import '../../../config/routes/app_routes.dart';
+import '../../../data/models/vendor/outright_order.dart';
 import '../../../data/models/vendor/reservation.dart';
 import '../../../data/models/vendor/vendor_activity_type.dart';
 import '../../../data/models/vendor/vendor_compliance.dart';
+import '../../../data/repository/vendors/outright_orders_repository.dart';
 import '../../../data/repository/vendors/reservations_repository.dart';
 import '../../../data/repository/vendors/vendor_repository.dart';
 import '../../../logic/bloc/vendor/home/vendor_home_bloc.dart';
@@ -123,77 +125,83 @@ class VendorHomeBody extends StatelessWidget {
                       
                       SizedBox(height: 16.h), 
 
-                      // 4. KPI BUTTONS
-                     StreamBuilder<Map<ReservationStatus, int>>(
-                      stream: vendors.streamCounts(vendorUid),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
-                          debugPrint("KPI Stream Error: ${snapshot.error}"); // 🔍 Debugging
-                        }
+                      // 4. KPI BUTTONS — reservations + outright combined.
+                      // Ready to Deliver = reservation readyForPickup + outright
+                      // readyToDeliver; the other three split the two types.
+                      StreamBuilder<Map<ReservationStatus, int>>(
+                        stream: vendors.streamCounts(vendorUid),
+                        builder: (context, resSnap) {
+                          if (resSnap.hasError) {
+                            debugPrint("KPI Reservation Stream Error: ${resSnap.error}");
+                          }
+                          final res = resSnap.data ?? const {};
 
-                        // 1. Handle Default Data (Include ALL Enum Keys)
-                        final counts = snapshot.data ?? {
-                          ReservationStatus.newRes: 0,
-                          ReservationStatus.ongoing: 0,
-                          ReservationStatus.readyForPickup: 0, // ✅ Critical Missing Key
-                          ReservationStatus.completed: 0,
-                          ReservationStatus.cancelled: 0,
-                        };
+                          return StreamBuilder<Map<OutrightOrderStatus, int>>(
+                            stream: vendors.streamOutrightCounts(vendorUid),
+                            builder: (context, outSnap) {
+                              if (outSnap.hasError) {
+                                debugPrint("KPI Outright Stream Error: ${outSnap.error}");
+                              }
+                              final out = outSnap.data ?? const {};
 
-                        return VendorKpiBlock(
-                          // 2. Map Data Correctly
-                          newCount: (counts[ReservationStatus.newRes] ?? 0).toString(),
-                          ongoingCount: (counts[ReservationStatus.ongoing] ?? 0).toString(),
-                          
-                          // ✅ Show "Ready" count. 
-                          // If you want to show "Ready" instead of "Cancelled" on the dashboard:
-                          readyCount: (counts[ReservationStatus.readyForPickup] ?? 0).toString(),
-                          
-                          completedCount: (counts[ReservationStatus.completed] ?? 0).toString(),
-                          
-                          // 3. Navigation Actions
-                          onTapNew: () => Get.toNamed(
-                            Routes.vendorReservations,
-                            arguments: {
-                              'uid': vendorUid,
-                              // 'repo': vendors,
-                              'filter': ReservationStatus.newRes,
-                              'showLeadingIcon': true,
-                            }
-                          ),
-                          // Ongoing
-                          onTapOngoing: () => Get.toNamed(
-                            Routes.vendorReservations,
-                            arguments: {
-                              'uid': vendorUid,
-                              // 'repo': vendors,
-                              'filter': ReservationStatus.ongoing,
-                              'showLeadingIcon': true,
-                            }
-                          ),    
-                          // Ready
-                          onTapReady: () => Get.toNamed(
-                            Routes.vendorReservations,
-                            arguments: {
-                              'uid': vendorUid,
-                              // 'repo': vendors,
-                              'filter': ReservationStatus.readyForPickup,
-                              'showLeadingIcon': true,
-                            }
-                          ),
-                          // Completed
-                          onTapCompleted: () => Get.toNamed(
-                            Routes.vendorReservations,
-                            arguments: {
-                              'uid': vendorUid,
-                              // 'repo': vendors,
-                              'filter': ReservationStatus.completed,
-                              'showLeadingIcon': true,
-                            }
-                          ),
-                        );
-                      },
-                    ),
+                              final resReady = res[ReservationStatus.readyForPickup] ?? 0;
+                              final resOngoing = res[ReservationStatus.ongoing] ?? 0;
+                              final resNew = res[ReservationStatus.newRes] ?? 0;
+                              final outReady = out[OutrightOrderStatus.readyToDeliver] ?? 0;
+                              final outNew = out[OutrightOrderStatus.pending] ?? 0;
+
+                              return VendorKpiBlock(
+                                readyCount: (resReady + outReady).toString(),
+                                newOrdersCount: outNew.toString(),
+                                ongoingCount: resOngoing.toString(),
+                                newReservationsCount: resNew.toString(),
+
+                                // Ready (both) → reservations panel, Ready tab.
+                                onTapReady: () => Get.toNamed(
+                                  Routes.vendorReservations,
+                                  arguments: {
+                                    'uid': vendorUid,
+                                    'filter': ReservationStatus.readyForPickup,
+                                    'panel': 0,
+                                    'showLeadingIcon': true,
+                                  },
+                                ),
+                                // New Orders → outright panel, New (pending) tab.
+                                onTapNewOrders: () => Get.toNamed(
+                                  Routes.vendorReservations,
+                                  arguments: {
+                                    'uid': vendorUid,
+                                    'filter': ReservationStatus.ongoing,
+                                    'panel': 1,
+                                    'outrightFilter': OutrightOrderStatus.pending,
+                                    'showLeadingIcon': true,
+                                  },
+                                ),
+                                // Ongoing → reservations panel, Ongoing tab.
+                                onTapOngoing: () => Get.toNamed(
+                                  Routes.vendorReservations,
+                                  arguments: {
+                                    'uid': vendorUid,
+                                    'filter': ReservationStatus.ongoing,
+                                    'panel': 0,
+                                    'showLeadingIcon': true,
+                                  },
+                                ),
+                                // New Reservations → reservations panel, New tab.
+                                onTapNewReservations: () => Get.toNamed(
+                                  Routes.vendorReservations,
+                                  arguments: {
+                                    'uid': vendorUid,
+                                    'filter': ReservationStatus.newRes,
+                                    'panel': 0,
+                                    'showLeadingIcon': true,
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
 
                       // 5. STREAMING ACTIVITY TIMELINE (Real-Time)
                       StreamBuilder<List<VendorActivityItem>>(

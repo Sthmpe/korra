@@ -17,6 +17,7 @@ import '../../presentation/vendor/product/widgets/Add_product_page.dart';
 import '../../presentation/vendor/product/widgets/product_details_screen.dart';
 import '../../presentation/vendor/product/widgets/product_edit_screen.dart';
 import '../../presentation/vendor/profile/change_password_screen.dart';
+import '../../presentation/vendor/profile/edit_vendor_profile_screen.dart';
 import '../../presentation/vendor/profile/payout_settings_screen.dart';
 import '../../presentation/vendor/profile/store_balance_screen.dart';
 import '../../presentation/vendor/profile/vendor_receipt_screen.dart';
@@ -90,6 +91,8 @@ class VendorPages {
         return ReservationsPage(
           vendorId: map['uid'],
           initialFilter: map['filter'],
+          initialPanel: map['panel'] ?? 0,
+          initialOutrightFilter: map['outrightFilter'],
           showLeadingIcon: map['showLeadingIcon'] ?? true,
         );
       }),
@@ -193,6 +196,16 @@ class VendorPages {
         return PayoutSettingsScreen(
           vendorUid: map['uid'],
         );
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
+    // ✏️ Edit Profile / Store Settings (Vendor)
+    GetPage(
+      name: Routes.vendorEditProfile,
+      page: () => guard((args) {
+        final map = args as Map<String, dynamic>;
+        return EditVendorProfileScreen(vendor: map['vendor']);
       }),
       middlewares: [AuthMiddleware()],
     ),

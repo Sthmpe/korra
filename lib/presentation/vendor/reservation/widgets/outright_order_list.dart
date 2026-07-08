@@ -1,10 +1,13 @@
 // lib/presentation/vendor/reservation/widgets/outright_order_list.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../data/models/vendor/outright_order.dart';
+import '../../../../logic/bloc/vendor/outright_order/outright_orders_bloc.dart';
+import '../../../../logic/bloc/vendor/outright_order/outright_orders_event.dart';
 import 'outright_order_tile.dart';
 
 class OutrightOrderList extends StatelessWidget {
@@ -47,9 +50,31 @@ class OutrightOrderList extends StatelessWidget {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final item = items[index];
+          final bloc = context.read<OutrightOrdersBloc>();
+          final isSelected = bloc.state.selectedIds.contains(item.id);
+          final isSelectionMode = bloc.state.selectedIds.isNotEmpty;
+
+          // Only New (pending) and Ready-to-Deliver orders can be bulk-delivered.
+          // Delivered/cancelled orders are never selectable.
+          final canSelect = item.isPending || item.isReadyToDeliver;
+
           return OutrightOrderTile(
             order: item,
-            onTap: () => onOpen(item.id),
+            isSelected: isSelected,
+            isSelectionMode: isSelectionMode,
+            onTap: () {
+              if (isSelectionMode && canSelect) {
+                bloc.add(OutrightToggleSelection(item.id));
+                return;
+              }
+              // In selection mode, tapping an ineligible order does nothing;
+              // otherwise open its details.
+              if (!isSelectionMode) onOpen(item.id);
+            },
+            // Long-press starts selection only on eligible orders.
+            onLongPress: canSelect
+                ? () => bloc.add(OutrightToggleSelection(item.id))
+                : null,
           );
         },
         childCount: items.length,

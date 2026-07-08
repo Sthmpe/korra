@@ -18,14 +18,20 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: Colors.white,
+      color: const Color(0xFFF9FAFB), // matches KorraColors.surface page bg
       child: Container(
         height: 58.h,
         margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: const Color(0xFFEAECF0).withOpacity(0.08)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         padding: EdgeInsets.all(4.r),
         child: SingleChildScrollView(
@@ -58,7 +64,8 @@ class PlansTabsSliver extends SliverPersistentHeaderDelegate {
     return GestureDetector(
       onTap: () => onChanged(value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 5),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
         padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 16.w),
         margin: EdgeInsets.only(right: 4.w),
         decoration: BoxDecoration(

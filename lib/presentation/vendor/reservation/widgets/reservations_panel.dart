@@ -28,6 +28,8 @@ class ReservationsPanel extends StatelessWidget {
         if (previous.countReady != current.countReady) return true;
         if (previous.countCompleted != current.countCompleted) return true;
         if (previous.countCancelled != current.countCancelled) return true;
+        // Selection changes must re-render the tiles (green fill + check circle).
+        if (!identical(previous.selectedIds, current.selectedIds)) return true;
         if (previous.visible.length != current.visible.length) return true;
         for (int i = 0; i < previous.visible.length; i++) {
           if (previous.visible[i] != current.visible[i]) return true;

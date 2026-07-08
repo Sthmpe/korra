@@ -311,7 +311,7 @@ Widget _secondary(String text, VoidCallback onTap) {
     child: OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: BorderSide(color: Color(0xFFEAE6E2).withOpacity(0.25)),
+        side: BorderSide(color: const Color(0xFFEAE6E2).withOpacity(0.25)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.r),
         ),

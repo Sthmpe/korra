@@ -19,6 +19,7 @@ export 'customer_profile_repository.dart';
 export 'plans_repository.dart';
 export 'verification_repository.dart';
 export 'customer_activity_feed.dart';
+export 'outright_checkout_repository.dart';
 
 class CustomerRepository implements INotificationRepository {
   final FirebaseAuth auth;

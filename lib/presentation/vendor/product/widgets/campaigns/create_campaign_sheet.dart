@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -14,6 +15,7 @@ import '../../../../../data/models/product_model.dart';
 import '../../../../../data/models/vendor/campaign_model.dart';
 import '../../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../shared/widgets/show_app_snackbar.dart';
+import 'campaign_timer_section.dart';
 import 'product_selector_page.dart';
 
 class CreateCampaignSheet extends StatefulWidget {
@@ -46,7 +48,18 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
   bool _offerDiscount = false;
   String _discountType = 'percentage'; // 'percentage' | 'amount'
 
+  // Deal countdown timer (independent of the tag — any campaign can have one)
+  bool _timerEnabled = false;
+  DateTime? _dealStartAt;
+  DateTime? _dealEndAt;
+
+  // Shared vocabulary with the customer marketplace (see
+  // config/constants/campaign_tags.dart): tags matching
+  // KorraCampaignTags.flashLike ("Flash Deal", "Hot Deal", "Limited Stock")
+  // light up the flash-deal treatment on customer storefront cards and the
+  // Hot Deals strip. Matching is case-insensitive.
   final List<String> _presetTags = [
+    'Flash Deal',
     'New Arrival',
     'Flash Sale',
     'Best Price',
@@ -114,6 +127,16 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
     }
   }
 
+  /// Selected products whose discounted price would round down to ₦0, from
+  /// either a percentage or a flat-amount discount, so the merchant can be
+  /// warned before launching a campaign that sells items for free.
+  List<Product> get _zeroPriceProducts {
+    if (!_offerDiscount || _discountValueController.text.trim().isEmpty) return const [];
+    return _selectedProducts
+        .where((p) => _calculateDiscountedPrice(p.price).round() <= 0)
+        .toList();
+  }
+
   Future<void> _submitCampaign() async {
     if (_selectedProducts.isEmpty) {
       showAppSnackbar("Please select at least one target product.", SnackbarType.error);
@@ -125,21 +148,36 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
     }
     if (!_formKey.currentState!.validate()) return;
 
+    if (_timerEnabled) {
+      if (_dealStartAt == null || _dealEndAt == null) {
+        showAppSnackbar("Set both a start and end time for the deal countdown.", SnackbarType.error);
+        return;
+      }
+      if (!_dealEndAt!.isAfter(_dealStartAt!)) {
+        showAppSnackbar("Deal end time must be after the start time.", SnackbarType.error);
+        return;
+      }
+      if (_dealEndAt!.isBefore(DateTime.now())) {
+        showAppSnackbar("Deal end time is already in the past.", SnackbarType.error);
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
     final repo = context.read<VendorRepository>();
 
     try {
-      // 1. Check active campaigns limit (max 3 active within 24h)
+      // 1. Check campaign limit (max 3 at a time). Campaigns no longer
+      // auto-expire, delete one from the Campaigns tab to free a slot.
       final activeSnap = await FirebaseFirestore.instance
           .collection('campaigns')
           .where('vendorId', isEqualTo: widget.vendorId)
-          .where('sentAt', isGreaterThan: Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 24))))
           .get();
 
       if (activeSnap.docs.length >= 3) {
         if (mounted) {
           showAppSnackbar(
-            "You have reached your limit of 3 active campaigns. Active campaigns expire after 24 hours.",
+            "You have reached your limit of 3 campaigns. Delete an existing one from the Campaigns tab to launch a new one.",
             SnackbarType.error,
           );
         }
@@ -181,6 +219,8 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
         openCount: 0,
         discountType: finalDiscountType,
         discountValue: finalDiscountValue,
+        dealStartAt: _timerEnabled ? _dealStartAt : null,
+        dealEndAt: _timerEnabled ? _dealEndAt : null,
       );
 
       await repo.createCampaign(campaign);
@@ -525,19 +565,21 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
                       color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(8.r),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _selectedProducts.map((p) {
-                        final original = p.price;
-                        final discounted = _calculateDiscountedPrice(original);
-                        return Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4.h),
-                          child: Row(
+                    child: Builder(builder: (context) {
+                      // One representative preview, not one row per selected
+                      // product (a campaign can target 100+ items).
+                      final sample = _selectedProducts.first;
+                      final original = sample.price;
+                      final discounted = _calculateDiscountedPrice(original);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
                                 child: Text(
-                                  p.name,
+                                  sample.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(fontSize: 12.sp, color: KorraColors.textDark),
@@ -553,12 +595,68 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
                               ),
                             ],
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          if (_selectedProducts.length > 1) ...[
+                            SizedBox(height: 4.h),
+                            Text(
+                              "Same discount applies to the other ${_selectedProducts.length - 1} selected product${_selectedProducts.length - 1 == 1 ? '' : 's'}.",
+                              style: GoogleFonts.inter(fontSize: 10.5.sp, color: Colors.grey.shade500),
+                            ),
+                          ],
+                        ],
+                      );
+                    }),
                   ),
+                  if (_zeroPriceProducts.isNotEmpty) ...[
+                    SizedBox(height: 10.h),
+                    Container(
+                      padding: EdgeInsets.all(10.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3F2),
+                        borderRadius: BorderRadius.circular(8.r),
+                        border: Border.all(color: const Color(0xFFFECDCA)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 16.sp, color: const Color(0xFFB42318)),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              _zeroPriceProducts.length == 1
+                                  ? "${_zeroPriceProducts.first.name}'s price will drop to ₦0 with this discount. Lower the discount or remove it from this campaign."
+                                  : "${_zeroPriceProducts.length} selected products will drop to ₦0 with this discount: ${_zeroPriceProducts.map((p) => p.name).join(', ')}. Lower the discount or remove them from this campaign.",
+                              style: GoogleFonts.inter(
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFFB42318),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ],
+              SizedBox(height: 8.h),
+
+              // Deal Countdown Timer (independent of tag/discount)
+              CampaignTimerSection(
+                enabled: _timerEnabled,
+                startAt: _dealStartAt,
+                endAt: _dealEndAt,
+                onToggled: (val) => setState(() {
+                  _timerEnabled = val;
+                  if (val && _dealStartAt == null) {
+                    // Sensible defaults: starts now, runs 24h
+                    _dealStartAt = DateTime.now();
+                    _dealEndAt = DateTime.now().add(const Duration(hours: 24));
+                  }
+                }),
+                onStartPicked: (dt) => setState(() => _dealStartAt = dt),
+                onEndPicked: (dt) => setState(() => _dealEndAt = dt),
+              ),
               SizedBox(height: 16.h),
 
               // Campaign Title
@@ -634,7 +732,9 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
               GestureDetector(
                 onTap: _pickCampaignImage,
                 child: Container(
-                  height: 110.h,
+                  // Matches the banner height CampaignCard renders at in the
+                  // Campaigns tab, so the picker preview isn't misleading.
+                  height: 120.h,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade50,
@@ -648,12 +748,21 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
                   child: _campaignImage != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r - 1.r),
-                          child: Image.file(
-                            File(_campaignImage!.path),
-                            height: 110.h,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
+                          // dart:io File can't read an XFile's path on web
+                          // (it's a blob URL), so preview via Image.network there.
+                          child: kIsWeb
+                              ? Image.network(
+                                  _campaignImage!.path,
+                                  height: 120.h,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                )
+                              : Image.file(
+                                  File(_campaignImage!.path),
+                                  height: 120.h,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

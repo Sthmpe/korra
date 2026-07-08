@@ -34,10 +34,19 @@ class VendorProductsPage extends StatefulWidget {
 class _VendorProductsPageState extends State<VendorProductsPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  // Reviews stays app-only for now; Campaigns is available on web too, so the
+  // tab count/order differs by platform and the header title must follow it.
+  List<String> get _tabTitles => [
+        'Products',
+        'Storefront Settings',
+        if (!kIsWeb) 'Ratings & Reviews',
+        'Marketing Campaigns',
+      ];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: kIsWeb ? 2 : 4, vsync: this);
+    _tabController = TabController(length: _tabTitles.length, vsync: this);
     _tabController.addListener(() {
       setState(() {}); // Rebuild to update "Add Product" button visibility
     });
@@ -50,18 +59,9 @@ class _VendorProductsPageState extends State<VendorProductsPage> with SingleTick
   }
 
   String _getHeaderTitle() {
-    switch (_tabController.index) {
-      case 0:
-        return 'Products';
-      case 1:
-        return 'Storefront Settings';
-      case 2:
-        return 'Ratings & Reviews';
-      case 3:
-        return 'Marketing Campaigns';
-      default:
-        return 'Store';
-    }
+    final index = _tabController.index;
+    if (index < 0 || index >= _tabTitles.length) return 'Store';
+    return _tabTitles[index];
   }
 
   @override
@@ -126,7 +126,7 @@ class _VendorProductsPageState extends State<VendorProductsPage> with SingleTick
                     const Tab(text: "Products"),
                     const Tab(text: "Storefront"),
                     if (!kIsWeb) const Tab(text: "Reviews"),
-                    if (!kIsWeb) const Tab(text: "Campaigns"),
+                    const Tab(text: "Campaigns"),
                   ],
                   labelColor: const Color(0xFFA54600),
                   unselectedLabelColor: KorraColors.textMuted,
@@ -149,10 +149,9 @@ class _VendorProductsPageState extends State<VendorProductsPage> with SingleTick
                         VendorReviewsBody(
                           vendorId: widget.vendorUid,
                         ),
-                      if (!kIsWeb)
-                        VendorCampaignsBody(
-                          vendorId: widget.vendorUid,
-                        ),
+                      VendorCampaignsBody(
+                        vendorId: widget.vendorUid,
+                      ),
                     ],
                   ),
                 ),

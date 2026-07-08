@@ -1,6 +1,10 @@
 // lib/presentation/customer/storefront/widgets/cart_service.dart
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../data/models/product_model.dart';
 
 class CartItem {
@@ -43,12 +47,78 @@ class CartItem {
   }
 }
 
+/// Carts persist across app launches (SharedPreferences) so we can nudge
+/// customers back to unfinished checkouts. Each vendor cart auto-expires
+/// [cartLifetime] after its last update.
 class CartService {
   static final CartService instance = CartService._internal();
   CartService._internal();
 
+  static const String _prefsKey = 'korra_saved_carts_v2';
+  static const Duration cartLifetime = Duration(days: 7);
+
   // Maps vendorId to a list of CartItems
   final ValueNotifier<Map<String, List<CartItem>>> cartsNotifier = ValueNotifier({});
+
+  /// Last-touched time per vendor cart, used for the 1-week auto-delete.
+  final Map<String, DateTime> _savedAt = {};
+  bool _loaded = false;
+
+  /// Vendors with an unfinished checkout — drives the nav-bar signal badge
+  /// and the red dots / ranking on the Stores page.
+  Set<String> get pendingVendorIds => cartsNotifier.value.keys.toSet();
+  bool get hasAnyCart => cartsNotifier.value.isNotEmpty;
+
+  /// Load saved carts from disk and purge expired ones. Safe to call more
+  /// than once; only the first call does work.
+  Future<void> init() async {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final restored = <String, List<CartItem>>{};
+      final now = DateTime.now();
+
+      decoded.forEach((vendorId, value) {
+        final entry = value as Map<String, dynamic>;
+        final savedAt = DateTime.tryParse(entry['savedAt'] ?? '') ?? now;
+        if (now.difference(savedAt) > cartLifetime) return; // expired — drop
+
+        final items = (entry['items'] as List<dynamic>? ?? [])
+            .map((m) => CartItem.fromMap(Map<String, dynamic>.from(m)))
+            .toList();
+        if (items.isEmpty) return;
+
+        restored[vendorId] = items;
+        _savedAt[vendorId] = savedAt;
+      });
+
+      if (restored.isNotEmpty) cartsNotifier.value = restored;
+      if (restored.length != decoded.length) _persist(); // rewrite without expired
+    } catch (e) {
+      debugPrint('CartService: failed to restore carts: $e');
+    }
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = <String, dynamic>{};
+      cartsNotifier.value.forEach((vendorId, items) {
+        payload[vendorId] = {
+          'savedAt': (_savedAt[vendorId] ?? DateTime.now()).toIso8601String(),
+          'items': items.map((i) => i.toMap()).toList(),
+        };
+      });
+      await prefs.setString(_prefsKey, jsonEncode(payload));
+    } catch (e) {
+      debugPrint('CartService: failed to save carts: $e');
+    }
+  }
 
   List<CartItem> getItems(String vendorId) {
     return cartsNotifier.value[vendorId] ?? [];
@@ -82,7 +152,9 @@ class CartService {
     }
 
     currentCarts[vendorId] = items;
+    _savedAt[vendorId] = DateTime.now();
     cartsNotifier.value = currentCarts;
+    _persist();
   }
 
   void updateQuantity(String vendorId, String productId, int delta) {
@@ -101,10 +173,13 @@ class CartService {
 
     if (items.isEmpty) {
       currentCarts.remove(vendorId);
+      _savedAt.remove(vendorId);
     } else {
       currentCarts[vendorId] = items;
+      _savedAt[vendorId] = DateTime.now();
     }
     cartsNotifier.value = currentCarts;
+    _persist();
   }
 
   void removeItem(String vendorId, String productId) {
@@ -115,15 +190,20 @@ class CartService {
 
     if (items.isEmpty) {
       currentCarts.remove(vendorId);
+      _savedAt.remove(vendorId);
     } else {
       currentCarts[vendorId] = items;
+      _savedAt[vendorId] = DateTime.now();
     }
     cartsNotifier.value = currentCarts;
+    _persist();
   }
 
   void clearCart(String vendorId) {
     final currentCarts = Map<String, List<CartItem>>.from(cartsNotifier.value);
     currentCarts.remove(vendorId);
+    _savedAt.remove(vendorId);
     cartsNotifier.value = currentCarts;
+    _persist();
   }
 }

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/plans.dart';
 
+/// Paid / Remaining amounts with the ownership progress bar. Floating white
+/// card — soft shadow, no border lines.
 class PlanDetailFinancialCard extends StatelessWidget {
   final Plan plan;
 
@@ -14,7 +16,6 @@ class PlanDetailFinancialCard extends StatelessWidget {
   });
 
   static const _brand = KorraColors.brand;
-  static const _stroke = Color(0xFFF2F4F7);
 
   @override
   Widget build(BuildContext context) {
@@ -32,27 +33,63 @@ class PlanDetailFinancialCard extends StatelessWidget {
     final bool isUnlocked = showExtensionLogic && percent >= 0.8;
 
     return Container(
-      padding: EdgeInsets.all(20.r),
+      padding: EdgeInsets.all(18.r),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: _stroke.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _amountCol(currencyFormat, "Paid", plan.amountPaid, _brand),
-              _amountCol(
-                currencyFormat,
-                "Remaining",
-                plan.outstandingLoanAmount,
-                const Color(0xFF101828),
+              Expanded(
+                child: Text(
+                  "Ownership Progress",
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w800,
+                    color: KorraColors.textDark,
+                  ),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: (isUnlocked ? const Color(0xFF039855) : _brand)
+                      .withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  "${(percent * 100).toInt()}%",
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w800,
+                    color: isUnlocked ? const Color(0xFF039855) : _brand,
+                  ),
+                ),
               ),
             ],
           ),
-          SizedBox(height: 20.h),
+          SizedBox(height: 16.h),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _amountCol(currencyFormat, "Paid", plan.amountPaid, _brand,
+                  CrossAxisAlignment.start),
+              _amountCol(currencyFormat, "Remaining",
+                  plan.outstandingLoanAmount, KorraColors.textDark,
+                  CrossAxisAlignment.end),
+            ],
+          ),
+          SizedBox(height: 16.h),
           Stack(
             children: [
               ClipRRect(
@@ -72,53 +109,42 @@ class PlanDetailFinancialCard extends StatelessWidget {
                   child: Container(
                     width: 2.w,
                     height: 12.h,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                   ),
                 ),
             ],
           ),
-          SizedBox(height: 12.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                showExtensionLogic
-                    ? (isUnlocked
-                        ? "Time Extension Available"
-                        : "Reach 80% to unlock time")
-                    : "Ownership Progress",
-                style: GoogleFonts.inter(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w600,
-                  color: showExtensionLogic
-                      ? (isUnlocked ? const Color(0xFF039855) : Colors.red)
-                      : Colors.grey,
-                ),
+          if (showExtensionLogic) ...[
+            SizedBox(height: 10.h),
+            Text(
+              isUnlocked
+                  ? "Time Extension Available"
+                  : "Reach 80% to unlock time",
+              style: GoogleFonts.inter(
+                fontSize: 11.sp,
+                fontWeight: FontWeight.w700,
+                color: isUnlocked
+                    ? const Color(0xFF039855)
+                    : const Color(0xFFB42318),
               ),
-              Text(
-                "${(percent * 100).toInt()}%",
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF101828),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _amountCol(NumberFormat formatter, String label, double amt, Color color) {
+  Widget _amountCol(NumberFormat formatter, String label, double amt,
+      Color color, CrossAxisAlignment align) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: align,
       children: [
         Text(
           label,
           style: GoogleFonts.inter(
-            fontSize: 12.sp,
-            color: Colors.grey.shade600,
+            fontSize: 11.5.sp,
+            fontWeight: FontWeight.w600,
+            color: KorraColors.textMuted,
           ),
         ),
         SizedBox(height: 4.h),
@@ -126,7 +152,7 @@ class PlanDetailFinancialCard extends StatelessWidget {
           formatter.format(amt),
           style: GoogleFonts.inter(
             fontSize: 16.sp,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: color,
           ),
         ),

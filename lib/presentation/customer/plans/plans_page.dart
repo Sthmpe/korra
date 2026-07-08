@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 
+import '../../../config/constants/colors.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../data/models/customer/plans.dart';
@@ -44,6 +45,11 @@ class PlansPage extends StatefulWidget {
 
 class _PlansPageState extends State<PlansPage> {
   late final CustomerRepository _repo;
+
+  // Owned by the state (NOT a BlocProvider created inside build): the FAB and
+  // the bottom sheet need this bloc from contexts that sit ABOVE any provider
+  // created in build — reading it there threw ProviderNotFoundException.
+  late final LinkBloc _linkBloc;
   // Filters State
   PlansTab _currentTab = PlansTab.active;
   SortBy _sortBy = SortBy.recent;
@@ -68,6 +74,10 @@ class _PlansPageState extends State<PlansPage> {
   void initState() {
     super.initState();
     _repo = context.read<CustomerRepository>();
+    _linkBloc = LinkBloc(
+      customerRepo: _repo,
+      customerUid: widget.customerUid,
+    );
     _customerSub = _repo.streamCustomer(widget.customerUid).listen((customer) {
       _latestCustomer = customer;
     });
@@ -117,17 +127,14 @@ class _PlansPageState extends State<PlansPage> {
   void dispose() {
     _customerSub?.cancel();
     _scrollController.dispose();
+    _linkBloc.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => LinkBloc(
-        customerRepo: _repo,
-        customerUid: widget.customerUid,
-      ),
-      child: BlocListener<LinkBloc, LinkState>(
+    return BlocListener<LinkBloc, LinkState>(
+        bloc: _linkBloc,
         listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
           if (state.status == LinkStatus.loaded) {
@@ -160,7 +167,7 @@ class _PlansPageState extends State<PlansPage> {
           }
         },
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: KorraColors.surface,
           appBar: KorraHeader(
             title: 'Plans',
             trailingActions: [
@@ -233,7 +240,7 @@ class _PlansPageState extends State<PlansPage> {
             ],
           ),
 
-          floatingActionButton: FloatingActionButton(
+          floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -242,21 +249,30 @@ class _PlansPageState extends State<PlansPage> {
                 isScrollControlled:
                     true, // <--- ⚠️ THIS IS THE CRITICAL FIX
                 builder: (_) => BlocProvider.value(
-                  value: context.read<LinkBloc>(),
+                  value: _linkBloc,
                   child: NewPlanSheet(
                     onSubmit: (v) {
                       FocusManager.instance.primaryFocus?.unfocus();
-                      context.read<LinkBloc>().add(LinkSubmitted(v));
+                      _linkBloc.add(LinkSubmitted(v));
                     },
                   ),
                 ),
               );
             },
             backgroundColor: _brand,
+            elevation: 2,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16.r),
+              borderRadius: BorderRadius.circular(18.r),
             ),
-            child: const Icon(Icons.add, color: Colors.white),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: Text(
+              'New Plan',
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
           ),
 
           // THE CORE: Real-Time Data Stream
@@ -346,7 +362,6 @@ class _PlansPageState extends State<PlansPage> {
             },
           ),
         ),
-      ),
     );
   }
 

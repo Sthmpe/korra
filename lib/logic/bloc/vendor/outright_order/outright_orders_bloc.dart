@@ -28,6 +28,37 @@ class OutrightOrdersBloc extends Bloc<OutrightOrdersEvent, OutrightOrdersState> 
     on<OutrightOrdersSearchChanged>(_onSearchChanged);
     on<OutrightOrdersLoadMore>(_onLoadMore);
     on<OutrightOrderMarkDelivered>(_onMarkDelivered);
+    on<OutrightBulkMarkDelivered>(_onBulkMarkDelivered);
+    on<OutrightToggleSelection>(_onToggleSelection);
+    on<OutrightSelectAll>(_onSelectAll);
+    on<OutrightClearSelection>(_onClearSelection);
+  }
+
+  // --- Multi-select (selection state only; bulk delivery write pending) ---
+
+  void _onToggleSelection(
+    OutrightToggleSelection event,
+    Emitter<OutrightOrdersState> emit,
+  ) {
+    final updated = Set<String>.from(state.selectedIds);
+    updated.contains(event.orderId)
+        ? updated.remove(event.orderId)
+        : updated.add(event.orderId);
+    emit(state.copyWith(selectedIds: updated));
+  }
+
+  void _onSelectAll(
+    OutrightSelectAll event,
+    Emitter<OutrightOrdersState> emit,
+  ) {
+    emit(state.copyWith(selectedIds: event.orderIds.toSet()));
+  }
+
+  void _onClearSelection(
+    OutrightClearSelection event,
+    Emitter<OutrightOrdersState> emit,
+  ) {
+    emit(state.copyWith(selectedIds: const {}));
   }
 
   Future<void> _onStarted(
@@ -174,6 +205,37 @@ class OutrightOrdersBloc extends Bloc<OutrightOrdersEvent, OutrightOrdersState> 
 
       await Future.delayed(const Duration(seconds: 1));
       emit(state.copyWith(deliveryStatus: DeliveryStatus.initial));
+
+      add(const OutrightOrdersRefresh());
+    } catch (e) {
+      emit(state.copyWith(
+        deliveryStatus: DeliveryStatus.failure,
+        errorMessage: e.toString(),
+      ));
+      await Future.delayed(const Duration(seconds: 1));
+      emit(state.copyWith(deliveryStatus: DeliveryStatus.initial));
+    }
+  }
+
+  Future<void> _onBulkMarkDelivered(
+    OutrightBulkMarkDelivered event,
+    Emitter<OutrightOrdersState> emit,
+  ) async {
+    if (event.orderIds.isEmpty) return;
+    emit(state.copyWith(deliveryStatus: DeliveryStatus.loading));
+
+    try {
+      // Reuse the single-order write per id — the same backend path used by
+      // the individual "Mark Delivered" action.
+      for (final id in event.orderIds) {
+        await repo.markOutrightOrderDelivered(id);
+      }
+
+      // Clear the selection and flag success before refreshing the list.
+      emit(state.copyWith(
+        deliveryStatus: DeliveryStatus.success,
+        selectedIds: const {},
+      ));
 
       add(const OutrightOrdersRefresh());
     } catch (e) {

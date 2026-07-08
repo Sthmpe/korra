@@ -11,20 +11,43 @@ import '../../../../../data/models/vendor/campaign_model.dart';
 class CampaignCard extends StatelessWidget {
   final Campaign campaign;
 
+  /// Multi-select delete support: when [selectionMode] is on, tapping the
+  /// card toggles [selected] instead of doing nothing. Long-pressing a card
+  /// while not yet in selection mode is how the merchant enters it.
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// Quick single delete, shown as a trash icon when not in selection mode.
+  final VoidCallback? onDeleteTap;
+
   const CampaignCard({
     super.key,
     required this.campaign,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onTap,
+    this.onLongPress,
+    this.onDeleteTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final active = campaign.isActive;
 
-    return Container(
+    return InkWell(
+      onTap: selectionMode ? onTap : null,
+      onLongPress: onLongPress,
+      borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
-        border: Border.all(color: const Color(0xFFF2F4F7)),
+        border: Border.all(
+          color: selected ? const Color(0xFFA54600) : const Color(0xFFF2F4F7),
+          width: selected ? 1.5 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.01),
@@ -33,7 +56,9 @@ class CampaignCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
+        children: [
+      Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Banner Image (Compulsory)
@@ -188,6 +213,45 @@ class CampaignCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+
+          // Selection checkbox (selection mode) / quick delete (normal mode)
+          Positioned(
+            top: 8.h,
+            right: 8.w,
+            child: selectionMode
+                ? Container(
+                    width: 24.w,
+                    height: 24.w,
+                    decoration: BoxDecoration(
+                      color: selected ? const Color(0xFFA54600) : Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selected ? const Color(0xFFA54600) : Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: selected
+                        ? Icon(Icons.check, size: 15.sp, color: Colors.white)
+                        : null,
+                  )
+                : (onDeleteTap != null
+                    ? InkWell(
+                        onTap: onDeleteTap,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: EdgeInsets.all(6.r),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.delete_outline, size: 16.sp, color: const Color(0xFFB42318)),
+                        ),
+                      )
+                    : const SizedBox.shrink()),
+          ),
+        ],
+      ),
       ),
     );
   }

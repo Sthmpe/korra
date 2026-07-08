@@ -19,6 +19,11 @@ class Campaign {
   final String discountType; // 'none' | 'percentage' | 'amount'
   final double discountValue;
 
+  // Deal countdown timer — independent of the tag. When set, customers see
+  // a live countdown between [dealStartAt] and [dealEndAt].
+  final DateTime? dealStartAt;
+  final DateTime? dealEndAt;
+
   Campaign({
     required this.id,
     required this.vendorId,
@@ -33,12 +38,30 @@ class Campaign {
     this.isMock = false,
     this.discountType = 'none',
     this.discountValue = 0.0,
+    this.dealStartAt,
+    this.dealEndAt,
   });
 
   bool get isActive {
-    final difference = DateTime.now().difference(sentAt);
-    return difference.inHours < 24;
+    // Timed deals live until their merchant-chosen end time. Untimed
+    // campaigns no longer auto-expire after 24h — the merchant now controls
+    // their lifecycle explicitly by deleting them (see CampaignsRepository
+    // deleteCampaign/deleteCampaigns).
+    if (dealEndAt != null) return DateTime.now().isBefore(dealEndAt!);
+    return true;
   }
+
+  bool get hasTimer => dealStartAt != null && dealEndAt != null;
+
+  /// Timer is set and the deal window is currently open.
+  bool get timerRunning {
+    if (!hasTimer) return false;
+    final now = DateTime.now();
+    return now.isAfter(dealStartAt!) && now.isBefore(dealEndAt!);
+  }
+
+  /// Timer is set but the deal hasn't opened yet.
+  bool get timerUpcoming => hasTimer && DateTime.now().isBefore(dealStartAt!);
 
   factory Campaign.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -66,6 +89,8 @@ class Campaign {
       isMock: data['isMock'] ?? false,
       discountType: data['discountType'] ?? 'none',
       discountValue: (data['discountValue'] ?? 0.0).toDouble(),
+      dealStartAt: (data['dealStartAt'] as Timestamp?)?.toDate(),
+      dealEndAt: (data['dealEndAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -83,6 +108,8 @@ class Campaign {
       'isMock': isMock,
       'discountType': discountType,
       'discountValue': discountValue,
+      if (dealStartAt != null) 'dealStartAt': Timestamp.fromDate(dealStartAt!),
+      if (dealEndAt != null) 'dealEndAt': Timestamp.fromDate(dealEndAt!),
     };
   }
 }

@@ -80,12 +80,9 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
             itemBuilder: (context, i, realIndex) {
               final p = widget.plans[i];
               
-              final String dueText = "Next milestone ${p.nextDueDate.day}/${p.nextDueDate.month}"; 
+              final String dueText = "Next milestone ${p.nextDueDate.day}/${p.nextDueDate.month}";
 
-              debugPrint("Rendering Plan Card: ${p.title}, Due: $dueText");
-              debugPrint("  Amount Paid: ${p.amountPaid}, Remaining: ${p.amountRemaining}");
-              
-              
+
               return Padding(
                 padding: EdgeInsets.only(
                   left: i == 0 ? 16.w : 8.w,

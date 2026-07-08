@@ -29,6 +29,7 @@ class OutrightOrdersPanel extends StatelessWidget {
         if (previous.countReadyToDeliver != current.countReadyToDeliver) return true;
         if (previous.countDelivered != current.countDelivered) return true;
         if (previous.countCancelled != current.countCancelled) return true;
+        if (!identical(previous.selectedIds, current.selectedIds)) return true;
         if (previous.visible.length != current.visible.length) return true;
         for (int i = 0; i < previous.visible.length; i++) {
           if (previous.visible[i] != current.visible[i]) return true;

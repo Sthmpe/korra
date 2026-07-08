@@ -261,67 +261,9 @@ class _HomePageState extends State<HomePage> {
                               context.read<LinkBloc>().add(LinkSubmitted(v));
                             },
                           ),
-                          
+
                           SizedBox(height: 4.h),
-
-                          // Link Loading State
-                          BlocBuilder<LinkBloc, LinkState>(
-                            builder: (context, state) {
-                              final showLoader = state.status == LinkStatus.validating || state.status == LinkStatus.loadingProduct;
-
-                              if (state.status == LinkStatus.empty) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text('Please enter a link to proceed', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              if (state.status == LinkStatus.invalid) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text('The link you provided is invalid', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
-                              }
-                              
-                              if (state.status == LinkStatus.failed) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text(state.message ?? 'Error occurred', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              if (!showLoader) return const SizedBox.shrink();
-                              
-                              return Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                child: Row(
-                                  children: [
-                                    SizedBox(width: 16.w, height: 16.w, child: const CircularProgressIndicator(strokeWidth: 2, color: KorraColors.brand)),
-                                    SizedBox(width: 8.w),
-                                    Expanded(child: Text(state.message ?? 'Processing...', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, fontStyle: FontStyle.italic, color: KorraColors.textMuted))),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                          _buildLinkStatus(),
 
                           // E. RECENT ACTIVITY
                           SectionHeader(title: 'Recent Activity', actionText: ''),
@@ -396,26 +338,100 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Inline feedback under the paste-link field (validation / loading / errors).
+  Widget _buildLinkStatus() {
+    return BlocBuilder<LinkBloc, LinkState>(
+      builder: (context, state) {
+        final showLoader = state.status == LinkStatus.validating ||
+            state.status == LinkStatus.loadingProduct;
+
+        String? errorText;
+        if (state.status == LinkStatus.empty) {
+          errorText = 'Please enter a link to proceed';
+        } else if (state.status == LinkStatus.invalid) {
+          errorText = 'The link you provided is invalid';
+        } else if (state.status == LinkStatus.failed) {
+          errorText = state.message ?? 'Error occurred';
+        }
+
+        if (errorText != null) {
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20.w),
+            child: Row(
+              children: [
+                Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Text(
+                    errorText,
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13.sp,
+                        color: KorraColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!showLoader) return const SizedBox.shrink();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 6.h, 20.w, 0),
+          child: Row(
+            children: [
+              SizedBox(
+                  width: 16.w,
+                  height: 16.w,
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2, color: KorraColors.brand)),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  state.message ?? 'Processing...',
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13.sp,
+                      fontStyle: FontStyle.italic,
+                      color: KorraColors.textMuted),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildEmptyPlanState() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       child: Container(
         width: double.infinity,
         padding: EdgeInsets.symmetric(vertical: 32.h, horizontal: 24.w),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFAFA),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: Color(0xFFF0F0F0).withOpacity(0.05)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Column(
           children: [
             Container(
               padding: EdgeInsets.all(12.r),
-              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
-              child: Icon(Icons.receipt_long_rounded, size: 24.sp, color: Colors.grey.shade400),
+              decoration: const BoxDecoration(
+                  color: KorraColors.brandLight, shape: BoxShape.circle),
+              child: Icon(Icons.receipt_long_rounded,
+                  size: 24.sp, color: KorraColors.brand),
             ),
             SizedBox(height: 12.h),
-            Text('No active plans yet', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
+            Text('No active plans yet', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B))),
             SizedBox(height: 4.h),
             Text('Paste a link below to start reserving.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4)),
           ],

@@ -207,8 +207,13 @@ class _MyVendorsScreenState extends State<MyVendorsScreen> {
                       final double credit = (data['storeCredit'] ?? 0).toDouble();
 
                       return _VendorCard(
+                        customerUid: widget.customerUid,
                         vendorId: vendorId,
                         storeCredit: credit,
+                        onDeleted: () => setState(() {
+                          _vendors.removeAt(index);
+                          _totalMerchantsCount = _totalMerchantsCount > 0 ? _totalMerchantsCount - 1 : 0;
+                        }),
                       );
                     },
                   ),
@@ -222,11 +227,127 @@ class _MyVendorsScreenState extends State<MyVendorsScreen> {
 // -----------------------------------------------------------------------------
 // _VendorCard & _SocialBtn REMAIN EXACTLY AS BEFORE
 // -----------------------------------------------------------------------------
-class _VendorCard extends StatelessWidget {
+class _VendorCard extends StatefulWidget {
+  final String customerUid;
   final String vendorId;
   final double storeCredit;
+  final VoidCallback onDeleted;
 
-  const _VendorCard({required this.vendorId, required this.storeCredit});
+  const _VendorCard({
+    required this.customerUid,
+    required this.vendorId,
+    required this.storeCredit,
+    required this.onDeleted,
+  });
+
+  @override
+  State<_VendorCard> createState() => _VendorCardState();
+}
+
+class _VendorCardState extends State<_VendorCard> {
+  bool _checkingDelete = false;
+
+  String get vendorId => widget.vendorId;
+  double get storeCredit => widget.storeCredit;
+
+  /// Deleting is only allowed with no active instalment plan and no leftover
+  /// store balance. Blocked cases explain why and just offer to close the
+  /// dialog, the store stays exactly as it is.
+  Future<void> _onDeleteTap(String storeName) async {
+    if (_checkingDelete) return;
+    setState(() => _checkingDelete = true);
+    try {
+      if (storeCredit > 0) {
+        if (mounted) {
+          _showBlockedDialog(
+            storeName,
+            "You have ${NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0).format(storeCredit)} in store balance with $storeName. Delete is disabled so that balance isn't lost, spend it or wait for a refund first.",
+          );
+        }
+        return;
+      }
+
+      final activePlan = await FirebaseFirestore.instance
+          .collection('plans')
+          .where('customerId', isEqualTo: widget.customerUid)
+          .where('vendorId', isEqualTo: vendorId)
+          .where('status', isEqualTo: 'active')
+          .limit(1)
+          .get();
+
+      if (activePlan.docs.isNotEmpty) {
+        if (mounted) {
+          _showBlockedDialog(
+            storeName,
+            "You have an ongoing instalment plan with $storeName. Delete is disabled until that plan is completed or cancelled.",
+          );
+        }
+        return;
+      }
+
+      if (mounted) _showConfirmDialog(storeName);
+    } catch (e) {
+      debugPrint("Delete-store eligibility check failed: $e");
+    } finally {
+      if (mounted) setState(() => _checkingDelete = false);
+    }
+  }
+
+  void _showBlockedDialog(String storeName, String reason) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Can't delete $storeName", style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15.sp)),
+        content: Text(reason, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade700, height: 1.4)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Close", style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: KorraColors.brand)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfirmDialog(String storeName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete $storeName?", style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15.sp)),
+        content: Text(
+          "This permanently removes $storeName from your merchants list. You won't have access to it here again unless you visit their store link. This can't be undone.",
+          style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade700, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel", style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteStore();
+            },
+            child: Text("Delete", style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: const Color(0xFFB42318))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteStore() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(widget.customerUid)
+          .collection('my_vendors')
+          .doc(vendorId)
+          .delete();
+      widget.onDeleted();
+    } catch (e) {
+      debugPrint("Delete store failed: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -306,23 +427,31 @@ class _VendorCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Store Credit Badge
-                    if (storeCredit > 0)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: Colors.transparent),
+                    // Store Credit Badge + delete-store action
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        InkWell(
+                          onTap: _checkingDelete ? null : () => _onDeleteTap(name),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Padding(
+                            padding: EdgeInsets.all(4.r),
+                            child: _checkingDelete
+                                ? SizedBox(
+                                    width: 16.sp,
+                                    height: 16.sp,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey.shade400),
+                                  )
+                                : Icon(Iconsax.trash, size: 18.sp, color: Colors.grey.shade400),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text("Store Balance", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
-                            Text(currencyFormat.format(storeCredit), style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w800, color: const Color(0xFF15803D))),
-                          ],
-                        ),
-                      )
+                        if (storeCredit > 0) ...[
+                          SizedBox(height: 4.h),
+                          Text("Store Balance", style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF166534))),
+                          Text(currencyFormat.format(storeCredit), style: GoogleFonts.inter(fontSize: 13.5.sp, fontWeight: FontWeight.w800, color: const Color(0xFF15803D))),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),

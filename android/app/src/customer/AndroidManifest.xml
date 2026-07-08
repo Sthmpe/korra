@@ -1,0 +1,25 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Customer-only App Links: the canonical store link
+         https://korra.com.ng/store/{slug} opens the shopping app straight
+         onto the storefront. Merged onto .MainActivity from the main manifest.
+         (The main manifest already covers ${appLinkHost} = app.korra.com.ng.) -->
+    <application>
+        <activity
+            android:name=".MainActivity"
+            tools:node="merge">
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="korra.com.ng" />
+                <data android:host="www.korra.com.ng" />
+                <data android:pathPrefix="/store" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -3,8 +3,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
+import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/plans.dart';
 
+/// Timeline status: days remaining, extension active or action required.
+/// Soft tinted card with a white icon bubble — no border lines.
 class PlanDetailTimelineCard extends StatelessWidget {
   final Plan plan;
 
@@ -24,7 +27,7 @@ class PlanDetailTimelineCard extends StatelessWidget {
     String title = "$daysLeft Days Remaining";
     String subtitle = "Timeline ends on ${DateFormat('MMM d').format(deadline)}";
     Color bg = const Color(0xFFF0F9FF);
-    Color iconColor = const Color(0xFF1570EF);
+    Color accent = const Color(0xFF1570EF);
     IconData icon = Iconsax.calendar_1;
 
     if (plan.isOverdue) {
@@ -35,32 +38,33 @@ class PlanDetailTimelineCard extends StatelessWidget {
       title = "Extension Active";
       subtitle = "Timeline extended to ${DateFormat('MMM d').format(deadline)}";
       bg = const Color(0xFFECFDF5);
-      iconColor = const Color(0xFF039855);
+      accent = const Color(0xFF039855);
       icon = Iconsax.tick_circle;
       isCritical = false;
     }
 
     if (isCritical) {
       bg = const Color(0xFFFEF2F2);
-      iconColor = Colors.red;
+      accent = const Color(0xFFD92D20);
       icon = Iconsax.warning_2;
     }
 
     return Container(
-      padding: EdgeInsets.all(16.r),
+      padding: EdgeInsets.all(14.r),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          width: 0.0,
-          color: bg == const Color(0xFFFEF2F2).withOpacity(0.8)
-              ? Colors.red.shade100.withOpacity(0.05)
-              : Colors.transparent,
-        ),
+        borderRadius: BorderRadius.circular(20.r),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 24.sp, color: iconColor),
+          Container(
+            padding: EdgeInsets.all(10.r),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 20.sp, color: accent),
+          ),
           SizedBox(width: 12.w),
           Expanded(
             child: Column(
@@ -69,16 +73,18 @@ class PlanDetailTimelineCard extends StatelessWidget {
                 Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14.sp,
-                    color: iconColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5.sp,
+                    color: accent,
                   ),
                 ),
+                SizedBox(height: 2.h),
                 Text(
                   subtitle,
                   style: GoogleFonts.inter(
                     fontSize: 12.sp,
-                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                    color: KorraColors.textBody,
                   ),
                 ),
               ],

@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
@@ -32,7 +33,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
   late TextEditingController _descController;
   late TextEditingController _whatsappController;
   late TextEditingController _instagramController;
-  late TextEditingController _twitterController;
+  late TextEditingController _tiktokController;
   late TextEditingController _phoneController;
 
   // File Upload State
@@ -53,7 +54,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
     _descController = TextEditingController();
     _whatsappController = TextEditingController();
     _instagramController = TextEditingController();
-    _twitterController = TextEditingController();
+    _tiktokController = TextEditingController();
     _phoneController = TextEditingController();
     _loadStorefrontData();
   }
@@ -65,7 +66,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
     _descController.dispose();
     _whatsappController.dispose();
     _instagramController.dispose();
-    _twitterController.dispose();
+    _tiktokController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
@@ -85,7 +86,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
           _descController.text = storeMap['description'] ?? '';
           _whatsappController.text = socialsMap['whatsappGroup'] ?? '';
           _instagramController.text = socialsMap['instagram'] ?? '';
-          _twitterController.text = socialsMap['twitter'] ?? '';
+          _tiktokController.text = socialsMap['tiktok'] ?? '';
           _phoneController.text = storeMap['contactPhone'] ?? personalMap['phone'] ?? '';
           _logoUrl = storeMap['logoUrl'] ?? '';
           _coverUrl = storeMap['coverUrl'] ?? '';
@@ -172,7 +173,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
         coverUrl: finalCoverUrl,
         whatsappGroup: _whatsappController.text.trim(),
         instagram: _instagramController.text.trim(),
-        twitter: _twitterController.text.trim(),
+        tiktok: _tiktokController.text.trim(),
         contactPhone: _phoneController.text.trim(),
         absorbOutrightFee: _absorbOutrightFee,
       );
@@ -366,32 +367,13 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
                       return null;
                     },
                     helperText: _slugController.text.isNotEmpty
-                        ? "Your store link: https://korra.shop/store/${_slugController.text.toLowerCase().trim()}"
+                        ? "Your store link: $_storeLink"
                         : null,
                     onChanged: (val) => setState(() {}),
                   ),
-                  if (_slugController.text.isNotEmpty && _logoUrl.isNotEmpty) ...[
-                    SizedBox(height: 8.h),
-                    GestureDetector(
-                      onTap: () {
-                        Share.share("Visit my store on Korra: https://korra.shop/store/${_slugController.text.toLowerCase().trim()}");
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.share, size: 14.sp, color: const Color(0xFFA54600)),
-                          SizedBox(width: 6.w),
-                          Text(
-                            "Share Store Link",
-                            style: GoogleFonts.inter(
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFFA54600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  if (_slugController.text.trim().isNotEmpty) ...[
+                    SizedBox(height: 12.h),
+                    _buildStoreLinkActions(),
                   ],
 
                   // Description
@@ -444,14 +426,14 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
                     ),
                   ),
 
-                  // Twitter
-                  _buildLabel("Twitter (X) Username"),
+                  // TikTok (replaced Twitter — David, 5 July 2026)
+                  _buildLabel("TikTok Username"),
                   _buildTextField(
-                    controller: _twitterController,
-                    hint: "e.g. nike_x",
+                    controller: _tiktokController,
+                    hint: "e.g. nike_store",
                     prefixIcon: Padding(
                       padding: EdgeInsets.all(20.r),
-                      child: FaIcon(FontAwesomeIcons.x, size: 18.sp, color: KorraColors.textHint),
+                      child: FaIcon(FontAwesomeIcons.tiktok, size: 18.sp, color: KorraColors.textHint),
                     ),
                   ),
 
@@ -521,6 +503,90 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
           ],
         ),
       ),
+    );
+  }
+
+  String get _storeLink =>
+      "https://korra.com.ng/store/${_slugController.text.toLowerCase().trim()}";
+
+  Future<void> _viewStore() async {
+    final uri = Uri.parse(_storeLink);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        showAppSnackbar("Could not open your store link.", SnackbarType.error);
+      }
+    } catch (e) {
+      debugPrint("Error opening store link: $e");
+      showAppSnackbar("Could not open your store link.", SnackbarType.error);
+    }
+  }
+
+  /// Share + View Store side by side under the slug field — tinted pills,
+  /// no border lines.
+  Widget _buildStoreLinkActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Share.share(
+              "Visit my store on Korra: $_storeLink",
+              subject: _nameController.text.trim(),
+            ),
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 12.h),
+              decoration: BoxDecoration(
+                color: KorraColors.brandLight,
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.share_outlined, size: 16.sp, color: KorraColors.brand),
+                  SizedBox(width: 8.w),
+                  Text(
+                    "Share Store",
+                    style: GoogleFonts.inter(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w700,
+                      color: KorraColors.brand,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 10.w),
+        Expanded(
+          child: GestureDetector(
+            onTap: _viewStore,
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 12.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.storefront_outlined, size: 16.sp, color: const Color(0xFF344054)),
+                  SizedBox(width: 8.w),
+                  Text(
+                    "View Store",
+                    style: GoogleFonts.inter(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF344054),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
