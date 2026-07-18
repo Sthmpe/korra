@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/models/product_model.dart';
 import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
@@ -25,6 +26,7 @@ import 'product_submit_area.dart';
 import 'product_timeline_logic_box.dart';
 import 'product_strict_settings_card.dart';
 import 'product_direct_settings_card.dart';
+import 'product_variants_editor.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final ProductItem product;
@@ -75,12 +77,27 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   bool _allowReservation = true;
   bool _isFeatured = false;
 
+  // Optional flat variants; when non-empty the Stock field mirrors the sum.
+  List<ProductVariant> _variants = [];
+
   String? _helperMessage;
 
   late final VendorRepository _vendors;
 
   void _onTextChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onVariantsChanged(List<ProductVariant> variants) {
+    setState(() {
+      _variants = variants;
+      if (variants.isNotEmpty) {
+        final total = variants.fold<int>(0, (acc, v) => acc + v.stock);
+        // Mirror the sum into the Stock field so the limit math and UI
+        // keep reading stockCtrl unchanged.
+        stockCtrl.text = total.toString();
+      }
+    });
   }
 
   @override
@@ -98,6 +115,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       text: p.priceText.replaceAll(RegExp(r'[^0-9.]'), ''),
     );
     stockCtrl = TextEditingController(text: p.stock.toString());
+    _variants = List<ProductVariant>.from(p.variants);
     categoryCtrl = TextEditingController(text: p.category);
     codeCtrl = TextEditingController(text: p.code);
     _allowReservation = p.allowReservation;
@@ -232,6 +250,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     bool enabled = true,
     bool readOnly = false,
     int maxLines = 1,
+    int? maxLength,
+    String? helperText,
     Widget? prefixIcon,
     Widget? suffixIcon,
     BoxConstraints? prefixIconConstraints,
@@ -244,6 +264,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       enabled: enabled,
       readOnly: readOnly,
       maxLines: maxLines,
+      maxLength: enabled ? maxLength : null,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
@@ -255,6 +276,18 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       cursorColor: KorraColors.brand,
       decoration: InputDecoration(
         hintText: hint,
+        helperText: helperText,
+        helperStyle: GoogleFonts.inter(
+          fontSize: 10.5.sp,
+          color: KorraColors.brand,
+          fontWeight: FontWeight.w600,
+        ),
+        counterStyle: GoogleFonts.inter(
+          fontSize: 10.5.sp,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w500,
+        ),
+        errorStyle: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFFD92D20)),
         filled: true,
         fillColor: enabled ? const Color(0xFFF9FAFB) : const Color(0xFFF2F4F7),
         prefixIcon: prefixIcon,
@@ -306,7 +339,21 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     final priceTxt = priceCtrl.text.replaceAll(',', '');
     final price = double.tryParse(priceTxt) ?? 0.0;
-    final stock = int.tryParse(stockCtrl.text) ?? 0;
+    final stock = _variants.isNotEmpty
+        ? _variants.fold<int>(0, (acc, v) => acc + v.stock)
+        : int.tryParse(stockCtrl.text) ?? 0;
+
+    if (_variants.isNotEmpty) {
+      final labels = _variants.map((v) => v.label.toLowerCase()).toSet();
+      if (labels.length != _variants.length) {
+        showAppSnackbar("Variant labels must be unique.", SnackbarType.error);
+        return;
+      }
+      if (stock <= 0) {
+        showAppSnackbar("Add stock to at least one variant.", SnackbarType.error);
+        return;
+      }
+    }
 
     if (_allowReservation) {
       int finalDuration = int.tryParse(_durationCtrl.text) ?? 0;
@@ -347,6 +394,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         noticePeriod: _allowReservation ? _calculatedNoticeInt : 0,
         extensionPeriod: _allowReservation ? _calculatedExtensionInt : 0,
         isFeatured: _isFeatured,
+        variants: _variants,
       ),
     );
   }
@@ -482,19 +530,22 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                       // 5. DETAILS (Identity)
                       Text("Details", style: _labelStyle()),
                       SizedBox(height: 6.h),
+                      // Name and description are permanently locked on edit
+                      // (David, 10 July 2026): identity is set at creation and
+                      // never changes afterwards, regardless of status.
                       _buildInput(
                         controller: nameCtrl,
                         hint: "Name",
-                        enabled: _canEditIdentity,
-                        validator: null,
+                        enabled: false,
+                        readOnly: true,
                       ),
                       SizedBox(height: 12.h),
                       _buildInput(
                         controller: descCtrl,
                         hint: "Description",
                         maxLines: 4,
-                        enabled: _canEditIdentity,
-                        validator: null,
+                        enabled: false,
+                        readOnly: true,
                       ),
 
                       SizedBox(height: 24.h),
@@ -830,6 +881,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                           ],
                         ),
                       ],
+                      SizedBox(height: 24.h),
+
+                      // VARIANTS (optional): editable any time after listing;
+                      // the Stock field above becomes the computed total.
+                      ProductVariantsEditor(
+                        initialVariants: widget.product.variants,
+                        onChanged: _onVariantsChanged,
+                      ),
                       SizedBox(height: 24.h),
 
                       if (_allowReservation) ...[

@@ -250,7 +250,7 @@ class StorefrontHeader extends StatelessWidget {
             ),
             SizedBox(width: 6.w),
             Text(
-              isPinned ? "Pinned" : "Pin Store",
+              isPinned ? "Saved" : "Save Store",
               style: GoogleFonts.inter(
                 fontSize: 12.sp,
                 fontWeight: FontWeight.w700,

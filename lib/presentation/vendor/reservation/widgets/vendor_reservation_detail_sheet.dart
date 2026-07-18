@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 
+import '../../../../logic/services/analytics_service.dart';
 import '../../../../data/models/vendor/reservation.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_bloc.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_event.dart';
@@ -181,6 +182,10 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                       onPressed: isLoading
                                           ? null
                                           : () {
+                                              Analytics.log(
+                                                AnalyticsEvents.merchReservationFulfilled,
+                                                {'reservation_id': d.id},
+                                              );
                                               // ✅ DIRECT BATCH CALL
                                               context.read<ReservationsBloc>().add(ResMarkFulfilled([d.id]));
                                             },
@@ -288,6 +293,13 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                 color: Colors.grey.shade400,
                                 letterSpacing: 1.2)),
                         SizedBox(height: 12.h),
+                        if (d.variantLabel != null) ...[
+                          _InfoRow(
+                              label: "Variant",
+                              value: d.variantLabel!,
+                              isBold: true),
+                          SizedBox(height: 8.h),
+                        ],
                         _InfoRow(label: "Product Price", value: d.totalText),
                         SizedBox(height: 8.h),
                         _InfoRow(

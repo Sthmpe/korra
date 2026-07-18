@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../config/utils/korra_exception.dart';
+import '../../../logic/services/recent_views_service.dart';
 import '../../models/customer/payment_receipt_data.dart';
 import 'customer_repository.dart';
 
@@ -50,6 +52,11 @@ extension OutrightCheckout on CustomerRepository {
       if (data['status'] == 'ERROR') {
         throw KorraException(data['error'] ?? "Checkout failed. Please try again.");
       }
+
+      // Purchased products drop out of Last Viewed immediately.
+      unawaited(RecentViewsService.instance.removePurchased(
+        items.map((i) => i['productId'].toString()).toList(),
+      ));
 
       // Fail-safe parse: if the receipt can't be read but the order went
       // through, still return success — the money already moved.

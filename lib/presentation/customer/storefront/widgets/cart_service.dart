@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../data/models/product_model.dart';
+import '../../../../logic/services/analytics_service.dart';
 
 class CartItem {
   final String productId;
@@ -15,6 +16,16 @@ class CartItem {
   final double price;
   int quantity;
 
+  /// Available stock at the time the item was added — quantity can never
+  /// exceed it. Old persisted carts (pre-stock) default high and get clamped
+  /// server-side at checkout anyway. For a variant line this is the VARIANT's
+  /// stock, not the product total.
+  final int stock;
+
+  /// The chosen variant ("XL", "XL / Red", ...). Null for products without
+  /// variants. Same product + different variants = separate cart lines.
+  final String? variantLabel;
+
   CartItem({
     required this.productId,
     required this.productCode,
@@ -22,7 +33,13 @@ class CartItem {
     required this.imageUrl,
     required this.price,
     required this.quantity,
+    this.stock = 99,
+    this.variantLabel,
   });
+
+  /// True when this line is the given product+variant combination.
+  bool matches(String productId, String? variantLabel) =>
+      this.productId == productId && this.variantLabel == variantLabel;
 
   Map<String, dynamic> toMap() {
     return {
@@ -32,6 +49,8 @@ class CartItem {
       'imageUrl': imageUrl,
       'price': price,
       'quantity': quantity,
+      'stock': stock,
+      if (variantLabel != null) 'variantLabel': variantLabel,
     };
   }
 
@@ -43,6 +62,8 @@ class CartItem {
       imageUrl: map['imageUrl'] ?? '',
       price: ((map['price'] ?? 0.0) as num).toDouble(),
       quantity: (map['quantity'] ?? 1) as int,
+      stock: (map['stock'] ?? 99) as int,
+      variantLabel: map['variantLabel'] as String?,
     );
   }
 }
@@ -129,17 +150,54 @@ class CartService {
     return items.fold(0, (sum, item) => sum + item.quantity);
   }
 
-  void addToCart(String vendorId, Product product, int quantity) {
+  /// Units of this product already held in the vendor's cart, summed across
+  /// ALL variant lines — the product sheet uses it so reopening can't add
+  /// the same stock twice.
+  int quantityInCart(String vendorId, String productId) {
+    return getItems(vendorId)
+        .where((item) => item.productId == productId)
+        .fold(0, (sum, item) => sum + item.quantity);
+  }
+
+  /// Units of one specific product+variant line already in the cart.
+  int quantityForVariant(String vendorId, String productId, String? variantLabel) {
+    final items = getItems(vendorId);
+    final index = items.indexWhere((item) => item.matches(productId, variantLabel));
+    return index >= 0 ? items[index].quantity : 0;
+  }
+
+  void addToCart(String vendorId, Product product, int quantity,
+      {String? variantLabel}) {
     final currentCarts = Map<String, List<CartItem>>.from(cartsNotifier.value);
     final items = List<CartItem>.from(currentCarts[vendorId] ?? []);
 
-    final finalPrice = (product.discountedPrice != null && product.discountedPrice! > 0)
-        ? product.discountedPrice!
+    // Use the ACTIVE discount so an expired/ended campaign charges full price.
+    final activeDiscount = product.activeDiscountedPrice;
+    final finalPrice = (activeDiscount != null && activeDiscount > 0)
+        ? activeDiscount
         : product.price;
+    // A variant line is capped by ITS stock; a flat line by the product total.
+    final stock = variantLabel != null
+        ? (product.variantStock(variantLabel) ?? 0)
+        : product.availableStock;
 
-    final existingIndex = items.indexWhere((item) => item.productId == product.id);
+    final existingIndex =
+        items.indexWhere((item) => item.matches(product.id, variantLabel));
     if (existingIndex >= 0) {
-      items[existingIndex].quantity += quantity;
+      // Combined quantity never exceeds the live stock.
+      final capped =
+          (items[existingIndex].quantity + quantity).clamp(1, stock > 0 ? stock : 1);
+      final old = items[existingIndex];
+      items[existingIndex] = CartItem(
+        productId: old.productId,
+        productCode: old.productCode,
+        name: old.name,
+        imageUrl: old.imageUrl,
+        price: finalPrice,
+        quantity: capped,
+        stock: stock,
+        variantLabel: old.variantLabel,
+      );
     } else {
       items.add(CartItem(
         productId: product.id,
@@ -147,7 +205,9 @@ class CartService {
         name: product.name,
         imageUrl: product.images.isNotEmpty ? product.images.first : '',
         price: finalPrice,
-        quantity: quantity,
+        quantity: stock > 0 ? quantity.clamp(1, stock) : quantity,
+        stock: stock,
+        variantLabel: variantLabel,
       ));
     }
 
@@ -155,15 +215,26 @@ class CartService {
     _savedAt[vendorId] = DateTime.now();
     cartsNotifier.value = currentCarts;
     _persist();
+
+    Analytics.log(AnalyticsEvents.custAddToCart, {
+      'vendor_id': vendorId,
+      'product_id': product.id,
+      'quantity': quantity,
+      'value': finalPrice * quantity,
+      'currency': 'NGN',
+      if (variantLabel != null) 'variant': variantLabel,
+    });
   }
 
-  void updateQuantity(String vendorId, String productId, int delta) {
+  void updateQuantity(String vendorId, String productId, int delta,
+      {String? variantLabel}) {
     final currentCarts = Map<String, List<CartItem>>.from(cartsNotifier.value);
     final items = List<CartItem>.from(currentCarts[vendorId] ?? []);
 
-    final index = items.indexWhere((item) => item.productId == productId);
+    final index = items.indexWhere((item) => item.matches(productId, variantLabel));
     if (index >= 0) {
-      final newQty = items[index].quantity + delta;
+      // The + stepper stops at the item's known stock.
+      final newQty = (items[index].quantity + delta).clamp(0, items[index].stock);
       if (newQty <= 0) {
         items.removeAt(index);
       } else {
@@ -182,11 +253,11 @@ class CartService {
     _persist();
   }
 
-  void removeItem(String vendorId, String productId) {
+  void removeItem(String vendorId, String productId, {String? variantLabel}) {
     final currentCarts = Map<String, List<CartItem>>.from(cartsNotifier.value);
     final items = List<CartItem>.from(currentCarts[vendorId] ?? []);
 
-    items.removeWhere((item) => item.productId == productId);
+    items.removeWhere((item) => item.matches(productId, variantLabel));
 
     if (items.isEmpty) {
       currentCarts.remove(vendorId);
@@ -197,6 +268,11 @@ class CartService {
     }
     cartsNotifier.value = currentCarts;
     _persist();
+
+    Analytics.log(AnalyticsEvents.custRemoveFromCart, {
+      'vendor_id': vendorId,
+      'product_id': productId,
+    });
   }
 
   void clearCart(String vendorId) {

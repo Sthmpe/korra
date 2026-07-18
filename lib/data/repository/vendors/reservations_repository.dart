@@ -13,66 +13,65 @@ import 'vendor_repository.dart';
 
 extension ReservationsRepository on VendorRepository {
   
-  // ✅ 1. STREAM COUNTS (Realtime Badges)
+  // ✅ 1. TAB COUNTS — server-side .count() aggregates instead of streaming the
+  // whole plans collection (which grew unbounded per vendor). Kept as a Stream
+  // (emits once) so the merchant home StreamBuilder is unchanged.
+  //
+  // Buckets mirror the old client categorization exactly:
+  //  - newRes  = active created today
+  //  - ongoing = active created before today   (= allActive - newRes)
+  //  - ready   = completed but NOT yet fulfilled (finalFulfilledAt missing)
+  //  - completed = completed AND fulfilled (finalFulfilledAt present)
+  //  - cancelled = cancelled | defaulted
+  // The ready/completed split uses orderBy('finalFulfilledAt'), which counts
+  // ONLY docs where the field exists (= fulfilled); ready is the remainder.
   Stream<Map<ReservationStatus, int>> streamCounts(String vendorId) {
-    return firestore
-        .collection('plans')
-        .where('vendorId', isEqualTo: vendorId)
-        .snapshots()
-        .map((snapshot) {
-          final allDocs = snapshot.docs;
+    return Stream.fromFuture(_reservationCounts(vendorId));
+  }
 
-          int newRes = 0;
-          int ongoing = 0;
-          int ready = 0; // ✅ New Bucket
-          int completed = 0;
-          int cancelled = 0;
+  Future<Map<ReservationStatus, int>> _reservationCounts(String vendorId) async {
+    try {
+      final base =
+          firestore.collection('plans').where('vendorId', isEqualTo: vendorId);
+      final now = DateTime.now();
+      final todayStart = Timestamp.fromDate(DateTime(now.year, now.month, now.day));
 
-          final now = DateTime.now();
-          final todayStart = DateTime(now.year, now.month, now.day);
+      final res = await Future.wait([
+        base
+            .where('status', isEqualTo: 'active')
+            .where('createdAt', isGreaterThanOrEqualTo: todayStart)
+            .count()
+            .get(), // newRes
+        base.where('status', isEqualTo: 'active').count().get(), // all active
+        base.where('status', isEqualTo: 'completed').count().get(), // all completed
+        base
+            .where('status', isEqualTo: 'completed')
+            .orderBy('finalFulfilledAt')
+            .count()
+            .get(), // fulfilled only (field present)
+        base
+            .where('status', whereIn: ['cancelled', 'defaulted'])
+            .count()
+            .get(), // cancelled
+      ]);
 
-          for (var doc in allDocs) {
-            final data = doc.data();
-            final status = data['status'] ?? 'active';
-            final fulfilledAt = data['finalFulfilledAt']; // Check fulfillment
-            final createdAtRaw = data['createdAt'];
+      final newRes = res[0].count ?? 0;
+      final activeAll = res[1].count ?? 0;
+      final completedAll = res[2].count ?? 0;
+      final fulfilled = res[3].count ?? 0;
 
-            DateTime createdDate;
-            if (createdAtRaw is Timestamp) {
-              createdDate = createdAtRaw.toDate();
-            } else {
-              createdDate = DateTime.now();
-            }
-
-            // --- CATEGORIZATION LOGIC ---
-            if (status == 'cancelled' || status == 'defaulted') {
-              cancelled++;
-            } 
-            else if (status == 'completed') {
-              // ✅ Split Completed vs Ready
-              if (fulfilledAt != null) {
-                completed++; 
-              } else {
-                ready++;
-              }
-            } 
-            else if (status == 'active') {
-              if (createdDate.isAfter(todayStart) || createdDate.isAtSameMomentAs(todayStart)) {
-                newRes++;
-              } else {
-                ongoing++;
-              }
-            }
-          }
-
-          return {
-            ReservationStatus.newRes: newRes,
-            ReservationStatus.ongoing: ongoing,
-            ReservationStatus.readyForPickup: ready, // ✅
-            ReservationStatus.completed: completed,
-            ReservationStatus.cancelled: cancelled,
-          };
-        });
+      return {
+        ReservationStatus.newRes: newRes,
+        ReservationStatus.ongoing: (activeAll - newRes).clamp(0, activeAll),
+        ReservationStatus.readyForPickup:
+            (completedAll - fulfilled).clamp(0, completedAll),
+        ReservationStatus.completed: fulfilled,
+        ReservationStatus.cancelled: res[4].count ?? 0,
+      };
+    } catch (e) {
+      debugPrint("Reservation count aggregate failed: $e");
+      return const {};
+    }
   }
 
  Future<Map<String, dynamic>> getReservations({
@@ -142,21 +141,31 @@ extension ReservationsRepository on VendorRepository {
     }
 
     // Apply strict limit after filtering
-    if (results.length > limit) {
+    final bool truncated = results.length > limit;
+    if (truncated) {
       results = results.sublist(0, limit);
     }
 
+    // Cursor rule: the next page must start where THIS SCAN stopped, not at
+    // the last filtered item. Anchoring to the last kept item re-scans raw
+    // docs the filter already saw and re-appends the same "ready" items on
+    // every load-more (the Ready-tab duplication bug). Only when we truncated
+    // do we anchor to the last kept item, so the dropped overflow is served
+    // on the next page instead of skipped.
     DocumentSnapshot? newLastDoc;
-    if (results.isNotEmpty) {
-      // Find the raw Firestore document that matches the very last item in our filtered list
+    if (truncated) {
       newLastDoc = snapshot.docs.firstWhere((doc) => doc.id == results.last.id);
+    } else if (snapshot.docs.isNotEmpty) {
+      newLastDoc = snapshot.docs.last;
     }
 
     // 🚀 Return the Map so the BLoC can paginate!
     return {
       'items': results,
       'lastDoc': newLastDoc,
-      'hasReachedMax': snapshot.docs.length < (limit * 4), // If we got fewer than requested, we hit the end
+      // Truncated pages always have leftovers to serve; otherwise a short
+      // raw snapshot means the collection scan is finished.
+      'hasReachedMax': !truncated && snapshot.docs.length < (limit * 4),
     };
   }
 

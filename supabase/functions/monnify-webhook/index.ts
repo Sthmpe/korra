@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
+import {
+  orderConfirmedEmail,
+  orderFailedEmail,
+  sendOrderEmail,
+  WebOrderEmailData,
+} from "../_shared/web_order_emails.ts";
 
 // 1. SETUP FIREBASE ADMIN
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
@@ -13,6 +19,359 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const messaging = admin.messaging();
+
+// =========================================================================
+// 🛍️ GUEST WEB PURCHASES (korra.com.ng storefront, no account)
+//
+// web-checkout `init` created the order with paymentStatus 'awaiting' and
+// touched NOTHING else. This handler is the single place a web order becomes
+// real money: verify amount, decrement stock, credit the merchant ledger as
+// pending settlement (mirror of outright-checkout), write the dispute copy,
+// notify the merchant, email the guest. Idempotent via paymentStatus.
+// =========================================================================
+const WEB_FEE_RATE = 0.035;
+
+async function handleWebOutrightPurchase(eventType: string, eventData: any): Promise<Response> {
+  const orderId = eventData.metaData?.orderId;
+  if (!orderId) {
+    console.error("web_outright webhook missing orderId:", eventData.metaData);
+    return new Response(JSON.stringify({ error: "Missing orderId" }), { status: 400 });
+  }
+
+  const orderRef = db.collection('orders').doc(orderId);
+
+  // ---- FAILED payment: cancel the awaiting order, email the guest ----
+  if (eventType === "FAILED_TRANSACTION") {
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) return new Response(JSON.stringify({ status: "ignored" }), { status: 200 });
+    const order = orderDoc.data()!;
+    if (order.paymentStatus !== 'awaiting') {
+      return new Response(JSON.stringify({ status: "ignored" }), { status: 200 });
+    }
+    await orderRef.update({
+      status: 'cancelled',
+      paymentStatus: 'failed',
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (order.customerEmail) {
+      const d = webEmailData(orderDoc.id, order, order.storeName ?? 'the store', '');
+      const { subject, html } = orderFailedEmail(d);
+      await sendOrderEmail(order.customerEmail, subject, html);
+    }
+    return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+  }
+
+  // ---- SUCCESSFUL payment ----
+  const amountPaid = Number(eventData.amountPaid);
+  const transactionReference = eventData.transactionReference ?? '';
+
+  let vendorFcmToken = "";
+  let shouldNotifyVendor = false;
+  let vendorIdForPush = "";
+  let emailPayload: WebOrderEmailData | null = null;
+  let customerTotalForPush = 0;
+  let summaryForPush = "";
+  let customerNameForPush = "";
+
+  await db.runTransaction(async (t) => {
+    // READS (all before writes)
+    const orderDoc = await t.get(orderRef);
+    if (!orderDoc.exists) throw "Web order not found";
+    const order = orderDoc.data()!;
+
+    // 🛑 Idempotency: webhook retries must be no-ops.
+    if (order.paymentStatus === 'paid') {
+      console.log(`Web order ${orderId} already paid. Skipping.`);
+      return;
+    }
+    if (order.webPurchase !== true) throw "Order is not a web purchase";
+
+    // 🛑 Amount check: what Monnify collected must cover what we quoted.
+    const amountCharged = Number(order.amountCharged ?? 0);
+    if (amountPaid + 0.01 < amountCharged) {
+      console.error(`Web order ${orderId} underpaid: ${amountPaid} < ${amountCharged}`);
+      t.update(orderRef, { paymentStatus: 'underpaid', amountPaidActual: amountPaid });
+      return;
+    }
+
+    const vendorRef = db.collection('vendors').doc(order.vendorId);
+    const vendorDoc = await t.get(vendorRef);
+    if (!vendorDoc.exists) throw "Vendor not found for web order";
+    const vendorData = vendorDoc.data()!;
+    const storeMap = vendorData.store ?? {};
+    const storeName = storeMap.storeName ?? 'Merchant Store';
+    vendorFcmToken = vendorData.fcmToken ?? "";
+    vendorIdForPush = order.vendorId;
+
+    const items: any[] = order.items ?? [];
+    const productRefs = items.map((it) => db.collection('products').doc(it.productId));
+    const productDocs = await Promise.all(productRefs.map((r) => t.get(r)));
+
+    const subtotal = Number(order.totalAmount ?? 0);
+    const feeAmount = Number(order.feeAmount ?? 0);
+    const absorbed = order.feePaidBy === 'merchant';
+    // Merchant take: full subtotal when the customer paid the fee on top,
+    // subtotal minus the (capped) fee when the merchant absorbs it.
+    const vendorNet = absorbed ? Math.floor((subtotal - feeAmount) * 100) / 100 : subtotal;
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const nowDate = new Date();
+    const currentDateStr = nowDate.toISOString().slice(0, 10);
+    const currentMonthStr = nowDate.toISOString().slice(0, 7);
+    const currentYearStr = nowDate.getFullYear().toString();
+    const currentDayStr = nowDate.toISOString().slice(8, 10);
+    const summaryTitle = items.length === 1
+      ? items[0].title
+      : `${items[0].title} +${items.length - 1} more`;
+
+    // WRITES
+    // 1. Stock (reversible: merchant cancel restores it, same as app orders).
+    // Sold units also release the capacity their listing was holding in
+    // vendor_stats.totalLiability (listing price x qty — the same math
+    // delete-product-secure and outright-checkout use).
+    let capacityToRestore = 0;
+    // Variant-aware: order items carry variantLabel (stamped by
+    // web-checkout). Lines are aggregated per product so a cart holding
+    // XL and XXL of the same product deducts each variant once and keeps
+    // availableStock as the recomputed sum. Flat products keep the exact
+    // increment(-qty) behavior they always had.
+    const processedProducts = new Set<string>();
+    for (const doc of productDocs) {
+      if (!doc.exists || processedProducts.has(doc.id)) continue;
+      processedProducts.add(doc.id);
+      const lines = items.filter((x) => x.productId === doc.id);
+      if (lines.length === 0) continue;
+      const totalQty = lines.reduce((acc, l) => acc + Number(l.quantity), 0);
+
+      const pData = doc.data()!;
+      const productVariants: { label: string; stock: number }[] =
+        Array.isArray(pData.variants)
+          ? pData.variants.map((v: any) => ({
+              label: String(v?.label ?? ''),
+              stock: Math.floor(Number(v?.stock ?? 0)),
+            }))
+          : [];
+
+      if (productVariants.length > 0) {
+        const newVariants = productVariants.map((v) => {
+          const deducted = lines
+            .filter((l) => (l.variantLabel ?? '').toString() === v.label)
+            .reduce((acc, l) => acc + Number(l.quantity), 0);
+          return { label: v.label, stock: Math.max(0, v.stock - deducted) };
+        });
+        const newTotal = newVariants.reduce((acc, v) => acc + v.stock, 0);
+        t.update(doc.ref, { variants: newVariants, availableStock: newTotal });
+      } else {
+        t.update(doc.ref, {
+          availableStock: admin.firestore.FieldValue.increment(-totalQty),
+        });
+      }
+      capacityToRestore += (Number(pData.price) || 0) * totalQty;
+    }
+    capacityToRestore = Math.round(capacityToRestore * 100) / 100;
+
+    // 2. Flip the order to paid. status is set back to 'pending' explicitly:
+    // if the customer closed the overlay (order cancelled as abandoned) but
+    // the transfer landed anyway, the confirmed payment restores the order.
+    t.update(orderRef, {
+      status: 'pending',
+      paymentStatus: 'paid',
+      paidAt: timestamp,
+      transactionReference,
+      amountPaidActual: amountPaid,
+    });
+
+    // 3. Merchant ledger: pending settlement, exactly like an app sale.
+    const vLedgerRef = vendorRef.collection('ledger_transactions').doc();
+    t.set(vLedgerRef, {
+      id: vLedgerRef.id,
+      userId: order.vendorId,
+      amount: vendorNet,
+      type: 'sale',
+      description: `${order.customerName} bought ${summaryTitle} outright on your web store (₦${amountCharged.toLocaleString()}${absorbed ? ", fee absorbed" : ""}, pending settlement)`,
+      reference: order.reference,
+      orderId: orderDoc.id,
+      status: 'success',
+      createdAt: timestamp,
+      customerName: order.customerName,
+      grossAmount: amountPaid,
+      feeAmount,
+      settlementStatus: 'pending',
+      webPurchase: true,
+    });
+
+    const vendorStatsRef = db.collection('vendor_stats').doc(order.vendorId);
+    t.set(vendorStatsRef, {
+      totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
+      walletBalance: admin.firestore.FieldValue.increment(vendorNet),
+      totalSalesVolume: admin.firestore.FieldValue.increment(subtotal),
+      // Sold stock frees the capacity its listing was holding.
+      totalLiability: admin.firestore.FieldValue.increment(-capacityToRestore),
+    }, { merge: true });
+
+    // 4. Korra's fee
+    if (feeAmount > 0) {
+      const korraLedger = db.collection('company_ledger').doc();
+      t.set(korraLedger, {
+        id: korraLedger.id,
+        type: 'credit',
+        category: 'outright_fee',
+        amount: feeAmount,
+        description: `${WEB_FEE_RATE * 100}% outright fee (${absorbed ? 'merchant absorbed' : 'customer paid'}) on ${summaryTitle} (web)`,
+        orderId: orderDoc.id,
+        timestamp,
+        dateStr: currentDateStr,
+        monthStr: currentMonthStr,
+        yearStr: currentYearStr,
+      });
+      const companyWalletRef = db.collection('company_wallet').doc('main');
+      t.set(companyWalletRef, {
+        availableBalance: admin.firestore.FieldValue.increment(feeAmount),
+        totalAllTimeEarnings: admin.firestore.FieldValue.increment(feeAmount),
+        lastUpdated: timestamp,
+      }, { merge: true });
+    }
+
+    // 4b. Campaign conversion: one purchase per campaign attributed at init
+    // (order.promotionCampaignIds — internal, never displayed). set+merge so
+    // an archived campaign doc can never abort the payment finalisation.
+    const promoCampaignIds: string[] = Array.isArray(order.promotionCampaignIds)
+      ? order.promotionCampaignIds
+      : [];
+    for (const cId of promoCampaignIds) {
+      t.set(
+        db.collection('campaigns').doc(String(cId)),
+        { purchases: admin.firestore.FieldValue.increment(1) },
+        { merge: true },
+      );
+    }
+
+    // 4c. Web Activity: raw web-purchase count for the merchant's Web
+    // Activity card (separate stat, never a rate against page views).
+    t.set(db.collection('web_activity').doc(order.vendorId), {
+      purchasesTotal: admin.firestore.FieldValue.increment(1),
+      purchasesDaily: { [currentDateStr]: admin.firestore.FieldValue.increment(1) },
+    }, { merge: true });
+
+    // 5. Dispute archive: full copy under web_purchases/{vendor}/purchases
+    const disputeRef = db
+      .collection('web_purchases').doc(order.vendorId)
+      .collection('purchases').doc(orderDoc.id);
+    t.set(disputeRef, {
+      orderId: orderDoc.id,
+      vendorId: order.vendorId,
+      storeName,
+      customerName: order.customerName,
+      customerEmail: order.customerEmail,
+      customerPhone: order.customerPhone,
+      items,
+      subtotal,
+      feeAmount,
+      feePaidBy: order.feePaidBy,
+      amountCharged,
+      amountPaidActual: amountPaid,
+      reference: order.reference,
+      transactionReference,
+      paidAt: timestamp,
+      createdAt: order.createdAt ?? timestamp,
+    });
+
+    // 6. Merchant activity feed + monthly analytics (same as app sales)
+    const activityRef = vendorRef.collection('activity_feed').doc();
+    t.set(activityRef, {
+      id: activityRef.id,
+      type: 'payment',
+      title: 'Web Order Paid',
+      body: `${order.customerName} paid ₦${amountCharged.toLocaleString()} outright for ${summaryTitle} on your web store (Pending Settlement)`,
+      ref_id: orderDoc.id,
+      amount_display: `+₦${amountCharged.toLocaleString()}`,
+      date: timestamp,
+      is_read: false,
+    });
+
+    const monthlyRef = vendorRef.collection('monthly_stats').doc(currentMonthStr);
+    t.set(monthlyRef, {
+      month: currentMonthStr,
+      year: currentYearStr,
+      earnings: admin.firestore.FieldValue.increment(vendorNet),
+      [`daily_breakdown.${currentDayStr}`]: admin.firestore.FieldValue.increment(vendorNet),
+      lastUpdated: timestamp,
+    }, { merge: true });
+
+    // 7. Merchant in-app notification (push goes out after commit)
+    const notifRef = vendorRef.collection('notifications').doc();
+    t.set(notifRef, {
+      id: notifRef.id,
+      title: "New Web Order 🌐",
+      body: `${order.customerName} just bought ${summaryTitle} on your web store. Head to Orders to fulfil it.`,
+      type: "vendor_order",
+      isRead: false,
+      createdAt: timestamp,
+      metadata: { type: "vendor_order", orderId: orderDoc.id },
+    });
+
+    shouldNotifyVendor = true;
+    customerTotalForPush = amountCharged;
+    summaryForPush = summaryTitle;
+    customerNameForPush = order.customerName ?? 'A customer';
+
+    emailPayload = webEmailData(
+      orderDoc.id,
+      order,
+      storeName,
+      storeMap.contactPhone ?? vendorData.personal?.phone ?? '',
+    );
+  });
+
+  // Push + email outside the transaction, same pattern as the wallet route.
+  if (shouldNotifyVendor && vendorFcmToken) {
+    await messaging.send({
+      token: vendorFcmToken,
+      notification: {
+        title: "New Web Order 🌐",
+        body: `${customerNameForPush} paid ₦${customerTotalForPush.toLocaleString()} for ${summaryForPush} on your web store.`,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "korra_high_importance_channel",
+          priority: "max",
+          color: "#A54600",
+          // Same small icon the manifest default uses — "ic_launcher" resolved
+          // to the wrong resource and rendered the Flutter logo in the tray.
+          icon: "notification_icon",
+        },
+      },
+      apns: { payload: { aps: { sound: "default", contentAvailable: true } } },
+    }).catch((e) => console.error("❌ Web order FCM failed:", e));
+  }
+
+  if (shouldNotifyVendor && emailPayload && (emailPayload as WebOrderEmailData).customerEmail) {
+    const { subject, html } = orderConfirmedEmail(emailPayload);
+    await sendOrderEmail((emailPayload as WebOrderEmailData).customerEmail, subject, html);
+  }
+
+  return new Response(JSON.stringify({ status: "success" }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function webEmailData(orderId: string, order: any, storeName: string, merchantPhone: string): WebOrderEmailData {
+  return {
+    customerName: order.customerName ?? 'there',
+    customerEmail: order.customerEmail ?? '',
+    orderIdShort: orderId.substring(0, 8).toUpperCase(),
+    orderId,
+    storeName,
+    merchantPhone,
+    items: order.items ?? [],
+    subtotal: Number(order.totalAmount ?? 0),
+    feeAmount: Number(order.feeAmount ?? 0),
+    feePaidBy: order.feePaidBy ?? 'customer',
+    amountCharged: Number(order.amountCharged ?? 0),
+  };
+}
 
 // 2. CRYPTO HELPER
 async function verifyMonnifyHash(bodyText: string, signature: string, secret: string): Promise<boolean> {
@@ -41,6 +400,19 @@ serve(async (req) => {
 
     const payload = JSON.parse(bodyText);
     const { eventType, eventData } = payload;
+
+    // =========================================================================
+    // 🚦 ROUTE 0: GUEST WEB PURCHASES (storefront, no account)
+    // metaData.purchaseType === 'web_outright' is set ONLY by the website's
+    // checkout. Anything without it falls through to the existing routes
+    // completely unchanged.
+    // =========================================================================
+    if (
+      (eventType === "SUCCESSFUL_TRANSACTION" || eventType === "FAILED_TRANSACTION") &&
+      eventData?.metaData?.purchaseType === 'web_outright'
+    ) {
+      return await handleWebOutrightPurchase(eventType, eventData);
+    }
 
     // =========================================================================
     // 🚦 ROUTE 1: CUSTOMER DEPOSITS (FUND WALLET)

@@ -28,13 +28,8 @@ function to2DP(num: number): number {
 // 3. MAIN WORKER
 serve(async (req) => {
   try {
-    // --- A. SECURITY CHECK ---
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
-        Logger.warn("AUTH", "Unauthorized access attempt");
-        return new Response("Unauthorized", { status: 401 });
-    }
+    // Auth: relies on the Supabase gateway key only (same as the other cron
+    // workers, e.g. korra_expiry_automation). No separate CRON_SECRET.
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -159,7 +154,14 @@ async function performAutoCancellation(db: any, planId: string, plan: any) {
     return db.runTransaction(async (t: any) => {
         const vendorId = plan.vendorId;
         const customerUid = plan.customerId;
-        const refundAmount = to2DP(Number(plan.amountPaid) || 0); 
+        const refundAmount = to2DP(Number(plan.amountPaid) || 0);
+
+        // Reads first: fetch the product when the plan reserved a specific
+        // variant, so its stock can be restored below.
+        let productSnapForRestore: any = null;
+        if (plan.productId && plan.variantLabel) {
+            productSnapForRestore = await t.get(db.collection("products").doc(plan.productId));
+        }
 
         // 1. UPDATE PLAN
         const planRef = db.collection("plans").doc(planId);
@@ -223,9 +225,25 @@ async function performAutoCancellation(db: any, planId: string, plan: any) {
         });
 
         const productRef = db.collection("products").doc(plan.productId);
-        t.update(productRef, { 
-            availableStock: admin.firestore.FieldValue.increment(1) 
-        });
+        // Restore the exact variant this plan reserved; total-only +1 when
+        // the product has no variants (or the label vanished after an edit).
+        const restoreVariants = (plan.variantLabel && productSnapForRestore?.exists &&
+            Array.isArray(productSnapForRestore.data()?.variants))
+            ? productSnapForRestore.data().variants : [];
+        const hasLabel = restoreVariants.some((v: any) => String(v?.label ?? '') === plan.variantLabel);
+        if (hasLabel) {
+            const newVariants = restoreVariants.map((v: any) => {
+                const lbl = String(v?.label ?? '');
+                const stk = Math.floor(Number(v?.stock ?? 0));
+                return { label: lbl, stock: lbl === plan.variantLabel ? stk + 1 : stk };
+            });
+            const newTotal = newVariants.reduce((acc: number, v: any) => acc + v.stock, 0);
+            t.update(productRef, { variants: newVariants, availableStock: newTotal });
+        } else {
+            t.update(productRef, {
+                availableStock: admin.firestore.FieldValue.increment(1)
+            });
+        }
 
         // 5. Activity Feed
         const actRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();

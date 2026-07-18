@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../config/utils/korra_exception.dart';
+import '../../../logic/services/recent_views_service.dart';
 import '../../models/customer/payment_receipt_data.dart';
 import '../../models/customer/plans.dart';
 import 'customer_repository.dart';
@@ -19,6 +21,7 @@ extension CustomerPlans on CustomerRepository {
     required String customerUid,
     required double productPrice,
     required String productId,
+    String? variantLabel,
   }) async {
     try {
       final user = auth.currentUser;
@@ -49,6 +52,9 @@ extension CustomerPlans on CustomerRepository {
           "action": "PREVIEW",
           "customerUid": customerUid,
           "productId": productId,
+          // Variant products: the server validates this label's stock and
+          // seals it inside the secureToken so CREATE can't be forged.
+          if (variantLabel != null) "variantLabel": variantLabel,
         },
       );
 
@@ -134,6 +140,9 @@ extension CustomerPlans on CustomerRepository {
       }
 
       debugPrint("✅ Plan Created via Supabase. ID: ${data['planId']}");
+
+      // Reserving counts as a purchase: drop it from Last Viewed immediately.
+      unawaited(RecentViewsService.instance.removePurchased([plan.productId]));
 
     } catch (e) {
       debugPrint("❌ Create Error (Technical): $e");

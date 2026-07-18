@@ -12,8 +12,10 @@ class CampaignCard extends StatelessWidget {
   final Campaign campaign;
 
   /// Multi-select delete support: when [selectionMode] is on, tapping the
-  /// card toggles [selected] instead of doing nothing. Long-pressing a card
-  /// while not yet in selection mode is how the merchant enters it.
+  /// card toggles [selected]; otherwise tapping opens the campaign's
+  /// analytics sheet (the caller decides — [onTap] fires either way).
+  /// Long-pressing a card while not yet in selection mode is how the
+  /// merchant enters selection.
   final bool selectionMode;
   final bool selected;
   final VoidCallback? onTap;
@@ -37,7 +39,7 @@ class CampaignCard extends StatelessWidget {
     final active = campaign.isActive;
 
     return InkWell(
-      onTap: selectionMode ? onTap : null,
+      onTap: onTap,
       onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(KorraSizes.cardRadius.r),
       child: Container(

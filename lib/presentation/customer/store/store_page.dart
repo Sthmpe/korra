@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -9,6 +11,7 @@ import '../../../data/models/vendor/campaign_model.dart';
 import '../storefront/widgets/cart_service.dart';
 import 'widgets/discover_store_list_item.dart';
 import 'widgets/hot_deals_strip.dart';
+import 'widgets/last_viewed_strip.dart';
 import 'widgets/recommended_stores_section.dart';
 import 'widgets/store_hero_header.dart';
 
@@ -45,7 +48,20 @@ class _StorePageState extends State<StorePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  late final Stream<QuerySnapshot> _vendorsStream;
+
+  /// The customer's own network: the stores they've actually interacted with
+  /// (customers/{uid}/my_vendors). Explore Stores is scoped to this — it is
+  /// NOT a global directory of every merchant on Korra. Search can still reach
+  /// any store by name/slug so a customer can find a new one to interact with.
+  late final Stream<QuerySnapshot> _networkStream;
+
+  /// Vendor docs are loaded on demand and memoized: while NOT searching we
+  /// fetch only the saved stores' docs (bounded by network size); the whole
+  /// vendors collection is read once ONLY when the customer is searching, then
+  /// reused across keystrokes. This keeps the Stores page from streaming every
+  /// merchant on Korra as the marketplace grows.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>? _vendorDocsFuture;
+  String _vendorDocsKey = '';
 
   /// Recent campaigns, used to flag stores with a live deal right now (the
   /// broadcasting dot on the Stores tab, same signal as an unfinished cart).
@@ -62,9 +78,10 @@ class _StorePageState extends State<StorePage> {
     super.initState();
     // Cached once — recreating a Firestore stream on every rebuild resets
     // the list to its loading state and re-reads the whole query.
-    _vendorsStream = _firestore
-        .collection('vendors')
-        .where('status', isNotEqualTo: 'banned')
+    _networkStream = _firestore
+        .collection('customers')
+        .doc(widget.customerUid)
+        .collection('my_vendors')
         .snapshots();
     _campaignsStream = _firestore
         .collection('campaigns')
@@ -122,57 +139,107 @@ class _StorePageState extends State<StorePage> {
     );
   }
 
+  /// Memoized vendor-doc source. While searching, one stable key ('search')
+  /// so the whole-vendor fetch runs once and is reused across keystrokes;
+  /// otherwise keyed by the saved-store set so it refetches only when the
+  /// customer's network changes.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _vendorDocsFor(
+      bool searching, List<String> networkIds) {
+    final key = searching
+        ? 'search'
+        : 'net:${(List<String>.from(networkIds)..sort()).join(',')}';
+    if (_vendorDocsFuture == null || _vendorDocsKey != key) {
+      _vendorDocsKey = key;
+      _vendorDocsFuture = _fetchVendorDocs(searching, networkIds);
+    }
+    return _vendorDocsFuture!;
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _fetchVendorDocs(
+      bool searching, List<String> networkIds) async {
+    final col = _firestore.collection('vendors');
+    if (searching) {
+      // On-demand whole-vendor read (one .get(), NOT a live stream). Filtered
+      // by name/slug in the build. Excludes banned stores.
+      final snap = await col.where('status', isNotEqualTo: 'banned').get();
+      return snap.docs;
+    }
+    if (networkIds.isEmpty) return const [];
+    // Default: only the saved stores' docs, whereIn documentId in chunks of 10.
+    final out = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    for (var i = 0; i < networkIds.length; i += 10) {
+      final chunk = networkIds.sublist(i, min(i + 10, networkIds.length));
+      final snap = await col.where(FieldPath.documentId, whereIn: chunk).get();
+      out.addAll(snap.docs);
+    }
+    return out;
+  }
+
   // DISCOVER STORES — one lazy CustomScrollView; rows build on demand only.
   Widget _buildDiscoverStores() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _vendorsStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Padding(
-            padding: EdgeInsets.all(24.r),
-            child: const Center(child: CircularProgressIndicator(color: KorraColors.brand)),
-          );
-        }
-
-        final docs = snapshot.data?.docs ?? [];
+      stream: _networkStream,
+      builder: (context, networkSnapshot) {
+        final networkIds = (networkSnapshot.data?.docs ?? const [])
+            .map((d) => d.id)
+            .toList();
         final query = _searchQuery.toLowerCase();
+        final searching = _searchQuery.isNotEmpty;
 
-        // Vendor data by id — lets the Hot Deals strip resolve store
-        // names/slugs for real campaigns without extra Firestore reads.
-        final vendorsById = <String, Map<String, dynamic>>{
-          for (final doc in docs) doc.id: doc.data() as Map<String, dynamic>? ?? {},
-        };
+        // Closed marketplace: the default list loads ONLY the customer's saved
+        // stores' vendor docs (bounded by network size). The whole vendors
+        // collection is read on demand ONLY while searching (one .get(), reused
+        // across keystrokes), then filtered by name/slug client-side.
+        return FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          future: _vendorDocsFor(searching, networkIds),
+          builder: (context, vendorSnap) {
+            if (vendorSnap.connectionState == ConnectionState.waiting) {
+              return Padding(
+                padding: EdgeInsets.all(24.r),
+                child: const Center(child: CircularProgressIndicator(color: KorraColors.brand)),
+              );
+            }
+            final docs = vendorSnap.data ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-        // Real merchants (search-filtered)
-        final entries = <_StoreEntry>[];
-        for (final doc in docs) {
-          final data = doc.data() as Map<String, dynamic>? ?? {};
-          final storeMap = data['store'] as Map<String, dynamic>? ?? {};
+            // Network vendor docs by id — lets Hot Deals / Recommended resolve
+            // store names/slugs without extra reads (both are hidden while
+            // searching, so an all-vendors payload there is harmless).
+            final vendorsById = <String, Map<String, dynamic>>{
+              for (final doc in docs) doc.id: doc.data(),
+            };
 
-          final name = (storeMap['storeName'] ?? '').toString();
-          final slug = (storeMap['slug'] ?? '').toString();
-          final code = (storeMap['storeCode'] ?? '').toString().toLowerCase();
-          final vendorId = doc.id;
+            final networkSet = networkIds.toSet();
+            final entries = <_StoreEntry>[];
+            for (final doc in docs) {
+              // Default view: saved stores only. Search: filter by name/slug.
+              if (!searching && !networkSet.contains(doc.id)) continue;
+              final data = doc.data();
+              final storeMap = data['store'] as Map<String, dynamic>? ?? {};
 
-          final matches = name.toLowerCase().contains(query) ||
-              slug.toLowerCase().contains(query) ||
-              code.contains(query) ||
-              vendorId.toLowerCase().contains(query);
-          if (!matches) continue;
+              final name = (storeMap['storeName'] ?? '').toString();
+              final slug = (storeMap['slug'] ?? '').toString();
+              final vendorId = doc.id;
 
-          entries.add(_StoreEntry(
-            id: vendorId,
-            name: name.isEmpty ? 'Unknown Merchant' : name,
-            description: (storeMap['description'] ?? 'No store description available.').toString(),
-            logoUrl: (storeMap['logoUrl'] ?? '').toString(),
-            slug: slug.isEmpty ? vendorId : slug,
-          ));
-        }
+              if (searching) {
+                final matches = name.toLowerCase().contains(query) ||
+                    slug.toLowerCase().contains(query) ||
+                    vendorId.toLowerCase().contains(query);
+                if (!matches) continue;
+              }
 
-        // Stores with an unfinished checkout rank first (live via cart notifier).
-        return StreamBuilder<QuerySnapshot>(
-          stream: _campaignsStream,
-          builder: (context, campaignSnapshot) {
+              entries.add(_StoreEntry(
+                id: vendorId,
+                name: name.isEmpty ? 'Unknown Merchant' : name,
+                description: (storeMap['description'] ?? 'No store description available.').toString(),
+                logoUrl: (storeMap['logoUrl'] ?? '').toString(),
+                slug: slug.isEmpty ? vendorId : slug,
+              ));
+            }
+
+            // Stores with an unfinished checkout rank first (live via cart notifier).
+            return StreamBuilder<QuerySnapshot>(
+              stream: _campaignsStream,
+              builder: (context, campaignSnapshot) {
             final activeCampaigns = (campaignSnapshot.data?.docs ?? const [])
                 .map(Campaign.fromFirestore)
                 .where((c) => c.isActive);
@@ -195,9 +262,24 @@ class _StorePageState extends State<StorePage> {
               controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               slivers: [
-                // 🔥 Auto-playing deals carousel (hidden while searching)
+                // 🔥 Auto-playing deals carousel (hidden while searching).
+                // Closed marketplace: scoped to the customer's saved stores by
+                // handing Hot Deals a network-only vendor map, so it never
+                // surfaces deals from stores they haven't saved.
                 if (_searchQuery.isEmpty)
-                  SliverToBoxAdapter(child: HotDealsStrip(vendorsById: vendorsById)),
+                  SliverToBoxAdapter(
+                    child: HotDealsStrip(
+                      vendorsById: {
+                        for (final id in networkIds)
+                          if (vendorsById.containsKey(id)) id: vendorsById[id]!,
+                      },
+                    ),
+                  ),
+
+                // 👀 Products viewed in the last 24h — renders nothing when
+                // no qualifying views exist (no empty state by design)
+                if (_searchQuery.isEmpty)
+                  const SliverToBoxAdapter(child: LastViewedStrip()),
 
                 // 🏅 Badge-holding merchants from the customer's own network
                 if (_searchQuery.isEmpty)
@@ -290,6 +372,8 @@ class _StorePageState extends State<StorePage> {
             );
               },
             );
+          },
+        );
           },
         );
       },

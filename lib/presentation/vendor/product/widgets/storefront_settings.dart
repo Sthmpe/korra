@@ -46,6 +46,12 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
   bool _isSaving = false;
   bool _absorbOutrightFee = false;
 
+  // The slug already saved in Firestore. Clearing the slug field must NOT
+  // erase an existing slug (their store link would break) — the slug only
+  // changes when the merchant actually types a new one. Merchants who never
+  // had a slug can leave it empty.
+  String _savedSlug = '';
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +88,8 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
 
         setState(() {
           _nameController.text = storeMap['storeName'] ?? '';
-          _slugController.text = storeMap['slug'] ?? '';
+          _savedSlug = (storeMap['slug'] ?? '').toString().trim().toLowerCase();
+          _slugController.text = _savedSlug;
           _descController.text = storeMap['description'] ?? '';
           _whatsappController.text = socialsMap['whatsappGroup'] ?? '';
           _instagramController.text = socialsMap['instagram'] ?? '';
@@ -128,23 +135,27 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
 
     setState(() => _isSaving = true);
     final vendorsRepo = context.read<VendorRepository>();
-    final newSlug = _slugController.text.trim().toLowerCase();
+    // Empty field falls back to the already-saved slug: clearing the text
+    // must never delete an existing store link.
+    final newSlug = _effectiveSlug;
 
     try {
-      // 0. Enforce Slug Uniqueness
-      final slugQuery = await _firestore
-          .collection('vendors')
-          .where('store.slug', isEqualTo: newSlug)
-          .get();
+      // 0. Enforce Slug Uniqueness (only when there is a slug to check)
+      if (newSlug.isNotEmpty && newSlug != _savedSlug) {
+        final slugQuery = await _firestore
+            .collection('vendors')
+            .where('store.slug', isEqualTo: newSlug)
+            .get();
 
-      for (var doc in slugQuery.docs) {
-        if (doc.id != widget.vendorUid) {
-          setState(() => _isSaving = false);
-          showAppSnackbar(
-            "This link slug is already taken by another merchant. Please choose a different one.",
-            SnackbarType.error,
-          );
-          return;
+        for (var doc in slugQuery.docs) {
+          if (doc.id != widget.vendorUid) {
+            setState(() => _isSaving = false);
+            showAppSnackbar(
+              "This link slug is already taken by another merchant. Please choose a different one.",
+              SnackbarType.error,
+            );
+            return;
+          }
         }
       }
 
@@ -168,7 +179,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
         uid: widget.vendorUid,
         storeName: _nameController.text.trim(),
         description: _descController.text.trim(),
-        slug: _slugController.text.trim().toLowerCase(),
+        slug: newSlug,
         logoUrl: finalLogoUrl,
         coverUrl: finalCoverUrl,
         whatsappGroup: _whatsappController.text.trim(),
@@ -185,6 +196,8 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
         _coverUrl = finalCoverUrl;
         _pickedLogo = null;
         _pickedCover = null;
+        _savedSlug = newSlug;
+        _slugController.text = newSlug;
         _isSaving = false;
       });
     } catch (e) {
@@ -351,7 +364,13 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
                   _buildTextField(
                     controller: _nameController,
                     hint: "e.g. Nike Store",
-                    validator: (v) => v == null || v.trim().isEmpty ? "Store name is required" : null,
+                    maxLength: 40,
+                    validator: (v) {
+                      final text = v?.trim() ?? '';
+                      if (text.isEmpty) return "Store name is required";
+                      if (text.length < 2) return "Store name must be at least 2 characters";
+                      return null;
+                    },
                   ),
 
                   // Slug
@@ -360,18 +379,33 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
                     controller: _slugController,
                     hint: "e.g. nike-store",
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return "Slug is required";
-                      if (RegExp(r'[^a-zA-Z0-9\-]').hasMatch(v)) {
+                      final typed = v?.trim() ?? '';
+                      // Empty is fine: an existing slug is kept, and merchants
+                      // without one can save without it.
+                      if (typed.isEmpty) return null;
+                      if (RegExp(r'[^a-zA-Z0-9\-]').hasMatch(typed)) {
                         return "Slug can only contain letters, numbers, and dashes (-)";
                       }
                       return null;
                     },
-                    helperText: _slugController.text.isNotEmpty
+                    helperText: _effectiveSlug.isNotEmpty
                         ? "Your store link: $_storeLink"
                         : null,
                     onChanged: (val) => setState(() {}),
                   ),
-                  if (_slugController.text.trim().isNotEmpty) ...[
+                  if (_slugController.text.trim().isEmpty && _savedSlug.isNotEmpty) ...[
+                    SizedBox(height: 6.h),
+                    Text(
+                      "Leaving this empty keeps your current slug \"$_savedSlug\". Type a new one to change it.",
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5.sp,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                  if (_effectiveSlug.isNotEmpty) ...[
                     SizedBox(height: 12.h),
                     _buildStoreLinkActions(),
                   ],
@@ -380,9 +414,16 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
                   _buildLabel("Store Bio / Description"),
                   _buildTextField(
                     controller: _descController,
-                    hint: "Tell customers about your store, product catalogs, and offerings...",
+                    hint: "e.g. Handmade Ankara gowns, custom sizing, delivery across Lagos",
                     maxLines: 3,
-                    validator: (v) => v == null || v.trim().isEmpty ? "Description is required" : null,
+                    maxLength: 160,
+                    helperText: "This helps your store get found on Google.",
+                    validator: (v) {
+                      final text = v?.trim() ?? '';
+                      if (text.isEmpty) return "Description is required";
+                      if (text.length < 30) return "Description must be at least 30 characters";
+                      return null;
+                    },
                   ),
 
                   SizedBox(height: 20.h),
@@ -506,8 +547,14 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
     );
   }
 
-  String get _storeLink =>
-      "https://korra.com.ng/store/${_slugController.text.toLowerCase().trim()}";
+  // The slug that will actually be saved: what's typed, or the existing
+  // saved slug when the field has been cleared.
+  String get _effectiveSlug {
+    final typed = _slugController.text.trim().toLowerCase();
+    return typed.isNotEmpty ? typed : _savedSlug;
+  }
+
+  String get _storeLink => "https://korra.com.ng/store/$_effectiveSlug";
 
   Future<void> _viewStore() async {
     final uri = Uri.parse(_storeLink);
@@ -609,6 +656,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
     required String hint,
     Widget? prefixIcon,
     int maxLines = 1,
+    int? maxLength,
     String? Function(String?)? validator,
     String? helperText,
     void Function(String)? onChanged,
@@ -616,6 +664,7 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
+      maxLength: maxLength,
       validator: validator,
       onChanged: onChanged,
       style: GoogleFonts.inter(
@@ -630,6 +679,11 @@ class _VendorStorefrontSettingsState extends State<VendorStorefrontSettings> {
           fontSize: 10.5.sp,
           color: KorraColors.brand,
           fontWeight: FontWeight.w600,
+        ),
+        counterStyle: GoogleFonts.inter(
+          fontSize: 10.5.sp,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w500,
         ),
         prefixIcon: prefixIcon,
         hintStyle: GoogleFonts.inter(

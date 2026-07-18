@@ -8,6 +8,7 @@ import 'flavors/app_config.dart';
 import 'korra_app.dart'; // ✅ Uses your existing KorraApp
 import 'logic/core/net/net_cubit.dart';
 import 'logic/core/update/update_cubit.dart';
+import 'logic/services/analytics_service.dart';
 import 'logic/services/auth_service.dart';
 import 'logic/services/deep_link_service.dart';
 
@@ -20,6 +21,10 @@ void main() async {
 
   // 2. Set Identity: CUSTOMER
   AppConfig.init(AppFlavor.customer);
+
+  // 2b. Analytics: tags every event with role=customer (AppConfig must be set
+  // first so the role is known).
+  await Analytics.init();
 
   // 3. Determine Route
   final auth = AuthService.to;

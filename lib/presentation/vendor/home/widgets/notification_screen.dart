@@ -7,7 +7,9 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
-import '../../../shared/widgets/korra_header.dart'; 
+import '../../../../logic/services/analytics_service.dart';
+import '../../../shared/widgets/date_group_label.dart';
+import '../../../shared/widgets/korra_header.dart';
 
 class VendorNotificationScreen extends StatelessWidget {
   final String vendorUid;
@@ -64,11 +66,13 @@ class VendorNotificationScreen extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         // ✅ Correctly targets 'vendors' collection
+        // Bounded: the feed never loads the whole subcollection at once.
         stream: FirebaseFirestore.instance
             .collection('vendors')
             .doc(vendorUid)
             .collection('notifications')
             .orderBy('createdAt', descending: true)
+            .limit(50)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -120,6 +124,17 @@ class VendorNotificationScreen extends StatelessWidget {
               final Timestamp? ts = data['createdAt'] as Timestamp?;
               final DateTime date = ts?.toDate() ?? DateTime.now();
 
+              // Date buckets: Today / Yesterday / Last Week / Last Month /
+              // month names (year only when not the current year).
+              final groupLabel = recencyGroupLabel(date);
+              final prevDate = index == 0
+                  ? null
+                  : ((docs[index - 1].data() as Map<String, dynamic>)['createdAt']
+                          as Timestamp?)
+                      ?.toDate();
+              final showHeader =
+                  prevDate == null || recencyGroupLabel(prevDate) != groupLabel;
+
               // Icon logic based on type (Optional polish)
               final String type = data['type'] ?? 'system';
               IconData icon;
@@ -140,8 +155,11 @@ class VendorNotificationScreen extends StatelessWidget {
                 iconBg = Colors.grey.shade100;
               }
 
-              return InkWell(
+              final row = InkWell(
                 onTap: () {
+                  Analytics.log(AnalyticsEvents.merchNotificationOpened, {
+                    'notification_type': type,
+                  });
                   if (!isRead) {
                     FirebaseFirestore.instance
                         .collection('vendors')
@@ -219,6 +237,18 @@ class VendorNotificationScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+              );
+
+              if (!showHeader) return row;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DateGroupHeader(
+                    label: groupLabel,
+                    padding: EdgeInsets.fromLTRB(0, index == 0 ? 4.h : 0, 0, 14.h),
+                  ),
+                  row,
+                ],
               );
             },
           );

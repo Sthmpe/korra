@@ -56,8 +56,13 @@ class _ProductSelectorPageState extends State<ProductSelectorPage> {
           .map((doc) => Product.fromMap(doc.data(), doc.id))
           .toList();
       
-      // Filter to products that are still in stock (availableStock > 0)
-      final List<Product> inStockList = list.where((p) => p.availableStock > 0).toList();
+      // Selectable = in stock AND not already in a live campaign. One campaign,
+      // one tag per product: a product whose tag/discount is still active is
+      // hidden so its UI can never carry two campaigns at once. Once its
+      // campaign ends/expires/deletes (promoActive false), it reappears here
+      // and can take a fresh campaign and tag.
+      final List<Product> inStockList =
+          list.where((p) => p.availableStock > 0 && !p.promoActive).toList();
 
       setState(() {
         _allProducts.clear();

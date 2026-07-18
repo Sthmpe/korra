@@ -180,8 +180,12 @@ class ReservationsBloc extends Bloc<ReservationsEvent, ReservationsState> {
       _lastDoc = mapResult['lastDoc'] as DocumentSnapshot?;
       _hasReachedMax = mapResult['hasReachedMax'] as bool;
 
-      // Combine old items with the newly fetched items
-      final newItems = mapResult['items'] as List<Reservation>;
+      // Combine old items with the newly fetched items, never re-adding an
+      // id already on screen (belt-and-braces against cursor overlap).
+      final existingIds = state.visible.map((r) => r.id).toSet();
+      final newItems = (mapResult['items'] as List<Reservation>)
+          .where((r) => !existingIds.contains(r.id))
+          .toList();
       final updatedList = List<Reservation>.from(state.visible)..addAll(newItems);
 
       emit(state.copyWith(visible: updatedList));

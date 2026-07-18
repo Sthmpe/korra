@@ -82,6 +82,7 @@ class CustomerPages {
           customerUid: map['customerUid'],
           customer: map['customer'],
           walletBalance: map['walletBalance'],
+          variantLabel: map['variantLabel'] as String?,
           onJumpToHome: () => Get.back(result: 'jump_to_home'),
           onJumpToPlan: () => Get.back(result: 'jump_to_plans'),
         );

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'config/theme/app_theme.dart';
+import 'logic/services/analytics_service.dart';
 import 'logic/core/net/global_offline_banner.dart';
 import 'logic/core/net/korra_offline_gate.dart';
 import 'logic/core/update/korra_update_gate.dart';
@@ -35,8 +36,11 @@ class KorraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: isMerchant ? 'Korra Business' : 'Korra',
       theme: AppTheme.light(),
-      initialRoute: initialRoute, 
-      getPages: appPages,  
+      initialRoute: initialRoute,
+      getPages: appPages,
+      // Auto-logs a screen_view on every route change — this is what powers
+      // "which screens do customers/merchants use most" in GA4.
+      navigatorObservers: [Analytics.observer()],
       unknownRoute: GetPage(
         name: '/not-found', 
         page: () => const NotFoundScreen(),

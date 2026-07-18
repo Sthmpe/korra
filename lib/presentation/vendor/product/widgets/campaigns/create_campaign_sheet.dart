@@ -14,6 +14,7 @@ import '../../../../../config/constants/sizes.dart';
 import '../../../../../data/models/product_model.dart';
 import '../../../../../data/models/vendor/campaign_model.dart';
 import '../../../../../data/repository/vendors/vendor_repository.dart';
+import '../../../../../logic/services/analytics_service.dart';
 import '../../../../shared/widgets/show_app_snackbar.dart';
 import 'campaign_timer_section.dart';
 import 'product_selector_page.dart';
@@ -167,14 +168,20 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
     final repo = context.read<VendorRepository>();
 
     try {
-      // 1. Check campaign limit (max 3 at a time). Campaigns no longer
-      // auto-expire, delete one from the Campaigns tab to free a slot.
+      // 1. Check campaign limit (max 3 ACTIVE at a time). Archived (history)
+      // and expired countdown campaigns don't occupy a slot.
       final activeSnap = await FirebaseFirestore.instance
           .collection('campaigns')
           .where('vendorId', isEqualTo: widget.vendorId)
           .get();
+      final activeCount = activeSnap.docs.where((d) {
+        final data = d.data();
+        if (data['archived'] == true) return false;
+        final end = (data['dealEndAt'] as Timestamp?)?.toDate();
+        return end == null || end.isAfter(DateTime.now());
+      }).length;
 
-      if (activeSnap.docs.length >= 3) {
+      if (activeCount >= 3) {
         if (mounted) {
           showAppSnackbar(
             "You have reached your limit of 3 campaigns. Delete an existing one from the Campaigns tab to launch a new one.",
@@ -225,6 +232,13 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
 
       await repo.createCampaign(campaign);
 
+      Analytics.log(AnalyticsEvents.merchCampaignCreated, {
+        'product_count': _selectedProducts.length,
+        'tag': finalTag,
+        'has_discount': _offerDiscount,
+        'timed': _timerEnabled,
+      });
+
       // 6. Apply discounted price & tag locally to the selected products in Firestore
       final batch = FirebaseFirestore.instance.batch();
       for (final product in _selectedProducts) {
@@ -237,6 +251,12 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
           'campaignTag': finalTag, // Apply tag directly to product
           if (_offerDiscount) 'discountedPrice': discountedPrice,
           if (!_offerDiscount) 'discountedPrice': FieldValue.delete(),
+          // Timed campaigns stamp their end time so the tag/discount lapse on
+          // their own (app + site) with no sweep. Untimed campaigns clear any
+          // stale end time left by a previous expired campaign on this product.
+          'campaignEndsAt': (_timerEnabled && _dealEndAt != null)
+              ? Timestamp.fromDate(_dealEndAt!)
+              : FieldValue.delete(),
         });
       }
       await batch.commit();
@@ -382,10 +402,10 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
                 SizedBox(height: 6.h),
                 TextFormField(
                   controller: _customTagController,
-                  maxLength: 20,
+                  maxLength: 16,
                   style: GoogleFonts.inter(fontSize: 13.sp),
                   decoration: InputDecoration(
-                    hintText: "Enter custom tag (max 20 chars)",
+                    hintText: "Enter custom tag (max 16 chars)",
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(KorraSizes.fieldRadius.r),
                     ),
@@ -395,8 +415,8 @@ class _CreateCampaignSheetState extends State<CreateCampaignSheet> {
                     if (isCustomTag && (val == null || val.trim().isEmpty)) {
                       return "Custom tag name is required";
                     }
-                    if (val != null && val.trim().length > 20) {
-                      return "Must be 20 characters or less";
+                    if (val != null && val.trim().length > 16) {
+                      return "Must be 16 characters or less";
                     }
                     return null;
                   },

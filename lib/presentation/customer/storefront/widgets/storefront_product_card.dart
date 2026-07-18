@@ -124,7 +124,10 @@ class _StorefrontProductCardState extends State<StorefrontProductCard> {
   Widget build(BuildContext context) {
     final product = widget.product;
     final currencyFormat = NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
-    final hasDiscount = product.discountedPrice != null && product.discountedPrice! > 0;
+    // Gate on the ACTIVE discount so an expired/ended campaign reverts to the
+    // full price with no lingering discount.
+    final discounted = product.activeDiscountedPrice;
+    final hasDiscount = discounted != null && discounted > 0;
     final soldOut = product.availableStock <= 0;
 
     return Listener(
@@ -253,7 +256,7 @@ class _StorefrontProductCardState extends State<StorefrontProductCard> {
                             children: [
                               Flexible(
                                 child: Text(
-                                  currencyFormat.format(product.discountedPrice),
+                                  currencyFormat.format(product.activeDiscountedPrice),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
@@ -272,7 +275,7 @@ class _StorefrontProductCardState extends State<StorefrontProductCard> {
                                   borderRadius: BorderRadius.circular(3.r),
                                 ),
                                 child: Text(
-                                  "-${((product.price - product.discountedPrice!) / product.price * 100).round()}%",
+                                  "-${((product.price - product.activeDiscountedPrice!) / product.price * 100).round()}%",
                                   style: GoogleFonts.inter(
                                     fontSize: 7.5.sp,
                                     fontWeight: FontWeight.w800,

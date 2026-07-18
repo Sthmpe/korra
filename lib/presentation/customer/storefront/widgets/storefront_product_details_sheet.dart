@@ -17,8 +17,12 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../../data/models/product_model.dart';
 import '../../../../data/models/vendor/campaign_model.dart';
+import '../../../../logic/services/analytics_service.dart';
+import '../../../../logic/services/recent_views_service.dart';
 import '../../store/widgets/deal_countdown_badge.dart';
+import 'cart_service.dart';
 import 'storefront_details_carousel.dart';
+import 'storefront_variant_picker.dart';
 
 /// Premium product details bottom sheet: swipable lazy carousel, price block
 /// with discount treatment, availability chips, quantity stepper and the
@@ -27,8 +31,20 @@ class StorefrontProductDetailsSheet extends StatefulWidget {
   final Product product;
   final DocumentSnapshot? rawDoc;
   final ScrollController scrollController;
-  final Function(Product, int) onAddToCart;
-  final Function(DocumentSnapshot?) onPayInstallments;
+  /// (product, quantity, variantLabel) — variantLabel is null for products
+  /// without variants; called once per variant line on multi-variant adds.
+  final Function(Product, int, String?)? onAddToCart;
+
+  /// (rawDoc, variantLabel) — variantLabel is null for products without
+  /// variants; for variant products the customer picks one first (a plan
+  /// reserves exactly one unit).
+  final Function(DocumentSnapshot?, String?)? onPayInstallments;
+
+  /// Read-only mode (opened from the cart): shows the product info but hides
+  /// the quantity stepper and the Add to Cart / Pay Installments actions, and
+  /// skips view-recording — peeking at an item already in the cart is not
+  /// browsing, so it must not feed Last Viewed or re-engagement.
+  final bool readOnly;
 
   /// The store's running/upcoming timed campaign for this product, if any.
   final Campaign? deal;
@@ -42,10 +58,11 @@ class StorefrontProductDetailsSheet extends StatefulWidget {
     required this.product,
     this.rawDoc,
     required this.scrollController,
-    required this.onAddToCart,
-    required this.onPayInstallments,
+    this.onAddToCart,
+    this.onPayInstallments,
     this.deal,
     this.storeSlug,
+    this.readOnly = false,
   });
 
   @override
@@ -55,6 +72,46 @@ class StorefrontProductDetailsSheet extends StatefulWidget {
 class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetailsSheet> {
   int _selectedQuantity = 1;
 
+  /// Selected quantity per variant label (variant products only).
+  final Map<String, int> _variantQty = {};
+
+  /// Dwell timing for the Last Viewed feature: a view only counts when the
+  /// sheet stayed open for 5+ seconds (see RecentViewsService.minDwell).
+  final Stopwatch _dwell = Stopwatch();
+
+  @override
+  void initState() {
+    super.initState();
+    _dwell.start();
+  }
+
+  @override
+  void dispose() {
+    _dwell.stop();
+    if (!widget.readOnly) {
+      RecentViewsService.instance.recordView(
+        widget.product,
+        _dwell.elapsed,
+        storeSlug: widget.storeSlug,
+      );
+      Analytics.log(AnalyticsEvents.custProductViewed, {
+        'vendor_id': widget.product.vendorId,
+        'product_id': widget.product.id,
+        'dwell_seconds': _dwell.elapsed.inSeconds,
+      });
+    }
+    super.dispose();
+  }
+
+  /// Units of this product the cart already holds — reopening the sheet must
+  /// not allow claiming the same stock twice.
+  int get _inCart => CartService.instance
+      .quantityInCart(widget.product.vendorId, widget.product.id);
+
+  /// Units still addable right now.
+  int get _maxAdd =>
+      (widget.product.availableStock - _inCart).clamp(0, widget.product.availableStock);
+
   /// Wraps the carousel-through-availability-banner region so it can be
   /// captured as an image on share (see [_shareProduct]).
   final GlobalKey _shareCaptureKey = GlobalKey();
@@ -62,6 +119,10 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
   Future<void> _shareProduct() async {
     final slug = widget.storeSlug;
     if (slug == null) return;
+    Analytics.log(AnalyticsEvents.custProductShared, {
+      'vendor_id': widget.product.vendorId,
+      'product_id': widget.product.id,
+    });
     final url = "https://korra.com.ng/store/$slug/p/${widget.product.id}";
     final caption = "${widget.product.name} on Korra\n$url";
 
@@ -95,7 +156,10 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
   Widget build(BuildContext context) {
     final product = widget.product;
     final currencyFormat = NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
-    final hasDiscount = product.discountedPrice != null && product.discountedPrice! > 0;
+    // Gate on the ACTIVE discount so an expired/ended campaign reverts to
+    // full price with no lingering discount.
+    final discounted = product.activeDiscountedPrice;
+    final hasDiscount = discounted != null && discounted > 0;
     final inStock = product.availableStock > 0;
 
     return SingleChildScrollView(
@@ -157,7 +221,7 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  currencyFormat.format(product.discountedPrice),
+                  currencyFormat.format(discounted),
                   style: GoogleFonts.inter(
                     fontSize: 22.sp,
                     fontWeight: FontWeight.w900,
@@ -186,7 +250,7 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
                     borderRadius: BorderRadius.circular(4.r),
                   ),
                   child: Text(
-                    "-${((product.price - product.discountedPrice!) / product.price * 100).round()}% OFF",
+                    "-${((product.price - discounted) / product.price * 100).round()}% OFF",
                     style: GoogleFonts.inter(
                       fontSize: 9.5.sp,
                       fontWeight: FontWeight.w800,
@@ -288,8 +352,33 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
           ),
           SizedBox(height: 22.h),
 
-          // Quantity stepper
-          if (inStock) ...[
+          // Variant quantity list (variant products): pick amounts across
+          // multiple options (5 x XL, 2 x XXL) and add them all in one tap.
+          if (product.hasVariants && inStock && !widget.readOnly) ...[
+            VariantQuantityList(
+              variants: product.variants,
+              quantities: _variantQty,
+              maxFor: (v) {
+                final inCart = CartService.instance.quantityForVariant(
+                    product.vendorId, product.id, v.label);
+                return (v.stock - inCart).clamp(0, v.stock);
+              },
+              onChanged: (label, delta) {
+                setState(() {
+                  final next = (_variantQty[label] ?? 0) + delta;
+                  if (next <= 0) {
+                    _variantQty.remove(label);
+                  } else {
+                    _variantQty[label] = next;
+                  }
+                });
+              },
+            ),
+            SizedBox(height: 16.h),
+          ],
+
+          // Quantity stepper (flat products only; hidden in read-only mode)
+          if (!product.hasVariants && inStock && !widget.readOnly) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -329,7 +418,7 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
                       ),
                       _stepperButton(
                         icon: Icons.add,
-                        enabled: _selectedQuantity < product.availableStock,
+                        enabled: _selectedQuantity < _maxAdd,
                         onTap: () => setState(() => _selectedQuantity++),
                       ),
                     ],
@@ -340,30 +429,57 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
             SizedBox(height: 24.h),
           ],
 
-          // Actions: Add to Cart & Pay Installments
+          // Actions: Add to Cart & Pay Installments (hidden in read-only mode)
+          if (!widget.readOnly)
           Row(
             children: [
               Expanded(
                 child: SizedBox(
                   height: 52.h,
-                  child: OutlinedButton.icon(
-                    onPressed: inStock
-                        ? () => widget.onAddToCart(product, _selectedQuantity)
-                        : null,
-                    icon: Icon(Iconsax.shopping_bag, size: 17.sp, color: const Color(0xFFA54600)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFA54600), width: 1.2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                    ),
-                    label: Text(
-                      "Add to Cart",
-                      style: GoogleFonts.inter(
-                        fontSize: 13.5.sp,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFA54600),
+                  child: Builder(builder: (context) {
+                    final selectedVariantTotal =
+                        _variantQty.values.fold(0, (a, b) => a + b);
+                    final canAdd = product.hasVariants
+                        ? selectedVariantTotal > 0
+                        : inStock && _maxAdd > 0;
+                    return OutlinedButton.icon(
+                      onPressed: canAdd
+                          ? () {
+                              if (product.hasVariants) {
+                                // One cart line per chosen variant, one tap.
+                                for (final entry in _variantQty.entries) {
+                                  widget.onAddToCart
+                                      ?.call(product, entry.value, entry.key);
+                                }
+                                setState(() => _variantQty.clear());
+                              } else {
+                                widget.onAddToCart?.call(product,
+                                    _selectedQuantity.clamp(1, _maxAdd), null);
+                                setState(() => _selectedQuantity = 1);
+                              }
+                            }
+                          : null,
+                      icon: Icon(Iconsax.shopping_bag, size: 17.sp, color: const Color(0xFFA54600)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFA54600), width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                       ),
-                    ),
-                  ),
+                      label: Text(
+                        product.hasVariants
+                            ? (selectedVariantTotal > 0
+                                ? "Add to Cart ($selectedVariantTotal)"
+                                : "Add to Cart")
+                            : (_maxAdd <= 0 && inStock
+                                ? "All stock in cart"
+                                : "Add to Cart"),
+                        style: GoogleFonts.inter(
+                          fontSize: 13.5.sp,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFA54600),
+                        ),
+                      ),
+                    );
+                  }),
                 ),
               ),
               if (product.allowReservation) ...[
@@ -372,7 +488,20 @@ class _StorefrontProductDetailsSheetState extends State<StorefrontProductDetails
                   child: SizedBox(
                     height: 52.h,
                     child: ElevatedButton.icon(
-                      onPressed: inStock ? () => widget.onPayInstallments(widget.rawDoc) : null,
+                      onPressed: inStock
+                          ? () async {
+                              if (product.hasVariants) {
+                                // A plan reserves exactly one unit, so the
+                                // customer picks the variant first.
+                                final label = await showVariantChooser(
+                                    context, product.variants);
+                                if (label == null) return;
+                                widget.onPayInstallments?.call(widget.rawDoc, label);
+                              } else {
+                                widget.onPayInstallments?.call(widget.rawDoc, null);
+                              }
+                            }
+                          : null,
                       icon: Icon(Iconsax.calendar_tick, size: 17.sp, color: Colors.white),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFA54600),

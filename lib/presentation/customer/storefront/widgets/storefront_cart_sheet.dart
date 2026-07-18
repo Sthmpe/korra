@@ -12,11 +12,14 @@ import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
 import '../../../../config/utils/korra_exception.dart';
 import '../../../../data/models/customer/customer_model.dart';
+import '../../../../data/models/product_model.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
+import '../../../../logic/services/analytics_service.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 import 'cart_service.dart';
 import 'storefront_cart_balances.dart';
 import 'storefront_cart_item_tile.dart';
+import 'storefront_product_details_sheet.dart';
 
 /// Premium multi-item cart sheet: floating item tiles, live fee breakdown
 /// (merchant absorb vs customer pays), store-balance-first payment split,
@@ -87,12 +90,57 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
     Get.toNamed(Routes.customerBankDetails, arguments: {'customer': customer});
   }
 
-  void _updateQuantity(String productId, int delta) {
-    CartService.instance.updateQuantity(widget.vendorId, productId, delta);
+  void _updateQuantity(String productId, int delta, {String? variantLabel}) {
+    CartService.instance.updateQuantity(widget.vendorId, productId, delta,
+        variantLabel: variantLabel);
   }
 
-  void _removeItem(String productId) {
-    CartService.instance.removeItem(widget.vendorId, productId);
+  void _removeItem(String productId, {String? variantLabel}) {
+    CartService.instance
+        .removeItem(widget.vendorId, productId, variantLabel: variantLabel);
+  }
+
+  /// Tapping a cart item opens its full details read-only — no stepper, no
+  /// Add to Cart / Pay Installments. The cart only stores a light CartItem, so
+  /// the product doc is fetched to build the rich view.
+  Future<void> _openProductDetails(CartItem item) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('products')
+          .doc(item.productId)
+          .get();
+      if (!doc.exists || doc.data() == null) {
+        if (mounted) {
+          showAppSnackbar("This product is no longer available.", SnackbarType.error);
+        }
+        return;
+      }
+      final product = Product.fromMap(doc.data()!, doc.id);
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        ),
+        builder: (context) => DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) => StorefrontProductDetailsSheet(
+            product: product,
+            scrollController: scrollController,
+            readOnly: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        showAppSnackbar("Couldn't open product details. Please try again.", SnackbarType.error);
+      }
+    }
   }
 
   Future<void> _confirmCheckout(
@@ -154,13 +202,26 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
     // items, and we only clear the local cart once the order is confirmed.
     final items = CartService.instance
         .getItems(widget.vendorId)
-        .map((i) => {'productId': i.productId, 'quantity': i.quantity})
+        .map((i) => {
+              'productId': i.productId,
+              'quantity': i.quantity,
+              // Variant lines carry their label so the server decrements
+              // that specific variant's stock.
+              if (i.variantLabel != null) 'variantLabel': i.variantLabel,
+            })
         .toList();
 
     if (items.isEmpty) {
       if (mounted) setState(() => _isCheckingOut = false);
       return;
     }
+
+    final unitCount = items.fold<int>(0, (n, i) => n + (i['quantity'] as int));
+    Analytics.log(AnalyticsEvents.custOutrightStarted, {
+      'vendor_id': widget.vendorId,
+      'item_count': items.length,
+      'units': unitCount,
+    });
 
     try {
       final receipt = await _repo.checkoutOutright(
@@ -171,6 +232,14 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
       // Order succeeded — safe to clear the local cart now.
       CartService.instance.clearCart(widget.vendorId);
 
+      Analytics.log(AnalyticsEvents.custOutrightSuccess, {
+        'vendor_id': widget.vendorId,
+        'item_count': items.length,
+        'units': unitCount,
+        'value': receipt.totalValue,
+        'currency': 'NGN',
+      });
+
       if (mounted) {
         Navigator.pop(context); // Close sheet
         showAppSnackbar(
@@ -179,8 +248,16 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
         );
       }
     } on KorraException catch (e) {
+      Analytics.log(AnalyticsEvents.custOutrightFailed, {
+        'vendor_id': widget.vendorId,
+        'reason': e.message,
+      });
       if (mounted) showAppSnackbar(e.message, SnackbarType.error);
     } catch (e) {
+      Analytics.log(AnalyticsEvents.custOutrightFailed, {
+        'vendor_id': widget.vendorId,
+        'reason': 'unknown',
+      });
       if (mounted) {
         showAppSnackbar("Checkout failed. Please try again.", SnackbarType.error);
       }
@@ -214,15 +291,6 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
               subtotal += item.price * item.quantity;
             }
 
-            // Calculate Processing Fee
-            double fee = 0.0;
-            if (!absorbOutrightFee) {
-              fee = subtotal * 0.035;
-              if (fee > 7500.0) {
-                fee = 7500.0;
-              }
-            }
-
             final totalUnits = items.fold(0, (sum, item) => sum + item.quantity);
 
             return StreamBuilder<double>(
@@ -236,17 +304,37 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
                     final storeBalance = balanceSnapshot.data ?? 0.0;
                     final walletBalance = customer?.availableBalance ?? 0.0;
 
-                    // Store balance is always consumed first; wallet covers the rest.
-                    final total = subtotal + fee;
-                    final storeApplied = storeBalance >= total ? total : storeBalance;
-                    final walletDue = total - storeApplied;
+                    // Store balance covers the PRODUCT only; every fee is
+                    // paid from the wallet (mirrors outright-checkout).
+                    final storeApplied =
+                        storeBalance >= subtotal ? subtotal : storeBalance;
+                    final cashPortion = subtotal - storeApplied;
+
+                    // Cash fee: 3.5% of the cash portion, capped at 7,500.
+                    // This is the only fee the merchant can absorb.
+                    double cashFee = cashPortion * 0.035;
+                    if (cashFee > 7500.0) cashFee = 7500.0;
+
+                    // Store balance usage fee: 0.35% of the balance used,
+                    // min 100, capped 1,000. Always the customer's, from
+                    // the wallet, never absorbed.
+                    double storeFee = 0.0;
+                    if (storeApplied > 0) {
+                      storeFee = (storeApplied * 0.0035).clamp(100.0, 1000.0);
+                    }
+
+                    final customerFee =
+                        (absorbOutrightFee ? 0.0 : cashFee) + storeFee;
+                    final walletDue = cashPortion + customerFee;
                     final shortfall = walletDue - walletBalance;
                     final insufficient = shortfall > 0;
 
                     return _buildCartBody(
                       items: items,
                       subtotal: subtotal,
-                      fee: fee,
+                      cashFee: cashFee,
+                      storeFee: storeFee,
+                      fee: customerFee,
                       absorbOutrightFee: absorbOutrightFee,
                       totalUnits: totalUnits,
                       storeBalance: storeBalance,
@@ -269,6 +357,8 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
   Widget _buildCartBody({
     required List<CartItem> items,
     required double subtotal,
+    required double cashFee,
+    required double storeFee,
     required double fee,
     required bool absorbOutrightFee,
     required int totalUnits,
@@ -357,8 +447,12 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
                       final item = items[index];
                       return StorefrontCartItemTile(
                         item: item,
-                        onQuantityChanged: (delta) => _updateQuantity(item.productId, delta),
-                        onRemove: () => _removeItem(item.productId),
+                        onQuantityChanged: (delta) => _updateQuantity(
+                            item.productId, delta,
+                            variantLabel: item.variantLabel),
+                        onRemove: () => _removeItem(item.productId,
+                            variantLabel: item.variantLabel),
+                        onTap: () => _openProductDetails(item),
                       );
                     },
                   ),
@@ -391,12 +485,25 @@ class _StorefrontCartSheetState extends State<StorefrontCartSheet> {
                         Divider(color: const Color(0xFFF2F4F7), height: 22.h),
 
                         _summaryRow("Subtotal", money.format(subtotal)),
-                        SizedBox(height: 8.h),
-                        _summaryRow(
-                          absorbOutrightFee ? "Processing Fee" : "Processing Fee (3.5%, max ₦7,500)",
-                          absorbOutrightFee ? "₦0 · absorbed by merchant" : money.format(fee),
-                          valueColor: absorbOutrightFee ? KorraColors.settleGreen : null,
-                        ),
+                        // Cash fee: only exists when the wallet covers part
+                        // of the product; the merchant may absorb this one.
+                        if (cashFee > 0) ...[
+                          SizedBox(height: 8.h),
+                          _summaryRow(
+                            absorbOutrightFee ? "Processing Fee" : "Processing Fee (3.5%, max ₦7,500)",
+                            absorbOutrightFee ? "₦0 · absorbed by merchant" : money.format(cashFee),
+                            valueColor: absorbOutrightFee ? KorraColors.settleGreen : null,
+                          ),
+                        ],
+                        // Store balance usage fee: always the customer's,
+                        // paid from the wallet, never absorbed.
+                        if (storeFee > 0) ...[
+                          SizedBox(height: 8.h),
+                          _summaryRow(
+                            "Store balance fee (min ₦100, max ₦1,000)",
+                            money.format(storeFee),
+                          ),
+                        ],
                         if (storeApplied > 0) ...[
                           SizedBox(height: 8.h),
                           _summaryRow(

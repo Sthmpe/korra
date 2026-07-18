@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:equatable/equatable.dart';
+
+import '../../../../data/models/product_model.dart';
 import 'vendor_products_state.dart';
 
 abstract class VendorProductsEvent extends Equatable {
@@ -99,6 +101,10 @@ class VendorProductsAdd extends VendorProductsEvent {
   final bool allowReservation;
   final bool isFeatured;
 
+  /// Optional flat variants (label + per-variant stock). Empty = classic
+  /// single-stock product. When non-empty, [stock] is the computed sum.
+  final List<ProductVariant> variants;
+
   const VendorProductsAdd({
     required this.name,
     required this.description,
@@ -116,13 +122,14 @@ class VendorProductsAdd extends VendorProductsEvent {
     required this.extensionPeriod,
     required this.allowReservation,
     this.isFeatured = false,
+    this.variants = const [],
   });
 
   @override
   List<Object?> get props => [
         name, description, price, stock, category, images,
         termsAccepted, modelType, cancellationPolicy, extensionsEnabled,
-        directDownPayment, duration, noticePeriod, extensionPeriod, allowReservation, isFeatured
+        directDownPayment, duration, noticePeriod, extensionPeriod, allowReservation, isFeatured, variants
       ];
 }
 
@@ -149,6 +156,11 @@ class VendorProductsEdit extends VendorProductsEvent {
   final int extensionPeriod;
   final bool isFeatured;
 
+  /// Optional flat variants. Empty list = product has no variants (also how
+  /// a merchant REMOVES variants on edit); when non-empty, [stock] is the
+  /// computed sum of variant stocks.
+  final List<ProductVariant> variants;
+
   const VendorProductsEdit({
     required this.productCode,
     required this.name,
@@ -168,12 +180,13 @@ class VendorProductsEdit extends VendorProductsEvent {
     required this.noticePeriod,
     required this.extensionPeriod,
     this.isFeatured = false,
+    this.variants = const [],
   });
-  
+
   @override
   List<Object?> get props => [
     productCode, name, newImages, existingImageUrls, status, allowReservation,
     modelType, cancellationPolicy, extensionsEnabled, directDownPayment,
-    duration, noticePeriod, extensionPeriod, isFeatured
+    duration, noticePeriod, extensionPeriod, isFeatured, variants
   ];
 }

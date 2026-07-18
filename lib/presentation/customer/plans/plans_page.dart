@@ -14,10 +14,14 @@ import '../../../logic/bloc/customer/link/link_bloc.dart';
 import '../../../logic/bloc/customer/link/link_event.dart';
 import '../../../logic/bloc/customer/link/link_state.dart';
 import '../../../logic/bloc/customer/plans/plan_action_cubit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/outright_only_sheet.dart';
 import 'dart:async';
 import 'widgets/new_plan_sheet.dart';
 import 'widgets/plan_card.dart';
+import 'widgets/plan_card_grid.dart';
 import 'widgets/plan_search_delegate.dart';
 import 'widgets/plans_filter_sheet.dart';
 import 'widgets/segmented_tabs.dart';
@@ -57,6 +61,10 @@ class _PlansPageState extends State<PlansPage> {
   bool _overdueOnly = false;
   bool _highValueOnly = false;
 
+  // Grid is the default view; the toggle choice sticks across sessions.
+  bool _gridView = true;
+  static const _gridPrefKey = 'plans_grid_view';
+
   // 1. 👇 Add a single stream variable here
   int _currentLimit = 15;
   late Stream<List<Plan>> _plansStream;
@@ -82,8 +90,21 @@ class _PlansPageState extends State<PlansPage> {
       _latestCustomer = customer;
     });
     _loadPlansStream();
-    
+
     _scrollController.addListener(_onScroll);
+
+    SharedPreferences.getInstance().then((prefs) {
+      final saved = prefs.getBool(_gridPrefKey);
+      if (saved != null && saved != _gridView && mounted) {
+        setState(() => _gridView = saved);
+      }
+    });
+  }
+
+  void _toggleView() {
+    setState(() => _gridView = !_gridView);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_gridPrefKey, _gridView));
   }
 
   void _onScroll() {
@@ -137,6 +158,14 @@ class _PlansPageState extends State<PlansPage> {
         bloc: _linkBloc,
         listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
+          if (state.status == LinkStatus.outrightOnly) {
+            final fetch = state.productFetch;
+            if (fetch != null && fetch.id.isNotEmpty) {
+              OutrightOnlySheet.show(context,
+                  productId: fetch.id, data: fetch.data);
+            }
+            return;
+          }
           if (state.status == LinkStatus.loaded) {
             // 1. Get the product from the LinkBloc state
             final product =
@@ -171,6 +200,16 @@ class _PlansPageState extends State<PlansPage> {
           appBar: KorraHeader(
             title: 'Plans',
             trailingActions: [
+              // Grid / List toggle (grid is the default)
+              IconButton(
+                onPressed: _toggleView,
+                icon: Icon(
+                  _gridView ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
+                  color: const Color(0xFF1B1B1B),
+                ),
+                iconSize: 22.sp,
+                tooltip: _gridView ? 'List view' : 'Grid view',
+              ),
               // Search Icon
               IconButton(
                 onPressed: () {
@@ -319,6 +358,37 @@ class _PlansPageState extends State<PlansPage> {
                         padding: EdgeInsets.only(top: 40.h),
                         child: EmptyStateCard(
                           text: _emptyText(_currentTab),
+                        ),
+                      ),
+                    )
+                  else if (_gridView)
+                    // 2-column grid (default view)
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12.h,
+                          crossAxisSpacing: 12.w,
+                          mainAxisExtent: 252.h,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final plan = visiblePlans[index];
+                            return PlanCardGrid(
+                              plan: plan,
+                              onPayNow: () => Get.toNamed(
+                                Routes.customerPayPlan,
+                                arguments: {'plan': plan},
+                              ),
+                              onView: () => Get.toNamed(
+                                Routes.customerPlanDetails,
+                                preventDuplicates: true,
+                                arguments: {'plan': plan},
+                              ),
+                            );
+                          },
+                          childCount: visiblePlans.length,
                         ),
                       ),
                     )

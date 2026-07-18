@@ -72,14 +72,38 @@ class OutrightOrderTile extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            order.id.substring(0, 8).toUpperCase(),
-                            style: GoogleFonts.inter(
-                              fontSize: 10.sp,
-                              fontWeight: FontWeight.w600,
-                              color: KorraColors.textMuted,
-                              letterSpacing: 0.5,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                order.id.substring(0, 8).toUpperCase(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 10.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: KorraColors.textMuted,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              if (order.webPurchase) ...[
+                                SizedBox(width: 6.w),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 6.w, vertical: 2.h),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF8FF),
+                                    borderRadius: BorderRadius.circular(20.r),
+                                  ),
+                                  child: Text(
+                                    "WEB",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 8.5.sp,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.5,
+                                      color: const Color(0xFF175CD3),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           if (isSelectionMode)
                             Container(
@@ -148,14 +172,24 @@ class OutrightOrderTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.check_circle_rounded, color: const Color(0xFF027A48), size: 14.sp),
+                    Icon(
+                      order.isAwaitingPayment
+                          ? Icons.hourglass_top_rounded
+                          : Icons.check_circle_rounded,
+                      color: order.isAwaitingPayment
+                          ? const Color(0xFFB95000)
+                          : const Color(0xFF027A48),
+                      size: 14.sp,
+                    ),
                     SizedBox(width: 4.w),
                     Text(
-                      "Paid Outright",
+                      order.isAwaitingPayment ? "Payment Pending" : "Paid Outright",
                       style: GoogleFonts.inter(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF027A48),
+                        color: order.isAwaitingPayment
+                            ? const Color(0xFFB95000)
+                            : const Color(0xFF027A48),
                       ),
                     ),
                   ],
@@ -232,6 +266,11 @@ class OutrightOrderTile extends StatelessWidget {
     Color fg;
 
     switch (order.status) {
+      case OutrightOrderStatus.awaitingPayment:
+        text = "Awaiting Payment";
+        bg = const Color(0xFFFFF7ED);
+        fg = const Color(0xFFB95000);
+        break;
       case OutrightOrderStatus.pending:
         text = "New";
         bg = Colors.blue.shade50;

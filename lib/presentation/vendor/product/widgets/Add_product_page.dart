@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../config/constants/colors.dart';
 import '../../../../config/utils/currency_formatters.dart';
+import '../../../../data/models/product_model.dart';
 import '../../../../data/models/vendor/vendor_stat.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import '../../../../logic/bloc/vendor/image/image_bloc.dart';
@@ -27,6 +28,7 @@ import 'product_submit_area.dart';
 import 'product_timeline_logic_box.dart';
 import 'product_strict_settings_card.dart';
 import 'product_direct_settings_card.dart';
+import 'product_variants_editor.dart';
 
 class AddProductPage extends StatefulWidget {
   final String vendorUid;
@@ -63,6 +65,11 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _termsAccepted = false;
   bool _allowReservation = true;
   bool _isFeatured = false;
+
+  // Optional flat variants; when non-empty the Stock field becomes the
+  // computed sum (kept in _stockCtrl so the limit header and plan logic
+  // keep reading it exactly as before).
+  List<ProductVariant> _variants = [];
 
   bool _isPriceTooHigh = false;
 
@@ -102,6 +109,18 @@ class _AddProductPageState extends State<AddProductPage> {
     _durationCtrl.addListener(_onDurationInputChanged);
 
     _fetchComplianceStatus();
+  }
+
+  void _onVariantsChanged(List<ProductVariant> variants) {
+    setState(() {
+      _variants = variants;
+      if (variants.isNotEmpty) {
+        final total = variants.fold<int>(0, (acc, v) => acc + v.stock);
+        // Mirror the sum into the Stock field so the limit header and plan
+        // logic keep working off _stockCtrl unchanged.
+        _stockCtrl.text = total.toString();
+      }
+    });
   }
 
   Future<void> _fetchComplianceStatus() async {
@@ -224,7 +243,22 @@ class _AddProductPageState extends State<AddProductPage> {
 
     final priceTxt = _priceCtrl.text.replaceAll(',', '');
     final price = double.tryParse(priceTxt) ?? 0.0;
-    final stock = int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
+    final stock = _variants.isNotEmpty
+        ? _variants.fold<int>(0, (acc, v) => acc + v.stock)
+        : int.tryParse(_stockCtrl.text.replaceAll(',', '')) ?? 0;
+
+    // Variant sanity: unique labels, at least one unit somewhere.
+    if (_variants.isNotEmpty) {
+      final labels = _variants.map((v) => v.label.toLowerCase()).toSet();
+      if (labels.length != _variants.length) {
+        showAppSnackbar("Variant labels must be unique.", SnackbarType.error);
+        return;
+      }
+      if (stock <= 0) {
+        showAppSnackbar("Add stock to at least one variant.", SnackbarType.error);
+        return;
+      }
+    }
 
     // Rule 1: Cap
     if (price > _currentMaxPlanLimit) {
@@ -304,6 +338,7 @@ class _AddProductPageState extends State<AddProductPage> {
         extensionPeriod: _allowReservation ? _calculatedExtensionInt : 0,
         allowReservation: _allowReservation,
         isFeatured: _isFeatured,
+        variants: _variants,
       ),
     );
   }
@@ -420,13 +455,30 @@ class _AddProductPageState extends State<AddProductPage> {
                         // 2. DETAILS
                         Text("Details", style: _labelStyle()),
                         SizedBox(height: 8.h),
-                        _buildInput(controller: _nameCtrl, hint: "Product Name"),
+                        _buildInput(
+                          controller: _nameCtrl,
+                          hint: "Product Name",
+                          maxLength: 60,
+                          validator: (v) {
+                            final text = v?.trim() ?? '';
+                            if (text.isEmpty) return "Product title is required";
+                            if (text.length < 3) return "Product title must be at least 3 characters";
+                            return null;
+                          },
+                        ),
                         SizedBox(height: 12.h),
                         _buildInput(
                           controller: _descCtrl,
-                          hint: "Description (optional)",
+                          hint: "e.g. Premium leather sandals, available in 5 colors, true to size",
                           maxLines: 3,
-                          validator: (value) => null,
+                          maxLength: 200,
+                          helperText: "This helps your product get found on Google.",
+                          validator: (v) {
+                            final text = v?.trim() ?? '';
+                            if (text.isEmpty) return "Description is required";
+                            if (text.length < 30) return "Description must be at least 30 characters";
+                            return null;
+                          },
                         ),
                         SizedBox(height: 24.h),                      // 3. ALLOW INSTALLMENTS SWITCH
                         Row(
@@ -799,7 +851,15 @@ class _AddProductPageState extends State<AddProductPage> {
                           ),
                         ],
                         SizedBox(height: 24.h),
- 
+
+                        // VARIANTS (optional): sizes/colors with per-variant
+                        // stock; when present the Stock field above becomes
+                        // the computed total.
+                        ProductVariantsEditor(
+                          onChanged: _onVariantsChanged,
+                        ),
+                        SizedBox(height: 24.h),
+
                         if (_allowReservation) ...[
                           // ----------------------------------------------------
                           // TIMELINE INFO
@@ -928,6 +988,8 @@ class _AddProductPageState extends State<AddProductPage> {
     required TextEditingController controller,
     required String hint,
     int maxLines = 1,
+    int? maxLength,
+    String? helperText,
     Widget? prefixIcon,
     BoxConstraints? prefixIconConstraints,
     TextInputType? keyboardType,
@@ -937,6 +999,7 @@ class _AddProductPageState extends State<AddProductPage> {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
+      maxLength: maxLength,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator ?? (v) => v!.trim().isEmpty ? "Required" : null,
@@ -947,6 +1010,17 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
       decoration: InputDecoration(
         hintText: hint,
+        helperText: helperText,
+        helperStyle: GoogleFonts.inter(
+          fontSize: 10.5.sp,
+          color: KorraColors.brand,
+          fontWeight: FontWeight.w600,
+        ),
+        counterStyle: GoogleFonts.inter(
+          fontSize: 10.5.sp,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w500,
+        ),
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
         prefixIcon: prefixIcon,

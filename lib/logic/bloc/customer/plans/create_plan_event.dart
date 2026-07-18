@@ -16,15 +16,19 @@ class LoadPlanPreview extends CreatePlanEvent {
   final int? extensionDays;
   final int? noticeDays;
 
+  /// Chosen variant for products with variants; null otherwise.
+  final String? variantLabel;
+
   LoadPlanPreview(
-    this.productPrice, 
-    this.customerUid, 
+    this.productPrice,
+    this.customerUid,
     this.productId,
     this.merchantDurationDays,
     this.allowExtension,
     this.extensionDays,
-    this.noticeDays,
-  );
+    this.noticeDays, {
+    this.variantLabel,
+  });
 }
 
 class ConfirmPlanCreation extends CreatePlanEvent {

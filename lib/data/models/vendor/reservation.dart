@@ -25,9 +25,14 @@ class Reservation {
   final String modelType; // strict, direct, outright, or installment
   
   // ✅ NEW FIELD
-  final DateTime? fulfilledAt; 
+  final DateTime? fulfilledAt;
   final DateTime? cancelledAt; // Optional: Track when it was cancelled
   final DateTime? finalFulfilledAt; // Optional: Track when it was fulfilled
+
+  /// Variant the plan reserved ("XL / Red"); null for products without
+  /// variants and all pre-variant plans. Shown so the merchant knows
+  /// exactly which unit to set aside.
+  final String? variantLabel;
 
   Reservation({
     required this.id,
@@ -45,7 +50,12 @@ class Reservation {
     this.cancelledAt,
     this.finalFulfilledAt,
     this.customerId,
+    this.variantLabel,
   });
+
+  /// Product title with the variant appended for tiles/sheets.
+  String get displayTitle =>
+      variantLabel == null ? productTitle : "$productTitle ($variantLabel)";
 
   // Helpers
   bool get isCompleted => statusRaw == 'completed';
@@ -106,6 +116,7 @@ class Reservation {
           : null,
       statusRaw: data['status'] ?? 'active',
       modelType: data['modelType'] ?? 'installment',
+      variantLabel: data['variantLabel'] as String?,
       
       // ✅ Parse Date
       fulfilledAt: data['fulfilledAt'] != null 

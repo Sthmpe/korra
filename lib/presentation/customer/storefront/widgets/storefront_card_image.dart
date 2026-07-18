@@ -143,12 +143,12 @@ class StorefrontCardImage extends StatelessWidget {
 
         // Campaign tag overlay on top right — flash-like tags (Flash Deal,
         // Hot Deal, Limited Stock) get a solid urgent chip with a bolt icon.
-        if (product.campaignTag != null && product.campaignTag!.isNotEmpty)
+        if (product.activeCampaignTag != null && product.activeCampaignTag!.isNotEmpty)
           Positioned(
             top: 8.h,
             right: 8.w,
             child: Builder(builder: (context) {
-              final tag = product.campaignTag!;
+              final tag = product.activeCampaignTag!;
               final isFlash = KorraCampaignTags.isFlashDeal(tag);
               final accent = KorraCampaignTags.colorFor(tag);
               return Container(

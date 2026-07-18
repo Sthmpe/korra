@@ -30,6 +30,28 @@ async function generateProductCode(vendorId: string) {
   return `K-${vendorPrefix}-${shortHash}`;
 }
 
+// --- 2b. HELPER: Sanitize optional flat variants ---
+// [{label, stock}] with unique non-empty labels and non-negative integer
+// stock. Returns null when the product has no variants. Throws on bad input
+// so a malformed payload can never write inconsistent stock.
+function sanitizeVariants(raw: unknown): { label: string; stock: number }[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  if (raw.length > 30) throw "Too many variants (max 30).";
+  const seen = new Set<string>();
+  const out: { label: string; stock: number }[] = [];
+  for (const v of raw) {
+    const label = String((v as any)?.label ?? '').trim().slice(0, 40);
+    const stock = Math.floor(Number((v as any)?.stock));
+    if (!label) throw "Variant label cannot be empty.";
+    if (!Number.isFinite(stock) || stock < 0) throw `Invalid stock for variant "${label}".`;
+    const key = label.toLowerCase();
+    if (seen.has(key)) throw `Duplicate variant label: "${label}".`;
+    seen.add(key);
+    out.push({ label, stock });
+  }
+  return out;
+}
+
 // --- 3. MAIN LOGIC ---
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -107,7 +129,12 @@ serve(async (req) => {
 
     // 1. Calculate & Validate Value
     const price = Number(productData.price);
-    const stock = Number(productData.availableStock);
+    // Variants (optional): the server-side sum is the ONLY source of truth
+    // for total stock when variants exist; the client's flat number is ignored.
+    const variants = sanitizeVariants(productData.variants);
+    const stock = variants
+      ? variants.reduce((acc, v) => acc + v.stock, 0)
+      : Number(productData.availableStock);
 
     const totalValue = price * stock;
 
@@ -167,8 +194,9 @@ serve(async (req) => {
         price: price,
         initialStock: stock,
         availableStock: stock,
-        
-        status: 'approved', 
+        ...(variants ? { variants } : {}),
+
+        status: 'approved',
         rejectionReason: null,
 
         isPremium: productData.isPremium || false,

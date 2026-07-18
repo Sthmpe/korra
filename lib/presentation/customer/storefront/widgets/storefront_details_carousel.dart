@@ -123,7 +123,7 @@ class _StorefrontDetailsCarouselState extends State<StorefrontDetailsCarousel> {
                   ),
 
                   // Campaign tag
-                  if (product.campaignTag != null && product.campaignTag!.isNotEmpty)
+                  if (product.activeCampaignTag != null && product.activeCampaignTag!.isNotEmpty)
                     Positioned(
                       top: 12.h,
                       right: 12.w,
@@ -134,7 +134,7 @@ class _StorefrontDetailsCarouselState extends State<StorefrontDetailsCarousel> {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          product.campaignTag!.toUpperCase(),
+                          product.activeCampaignTag!.toUpperCase(),
                           style: GoogleFonts.inter(
                             fontSize: 9.sp,
                             fontWeight: FontWeight.w800,

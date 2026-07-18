@@ -11,6 +11,8 @@ import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/korra_notification.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../config/routes/app_routes.dart';
+import '../../../logic/services/analytics_service.dart';
+import '../../shared/widgets/date_group_label.dart';
 import '../../shared/widgets/korra_header.dart';
 
 class NotificationScreen extends StatelessWidget {
@@ -101,7 +103,15 @@ class NotificationScreen extends StatelessWidget {
             separatorBuilder: (_, __) => Divider(height: 32.h, color: Colors.grey.shade100),
             itemBuilder: (context, index) {
               final notif = notifications[index];
-              
+
+              // Date buckets: Today / Yesterday / Last Week / Last Month /
+              // month names (year only when not the current year).
+              final groupLabel = recencyGroupLabel(notif.createdAt);
+              final prevLabel = index == 0
+                  ? null
+                  : recencyGroupLabel(notifications[index - 1].createdAt);
+              final showHeader = groupLabel != prevLabel;
+
               // ✅ Logic to determine Icon Style (Matched Vendor Styling)
               IconData icon;
               Color iconColor;
@@ -135,8 +145,12 @@ class NotificationScreen extends StatelessWidget {
                   iconBg = Colors.grey.shade100;
               }
 
-              return InkWell(
+              final row = InkWell(
                 onTap: () {
+                  Analytics.log(AnalyticsEvents.custNotificationOpened, {
+                    'notification_type': notif.type,
+                  });
+
                   // 1. Mark Read
                   if (!notif.isRead) repo.markNotificationRead(uid, notif.id);
 
@@ -243,6 +257,18 @@ class NotificationScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+              );
+
+              if (!showHeader) return row;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DateGroupHeader(
+                    label: groupLabel,
+                    padding: EdgeInsets.fromLTRB(0, index == 0 ? 4.h : 0, 0, 14.h),
+                  ),
+                  row,
+                ],
               );
             },
           );

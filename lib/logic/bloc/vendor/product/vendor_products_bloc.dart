@@ -154,6 +154,9 @@ class VendorProductsBloc
         'totalMaxTime': "$totalDays Days",
         'allowReservation': event.allowReservation,
         'isFeatured': event.isFeatured,
+        // Optional flat variants; server recomputes availableStock as the
+        // sum when present, so the stock fields above are just a mirror.
+        'variants': event.variants.map((v) => v.toMap()).toList(),
       };
 
       await vendors.addProductSecure(newProductMap);
@@ -216,6 +219,9 @@ class VendorProductsBloc
         'noticePeriod': "${event.noticePeriod} Days",
         'totalMaxTime': "${event.duration + event.noticePeriod + (event.extensionsEnabled ? event.extensionPeriod : 0)} Days",
         'isFeatured': event.isFeatured,
+        // Always sent: an empty list REMOVES variants (server deletes the
+        // field); non-empty makes the server recompute availableStock.
+        'variants': event.variants.map((v) => v.toMap()).toList(),
       };
 
       await vendors.updateProductSecure(

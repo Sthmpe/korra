@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 import '../../../../data/models/vendor/reservation.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_bloc.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_event.dart';
@@ -12,7 +13,10 @@ import 'reservation_status_tabs.dart';
 import 'vendor_reservation_detail_sheet.dart';
 
 class ReservationsPanel extends StatelessWidget {
-  const ReservationsPanel({super.key});
+  /// View mode owned by the Orders page (its header hosts the toggle).
+  final bool grid;
+
+  const ReservationsPanel({super.key, this.grid = false});
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +96,7 @@ class ReservationsPanel extends StatelessWidget {
                   sliver: ReservationList(
                     loading: state.loading,
                     items: displayList,
+                    grid: grid,
                     filter: state.filter,
                     onOpen: (id) {
                       final item = state.visible.firstWhere((e) => e.id == id);

@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart'; // Premium Icons
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../config/constants/colors.dart';
 import '../../../config/routes/app_routes.dart';
@@ -14,17 +15,47 @@ import '../../../logic/bloc/vendor/product/vendor_products_state.dart';
 
 // We will build these widgets next
 import '../../shared/widgets/show_app_snackbar.dart';
+import 'widgets/product_grid_item.dart';
 import 'widgets/product_list_item_premium.dart';
 import 'widgets/product_search_bar.dart';
 import 'widgets/product_filter_pills.dart';
 
-class VendorProductsBody extends StatelessWidget {
+class VendorProductsBody extends StatefulWidget {
   final String vendorUid;
 
   const VendorProductsBody({
     super.key,
     required this.vendorUid,
   });
+
+  @override
+  State<VendorProductsBody> createState() => _VendorProductsBodyState();
+}
+
+class _VendorProductsBodyState extends State<VendorProductsBody> {
+  String get vendorUid => widget.vendorUid;
+
+  // List is the merchant default (management first); the toggle choice
+  // sticks across sessions.
+  bool _gridView = false;
+  static const _gridPrefKey = 'vendor_products_grid_view';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final saved = prefs.getBool(_gridPrefKey);
+      if (saved != null && saved != _gridView && mounted) {
+        setState(() => _gridView = saved);
+      }
+    });
+  }
+
+  void _toggleView() {
+    setState(() => _gridView = !_gridView);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_gridPrefKey, _gridView));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,9 +128,28 @@ class VendorProductsBody extends StatelessWidget {
                         children: [
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 20.w),
-                            child: ProductSearchBar(
-                              initialValue: state.query,
-                              onChanged: (q) => context.read<VendorProductsBloc>().add(VendorProductsQueryChanged(q)),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ProductSearchBar(
+                                    initialValue: state.query,
+                                    onChanged: (q) => context.read<VendorProductsBloc>().add(VendorProductsQueryChanged(q)),
+                                  ),
+                                ),
+                                SizedBox(width: 8.w),
+                                // Grid / List toggle (list is the default)
+                                IconButton(
+                                  onPressed: _toggleView,
+                                  icon: Icon(
+                                    _gridView
+                                        ? Icons.view_agenda_outlined
+                                        : Icons.grid_view_rounded,
+                                    color: const Color(0xFF1B1B1B),
+                                  ),
+                                  iconSize: 22.sp,
+                                  tooltip: _gridView ? 'List view' : 'Grid view',
+                                ),
+                              ],
                             ),
                           ),
                           SizedBox(height: 16.h),
@@ -118,6 +168,47 @@ class VendorProductsBody extends StatelessWidget {
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: _buildEmptyState(context, state),
+                    )
+                  else if (_gridView)
+                    // 2-column catalog grid (opt-in view)
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12.h,
+                          crossAxisSpacing: 12.w,
+                          mainAxisExtent: 226.h,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final product = state.visibleItems[index];
+                            return ProductGridItem(
+                              product: product,
+                              isSelectionMode: state.isSelectionMode,
+                              isSelected: state.selectedIds.contains(product.id),
+                              onTap: () {
+                                if (state.isSelectionMode) {
+                                  context.read<VendorProductsBloc>().add(VendorProductsToggleSelection(product.id));
+                                } else {
+                                  final currentBloc = context.read<VendorProductsBloc>();
+                                  Get.toNamed(
+                                    Routes.vendorProductDetails,
+                                    arguments: {
+                                      'product': product,
+                                      'repo': vendors,
+                                      'uid': vendorUid,
+                                      'listBloc': currentBloc,
+                                    },
+                                  );
+                                }
+                              },
+                              onLongPress: () => context.read<VendorProductsBloc>().add(VendorProductsToggleSelection(product.id)),
+                            );
+                          },
+                          childCount: state.visibleItems.length,
+                        ),
+                      ),
                     )
                   else
                     SliverPadding(

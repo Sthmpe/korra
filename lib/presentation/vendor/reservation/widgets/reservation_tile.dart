@@ -112,7 +112,7 @@ class ReservationTile extends StatelessWidget {
 
                       // Product Title
                       Text(
-                        reservation.productTitle,
+                        reservation.displayTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(

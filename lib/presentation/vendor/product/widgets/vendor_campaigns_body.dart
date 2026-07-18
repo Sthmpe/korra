@@ -11,12 +11,18 @@ import '../../../../config/constants/sizes.dart';
 import '../../../../data/models/vendor/campaign_model.dart';
 import '../../../../data/models/vendor/vendor_visibility.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
+import '../../../../logic/services/analytics_service.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 
 import 'campaigns/campaign_reach_cards.dart';
 import 'campaigns/highlighted_store_promo.dart';
+import 'campaigns/campaign_analytics_sheet.dart';
 import 'campaigns/campaign_card.dart';
+import 'campaigns/campaign_history_screen.dart';
+import 'campaigns/campaign_history_tile.dart';
 import 'campaigns/create_campaign_sheet.dart';
+import 'campaigns/saves_count_card.dart';
+import 'campaigns/web_activity_card.dart';
 
 class VendorCampaignsBody extends StatefulWidget {
   final String vendorId;
@@ -33,6 +39,40 @@ class VendorCampaignsBody extends StatefulWidget {
 class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
+
+  /// Countdown campaigns whose timer ran out get swept into history exactly
+  /// once per session: archiving them reverts their product tag/discount
+  /// (deleteCampaigns handles both) since nothing else ever cleans up after
+  /// an expired timer.
+  final Set<String> _sweptExpiredIds = {};
+
+  void _sweepExpired(BuildContext context, List<Campaign> campaigns) {
+    final expired = campaigns
+        .where((c) =>
+            !c.archived && c.isPast && !_sweptExpiredIds.contains(c.id))
+        .toList();
+    if (expired.isEmpty) return;
+    _sweptExpiredIds.addAll(expired.map((c) => c.id));
+    // Fire-and-forget; the stream will redraw them into History.
+    context.read<VendorRepository>().deleteCampaigns(expired).catchError((e) {
+      debugPrint("Expired campaign sweep failed: $e");
+    });
+  }
+
+  void _openAnalytics(BuildContext context, Campaign campaign) {
+    Analytics.log(AnalyticsEvents.merchCampaignAnalytics, {
+      'campaign_id': campaign.id,
+      'archived': campaign.archived,
+      'opens': campaign.openCount,
+      'purchases': campaign.purchases,
+    });
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CampaignAnalyticsSheet(campaign: campaign),
+    );
+  }
 
   void _enterSelection(String campaignId) {
     setState(() {
@@ -67,8 +107,8 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
         title: Text(plural ? "Delete ${targets.length} campaigns?" : "Delete this campaign?"),
         content: Text(
           plural
-              ? "This ends ${targets.length} campaigns now and reverts any discounted price and tag they applied to their products. This can't be undone."
-              : "This ends the campaign now and reverts any discounted price and tag it applied to its products. This can't be undone.",
+              ? "This ends ${targets.length} campaigns now and reverts any discounted price and tag they applied to their products. They move to Campaign History with their stats."
+              : "This ends the campaign now and reverts any discounted price and tag it applied to its products. It moves to Campaign History with its stats.",
         ),
         actions: [
           TextButton(
@@ -86,6 +126,9 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
 
     try {
       await context.read<VendorRepository>().deleteCampaigns(targets);
+      Analytics.log(AnalyticsEvents.merchCampaignDeleted, {
+        'count': targets.length,
+      });
       if (context.mounted) {
         showAppSnackbar(
           plural ? "${targets.length} campaigns deleted." : "Campaign deleted.",
@@ -125,7 +168,17 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
           );
         }
 
-        final campaigns = snapshot.data ?? [];
+        final allCampaigns = snapshot.data ?? [];
+
+        // Expired countdowns migrate to history (and revert their products).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _sweepExpired(context, allCampaigns);
+        });
+
+        // Live campaigns up top; everything ended lives in Campaign History.
+        final campaigns = allCampaigns.where((c) => c.isActive).toList();
+        final history = allCampaigns.where((c) => c.isPast).toList()
+          ..sort((a, b) => (b.endDate ?? b.sentAt).compareTo(a.endDate ?? a.sentAt));
 
         return CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -142,13 +195,100 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
                       children: [
                         CampaignReachCards(visibility: visibility),
                         SizedBox(height: 12.h),
+                        // Saves: customers who saved this store (real, moves
+                        // both ways). Borderless premium card.
+                        SavesCountCard(vendorId: vendorId),
+                        SizedBox(height: 12.h),
                         HighlightedStorePromo(vendorId: vendorId, visibility: visibility),
+                        SizedBox(height: 12.h),
+                        // Separate stat by design: web page loads, never
+                        // merged into campaign opens or Most Visited.
+                        WebActivityCard(vendorId: vendorId),
                       ],
                     );
                   },
                 ),
               ),
             ),
+
+            // 1b. Campaign History — ABOVE the active list (David). Compact
+            // preview of the most recent entries; "View all" opens the full
+            // month-grouped history.
+            if (history.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 10.h),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Campaign History',
+                        style: GoogleFonts.inter(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: KorraColors.textDark,
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.5.h),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F5F1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          "${history.length}",
+                          style: GoogleFonts.inter(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFFA54600),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (history.length > 2)
+                        TextButton(
+                          onPressed: () {
+                            Analytics.log(AnalyticsEvents.merchCampaignHistoryViewed, {
+                              'count': history.length,
+                            });
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CampaignHistoryScreen(history: history),
+                              ),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            "View all",
+                            style: GoogleFonts.inter(
+                              fontSize: 12.5.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFA54600),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: 16.w),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => CampaignHistoryTile(
+                      campaign: history[index],
+                      onTap: () => _openAnalytics(context, history[index]),
+                    ),
+                    childCount: history.length > 2 ? 2 : history.length,
+                  ),
+                ),
+              ),
+            ],
 
             // 2. Section Header — either the normal title + New Campaign +
             // Select entry point, or the selection toolbar (count + Delete).
@@ -207,7 +347,7 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Sent Campaigns (${campaigns.length})',
+                            'Active Campaigns (${campaigns.length})',
                             style: GoogleFonts.inter(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.w700,
@@ -299,10 +439,26 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
               ),
 
             // 4. Feed Body List
-            if (campaigns.isEmpty)
+            if (campaigns.isEmpty && history.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _buildEmptyState(context),
+              )
+            else if (campaigns.isEmpty)
+              // History exists but nothing is live — slim note, not the
+              // full empty state (history renders right below).
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 20.h),
+                  child: Text(
+                    "No active campaigns right now. Launch one to notify your customer network.",
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5.sp,
+                      color: Colors.grey.shade500,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
               )
             else
               SliverPadding(
@@ -317,7 +473,9 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
                           campaign: campaign,
                           selectionMode: _selectionMode,
                           selected: _selectedIds.contains(campaign.id),
-                          onTap: () => _toggleSelected(campaign.id),
+                          onTap: () => _selectionMode
+                              ? _toggleSelected(campaign.id)
+                              : _openAnalytics(context, campaign),
                           onLongPress: () => _enterSelection(campaign.id),
                           onDeleteTap: () => _confirmDelete(context, [campaign]),
                         ),
@@ -327,6 +485,8 @@ class _VendorCampaignsBodyState extends State<VendorCampaignsBody> {
                   ),
                 ),
               ),
+
+            SliverToBoxAdapter(child: SizedBox(height: 24.h)),
           ],
         );
       },

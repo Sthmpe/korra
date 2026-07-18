@@ -185,9 +185,22 @@ class NotificationService extends GetxService {
           Routes.customerPlanDetailsLoader,
           arguments: {'planId': id},
         );
-      } 
+        return;
+      }
       // Add vendor routing here later if needed!
       // else if (type == 'vendor_order') { ... }
+    }
+
+    // Last Viewed re-engagement push: straight to the product inside its
+    // merchant's storefront (slug preferred, vendorId resolves too).
+    if (type == 'last_viewed') {
+      final productId = (message.data['productId'] ?? '').toString();
+      final slug = (message.data['slug'] ?? '').toString().trim().isNotEmpty
+          ? message.data['slug'].toString().trim()
+          : (message.data['vendorId'] ?? '').toString();
+      if (slug.isNotEmpty && productId.isNotEmpty) {
+        Get.toNamed('/store/$slug', parameters: {'product': productId});
+      }
     }
   }
 }

@@ -10,6 +10,8 @@ import '../../../../config/constants/colors.dart';
 import '../../../../config/routes/app_routes.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../../data/models/vendor/outright_order.dart';
+import '../../../shared/widgets/date_group_label.dart';
+import 'customer_outright_order_sheet.dart';
 import 'storefront_lazy_image.dart';
 
 /// Unified purchase entry rendered in the history list — built from either a
@@ -140,7 +142,7 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
 
                   final entries = [
                     ..._planEntries(context, planSnapshot.data?.docs ?? []),
-                    ..._orderEntries(orderSnapshot.data?.docs ?? []),
+                    ..._orderEntries(context, orderSnapshot.data?.docs ?? []),
                   ];
 
                   if (entries.isEmpty) return _buildEmptyState();
@@ -158,7 +160,29 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
                     physics: const BouncingScrollPhysics(),
                     padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                     itemCount: entries.length,
-                    itemBuilder: (context, index) => _PurchaseTile(entry: entries[index]),
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final tile = _PurchaseTile(entry: entry);
+                      // Recency buckets (Today / Yesterday / Last Week /
+                      // Last Month / month names); undated entries get none.
+                      if (entry.date == null) return tile;
+                      final label = recencyGroupLabel(entry.date!);
+                      final prev = index == 0 ? null : entries[index - 1].date;
+                      final showHeader =
+                          prev == null || recencyGroupLabel(prev) != label;
+                      if (!showHeader) return tile;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DateGroupHeader(
+                            label: label,
+                            padding: EdgeInsets.fromLTRB(
+                                4.w, index == 0 ? 2.h : 10.h, 0, 8.h),
+                          ),
+                          tile,
+                        ],
+                      );
+                    },
                   );
                 },
               );
@@ -180,7 +204,9 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
 
       return _PurchaseEntry(
         isOutright: false,
-        title: plan.title,
+        title: plan.variantLabel != null
+            ? "${plan.title} (${plan.variantLabel})"
+            : plan.title,
         imageUrl: plan.imageUrls.isNotEmpty ? plan.imageUrls.first : '',
         statusLabel: plan.status.toUpperCase(),
         statusBg: completed ? KorraColors.successBg : KorraColors.brandLight,
@@ -197,7 +223,7 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
   }
 
   // ── orders/ → Outright Purchase entries ───────────────────────────────────
-  List<_PurchaseEntry> _orderEntries(List<QueryDocumentSnapshot> docs) {
+  List<_PurchaseEntry> _orderEntries(BuildContext context, List<QueryDocumentSnapshot> docs) {
     return docs.map((doc) {
       final order = OutrightOrder.fromFirestore(doc);
       final first = order.items.isNotEmpty ? order.items.first : null;
@@ -220,7 +246,7 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
         isOutright: true,
         title: first == null
             ? "Outright Order"
-            : (extra > 0 ? "${first.title} +$extra more" : first.title),
+            : (extra > 0 ? "${first.displayTitle} +$extra more" : first.displayTitle),
         imageUrl: first?.imageUrl ?? '',
         statusLabel: order.isDelivered
             ? "DELIVERED"
@@ -233,6 +259,19 @@ class StorefrontPurchaseHistorySheet extends StatelessWidget {
         statusFg: fg,
         amountText: order.totalText,
         date: order.createdAt,
+        onTap: () {
+          // Detail sheet with the Order ID the customer can share to their
+          // merchant, plus the delivery status explainer.
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => CustomerOutrightOrderSheet(
+              order: order,
+              storeName: storeName,
+            ),
+          );
+        },
       );
     }).toList();
   }

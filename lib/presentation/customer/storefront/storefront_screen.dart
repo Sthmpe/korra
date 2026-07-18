@@ -81,6 +81,10 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
   double? _maxPrice;
   bool _isPinned = false;
   bool _isMuted = false;
+  // Store balance (DB field: storeCredit) at this merchant. A customer can't
+  // unsave a store while they still hold a balance there, so unsave stays
+  // blocked until it reaches zero.
+  double _storeBalance = 0;
   StreamSubscription<DocumentSnapshot>? _pinSubscription;
 
   // Trust & compliance lock — same source as create-plan/pay checks
@@ -285,6 +289,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
       if (mounted) {
         setState(() {
           _isPinned = doc.exists;
+          _storeBalance = (doc.data()?['storeCredit'] ?? 0).toDouble();
         });
       }
     });
@@ -300,9 +305,12 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
     // Firestore rules are locked, so the count goes through the record-visit
     // edge function (admin SDK) instead of a direct write. Fire-and-forget.
+    // customerId lets the backend dedupe campaign opens per customer per day.
     try {
-      await Supabase.instance.client.functions
-          .invoke('record-visit', body: {'vendorId': vendorId});
+      await Supabase.instance.client.functions.invoke('record-visit', body: {
+        'vendorId': vendorId,
+        'customerId': _auth.currentUser?.uid ?? '',
+      });
     } catch (e) {
       _countedVisits.remove(vendorId); // allow a retry next open
       debugPrint("Visit count failed for $vendorId: $e");
@@ -369,7 +377,18 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
   Future<void> _togglePin(String vendorId) async {
     final user = _auth.currentUser;
     if (user == null) {
-      showAppSnackbar("Please log in to follow this merchant.", SnackbarType.info);
+      showAppSnackbar("Please log in to save this store.", SnackbarType.info);
+      return;
+    }
+
+    // A store you still hold a balance with can't be unsaved: the my_vendors
+    // doc carries that balance, so removing it would orphan it. Spend it down
+    // to zero to unsave.
+    if (_isPinned && _storeBalance > 0) {
+      showAppSnackbar(
+        "You have a store balance here, so this store stays saved. Use it up to unsave.",
+        SnackbarType.info,
+      );
       return;
     }
 
@@ -382,18 +401,18 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
       if (_isPinned) {
         await docRef.delete();
-        showAppSnackbar("Store unpinned successfully.", SnackbarType.success);
+        showAppSnackbar("Store unsaved.", SnackbarType.success);
       } else {
         await docRef.set({
           'vendorId': vendorId,
           'pinnedAt': FieldValue.serverTimestamp(),
           'lastInteraction': FieldValue.serverTimestamp(),
         });
-        showAppSnackbar("Store pinned to My Merchants!", SnackbarType.success);
+        showAppSnackbar("Store saved.", SnackbarType.success);
       }
     } catch (e) {
-      debugPrint("Error toggling storefront pin: $e");
-      showAppSnackbar("Could not update pin status. Please try again.", SnackbarType.error);
+      debugPrint("Error toggling storefront save: $e");
+      showAppSnackbar("Could not update saved status. Please try again.", SnackbarType.error);
     }
   }
 
@@ -613,9 +632,9 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
                         p.code.toLowerCase().contains(_searchQuery.toLowerCase());
                     final matchesCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
                     final matchesDeals = !_dealsOnly ||
-                        (p.campaignTag != null && p.campaignTag!.trim().isNotEmpty);
-                    final effectivePrice = (p.discountedPrice != null && p.discountedPrice! > 0)
-                        ? p.discountedPrice!
+                        (p.activeCampaignTag != null && p.activeCampaignTag!.trim().isNotEmpty);
+                    final effectivePrice = (p.activeDiscountedPrice != null && p.activeDiscountedPrice! > 0)
+                        ? p.activeDiscountedPrice!
                         : p.price;
                     final matchesPrice = (_minPrice == null || effectivePrice >= _minPrice!) &&
                         (_maxPrice == null || effectivePrice <= _maxPrice!);
@@ -625,14 +644,14 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
                   // Sort products if priceSort is active
                   if (_priceSort == 'asc') {
                     filteredProducts.sort((a, b) {
-                      final ap = (a.discountedPrice != null && a.discountedPrice! > 0) ? a.discountedPrice! : a.price;
-                      final bp = (b.discountedPrice != null && b.discountedPrice! > 0) ? b.discountedPrice! : b.price;
+                      final ap = (a.activeDiscountedPrice != null && a.activeDiscountedPrice! > 0) ? a.activeDiscountedPrice! : a.price;
+                      final bp = (b.activeDiscountedPrice != null && b.activeDiscountedPrice! > 0) ? b.activeDiscountedPrice! : b.price;
                       return ap.compareTo(bp);
                     });
                   } else if (_priceSort == 'desc') {
                     filteredProducts.sort((a, b) {
-                      final ap = (a.discountedPrice != null && a.discountedPrice! > 0) ? a.discountedPrice! : a.price;
-                      final bp = (b.discountedPrice != null && b.discountedPrice! > 0) ? b.discountedPrice! : b.price;
+                      final ap = (a.activeDiscountedPrice != null && a.activeDiscountedPrice! > 0) ? a.activeDiscountedPrice! : a.price;
+                      final bp = (b.activeDiscountedPrice != null && b.activeDiscountedPrice! > 0) ? b.activeDiscountedPrice! : b.price;
                       return bp.compareTo(ap);
                     });
                   }
@@ -799,12 +818,12 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
               deal: deal,
               storeSlug: widget.storeSlug,
               scrollController: scrollController,
-              onAddToCart: (prod, qty) {
-                _addToCart(prod, qty);
+              onAddToCart: (prod, qty, variantLabel) {
+                _addToCart(prod, qty, variantLabel);
               },
-              onPayInstallments: (doc) {
+              onPayInstallments: (doc, variantLabel) {
                 Navigator.pop(context); // Close sheet
-                _navigateToProductPlan(product, doc);
+                _navigateToProductPlan(product, doc, variantLabel);
               },
             );
           },
@@ -813,20 +832,24 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
     );
   }
 
-  void _addToCart(Product product, int quantity) {
+  void _addToCart(Product product, int quantity, [String? variantLabel]) {
     final user = _auth.currentUser;
     if (user == null) {
       showAppSnackbar("Please log in to add items to your cart.", SnackbarType.info);
       return;
     }
 
-    CartService.instance.addToCart(product.vendorId, product, quantity);
-    showAppSnackbar("Added $quantity x ${product.name} to cart!", SnackbarType.success);
+    CartService.instance
+        .addToCart(product.vendorId, product, quantity, variantLabel: variantLabel);
+    final what =
+        variantLabel != null ? "${product.name} ($variantLabel)" : product.name;
+    showAppSnackbar("Added $quantity x $what to cart!", SnackbarType.success);
   }
 
 
 
-  void _navigateToProductPlan(Product product, DocumentSnapshot? rawDoc) async {
+  void _navigateToProductPlan(Product product, DocumentSnapshot? rawDoc,
+      [String? variantLabel]) async {
     final user = _auth.currentUser;
     final productFetch = ProductFetchResult(
       data: rawDoc != null
@@ -844,8 +867,10 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
               'allowReservation': product.allowReservation,
               'modelType': product.modelType,
               'isFeatured': product.isFeatured,
-              'campaignTag': product.campaignTag,
-              'discountedPrice': product.discountedPrice,
+              // Active values only, so an expired campaign never carries a
+              // stale tag/discount into installment plan creation.
+              'campaignTag': product.activeCampaignTag,
+              'discountedPrice': product.activeDiscountedPrice,
             },
       id: rawDoc?.id ?? product.id,
     );
@@ -860,6 +885,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
             'product': productFetch,
             'customerUid': '',
             'walletBalance': 0.0,
+            'variantLabel': variantLabel,
           }
         },
       );
@@ -891,6 +917,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
           'customer': customer,
           'customerUid': user.uid,
           'walletBalance': customer.availableBalance,
+          'variantLabel': variantLabel,
         },
       );
     } catch (e) {

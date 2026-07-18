@@ -11,6 +11,7 @@
 // GET /store-api?slug={slug}&productId={id}      → store + single product (product-level SSR page/OG)
 // GET /store-api?action=slugs                    → all store slugs (for the sitemap)
 // GET /store-api?action=product-urls             → all { slug, productId } pairs (for the sitemap)
+// GET /store-api?action=store-stats              → per-store { slug, rating, reviewCount } (for the reviews sitemap gate)
 //
 // Called with the Supabase anon key (public-safe). No per-user auth.
 
@@ -58,26 +59,45 @@ function publicStore(id: string, data: any) {
       .join(', '),
     phone: store.contactPhone || personal.phone || '',
     whatsapp: socials.whatsappGroup || '',
+    // Guest checkout: true -> merchant absorbs the 3.5% fee (no fee line
+    // shown); false -> customer pays it on top. Display only; web-checkout
+    // recomputes the authoritative amounts server-side.
+    absorbOutrightFee: store.absorbOutrightFee === true,
     instagram: socials.instagram || '',
     tiktok: socials.tiktok || '',
   };
 }
 
 function publicProduct(id: string, p: any) {
+  // A timed campaign stamps campaignEndsAt on the product. Once it passes, the
+  // tag and discount have lapsed, so we drop them here — a single gate that
+  // covers every site surface (store page, product page, modal, cart display)
+  // with no dependency on the merchant-side sweep cleaning the field. Untimed
+  // campaigns have no end time and stay until the merchant deletes them.
+  const endsAt = p.campaignEndsAt?.toDate?.()?.getTime?.() ?? null;
+  const promoActive = endsAt == null || endsAt > Date.now();
   return {
     id,
     code: p.code || '',
     name: p.name || 'Product',
     description: p.description || '',
     price: Number(p.price || 0),
-    discountedPrice: Number(p.discountedPrice || 0),
+    discountedPrice: promoActive ? Number(p.discountedPrice || 0) : 0,
     images: Array.isArray(p.images) ? p.images.slice(0, 6) : [],
     category: p.category || '',
     availableStock: Number(p.availableStock || 0),
     allowReservation: p.allowReservation !== false,
     modelType: p.modelType || '',
     isFeatured: p.isFeatured === true,
-    campaignTag: p.campaignTag || null,
+    campaignTag: promoActive ? (p.campaignTag || null) : null,
+    // Optional flat variants (label + per-variant stock); [] for products
+    // without variants. availableStock above is always the summed total.
+    variants: Array.isArray(p.variants)
+      ? p.variants.map((v: any) => ({
+          label: String(v?.label ?? ''),
+          stock: Math.floor(Number(v?.stock ?? 0)),
+        }))
+      : [],
   };
 }
 
@@ -89,6 +109,7 @@ async function fetchDeals(vendorId: string) {
   const deals: any[] = [];
   snap.forEach((doc) => {
     const c = doc.data();
+    if (c.archived === true) return; // soft-deleted → history only
     const start = c.dealStartAt?.toDate?.()?.getTime?.() ?? null;
     const end = c.dealEndAt?.toDate?.()?.getTime?.() ?? null;
     if (start == null || end == null) return; // untimed campaign → no countdown
@@ -104,6 +125,28 @@ async function fetchDeals(vendorId: string) {
     });
   });
   return deals;
+}
+
+// vendorId → slug for every vendor that has a slug, fully paginated.
+async function allVendorSlugs(): Promise<Map<string, string>> {
+  const slugById = new Map<string, string>();
+  let last: string | null = null;
+  while (true) {
+    let q = db
+      .collection('vendors')
+      .select('store.slug')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(1000);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    snap.docs.forEach((d) => {
+      const slug = d.data()?.store?.slug;
+      if (typeof slug === 'string' && slug.length > 0) slugById.set(d.id, slug);
+    });
+    if (snap.size < 1000) break;
+    last = snap.docs[snap.size - 1].id;
+  }
+  return slugById;
 }
 
 async function resolveVendor(slug: string) {
@@ -170,40 +213,66 @@ serve(async (req) => {
 
     // Sitemap helper — all slugs.
     if (action === 'slugs') {
-      const snap = await db.collection('vendors').select('store.slug').limit(1000).get();
-      const slugs = snap.docs
-        .map((d) => d.data()?.store?.slug)
-        .filter((s) => typeof s === 'string' && s.length > 0);
-      return json({ slugs });
+      const slugById = await allVendorSlugs();
+      return json({ slugs: [...slugById.values()] });
     }
 
-    // Sitemap helper — every approved product's { slug, productId }, so
+    // Sitemap helper — EVERY approved product's { slug, productId }, so
     // individual product pages (/store/{slug}/p/{id}) are discoverable by
-    // crawlers. Capped at 5000 (Google's sitemap.xml limit is 50k anyway).
+    // crawlers. Fully paginated (no cap): the website chunks the result into
+    // 50k-URL sitemap files, so scale is handled there, not here.
     if (action === 'product-urls') {
-      const vendorsSnap = await db.collection('vendors').select('store.slug').limit(2000).get();
-      const slugById = new Map<string, string>();
-      vendorsSnap.docs.forEach((d) => {
-        const slug = d.data()?.store?.slug;
-        if (typeof slug === 'string' && slug.length > 0) slugById.set(d.id, slug);
-      });
+      const slugById = await allVendorSlugs();
 
-      const productsSnap = await db
-        .collection('products')
-        .where('status', '==', 'approved')
-        .select('vendorId')
-        .limit(5000)
-        .get();
-
-      const urls = productsSnap.docs
-        .map((d) => {
+      const urls: { slug: string; productId: string }[] = [];
+      let last: string | null = null;
+      while (true) {
+        let q = db
+          .collection('products')
+          .where('status', '==', 'approved')
+          .select('vendorId')
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(1000);
+        if (last) q = q.startAfter(last);
+        const snap = await q.get();
+        snap.docs.forEach((d) => {
           const vendorId = d.data()?.vendorId;
           const slug = typeof vendorId === 'string' ? slugById.get(vendorId) : undefined;
-          return slug ? { slug, productId: d.id } : null;
-        })
-        .filter((x): x is { slug: string; productId: string } => x !== null);
+          if (slug) urls.push({ slug, productId: d.id });
+        });
+        if (snap.size < 1000) break;
+        last = snap.docs[snap.size - 1].id;
+      }
 
       return json({ urls });
+    }
+
+    // Sitemap helper — each store's review average and count, so the website
+    // can decide which /store/{slug}/reviews pages are worth indexing.
+    if (action === 'store-stats') {
+      const slugById = await allVendorSlugs();
+      const entries = [...slugById.entries()]; // [vendorId, slug]
+      const stores: { slug: string; rating: number; reviewCount: number }[] = [];
+      // Small parallel batches — one reviews read per vendor.
+      for (let i = 0; i < entries.length; i += 10) {
+        const batch = entries.slice(i, i + 10);
+        const results = await Promise.all(
+          batch.map(async ([vendorId, slug]) => {
+            const snap = await db
+              .collection('vendors').doc(vendorId)
+              .collection('reviews').select('rating').get();
+            let sum = 0;
+            snap.forEach((d) => { sum += Number(d.data()?.rating || 0); });
+            return {
+              slug,
+              rating: snap.size > 0 ? sum / snap.size : 0,
+              reviewCount: snap.size,
+            };
+          }),
+        );
+        stores.push(...results);
+      }
+      return json({ stores });
     }
 
     const slug = url.searchParams.get('slug');

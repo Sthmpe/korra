@@ -39,8 +39,11 @@ function to2DP_Floor(num: number): number {
 }
 
 // ----- FEE CONSTANTS (same economics as the cart sheet UI) -----
-const OUTRIGHT_FEE_RATE = 0.035; // 3.5% of the subtotal
-const MAX_FEE = 7500;            // fee ceiling
+const OUTRIGHT_FEE_RATE = 0.035;       // 3.5% on the wallet-cash portion
+const MAX_FEE = 7500;                  // cash fee ceiling
+const STORE_FEE_RATE = 0.035 * 0.10;   // 0.35% on store balance usage
+const MIN_STORE_FEE = 100;             // store balance fee floor
+const MAX_STORE_FEE = 1000;            // store balance fee ceiling
 
 async function sendFcm(uid: string, title: string, body: string, data: any, collection = 'customers') {
   if (!uid) return;
@@ -136,6 +139,11 @@ serve(async (req) => {
       if (!it?.productId || typeof it.productId !== 'string') throw "Invalid cart item.";
       const qty = Number(it.quantity);
       if (!Number.isInteger(qty) || qty <= 0 || qty > 99) throw "Invalid item quantity.";
+      // Optional variant line ("XL / Red"): must be a short string when sent.
+      if (it.variantLabel != null &&
+          (typeof it.variantLabel !== 'string' || it.variantLabel.length > 40)) {
+        throw "Invalid item option.";
+      }
     }
 
     // =======================================================================
@@ -169,16 +177,68 @@ serve(async (req) => {
       const absorbOutrightFee = storeMap.absorbOutrightFee === true; // 🚩 THE MERCHANT FLAG
 
       const userData = userDoc.data()!;
-      const customerName = `${userData.firstName ?? userData.name ?? 'Korra'} ${userData.lastName ?? 'Customer'}`.trim();
-      const customerPhone = userData.phone ?? userData.phoneNumber ?? '';
+      // Customer docs nest identity under `personal` and `address` (see the
+      // app's Customer.fromMap) — the old top-level reads always missed and
+      // every order showed "Korra Customer" with no phone.
+      const personal = userData.personal ?? {};
+      const addressMap = userData.address ?? {};
+      const first = personal.first ?? userData.firstName ?? userData.name ?? '';
+      const last = personal.last ?? userData.lastName ?? '';
+      const customerName = `${first} ${last}`.trim() || 'Korra Customer';
+      const customerPhone = personal.phone ?? userData.phone ?? userData.phoneNumber ?? '';
+      const customerAddress = [addressMap.address, addressMap.city, addressMap.state]
+        .map((s: any) => (s ?? '').toString().trim())
+        .filter(Boolean)
+        .join(', ');
 
       // --- PRODUCTS: server-side prices, never the client's ---
       const productRefs = items.map((it: any) => db.collection('products').doc(it.productId));
       const productDocs = await Promise.all(productRefs.map((r) => t.get(r)));
 
+      // Active campaigns for this store (max 3 per vendor, cheap read). Used
+      // to snapshot the promotion tag onto the order: a product's campaignTag
+      // only counts if its owning campaign is still live right now (untimed
+      // campaigns live until deleted; timed ones only while dealEndAt is in
+      // the future — an expired countdown leaves a stale tag on the product).
+      const campaignsSnap = await t.get(db.collection('campaigns').where('vendorId', '==', vendorId));
+      const activeCampaigns = campaignsSnap.docs
+        .filter((d) => {
+          const c = d.data();
+          if (c.archived === true) return false; // soft-deleted → history only
+          const end = c.dealEndAt?.toDate?.()?.getTime?.();
+          return typeof end === 'number' ? Date.now() < end : true;
+        });
+      // Returns the tag for display AND the owning campaign's id for
+      // attribution (id never shown to customer/merchant).
+      const activePromo = (productId: string, tag: any): { tag: string; campaignId: string } | null => {
+        const t2 = (tag ?? '').toString().trim();
+        if (!t2) return null;
+        const owner = activeCampaigns.find((d) => {
+          const c = d.data();
+          return Array.isArray(c.productIds) && c.productIds.includes(productId);
+        });
+        return owner ? { tag: t2, campaignId: owner.id } : null;
+      };
+
       let subtotal = 0;
       const orderItems: any[] = [];
+      const promotions: string[] = []; // unique active campaign tags, snapshotted
+      const promotionCampaignIds: string[] = []; // internal: attribution only
       const stockUpdates: { ref: FirebaseFirestore.DocumentReference; qty: number }[] = [];
+      // Variant products can appear on several cart lines (XL and XXL of the
+      // same product), so their deductions are aggregated per product and
+      // written once: updated variants array + recomputed availableStock.
+      const variantUpdates = new Map<string, {
+        ref: FirebaseFirestore.DocumentReference;
+        name: string;
+        variants: { label: string; stock: number }[];
+        deducted: Map<string, number>;
+      }>();
+
+      // Listing a product holds capacity in vendor_stats.totalLiability
+      // (listing price x stock). Sold units leave inventory, so their held
+      // capacity is released here — same math delete-product-secure uses.
+      let capacityToRestore = 0;
 
       for (let i = 0; i < items.length; i++) {
         const doc = productDocs[i];
@@ -191,55 +251,117 @@ serve(async (req) => {
         const stock = Number(p.availableStock ?? 0);
         if (stock < qty) throw `Only ${stock} left of "${p.name}" — please adjust your cart.`;
 
+        // --- VARIANT VALIDATION (per-variant stock) ---
+        const productVariants: { label: string; stock: number }[] =
+          Array.isArray(p.variants)
+            ? p.variants.map((v: any) => ({
+                label: String(v?.label ?? ''),
+                stock: Math.floor(Number(v?.stock ?? 0)),
+              }))
+            : [];
+        const requestedLabel = (items[i].variantLabel ?? '').toString().trim();
+        let chosenVariant: string | null = null;
+
+        if (productVariants.length > 0) {
+          if (!requestedLabel) throw `Please choose an option for "${p.name}".`;
+          const match = productVariants.find((v) => v.label === requestedLabel);
+          if (!match) throw `Option "${requestedLabel}" of "${p.name}" is no longer available.`;
+
+          let agg = variantUpdates.get(doc.id);
+          if (!agg) {
+            agg = { ref: doc.ref, name: p.name ?? 'Product', variants: productVariants, deducted: new Map() };
+            variantUpdates.set(doc.id, agg);
+          }
+          const already = agg.deducted.get(requestedLabel) ?? 0;
+          if (already + qty > match.stock) {
+            throw `Only ${match.stock} left of "${p.name}" (${requestedLabel}) — please adjust your cart.`;
+          }
+          agg.deducted.set(requestedLabel, already + qty);
+          chosenVariant = requestedLabel;
+        }
+
+        // Only honor the discount when the product's owning campaign is still
+        // live (untimed, or timed and not yet past). An expired/archived/
+        // deleted campaign that left a stale discountedPrice behind is charged
+        // at full price — the discount and its tag lapse together.
+        const promo = activePromo(doc.id, p.campaignTag);
         const unitPrice = to2DP(
-          (p.discountedPrice != null && Number(p.discountedPrice) > 0)
+          (promo != null && p.discountedPrice != null && Number(p.discountedPrice) > 0)
             ? Number(p.discountedPrice)
             : Number(p.price ?? 0),
         );
         if (unitPrice <= 0) throw `"${p.name}" has an invalid price.`;
 
         subtotal = to2DP(subtotal + unitPrice * qty);
+        if (promo && !promotions.includes(promo.tag)) promotions.push(promo.tag);
+        if (promo && !promotionCampaignIds.includes(promo.campaignId)) {
+          promotionCampaignIds.push(promo.campaignId);
+        }
         orderItems.push({
           productId: doc.id,
           title: p.name ?? 'Product',
           imageUrl: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '',
           quantity: qty,
           unitPrice,
+          ...(promo ? { promotion: promo.tag } : {}),
+          ...(chosenVariant ? { variantLabel: chosenVariant } : {}),
         });
-        stockUpdates.push({ ref: doc.ref, qty });
+        // Variant products are decremented via variantUpdates (full-array
+        // write); only flat products take the blind increment path.
+        if (chosenVariant == null) stockUpdates.push({ ref: doc.ref, qty });
+        // Liability was charged at the LISTING price when stock was added,
+        // so it's released at the listing price too (not the discounted one).
+        capacityToRestore = to2DP(capacityToRestore + Number(p.price ?? 0) * qty);
       }
 
-      // --- FEE (3.5% of subtotal, capped ₦7,500) ---
-      let feeAmount = to2DP(subtotal * OUTRIGHT_FEE_RATE);
-      if (feeAmount > MAX_FEE) feeAmount = MAX_FEE;
-
-      // Who pays it: customer on top, or merchant out of their take.
-      const customerTotal = absorbOutrightFee ? subtotal : to2DP(subtotal + feeAmount);
-
-      // --- PAYMENT SPLIT: store balance first, wallet covers the rest ---
+      // --- FEES (David's rule, 17 Jul 2026) ---
+      // Store balance pays for the PRODUCT only; every fee comes from the
+      // customer's wallet.
+      //  - Cash fee: 3.5% of the wallet-cash portion of the subtotal, capped
+      //    ₦7,500. This is the only fee the merchant can absorb.
+      //  - Store balance usage fee: 0.35% (10% of 3.5%) of the credit used,
+      //    min ₦100, capped ₦1,000. ALWAYS paid by the customer, never
+      //    absorbable: the merchant receives no cash on that portion, so
+      //    there is nothing to deduct it from.
       const walletBalance = to2DP_Floor(userData.monnify?.availableBalance ?? 0);
       const relData = relDoc.exists ? relDoc.data()! : {};
       const availableStoreCredit = to2DP_Floor(relData.storeCredit ?? 0);
 
-      let creditUsed = 0;
-      let walletUsed = 0;
-      if (availableStoreCredit >= customerTotal) {
-        creditUsed = customerTotal;
-      } else {
-        creditUsed = availableStoreCredit;
-        walletUsed = to2DP(customerTotal - creditUsed);
+      const creditUsed = to2DP_Floor(Math.min(availableStoreCredit, subtotal));
+      const cashPortion = to2DP(subtotal - creditUsed);
+
+      let cashFee = to2DP(cashPortion * OUTRIGHT_FEE_RATE);
+      if (cashFee > MAX_FEE) cashFee = MAX_FEE;
+
+      let storeFee = 0;
+      if (creditUsed > 0) {
+        storeFee = to2DP(creditUsed * STORE_FEE_RATE);
+        if (storeFee < MIN_STORE_FEE) storeFee = MIN_STORE_FEE;
+        if (storeFee > MAX_STORE_FEE) storeFee = MAX_STORE_FEE;
       }
 
+      // Korra's total take on this order (both fee legs, whoever pays them).
+      const feeAmount = to2DP(cashFee + storeFee);
+      // What the customer pays in fees: the cash fee drops off when the
+      // merchant absorbs it; the store balance fee never does.
+      const customerFeePaid = to2DP((absorbOutrightFee ? 0 : cashFee) + storeFee);
+      const customerTotal = to2DP(subtotal + customerFeePaid);
+      const walletUsed = to2DP(cashPortion + customerFeePaid);
+
       if (walletBalance < walletUsed) {
+        if (creditUsed > 0 && walletBalance < storeFee) {
+          throw `Insufficient wallet balance to cover the store balance fee. You need at least ₦${storeFee.toLocaleString()} in your wallet to use your store balance.`;
+        }
         throw `Insufficient funds. Needed: ₦${walletUsed.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}`;
       }
 
-      // Vendor's take: gross entitlement minus the platform fee. The store
-      // credit portion is money the vendor already holds (liability), so only
-      // the wallet portion creates fresh earnings — mirror of plan-manager.
-      // vendorNet can be negative when store credit covered nearly everything
-      // and the merchant absorbs the fee; the increment handles that.
-      const vendorNet = to2DP_Floor(walletUsed - feeAmount);
+      // Vendor's take: the fresh cash paid for the goods, minus the cash fee
+      // when the merchant absorbs it. The store-credit portion is liability
+      // redemption (money the vendor already holds) and the store balance
+      // usage fee is Korra's, so neither touches the vendor's take. When the
+      // whole order was covered by store balance the vendor receives 0 and,
+      // per the rule, absorbs nothing.
+      const vendorNet = to2DP_Floor(cashPortion - (absorbOutrightFee ? cashFee : 0));
 
       // --- WRITES ---
       const orderRef = db.collection('orders').doc();
@@ -254,6 +376,16 @@ serve(async (req) => {
       for (const s of stockUpdates) {
         t.update(s.ref, { availableStock: admin.firestore.FieldValue.increment(-s.qty) });
       }
+      // 1b. Variant products: write the deducted variants array and keep
+      // availableStock as the recomputed sum (single write per product).
+      for (const agg of variantUpdates.values()) {
+        const newVariants = agg.variants.map((v) => ({
+          label: v.label,
+          stock: Math.max(0, v.stock - (agg.deducted.get(v.label) ?? 0)),
+        }));
+        const newTotal = newVariants.reduce((acc, v) => acc + v.stock, 0);
+        t.update(agg.ref, { variants: newVariants, availableStock: newTotal });
+      }
 
       // 2. The order doc (schema the vendor Outright Orders screen reads)
       const summaryTitle = orderItems.length === 1
@@ -265,8 +397,12 @@ serve(async (req) => {
         customerId: customerUid,
         customerName,
         customerPhone,
+        customerAddress,
         totalAmount: subtotal,
         feeAmount,
+        cashFeeAmount: cashFee,
+        storeFeeAmount: storeFee,
+        // Describes the CASH fee leg; the store balance fee is always customer.
         feePaidBy: absorbOutrightFee ? 'merchant' : 'customer',
         amountCharged: customerTotal,
         creditUsed,
@@ -275,7 +411,21 @@ serve(async (req) => {
         reference: txRefId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         items: orderItems,
+        // Snapshot at time of purchase — kept even if the campaign later
+        // expires or is deleted (copied, not referenced live).
+        ...(promotions.length > 0 ? { promotions } : {}),
+        ...(promotionCampaignIds.length > 0 ? { promotionCampaignIds } : {}),
       });
+
+      // Conversion tracking: one purchase per attributed campaign. set+merge
+      // so a since-archived campaign doc never aborts the checkout.
+      for (const cId of promotionCampaignIds) {
+        t.set(
+          db.collection('campaigns').doc(cId),
+          { purchases: admin.firestore.FieldValue.increment(1) },
+          { merge: true },
+        );
+      }
 
       // 3. Customer ledger + receipt payload (same shape the receipt UI reads)
       const receiptPayload = {
@@ -296,14 +446,16 @@ serve(async (req) => {
         isFinished: true,
         creditUsed,
         walletUsed,
-        feeAmount,
-        cashFeeAmount: absorbOutrightFee ? 0 : feeAmount,
-        storeFeeAmount: 0,
+        // Receipt shows what the CUSTOMER paid in fees (plan-manager style).
+        feeAmount: customerFeePaid,
+        cashFeeAmount: absorbOutrightFee ? 0 : cashFee,
+        storeFeeAmount: storeFee,
         appliedToItem: subtotal,
         totalWalletDeducted: walletUsed,
         nextDueDate: null,
         orderType: 'outright',
         items: orderItems,
+        ...(promotions.length > 0 ? { promotions } : {}),
       };
 
       const ledgerRef = userRef.collection('ledger_transactions').doc();
@@ -323,7 +475,9 @@ serve(async (req) => {
           paidWithWallet: walletUsed,
           paidWithCredit: creditUsed,
           vendorName: storeName,
-          feeAmount,
+          feeAmount: customerFeePaid,
+          cashFeeAmount: absorbOutrightFee ? 0 : cashFee,
+          storeFeeAmount: storeFee,
           feePaidBy: absorbOutrightFee ? 'merchant' : 'customer',
           appliedToItem: subtotal,
           totalWalletDeducted: walletUsed,
@@ -394,6 +548,9 @@ serve(async (req) => {
       t.set(vendorStatsRef, {
         totalEarnings: admin.firestore.FieldValue.increment(vendorNet),
         walletBalance: admin.firestore.FieldValue.increment(vendorNet),
+        totalSalesVolume: admin.firestore.FieldValue.increment(subtotal),
+        // Sold stock frees the capacity its listing was holding.
+        totalLiability: admin.firestore.FieldValue.increment(-capacityToRestore),
       }, { merge: true });
 
       // 7. Korra's fee
@@ -404,7 +561,7 @@ serve(async (req) => {
           type: 'credit',
           category: 'outright_fee',
           amount: feeAmount,
-          description: `${OUTRIGHT_FEE_RATE * 100}% outright fee (${absorbOutrightFee ? 'merchant absorbed' : 'customer paid'}) on ${summaryTitle}`,
+          description: `Outright fee on ${summaryTitle}: cash ₦${cashFee.toLocaleString()} (${absorbOutrightFee ? 'merchant absorbed' : 'customer paid'})${storeFee > 0 ? ` + store balance usage ₦${storeFee.toLocaleString()} (customer paid)` : ''}`,
           orderId: orderRef.id,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           dateStr: currentDateStr,

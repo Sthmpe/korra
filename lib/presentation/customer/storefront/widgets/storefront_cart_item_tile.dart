@@ -17,18 +17,25 @@ class StorefrontCartItemTile extends StatelessWidget {
   final void Function(int delta) onQuantityChanged;
   final VoidCallback onRemove;
 
+  /// Opens a read-only product details view (no add-to-cart / installments) —
+  /// the stepper and remove button keep their own taps.
+  final VoidCallback? onTap;
+
   const StorefrontCartItemTile({
     super.key,
     required this.item,
     required this.onQuantityChanged,
     required this.onRemove,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 0);
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
@@ -77,6 +84,26 @@ class StorefrontCartItemTile extends StatelessWidget {
                     height: 1.25,
                   ),
                 ),
+                if (item.variantLabel != null) ...[
+                  SizedBox(height: 3.h),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4ED),
+                      borderRadius: BorderRadius.circular(5.r),
+                    ),
+                    child: Text(
+                      item.variantLabel!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFA54600),
+                      ),
+                    ),
+                  ),
+                ],
                 SizedBox(height: 4.h),
                 Text(
                   "${currencyFormat.format(item.price)} each",
@@ -145,6 +172,7 @@ class StorefrontCartItemTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }

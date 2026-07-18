@@ -173,11 +173,14 @@ class _DealListCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (deal.tags.length > 3) ...[
+                  // The card overlays only the latest campaign's tag; list the
+                  // store's OTHER running campaign tags here (below the image,
+                  // so there's no old-tag-on-new-image mismatch).
+                  if (deal.tags.length > 1) ...[
                     Wrap(
                       spacing: 6.w,
                       runSpacing: 6.h,
-                      children: deal.tags.skip(3).map((tag) {
+                      children: deal.tags.skip(1).map((tag) {
                         final color = KorraCampaignTags.colorFor(tag);
                         return Container(
                           padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),

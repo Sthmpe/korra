@@ -7,6 +7,8 @@
 // stay in the regular Explore Stores list (absence is never a penalty).
 // Earned badges (Top Seller, Most Visited) rank above the Highlighted tier.
 
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -65,6 +67,14 @@ class _RecommendedStoresSectionState extends State<RecommendedStoresSection> {
   // refire Firestore gets.
   Future<Map<String, VendorVisibility>>? _visibilityFuture;
   String _visibilitySignature = '';
+
+  // When the customer has more than five badge-holders we show a random five,
+  // re-rolled each time this section is built fresh (i.e. the Stores screen is
+  // reopened). Memoized per eligible set so scrolling/rebuilds don't reshuffle
+  // the row mid-view.
+  final Random _random = Random();
+  Set<String>? _pickedIds;
+  String _pickedSignature = '';
 
   @override
   void initState() {
@@ -136,7 +146,31 @@ class _RecommendedStoresSectionState extends State<RecommendedStoresSection> {
             }
 
             if (recommended.isEmpty) return const SizedBox.shrink();
-            recommended.sort((a, b) => a.rank.compareTo(b.rank));
+
+            // Cap the row at a random five when there are more than five
+            // badge-holders. Re-rolled per screen-open (fresh State), stable
+            // within a single view via the eligible-set signature.
+            final eligibleSignature =
+                (recommended.map((s) => s.vendorId).toList()..sort()).join(',');
+            if (eligibleSignature != _pickedSignature) {
+              _pickedSignature = eligibleSignature;
+              if (recommended.length > 5) {
+                final pool = List<_RecommendedStore>.from(recommended)
+                  ..shuffle(_random);
+                _pickedIds = pool.take(5).map((s) => s.vendorId).toSet();
+              } else {
+                _pickedIds = null; // five or fewer: show them all
+              }
+            }
+
+            final shown = _pickedIds == null
+                ? recommended
+                : recommended
+                    .where((s) => _pickedIds!.contains(s.vendorId))
+                    .toList();
+
+            // Earned badges still surface first among whichever five showed.
+            shown.sort((a, b) => a.rank.compareTo(b.rank));
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,11 +202,11 @@ class _RecommendedStoresSectionState extends State<RecommendedStoresSection> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    itemCount: recommended.length,
+                    itemCount: shown.length,
                     itemBuilder: (context, index) => Padding(
                       padding: EdgeInsets.only(right: 12.w),
                       child: RepaintBoundary(
-                        child: _RecommendedCard(store: recommended[index]),
+                        child: _RecommendedCard(store: shown[index]),
                       ),
                     ),
                   ),

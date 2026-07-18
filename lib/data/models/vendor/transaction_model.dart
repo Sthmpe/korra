@@ -24,6 +24,10 @@ class TransactionModel {
   final double? grossAmount; // The amount the customer actually paid
   final double? feeAmount;   // The cut Korra took
 
+  // Guest web purchase (korra.com.ng storefront) — shown as a WEB tag on
+  // the transaction receipt so merchants know the sale came from their site.
+  final bool webPurchase;
+
   const TransactionModel({
     required this.id,
     required this.userId,
@@ -41,6 +45,7 @@ class TransactionModel {
     this.planId,
     this.grossAmount,
     this.feeAmount,
+    this.webPurchase = false,
   });
 
   factory TransactionModel.fromMap(Map<String, dynamic> map, String id) {
@@ -64,6 +69,7 @@ class TransactionModel {
       // ✅ Parse safely (Handle nulls if old data doesn't have it)
       grossAmount: (map['grossAmount'] as num?)?.toDouble(),
       feeAmount: (map['feeAmount'] as num?)?.toDouble(),
+      webPurchase: map['webPurchase'] ?? false,
     );
   }
 }

@@ -29,10 +29,12 @@ import '../../../logic/services/notification_service.dart'; // Import Service
 
 // WIDGETS
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/outright_only_sheet.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/activity_timeline.dart';
 import 'widgets/customer_wallet_card.dart';
+import 'widgets/featured_products_strip.dart';
 import 'widgets/link_input.dart';
 import 'widgets/plan_carousel_slider.dart';
 import 'widgets/shimmer_loading.dart';
@@ -101,6 +103,14 @@ class _HomePageState extends State<HomePage> {
               BlocListener<LinkBloc, LinkState>(
                 listenWhen: (p, c) => p.status != c.status,
                 listener: (context, state) async {
+                  if (state.status == LinkStatus.outrightOnly) {
+                    final fetch = state.productFetch;
+                    if (fetch != null && fetch.id.isNotEmpty) {
+                      OutrightOnlySheet.show(context,
+                          productId: fetch.id, data: fetch.data);
+                    }
+                    return;
+                  }
                   if (state.status == LinkStatus.loaded) {
                     final product = state.productFetch ?? ProductFetchResult.empty();
                     
@@ -146,9 +156,9 @@ class _HomePageState extends State<HomePage> {
                         }
                       );
 
-                      // 🦘 JUMP LOGIC
+                      // 🦘 JUMP LOGIC (Plans tab is index 2 now — Stores moved to 1)
                       if (result == 'jump_to_plans') {
-                        widget.onJumpTo(1); 
+                        widget.onJumpTo(2);
                       }
                     },
                     icon: Stack(
@@ -214,44 +224,15 @@ class _HomePageState extends State<HomePage> {
                             },
                           ),
 
-                          // B. ACTIVE PLANS (Filtered Stream)
-                          StreamBuilder<List<Plan>>(
-                            stream: _plansStream,
-                            builder: (context, planSnap) {
-                              // Loading
-                              if (planSnap.connectionState == ConnectionState.waiting) {
-                                return Column(children: [
-                                   SectionHeader(title: 'Your reserve plans', actionText: '', topPadding: 10),
-                                   const PlanCarouselLoading(),
-                                ]);
-                              }
-                              
-                              final allPlans = planSnap.data ?? [];
-                              // Filter out Completed/Cancelled for Home view
-                              final activePlans = allPlans.where((p) => !p.isCompleted && !p.isCancelled).toList();
-
-                              return Column(
-                                children: [
-                                  SectionHeader(
-                                    title: 'Your reserve plans',
-                                    actionText: activePlans.isEmpty ? null : 'View all',
-                                    onAction: activePlans.isEmpty ? null : () => widget.onJumpTo(1),
-                                    topPadding: 10,
-                                  ),
-                                  SizedBox(height: 8.h),
-                                  
-                                  activePlans.isEmpty 
-                                    ? _buildEmptyPlanState()
-                                    : PlanCarouselSlider(
-                                        plans: activePlans.take(5).toList(),
-                                      ),
-                                ],
-                              );
-                            },
+                          // B. START NEW PLAN — the app's primary action sits
+                          // right under the wallet (David, 10 July 2026).
+                          SectionHeader(
+                            title: 'Start a new plan',
+                            subtitle: 'Paste a product code from any merchant',
+                            icon: Iconsax.add_circle,
+                            topPadding: 10,
+                            actionText: '',
                           ),
-
-                          // C. START NEW PLAN
-                          SectionHeader(title: 'Start a new plan', topPadding: 24, actionText: ''),
                           LinkInput(
                             onSubmit: (v) {
                               FocusManager.instance.primaryFocus?.unfocus();
@@ -265,8 +246,58 @@ class _HomePageState extends State<HomePage> {
                           SizedBox(height: 4.h),
                           _buildLinkStatus(),
 
+                          // C. ACTIVE PLANS (Filtered Stream)
+                          StreamBuilder<List<Plan>>(
+                            stream: _plansStream,
+                            builder: (context, planSnap) {
+                              // Loading
+                              if (planSnap.connectionState == ConnectionState.waiting) {
+                                return Column(children: [
+                                   SectionHeader(
+                                     title: 'Your reserve plans',
+                                     subtitle: 'Track and pay your instalments',
+                                     icon: Iconsax.receipt_2,
+                                     actionText: '',
+                                   ),
+                                   const PlanCarouselLoading(),
+                                ]);
+                              }
+
+                              final allPlans = planSnap.data ?? [];
+                              // Filter out Completed/Cancelled for Home view
+                              final activePlans = allPlans.where((p) => !p.isCompleted && !p.isCancelled).toList();
+
+                              return Column(
+                                children: [
+                                  SectionHeader(
+                                    title: 'Your reserve plans',
+                                    subtitle: 'Track and pay your instalments',
+                                    icon: Iconsax.receipt_2,
+                                    actionText: activePlans.isEmpty ? null : 'View all',
+                                    onAction: activePlans.isEmpty ? null : () => widget.onJumpTo(2),
+                                  ),
+                                  SizedBox(height: 8.h),
+
+                                  activePlans.isEmpty
+                                    ? _buildEmptyPlanState()
+                                    : PlanCarouselSlider(
+                                        plans: activePlans.take(5).toList(),
+                                      ),
+                                ],
+                              );
+                            },
+                          ),
+
+                          // D. FEATURED PRODUCTS (random picks across stores)
+                          const FeaturedProductsStrip(),
+
                           // E. RECENT ACTIVITY
-                          SectionHeader(title: 'Recent Activity', actionText: ''),
+                          SectionHeader(
+                            title: 'Recent Activity',
+                            subtitle: 'Your latest payments and updates',
+                            icon: Iconsax.activity,
+                            actionText: '',
+                          ),
                           StreamBuilder<List<ActivityItem>>(
                             stream: _activityStream,
                             builder: (context, feedSnap) {
@@ -433,7 +464,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(height: 12.h),
             Text('No active plans yet', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B))),
             SizedBox(height: 4.h),
-            Text('Paste a link below to start reserving.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4)),
+            Text('Paste a product code above to start reserving.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4)),
           ],
         ),
       ),

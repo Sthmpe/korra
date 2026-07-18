@@ -71,6 +71,25 @@ class _PlanDetailProductHeaderState extends State<PlanDetailProductHeader> {
                     height: 1.25,
                   ),
                 ),
+                if (p.variantLabel != null) ...[
+                  SizedBox(height: 6.h),
+                  Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4ED),
+                      borderRadius: BorderRadius.circular(6.r),
+                    ),
+                    child: Text(
+                      p.variantLabel!,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w700,
+                        color: KorraColors.brand,
+                      ),
+                    ),
+                  ),
+                ],
                 SizedBox(height: 10.h),
                 Row(
                   children: [

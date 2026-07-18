@@ -10,7 +10,8 @@
 // other fields survive. Non-qualifying stores are reset to 0 so a badge that
 // was earned last week disappears when the store falls out of the ranking.
 //
-// Auth: Authorization: Bearer <CRON_SECRET> (same as the other cron workers).
+// Auth: relies on the Supabase gateway key only (same as the other cron
+// workers, e.g. korra_expiry_automation). No separate CRON_SECRET.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import admin from "npm:firebase-admin@11.11.0";
@@ -31,23 +32,42 @@ const TOP_N = 20;
 const MIN_VISITS = 10;   // rolling 30-day visits
 const MIN_EARNINGS = 1;  // any real earnings
 
-// Sum the last 30 days of the per-day visit map (falls back to visitsTotal).
+// Sum the last 30 days of the per-day visit map. Falls back to visitsTotal
+// ONLY for legacy docs that predate the daily map — a store whose daily map
+// exists but has no entries inside the window genuinely has 0 rolling visits
+// (otherwise stale stores never decay out of "Most Visited").
 function rollingVisits(data: any): number {
   const daily = data?.daily || {};
+  if (Object.keys(daily).length === 0) return Number(data?.visitsTotal || 0);
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
 
   let sum = 0;
-  let counted = false;
   for (const key of Object.keys(daily)) {
     const d = new Date(key);
     if (!isNaN(d.getTime()) && d >= cutoff) {
       sum += Number(daily[key] || 0);
-      counted = true;
     }
   }
-  if (counted) return sum;
-  return Number(data?.visitsTotal || 0);
+  return sum;
+}
+
+// Circle size = customers who saved the store (customers/{uid}/my_vendors/
+// {vendorId}) — the same live aggregate the merchant app's Saves card uses.
+// Only run for badge winners (≤ TOP_N), so at most 20 cheap count queries.
+async function circleSize(vendorId: string): Promise<number> {
+  try {
+    const agg = await db
+      .collectionGroup('my_vendors')
+      .where('vendorId', '==', vendorId)
+      .count()
+      .get();
+    return Number(agg.data().count || 0);
+  } catch (e) {
+    console.error(`circleSize failed for ${vendorId}:`, e);
+    return 0;
+  }
 }
 
 serve(async (req) => {
@@ -56,11 +76,8 @@ serve(async (req) => {
   }
 
   try {
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
-    }
+    // Auth: relies on the Supabase gateway key only (same as the other cron
+    // workers, e.g. korra_expiry_automation). No separate CRON_SECRET.
 
     // 1. Load signals (two collection scans).
     const [metricsSnap, statsSnap] = await Promise.all([
@@ -92,9 +109,19 @@ serve(async (req) => {
     const mostVisitedCount = new Map(topVisited); // reach number to display
     const topSellerRank = new Set(topSellers.map(([id]) => id));
 
+    // Top Seller's displayed number is the store's real circle size (saved
+    // customers), NOT its visit count — matches the app copy "ranked per
+    // customer circle". Counted only for the ≤ TOP_N winners.
+    const topSellerReach = new Map<string, number>();
+    await Promise.all(
+      [...topSellerRank].map(async (id) => {
+        topSellerReach.set(id, await circleSize(id));
+      }),
+    );
+
     // 3. Every store we have any signal for gets rewritten (so lost badges
     //    clear). The displayed "circles" number is the reach proxy:
-    //      mostVisitedCircles = rolling visits, topSellerCircles = follower reach.
+    //      mostVisitedCircles = rolling visits, topSellerCircles = circle size.
     const allIds = new Set<string>([...visits.keys(), ...earnings.keys()]);
 
     let updated = 0;
@@ -109,7 +136,7 @@ serve(async (req) => {
         db.collection('vendor_visibility').doc(id),
         {
           mostVisitedCircles: isMostVisited ? mostVisitedCount.get(id) : 0,
-          topSellerCircles: isTopSeller ? (visits.get(id) || 1) : 0,
+          topSellerCircles: isTopSeller ? (topSellerReach.get(id) || 0) : 0,
           visibilityUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true },

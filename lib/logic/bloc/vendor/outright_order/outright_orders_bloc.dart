@@ -89,6 +89,7 @@ class OutrightOrdersBloc extends Bloc<OutrightOrdersEvent, OutrightOrdersState> 
       emit(state.copyWith(
         loading: false,
         visible: items,
+        countAwaitingPayment: counts[OutrightOrderStatus.awaitingPayment] ?? 0,
         countPending: counts[OutrightOrderStatus.pending] ?? 0,
         countReadyToDeliver: counts[OutrightOrderStatus.readyToDeliver] ?? 0,
         countDelivered: counts[OutrightOrderStatus.delivered] ?? 0,
@@ -145,6 +146,7 @@ class OutrightOrdersBloc extends Bloc<OutrightOrdersEvent, OutrightOrdersState> 
       emit(state.copyWith(
         loading: false,
         visible: items,
+        countAwaitingPayment: counts[OutrightOrderStatus.awaitingPayment] ?? 0,
         countPending: counts[OutrightOrderStatus.pending] ?? 0,
         countReadyToDeliver: counts[OutrightOrderStatus.readyToDeliver] ?? 0,
         countDelivered: counts[OutrightOrderStatus.delivered] ?? 0,
@@ -174,7 +176,11 @@ class OutrightOrdersBloc extends Bloc<OutrightOrdersEvent, OutrightOrdersState> 
       _lastDoc = mapResult['lastDoc'] as DocumentSnapshot?;
       _hasReachedMax = mapResult['hasReachedMax'] as bool;
 
-      final newItems = mapResult['items'] as List<OutrightOrder>;
+      // Never re-add an id already on screen (same guard as reservations).
+      final existingIds = state.visible.map((o) => o.id).toSet();
+      final newItems = (mapResult['items'] as List<OutrightOrder>)
+          .where((o) => !existingIds.contains(o.id))
+          .toList();
       final updatedList = List<OutrightOrder>.from(state.visible)..addAll(newItems);
 
       emit(state.copyWith(visible: updatedList));

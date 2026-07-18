@@ -81,12 +81,15 @@ extension VendorCampaignsRepository on VendorRepository {
   }
 
   // 4. DELETE CAMPAIGN(S) — campaigns no longer auto-expire, so this is now
-  // how a merchant ends one. Also reverts the campaign's own effect on its
-  // target products (campaignTag + discountedPrice), since nothing else ever
-  // did. Note: if a product was later re-tagged by a NEWER campaign, deleting
-  // an older campaign that also targeted it will still clear that newer
-  // tag/price too — campaigns don't track "which one currently owns" a
-  // product's discount, so this is a known simplification.
+  // how a merchant ends one. SOFT delete: the doc survives as Campaign
+  // History (archived + endedAt), keeping its opens/purchases analytics;
+  // everything that treats campaigns as live filters archived out. Also
+  // reverts the campaign's own effect on its target products (campaignTag +
+  // discountedPrice), since nothing else ever did. Note: if a product was
+  // later re-tagged by a NEWER campaign, deleting an older campaign that also
+  // targeted it will still clear that newer tag/price too — campaigns don't
+  // track "which one currently owns" a product's discount, so this is a
+  // known simplification.
   Future<void> deleteCampaigns(List<Campaign> campaigns) async {
     if (campaigns.isEmpty) return;
 
@@ -94,7 +97,10 @@ extension VendorCampaignsRepository on VendorRepository {
     // safe as one atomic batch.
     final batch = firestore.batch();
     for (final campaign in campaigns) {
-      batch.delete(firestore.collection('campaigns').doc(campaign.id));
+      batch.update(firestore.collection('campaigns').doc(campaign.id), {
+        'archived': true,
+        'endedAt': FieldValue.serverTimestamp(),
+      });
     }
     await batch.commit();
 
@@ -108,6 +114,7 @@ extension VendorCampaignsRepository on VendorRepository {
         await firestore.collection('products').doc(id).update({
           'campaignTag': FieldValue.delete(),
           'discountedPrice': FieldValue.delete(),
+          'campaignEndsAt': FieldValue.delete(),
         });
       } catch (e) {
         debugPrint("Campaign cleanup: could not revert product $id: $e");

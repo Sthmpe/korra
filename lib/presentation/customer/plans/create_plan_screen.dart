@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -47,6 +48,11 @@ class CreatePlanScreen extends StatefulWidget {
   final VoidCallback onJumpToPlan;
   final double walletBalance;
 
+  /// Variant chosen before entering this screen ("XL / Red"); null for
+  /// products without variants. Rides into PREVIEW so the server locks the
+  /// plan to that variant's stock.
+  final String? variantLabel;
+
   const CreatePlanScreen({
     super.key,
     required this.product,
@@ -55,6 +61,7 @@ class CreatePlanScreen extends StatefulWidget {
     required this.walletBalance,
     required this.onJumpToHome,
     required this.onJumpToPlan,
+    this.variantLabel,
   });
 
   @override
@@ -105,9 +112,26 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   );
 
   double get productPrice {
-    final discount = widget.product.data['discountedPrice']?.toDouble() ?? 0.0;
-    if (discount > 0) return discount;
-    return widget.product.data['price']?.toDouble() ?? 0.0;
+    final data = widget.product.data;
+    final discount = data['discountedPrice']?.toDouble() ?? 0.0;
+    final base = data['price']?.toDouble() ?? 0.0;
+    // A timed campaign's discount lapses at campaignEndsAt; charge full price
+    // once it has ended so an expired promo never sets the plan price.
+    if (discount > 0 && _campaignDiscountActive(data)) return discount;
+    return base;
+  }
+
+  /// Absent end time = untimed campaign (or an already-gated value) = valid.
+  bool _campaignDiscountActive(Map<String, dynamic> data) {
+    final ends = data['campaignEndsAt'];
+    if (ends == null) return true;
+    DateTime? end;
+    if (ends is Timestamp) {
+      end = ends.toDate();
+    } else if (ends is DateTime) {
+      end = ends;
+    }
+    return end == null || DateTime.now().isBefore(end);
   }
 
   ProductModelType get modelType {
@@ -395,13 +419,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           create: (context) =>
               CreatePlanBloc(repo: customerRepo)
                 ..add(LoadPlanPreview(
-                  productPrice, 
-                  widget.customerUid, 
+                  productPrice,
+                  widget.customerUid,
                   productId,
-                  parsedMerchantDuration, 
-                  parsedAllowExtension,   
-                  parsedExtensionDays,    
-                  parsedNoticeDays 
+                  parsedMerchantDuration,
+                  parsedAllowExtension,
+                  parsedExtensionDays,
+                  parsedNoticeDays,
+                  variantLabel: widget.variantLabel,
                 )),
           child: BlocConsumer<CreatePlanBloc, CreatePlanState>(
             listenWhen: (previous, current) =>

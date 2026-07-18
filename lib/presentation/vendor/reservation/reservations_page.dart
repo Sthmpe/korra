@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/models/vendor/outright_order.dart';
 import '../../../data/models/vendor/reservation.dart';
@@ -48,11 +49,27 @@ class _ReservationsPageState extends State<ReservationsPage> {
   late PageController _pageController;
   int _currentIndex = 0;
 
+  // One view preference for both order panels; list is the default.
+  static const _gridPrefKey = 'vendor_orders_grid_view';
+  bool _gridView = false;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialPanel;
     _pageController = PageController(initialPage: widget.initialPanel);
+    SharedPreferences.getInstance().then((prefs) {
+      final saved = prefs.getBool(_gridPrefKey);
+      if (saved != null && saved != _gridView && mounted) {
+        setState(() => _gridView = saved);
+      }
+    });
+  }
+
+  void _toggleView() {
+    setState(() => _gridView = !_gridView);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_gridPrefKey, _gridView));
   }
 
   @override
@@ -130,6 +147,20 @@ class _ReservationsPageState extends State<ReservationsPage> {
                 context.read<ReservationsBloc>().add(const ResSearchChanged(''));
                 context.read<OutrightOrdersBloc>().add(const OutrightOrdersSearchChanged(''));
               },
+              trailingActions: [
+                // Grid / List toggle for both order panels (list default)
+                IconButton(
+                  onPressed: _toggleView,
+                  icon: Icon(
+                    _gridView
+                        ? Icons.view_agenda_outlined
+                        : Icons.grid_view_rounded,
+                    color: const Color(0xFF1B1B1B),
+                  ),
+                  iconSize: 22.sp,
+                  tooltip: _gridView ? 'List view' : 'Grid view',
+                ),
+              ],
             ),
             floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
             floatingActionButton: _currentIndex == 0
@@ -159,9 +190,9 @@ class _ReservationsPageState extends State<ReservationsPage> {
                         _currentIndex = index;
                       });
                     },
-                    children: const [
-                      ReservationsPanel(),
-                      OutrightOrdersPanel(),
+                    children: [
+                      ReservationsPanel(grid: _gridView),
+                      OutrightOrdersPanel(grid: _gridView),
                     ],
                   ),
                 ),

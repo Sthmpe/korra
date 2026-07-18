@@ -12,6 +12,7 @@ class OutrightOrdersState {
   final String errorMessage;
 
   // Tab counts
+  final int countAwaitingPayment;
   final int countPending;
   final int countReadyToDeliver;
   final int countDelivered;
@@ -29,6 +30,7 @@ class OutrightOrdersState {
     this.filter = OutrightOrderStatus.pending,
     this.query = '',
     this.errorMessage = '',
+    this.countAwaitingPayment = 0,
     this.countPending = 0,
     this.countReadyToDeliver = 0,
     this.countDelivered = 0,
@@ -47,6 +49,7 @@ class OutrightOrdersState {
     OutrightOrderStatus? filter,
     String? query,
     String? errorMessage,
+    int? countAwaitingPayment,
     int? countPending,
     int? countReadyToDeliver,
     int? countDelivered,
@@ -60,6 +63,7 @@ class OutrightOrdersState {
       filter: filter ?? this.filter,
       query: query ?? this.query,
       errorMessage: errorMessage ?? this.errorMessage,
+      countAwaitingPayment: countAwaitingPayment ?? this.countAwaitingPayment,
       countPending: countPending ?? this.countPending,
       countReadyToDeliver: countReadyToDeliver ?? this.countReadyToDeliver,
       countDelivered: countDelivered ?? this.countDelivered,

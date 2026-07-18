@@ -12,7 +12,27 @@ class Campaign {
   final String caption;
   final String imageUrl;
   final DateTime sentAt;
+
+  /// Unique opens: one per customer per calendar day (deduped server-side in
+  /// record-visit via campaigns/{id}/opens markers). In-app opens only — web
+  /// page loads are tracked separately as Web Activity, never here.
   final int openCount;
+
+  /// Orders placed while this campaign's tag was active on the product,
+  /// attributed by campaign ID at checkout (see promotionCampaignIds).
+  final int purchases;
+
+  /// Opens per day: { 'yyyy-MM-dd': n } — feeds the analytics breakdown.
+  final Map<String, int> dailyOpens;
+
+  /// Soft delete: merchants "delete" a campaign but the record survives as
+  /// history. Archived campaigns are inactive everywhere and don't count
+  /// against the 3-active limit.
+  final bool archived;
+
+  /// When the campaign ended: manual deletion timestamp (archived) — for
+  /// expired countdowns the end date is dealEndAt instead.
+  final DateTime? endedAt;
   final bool isMock;
 
   // Discount options
@@ -35,6 +55,10 @@ class Campaign {
     required this.imageUrl,
     required this.sentAt,
     required this.openCount,
+    this.purchases = 0,
+    this.dailyOpens = const {},
+    this.archived = false,
+    this.endedAt,
     this.isMock = false,
     this.discountType = 'none',
     this.discountValue = 0.0,
@@ -43,6 +67,8 @@ class Campaign {
   });
 
   bool get isActive {
+    // Archived (soft-deleted) campaigns are over, full stop.
+    if (archived) return false;
     // Timed deals live until their merchant-chosen end time. Untimed
     // campaigns no longer auto-expire after 24h — the merchant now controls
     // their lifecycle explicitly by deleting them (see CampaignsRepository
@@ -50,6 +76,16 @@ class Campaign {
     if (dealEndAt != null) return DateTime.now().isBefore(dealEndAt!);
     return true;
   }
+
+  /// History entries: manually ended (archived) or a countdown that ran out.
+  bool get isPast => !isActive;
+
+  /// The end date shown in history: manual deletion time, else the
+  /// countdown's auto-expiry time.
+  DateTime? get endDate => endedAt ?? dealEndAt;
+
+  /// purchases ÷ unique opens, 0..1. Zero opens → zero (no divide-by-zero).
+  double get conversionRate => openCount > 0 ? purchases / openCount : 0;
 
   bool get hasTimer => dealStartAt != null && dealEndAt != null;
 
@@ -86,6 +122,11 @@ class Campaign {
       imageUrl: data['imageUrl'] ?? '',
       sentAt: (data['sentAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       openCount: (data['openCount'] ?? 0).toInt(),
+      purchases: (data['purchases'] ?? 0).toInt(),
+      dailyOpens: Map<String, dynamic>.from(data['dailyOpens'] ?? const {})
+          .map((k, v) => MapEntry(k, (v as num).toInt())),
+      archived: data['archived'] ?? false,
+      endedAt: (data['endedAt'] as Timestamp?)?.toDate(),
       isMock: data['isMock'] ?? false,
       discountType: data['discountType'] ?? 'none',
       discountValue: (data['discountValue'] ?? 0.0).toDouble(),
@@ -105,6 +146,8 @@ class Campaign {
       'imageUrl': imageUrl,
       'sentAt': Timestamp.fromDate(sentAt),
       'openCount': openCount,
+      'purchases': purchases,
+      'archived': archived,
       'isMock': isMock,
       'discountType': discountType,
       'discountValue': discountValue,

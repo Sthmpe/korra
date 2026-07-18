@@ -120,37 +120,32 @@ class _HotDealsStripState extends State<HotDealsStrip> {
     }
   }
 
-  /// Group live campaigns into per-store deals.
+  /// One card per LIVE campaign (not per store): a store running 3 campaigns
+  /// shows 3 separate cards, each with its own image and its own tag.
   /// Defensive on purpose: a malformed campaign doc is skipped, never thrown.
   List<StoreDeal> _buildDeals(List<QueryDocumentSnapshot> campaignDocs) {
-    final byVendor = <String, List<Campaign>>{};
+    final deals = <StoreDeal>[];
     for (final doc in campaignDocs) {
       try {
         if (doc.data() is! Map<String, dynamic>) continue;
         final campaign = Campaign.fromFirestore(doc);
         if (campaign.vendorId.isEmpty || !campaign.isActive) continue;
-        byVendor.putIfAbsent(campaign.vendorId, () => []).add(campaign);
+        final vendorData = widget.vendorsById[campaign.vendorId];
+        if (vendorData == null) continue; // banned/unknown vendor
+        final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
+        deals.add(StoreDeal(
+          vendorId: campaign.vendorId,
+          storeName: (storeMap['storeName'] ?? 'Merchant Store').toString(),
+          slug: (storeMap['slug'] ?? campaign.vendorId).toString(),
+          logoUrl: (storeMap['logoUrl'] ?? '').toString(),
+          campaigns: [campaign],
+        ));
       } catch (e) {
         debugPrint('Skipping malformed campaign ${doc.id}: $e');
       }
     }
 
-    final deals = <StoreDeal>[];
-    byVendor.forEach((vendorId, campaigns) {
-      final vendorData = widget.vendorsById[vendorId];
-      if (vendorData == null || campaigns.isEmpty) return; // banned/unknown vendor
-      final storeMap = vendorData['store'] as Map<String, dynamic>? ?? {};
-      campaigns.sort((a, b) => b.sentAt.compareTo(a.sentAt));
-      deals.add(StoreDeal(
-        vendorId: vendorId,
-        storeName: (storeMap['storeName'] ?? 'Merchant Store').toString(),
-        slug: (storeMap['slug'] ?? vendorId).toString(),
-        logoUrl: (storeMap['logoUrl'] ?? '').toString(),
-        campaigns: campaigns,
-      ));
-    });
-
-    // Freshest deal first across stores.
+    // Freshest campaign first across all stores.
     deals.sort((a, b) => b.latest.sentAt.compareTo(a.latest.sentAt));
     return deals;
   }
@@ -288,7 +283,10 @@ class HotDealCard extends StatelessWidget {
                 ),
               ),
 
-              // Tag chips — newest campaign's tag first
+              // Tag chip — only the tag of the campaign whose image is shown
+              // (deal.latest). Aggregating every active campaign's tag here
+              // made an older campaign's tag appear on the newest campaign's
+              // card; the chip must match the picture on screen.
               Positioned(
                 top: 10.h,
                 left: 10.w,
@@ -296,7 +294,9 @@ class HotDealCard extends StatelessWidget {
                 child: Wrap(
                   spacing: 6.w,
                   runSpacing: 6.h,
-                  children: deal.tags.take(3).map((tag) {
+                  children: [deal.latest.tag]
+                      .where((t) => t.trim().isNotEmpty)
+                      .map((tag) {
                     return Container(
                       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.5.h),
                       decoration: BoxDecoration(

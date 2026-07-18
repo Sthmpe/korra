@@ -17,12 +17,8 @@ function to2DP(num: number): number {
 
 serve(async (req) => {
   try {
-    // --- SECURITY CHECK ---
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    // Auth: relies on the Supabase gateway key only (same as the other cron
+    // workers, e.g. korra_expiry_automation). No separate CRON_SECRET.
 
     // --- DATE CALCULATION ---
     const now = new Date();
@@ -47,6 +43,49 @@ serve(async (req) => {
 
     console.log(`[INFO] Found ${snapshot.size} plans to process.`);
 
+    // Pre-read products for plans that reserved a specific VARIANT (batches
+    // cannot read). A mutable working copy accumulates restores so several
+    // overdue plans on the same product each add their unit back. The tiny
+    // read-then-batch race vs a concurrent sale is acceptable for this cron.
+    const workingVariants = new Map<string, { label: string; stock: number }[]>();
+    {
+      const ids = [...new Set(
+        snapshot.docs
+          .map((d) => d.data())
+          .filter((p) => p.productId && p.variantLabel)
+          .map((p) => p.productId as string),
+      )];
+      if (ids.length > 0) {
+        const docs = await Promise.all(ids.map((id) => db.collection('products').doc(id).get()));
+        for (const d of docs) {
+          if (d.exists && Array.isArray(d.data()?.variants)) {
+            workingVariants.set(d.id, d.data()!.variants.map((v: any) => ({
+              label: String(v?.label ?? ''),
+              stock: Math.floor(Number(v?.stock ?? 0)),
+            })));
+          }
+        }
+      }
+    }
+
+    // Returns the stock-release update for a plan: the exact variant +1 with
+    // a recomputed total, or the classic total-only +1 fallback.
+    function stockReleaseUpdate(plan: any): Record<string, unknown> {
+      const variants = plan.variantLabel ? workingVariants.get(plan.productId) : undefined;
+      const hasLabel = !!variants && variants.some((v) => v.label === plan.variantLabel);
+      if (!variants || !hasLabel) {
+        return { availableStock: admin.firestore.FieldValue.increment(1) };
+      }
+      for (const v of variants) {
+        if (v.label === plan.variantLabel) v.stock += 1;
+      }
+      const newTotal = variants.reduce((acc, v) => acc + v.stock, 0);
+      return {
+        variants: variants.map((v) => ({ label: v.label, stock: v.stock })),
+        availableStock: newTotal,
+      };
+    }
+
     const batch = db.batch();
     let processedCount = 0;
 
@@ -65,10 +104,10 @@ serve(async (req) => {
             cancellationReason: 'Automatic: Payment Default'
         });
         
-        // Release Stock
+        // Release Stock (variant-aware)
         const productRef = db.collection("products").doc(plan.productId);
-        batch.update(productRef, { availableStock: admin.firestore.FieldValue.increment(1) });
-        
+        batch.update(productRef, stockReleaseUpdate(plan));
+
         // Release Slot
         const statsRef = db.collection('customers').doc(customerId).collection('account_stats').doc('main');
         batch.update(statsRef, { 
@@ -160,10 +199,10 @@ serve(async (req) => {
       });
 
       // ==============================================================
-      // 4. CLEANUP (Stock)
+      // 4. CLEANUP (Stock, variant-aware)
       // ==============================================================
       const productRef = db.collection("products").doc(plan.productId);
-      batch.update(productRef, { availableStock: admin.firestore.FieldValue.increment(1) });
+      batch.update(productRef, stockReleaseUpdate(plan));
 
       // Notifications
       const notifRef = db.collection('customers').doc(customerId).collection('notifications').doc();

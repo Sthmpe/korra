@@ -14,7 +14,10 @@ import 'outright_order_detail_sheet.dart';
 import 'outright_order_list.dart';
 
 class OutrightOrdersPanel extends StatelessWidget {
-  const OutrightOrdersPanel({super.key});
+  /// View mode owned by the Orders page (its header hosts the toggle).
+  final bool grid;
+
+  const OutrightOrdersPanel({super.key, this.grid = false});
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +29,7 @@ class OutrightOrdersPanel extends StatelessWidget {
         if (previous.filter != current.filter) return true;
         if (previous.query != current.query) return true;
         if (previous.countPending != current.countPending) return true;
+        if (previous.countAwaitingPayment != current.countAwaitingPayment) return true;
         if (previous.countReadyToDeliver != current.countReadyToDeliver) return true;
         if (previous.countDelivered != current.countDelivered) return true;
         if (previous.countCancelled != current.countCancelled) return true;
@@ -47,6 +51,7 @@ class OutrightOrdersPanel extends StatelessWidget {
                 final matchesProducts = o.items.any((item) => item.title.toLowerCase().contains(query));
                 return matchesCustomer || matchesId || matchesProducts;
               }).toList();
+
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -78,6 +83,7 @@ class OutrightOrdersPanel extends StatelessWidget {
                     child: _OutrightStatusTabs(
                       current: state.filter,
                       pendingCount: _formatCount(state.countPending),
+                      awaitingCount: _formatCount(state.countAwaitingPayment),
                       readyCount: _formatCount(state.countReadyToDeliver),
                       deliveredCount: _formatCount(state.countDelivered),
                       cancelledCount: _formatCount(state.countCancelled),
@@ -86,29 +92,18 @@ class OutrightOrdersPanel extends StatelessWidget {
                   ),
                 ),
 
-                // 3. List
+                // 3. List (the current tab's orders; Awaiting Payment is its
+                // own tab, so no inline splitting here)
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: 4.w),
                   sliver: OutrightOrderList(
                     loading: state.loading,
                     items: displayList,
-                    onOpen: (id) {
-                      final item = state.visible.firstWhere((e) => e.id == id);
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => BlocProvider.value(
-                          value: bloc,
-                          child: SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.85,
-                            child: OutrightOrderDetailSheet(order: item),
-                          ),
-                        ),
-                      );
-                    },
+                    grid: grid,
+                    onOpen: (id) => _openDetail(context, bloc, state, id),
                   ),
                 ),
+
                 SliverToBoxAdapter(child: SizedBox(height: 100.h)),
               ],
             ),
@@ -119,11 +114,33 @@ class OutrightOrdersPanel extends StatelessWidget {
   }
 
   String _formatCount(int count) => count > 99 ? '99+' : count.toString();
+
+  void _openDetail(
+    BuildContext context,
+    OutrightOrdersBloc bloc,
+    OutrightOrdersState state,
+    String id,
+  ) {
+    final item = state.visible.firstWhere((e) => e.id == id);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: OutrightOrderDetailSheet(order: item),
+        ),
+      ),
+    );
+  }
 }
 
 class _OutrightStatusTabs extends StatelessWidget {
   final OutrightOrderStatus current;
   final String pendingCount;
+  final String awaitingCount;
   final String readyCount;
   final String deliveredCount;
   final String cancelledCount;
@@ -132,6 +149,7 @@ class _OutrightStatusTabs extends StatelessWidget {
   const _OutrightStatusTabs({
     required this.current,
     required this.pendingCount,
+    required this.awaitingCount,
     required this.readyCount,
     required this.deliveredCount,
     required this.cancelledCount,
@@ -161,6 +179,15 @@ class _OutrightStatusTabs extends StatelessWidget {
             count: pendingCount,
             isActive: current == OutrightOrderStatus.pending,
             onTap: () => onChanged(OutrightOrderStatus.pending),
+          ),
+
+          // 3. Pending Payment (web orders not yet confirmed by Monnify)
+          _Tab(
+            label: "Pending Payment",
+            count: awaitingCount,
+            isActive: current == OutrightOrderStatus.awaitingPayment,
+            onTap: () => onChanged(OutrightOrderStatus.awaitingPayment),
+            activeColor: const Color(0xFFB95000),
           ),
 
           // 3. Delivered
