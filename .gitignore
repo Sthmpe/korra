@@ -1,60 +1,87 @@
-# Miscellaneous
+# Operating system and temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
 *.class
 *.log
 *.pyc
 *.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+*.tmp
+*.bak
 
-# IntelliJ related
+# Editors and local development history
+.atom/
+.idea/
+.vscode/
+.history/
+.specstory/
+.svn/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Dart and Flutter
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
-/build/
+build/
+**/doc/api/
+**/ios/Flutter/.last_build_id
 
-# Symbolication related
+# Generated symbols and maps
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Android and iOS build output
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/ios/Flutter/ephemeral/
 
-# App Secrets
-/lib/app_secrets.dart
-/.vscode
-/firebase_rule.txt
-/.env
-.vercel
-/.build
-/app/
+# Local environment files
 .env
-.env.prod
-.env.test
-.env.dev
-.vercel
-.env*.local
+.env.*
+!.env.example
+
+# Firebase configuration
+/.firebaserc
+/android/app/google-services.json
+/ios/Runner/GoogleService-Info.plist
+/lib/firebase_options.dart
+/lib/config/firebase_options_prod.dart
+/firebase_rule.txt
+
+# Private keys and credentials
+/lib/app_secrets.dart
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+service-account*.json
+credentials*.json
+
+# Local platform and deployment data
+/.vercel/
+.build/
+.buildlog/
+.swiftpm/
+migrate_working_dir/
+/app/
+
+# Internal notes and generated project records
+/SESSION_HANDOVER.md
+/korra_logs.txt
+/korra_lib_tree.txt
+/supabase - Shortcut.lnk
+
+# Temporary screenshots outside the documentation folder
+/flutter_*.png
+/Korra_customer_storespage.jpg
+/Korra_merchant_product_list.jpg
+/korra_customer_products_details.jpg
+/korra_merchan_storeview.jpg

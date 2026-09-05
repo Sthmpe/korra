@@ -6,6 +6,11 @@ Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down pa
 
 > *Reserve now, pay in parts, own with ease.*
 
+## Live applications
+
+- [Korra Shop on Google Play](https://play.google.com/store/apps/details?id=com.korra.shop.live), the customer application
+- [Korra Biz on Google Play](https://play.google.com/store/apps/details?id=com.korra.business.live), the merchant application
+
 <p align="center">
   <img src="docs/screenshots/customer-storefront.png" width="23%" alt="Customer storefront discovery" />
   <img src="docs/screenshots/customer-product-detail.png" width="23%" alt="Product detail with instalment breakdown" />
@@ -21,6 +26,7 @@ Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down pa
 
 ## Table of contents
 
+- [Live applications](#live-applications)
 - [What it does](#what-it-does)
 - [Engineering highlights](#engineering-highlights)
 - [Architecture](#architecture)
@@ -62,9 +68,9 @@ One Flutter project ships two independently-branded, separately-published apps (
 
 Strict separation between presentation, logic (BLoC and Cubit), repository, and data source. The UI holds no business logic and never touches Firestore or HTTP directly. Every feature is a state machine with explicit events and states, which makes the payment and KYC flows, where partial failure is expensive, deterministic and testable.
 
-### 41 serverless edge functions
+### 40 serverless edge functions
 
-[`supabase/functions/`](supabase/functions/) holds every money-touching, trust-sensitive, and privileged operation, running server-side in TypeScript rather than in the client: payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN and NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, credit limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
+[`supabase/functions/`](supabase/functions/) contains 40 deployable edge functions plus shared server utilities. Money-related, trust-sensitive, and privileged operations run server-side in TypeScript rather than in the client. These operations include payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN and NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, credit limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
 
 ### Financial correctness under retry
 
@@ -95,7 +101,7 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
         │                     │                     │
 ┌───────▼────────┐   ┌────────▼─────────┐   ┌───────▼────────┐
 │  Firebase      │   │ Supabase Edge    │   │ Payment rails  │
-│  Auth          │   │ Functions (41)   │   │ Monnify        │
+│  Auth          │   │ Functions (40)   │   │ Monnify        │
 │  Firestore     │   │ risk · payments  │   │ Paystack       │
 │  Storage · FCM │   │ KYC · settlement │   │ webhooks       │
 │  Analytics     │   │ automation       │   │ virtual accts  │
@@ -110,7 +116,7 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
 
 | Layer | Technology |
 |---|---|
-| Framework | Flutter 3.8+ and Dart, multi-flavour (Android, iOS, Web) |
+| Framework | Flutter with Dart SDK ^3.8.1, multi-flavour (Android, iOS, Web) |
 | State management | BLoC and Cubit (`flutter_bloc`) with `equatable` |
 | Authentication | Firebase Auth, Google Sign-In and email/password |
 | Primary datastore | Cloud Firestore |
@@ -148,22 +154,22 @@ lib/
     ├── vendor/                 # Dashboard, catalogue, orders, payouts
     └── shared/                 # Cross-flavour widgets
 
-supabase/functions/             # 41 edge functions: payments, KYC, automation
+supabase/functions/             # 40 edge functions plus shared server utilities
 ```
 
 ---
 
 ## Running locally
 
-**Prerequisites.** Flutter SDK 3.8+, a Firebase project (`google-services.json` and `GoogleService-Info.plist`), a Supabase project, and payment provider credentials.
+**Prerequisites.** Flutter with Dart SDK 3.8.1 or later, a Firebase project, a Supabase project, and your own client-safe configuration.
 
 ```bash
 # 1. Install dependencies
 flutter pub get
 
 # 2. Provide environment configuration
-#    Create .env and .env.prod at the project root with the
-#    Firebase, Supabase, and payment provider keys.
+#    Create .env and .env.prod at the project root with client-safe
+#    Firebase and Supabase configuration. Keep private keys server-side.
 
 # 3. Run the customer app
 flutter run -t lib/main_customer.dart
@@ -179,7 +185,7 @@ flutter build appbundle -t lib/main_customer.dart
 flutter build appbundle -t lib/main_vendor.dart
 ```
 
-Secrets are loaded at runtime from `.env` via `flutter_dotenv` and are not committed to the repository.
+Local `.env` files are excluded from Git. They should contain only client-safe configuration because values packaged with a Flutter application can be extracted from a release build. Payment secrets, service-role keys, and other privileged credentials must remain in the server-side environment used by the Supabase Edge Functions.
 
 ---
 
@@ -189,7 +195,7 @@ Secrets are loaded at runtime from `.env` via `flutter_dotenv` and are not commi
 |---|---|
 | Dart source files | 433 |
 | Lines of Dart | ~79,000 |
-| Serverless edge functions | 41 |
+| Serverless edge functions | 40, plus shared server utilities |
 | Published apps from one codebase | 2 |
 | Platforms | Android, iOS, Web |
 
@@ -197,6 +203,6 @@ Secrets are loaded at runtime from `.env` via `flutter_dotenv` and are not commi
 
 ## Notes
 
-This repository is the working source for a live product. Configuration files, service-account credentials, and provider keys are excluded, so the build will not run without your own environment configuration.
+This repository contains the working source for a live product. Sensitive server credentials, local environment files, Firebase client configuration, service-account credentials, and payment provider secret keys are excluded. The project will not run without your own Firebase, Supabase, and client-safe environment configuration.
 
 **Author:** David ([olaniteolanight@gmail.com](mailto:olaniteolanight@gmail.com))
