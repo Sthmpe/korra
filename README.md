@@ -1,16 +1,20 @@
 # Korra
 
-**A two-sided buy-now-pay-later marketplace for Nigerian commerce — built in Flutter, backed by a custom underwriting engine.**
+**A two-sided buy-now-pay-later marketplace for Nigerian commerce, built in Flutter and backed by a custom underwriting engine.**
 
 Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down payment, and settle the balance in instalments. Merchants list products, receive reservations, fulfil orders, and get paid on a T+1 settlement cycle. Both sides ship from a single Flutter codebase as two separately-branded apps.
 
 > *Reserve now, pay in parts, own with ease.*
 
 <p align="center">
-  <img src="Korra_customer_storespage.jpg" width="24%" alt="Customer storefront" />
-  <img src="korra_customer_products_details.jpg" width="24%" alt="Product detail with instalment breakdown" />
-  <img src="Korra_merchant_product_list.jpg" width="24%" alt="Merchant product catalogue" />
-  <img src="korra_merchan_storeview.jpg" width="24%" alt="Merchant storefront" />
+  <img src="docs/screenshots/customer-storefront.png" width="23%" alt="Customer storefront discovery" />
+  <img src="docs/screenshots/customer-product-detail.png" width="23%" alt="Product detail with instalment breakdown" />
+  <img src="docs/screenshots/merchant-catalogue.png" width="23%" alt="Merchant product catalogue" />
+  <img src="docs/screenshots/merchant-storefront.png" width="23%" alt="Merchant branded storefront" />
+</p>
+
+<p align="center">
+  <sub>Customer discovery &nbsp;·&nbsp; Product detail &nbsp;·&nbsp; Merchant catalogue &nbsp;·&nbsp; Merchant storefront</sub>
 </p>
 
 ---
@@ -32,37 +36,43 @@ Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down pa
 **The core loop**
 
 1. A merchant lists a product and receives a shareable product code (`K-XXXX-XXXXXXX`) and storefront link.
-2. A customer opens the link — via deep link, QR code, or the in-app marketplace — and the risk engine computes a minimum down payment for that specific customer and item.
-3. The customer pays the down payment; a plan is created and the merchant sees the reservation instantly.
-4. The customer pays instalments on schedule; the merchant is settled T+1 and delivers the item.
+2. A customer opens the link via deep link, QR code, or the in-app marketplace, and the risk engine computes a minimum down payment for that specific customer and item.
+3. The customer pays the down payment, a plan is created, and the merchant sees the reservation instantly.
+4. The customer pays instalments on schedule, the merchant is settled T+1, and the item is delivered.
 
-**Customer app** — marketplace discovery, storefront browsing, KYC (BVN/NIN), instalment plan creation and tracking, in-app payments, dedicated virtual accounts, payment receipts, push notifications.
+**Customer app.** Marketplace discovery, storefront browsing, KYC (BVN and NIN), instalment plan creation and tracking, in-app payments, dedicated virtual accounts, payment receipts, and push notifications.
 
-**Merchant app (Korra Biz)** — product catalogue management, branded storefront, order and reservation management, outright and layaway sales, payouts with OTP-authorised transfers, campaign broadcasts to followers, and a metrics dashboard driving marketplace visibility badges.
+**Merchant app (Korra Biz).** Product catalogue management, branded storefront, order and reservation management, outright and layaway sales, payouts with OTP-authorised transfers, campaign broadcasts to followers, and a metrics dashboard that drives marketplace visibility badges.
 
 ---
 
 ## Engineering highlights
 
-These are the parts of the codebase I'd point at in a technical interview.
+These are the parts of the codebase I would point at in a technical interview.
 
-### Custom risk & underwriting engine
-[`lib/logic/korra_risk_engine/`](lib/logic/korra_risk_engine/) — the commercial core of the product. Given a product price, a customer's available credit limit, and their repayment history, it computes a randomised down-payment percentage banded by price tier, calculates the funding gap, and applies hard-stop decline rules when exposure is unfavourable. The client mirrors a server-side implementation deployed as an edge function, which is the sole source of truth: it issues a signed `secureToken` that the checkout flow must present, so a tampered client cannot mint its own terms.
+### Custom risk and underwriting engine
+
+[`lib/logic/korra_risk_engine/`](lib/logic/korra_risk_engine/) is the commercial core of the product. Given a product price, a customer's available credit limit, and their repayment history, it computes a randomised down-payment percentage banded by price tier, calculates the funding gap, and applies hard-stop decline rules when exposure is unfavourable. The client mirrors a server-side implementation deployed as an edge function, which is the sole source of truth: it issues a signed `secureToken` that the checkout flow must present, so a tampered client cannot mint its own terms.
 
 ### Dual-flavour single codebase
-One Flutter project ships two independently-branded, separately-published apps (customer and merchant) from distinct entry points (`main_customer.dart`, `main_vendor.dart`) resolved through a compile-time flavour config. Web builds get their own per-flavour `index.html` and PWA manifest. This keeps shared models, repositories, theming, and auth in one place while the two products evolve independently.
+
+One Flutter project ships two independently-branded, separately-published apps (customer and merchant) from distinct entry points, `main_customer.dart` and `main_vendor.dart`, resolved through a compile-time flavour config. Web builds get their own per-flavour `index.html` and PWA manifest. This keeps shared models, repositories, theming, and auth in one place while the two products evolve independently.
 
 ### Layered BLoC architecture
-Strict separation between **presentation → logic (BLoC/Cubit) → repository → data source**. UI holds no business logic and never touches Firestore or HTTP directly; every feature is a state machine with explicit events and states, which makes the payment and KYC flows — where partial failure is expensive — deterministic and testable.
+
+Strict separation between presentation, logic (BLoC and Cubit), repository, and data source. The UI holds no business logic and never touches Firestore or HTTP directly. Every feature is a state machine with explicit events and states, which makes the payment and KYC flows, where partial failure is expensive, deterministic and testable.
 
 ### 41 serverless edge functions
-[`supabase/functions/`](supabase/functions/) — all money-touching, trust-sensitive, and privileged operations run server-side in TypeScript rather than in the client: payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN/NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, credit limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
+
+[`supabase/functions/`](supabase/functions/) holds every money-touching, trust-sensitive, and privileged operation, running server-side in TypeScript rather than in the client: payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN and NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, credit limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
 
 ### Financial correctness under retry
-Payment and notification pipelines are written to be idempotent — reconciliation is keyed off provider references, and fan-out events (store visits, campaign opens) are deduplicated with per-day marker documents written via transactional `create()` so a retried webhook or a relaunched app can't inflate counts or double-credit a wallet.
+
+Payment and notification pipelines are written to be idempotent. Reconciliation is keyed off provider references, and fan-out events such as store visits and campaign opens are deduplicated with per-day marker documents written via transactional `create()`, so a retried webhook or a relaunched app cannot inflate counts or double-credit a wallet.
 
 ### Production-hardened client
-Offline fallbacks with cached data and connectivity monitoring, Crashlytics-instrumented failure paths, forced-update gating via version comparison, image compression before upload, deep link and app-link handling, and local + remote notification orchestration.
+
+Offline fallbacks with cached data and connectivity monitoring, Crashlytics-instrumented failure paths, forced-update gating via version comparison, image compression before upload, deep link and app-link handling, and local plus remote notification orchestration.
 
 ---
 
@@ -92,7 +102,7 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
 └────────────────┘   └──────────────────┘   └────────────────┘
 ```
 
-**Trust boundary.** The client renders and requests; it never authorises. Credit terms, product mutations, payouts, and settlements are all computed and signed server-side, with Firestore security rules as the second line of defence.
+**Trust boundary.** The client renders and requests, it never authorises. Credit terms, product mutations, payouts, and settlements are all computed and signed server-side, with Firestore security rules as the second line of defence.
 
 ---
 
@@ -100,17 +110,17 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
 
 | Layer | Technology |
 |---|---|
-| Framework | Flutter 3.8+ / Dart — multi-flavour (Android, iOS, Web) |
-| State management | BLoC + Cubit (`flutter_bloc`) with `equatable` |
-| Authentication | Firebase Auth — Google Sign-In and email/password |
+| Framework | Flutter 3.8+ and Dart, multi-flavour (Android, iOS, Web) |
+| State management | BLoC and Cubit (`flutter_bloc`) with `equatable` |
+| Authentication | Firebase Auth, Google Sign-In and email/password |
 | Primary datastore | Cloud Firestore |
-| Backend | Supabase Edge Functions (Deno / TypeScript) |
-| Payments | Monnify SDK, Paystack — virtual accounts, webhooks, settlements |
-| Identity / KYC | BVN and NIN verification via edge functions |
-| Messaging | Firebase Cloud Messaging + `flutter_local_notifications` |
-| Observability | Firebase Analytics, Crashlytics |
+| Backend | Supabase Edge Functions (Deno, TypeScript) |
+| Payments | Monnify SDK and Paystack, virtual accounts, webhooks, settlements |
+| Identity and KYC | BVN and NIN verification via edge functions |
+| Messaging | Firebase Cloud Messaging with `flutter_local_notifications` |
+| Observability | Firebase Analytics and Crashlytics |
 | Media | Firebase Storage, `flutter_image_compress`, `cached_network_image` |
-| Routing & UI | GetX routing, `flutter_screenutil`, Google Fonts, Lottie |
+| Routing and UI | GetX routing, `flutter_screenutil`, Google Fonts, Lottie |
 
 ---
 
@@ -119,33 +129,33 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
 ```
 lib/
 ├── bootstrap.dart              # App initialisation (Firebase, dotenv, services)
-├── main_customer.dart          # Entry point — customer flavour
-├── main_vendor.dart            # Entry point — merchant flavour
+├── main_customer.dart          # Entry point, customer flavour
+├── main_vendor.dart            # Entry point, merchant flavour
 ├── flavors/                    # Compile-time flavour configuration
 ├── config/                     # Theme, routes, constants, validators, utils
 ├── data/
 │   ├── models/                 # Domain models (customer, vendor, product)
-│   └── repository/             # Data access abstraction over Firestore + APIs
+│   └── repository/             # Data access abstraction over Firestore and APIs
 ├── logic/
-│   ├── bloc/                   # Feature state machines (auth, plans, payouts, …)
+│   ├── bloc/                   # Feature state machines (auth, plans, payouts)
 │   ├── cubit/                  # Lightweight state holders
 │   ├── core/net/               # Connectivity monitoring
 │   ├── services/               # Analytics, notifications, deep links, updates
-│   └── korra_risk_engine/      # Underwriting logic (mirrors the edge function)
+│   └── korra_risk_engine/      # Underwriting logic, mirrors the edge function
 └── presentation/
     ├── auth/                   # Login, signup, verification
     ├── customer/               # Marketplace, storefronts, plans, KYC, profile
     ├── vendor/                 # Dashboard, catalogue, orders, payouts
     └── shared/                 # Cross-flavour widgets
 
-supabase/functions/             # 41 edge functions — payments, KYC, automation
+supabase/functions/             # 41 edge functions: payments, KYC, automation
 ```
 
 ---
 
 ## Running locally
 
-**Prerequisites** — Flutter SDK 3.8+, a Firebase project (`google-services.json` / `GoogleService-Info.plist`), a Supabase project, and payment provider credentials.
+**Prerequisites.** Flutter SDK 3.8+, a Firebase project (`google-services.json` and `GoogleService-Info.plist`), a Supabase project, and payment provider credentials.
 
 ```bash
 # 1. Install dependencies
@@ -187,6 +197,6 @@ Secrets are loaded at runtime from `.env` via `flutter_dotenv` and are not commi
 
 ## Notes
 
-This repository is the working source for a live product. Configuration files, service-account credentials, and provider keys are excluded — the build will not run without your own environment configuration.
+This repository is the working source for a live product. Configuration files, service-account credentials, and provider keys are excluded, so the build will not run without your own environment configuration.
 
-**Author** — David ([opeyemiolanite1@gmail.com](mailto:opeyemiolanite1@gmail.com))
+**Author:** David ([olaniteolanight@gmail.com](mailto:olaniteolanight@gmail.com))
