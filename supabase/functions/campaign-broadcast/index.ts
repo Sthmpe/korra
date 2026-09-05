@@ -2,8 +2,19 @@
 //
 // Fans out a merchant's new campaign to their circle — every customer who
 // follows the store (customers/{uid}/my_vendors/{vendorId}) gets an in-app
-// notification and a device push. Customers who muted the store
-// (customers/{uid}.mutedStores contains vendorId) are skipped.
+// notification. Customers who muted the store (customers/{uid}.mutedStores
+// contains vendorId) are skipped entirely — no in-app, no push.
+//
+// PUSH CAP (confirmed by David): each customer gets at most 3 pushed campaign
+// notifications per calendar day, combined across every store they follow,
+// and one of those 3 slots per distinct store — a store that already used its
+// slot today can never claim a second one, even if fewer than 3 stores total
+// have been used. Tracked at customers/{uid}/campaignPushDaily/{yyyy-MM-dd}.
+// Once a customer's slots for a day are gone, further campaigns from any
+// store still write the in-app notification, just without a push. This is
+// purely per-customer (their own follow list + their own daily slot count) —
+// a customer who hasn't saved a store never sees it at all, and one
+// customer's used-up slots have no effect on any other customer.
 //
 // Called by the merchant app right after the campaign doc is created. Same
 // Double-Lock security as plan-manager; the Firebase token IS the identity, so
@@ -30,6 +41,31 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+// Customer-side push cap: max 3 pushes/day, one per DISTINCT store — never
+// two slots to the same store even if it broadcasts twice. Tracked per
+// customer at customers/{uid}/campaignPushDaily/{yyyy-MM-dd}.vendorIds.
+// The in-app notification is unaffected by this cap; it always gets written.
+async function claimPushSlot(customerId: string, vendorId: string, today: string): Promise<boolean> {
+  const ref = db
+    .collection('customers')
+    .doc(customerId)
+    .collection('campaignPushDaily')
+    .doc(today);
+
+  return db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    const vendorIds: string[] = snap.exists ? (snap.data()?.vendorIds ?? []) : [];
+    if (vendorIds.includes(vendorId)) return false; // this store already used its slot today
+    if (vendorIds.length >= 3) return false; // all 3 slots already claimed by other stores
+    t.set(
+      ref,
+      { vendorIds: [...vendorIds, vendorId], updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    return true;
+  });
 }
 
 serve(async (req) => {
@@ -93,26 +129,37 @@ serve(async (req) => {
     // 2. Load each follower's mutedStores + fcmToken (chunked getAll).
     let reached = 0;
     let muted = 0;
+    let capped = 0; // in-app only: this customer's 3 daily push slots are taken
     const tokens: string[] = [];
+    const today = new Date().toISOString().slice(0, 10); // yyyy-MM-dd
 
     for (const ids of chunk(followerIds, 200)) {
       const refs = ids.map((id) => db.collection('customers').doc(id));
       const docs = await db.getAll(...refs);
 
+      const eligible = docs.filter((doc) => {
+        if (!doc.exists) return false;
+        const mutedStores: string[] = Array.isArray(doc.data()?.mutedStores) ? doc.data()!.mutedStores : [];
+        return !mutedStores.includes(vendorId);
+      });
+      muted += docs.length - eligible.length;
+
+      // Push-slot claims are per-customer transactions, so resolve them
+      // before batching the in-app writes below.
+      const canPush = await Promise.all(
+        eligible.map((doc) => claimPushSlot(doc.id, vendorId, today)),
+      );
+
       let writeBatch = db.batch();
       let ops = 0;
 
-      for (const doc of docs) {
-        if (!doc.exists) continue;
+      for (let i = 0; i < eligible.length; i++) {
+        const doc = eligible[i];
         const data = doc.data()!;
-        const mutedStores: string[] = Array.isArray(data.mutedStores) ? data.mutedStores : [];
-        if (mutedStores.includes(vendorId)) {
-          muted++;
-          continue; // respected the mute — no in-app, no push
-        }
 
         // In-app notification. vendorId in metadata keeps it mute-filterable
-        // client-side too, matching KorraNotification parsing.
+        // client-side too, matching KorraNotification parsing. Always written,
+        // regardless of the customer's push cap.
         const notifRef = doc.ref.collection('notifications').doc();
         writeBatch.set(notifRef, {
           title,
@@ -131,8 +178,12 @@ serve(async (req) => {
         ops++;
         reached++;
 
-        if (typeof data.fcmToken === 'string' && data.fcmToken.length > 0) {
-          tokens.push(data.fcmToken);
+        if (canPush[i]) {
+          if (typeof data.fcmToken === 'string' && data.fcmToken.length > 0) {
+            tokens.push(data.fcmToken);
+          }
+        } else {
+          capped++;
         }
 
         if (ops >= 400) {
@@ -174,6 +225,7 @@ serve(async (req) => {
         followers: followerIds.length,
         reached,
         muted,
+        capped,
         pushed,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

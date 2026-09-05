@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 
 import '../../../../config/constants/prefs_keys.dart';
+import '../../../../config/utils/korra_exception.dart';
 import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../data/repository/vendors/vendor_repository.dart';
 import 'role_login_event.dart';
@@ -198,12 +199,6 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
 
     try {
       if (state.role == KorraRole.vendor) {
-        final existsInCustomer = await _customerRepo.checkCollectionForEmail('customers', state.email.trim());
-        
-        if (existsInCustomer) {
-          throw Exception('customer');
-        }
-
         final uid = await _vendorRepo.signInVendor(
           state.email.trim(),
           state.password.trim(),
@@ -225,12 +220,6 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           return;
         }
       } else {
-        final existsInVendors = await _customerRepo.checkCollectionForEmail('vendors', state.email.trim());
-        
-        if (existsInVendors) {
-          throw Exception('vendor');
-        }
-
         final uid = await _customerRepo.signInCustomer(
           state.email.trim(),
           state.password.trim(),
@@ -264,45 +253,32 @@ class RoleLoginBloc extends Bloc<RoleLoginEvent, RoleLoginState> {
           failure: _mapAuthError(ex),
         ),
       );
-    } on Exception catch (err) {
-      final msg = err.toString();
-      if (msg.contains('customer')) {
-        emit(
-          state.copyWith(
-            loading: false,
-            status: LoginStatus.failure,
-            failure: const KorraFailure(
-              code: 'role_mismatch',
-              title: 'Check role selected',
-              message: 'This account is not registered as a merchant.',
-            ),
+    } on KorraException catch (ex) {
+      // Thrown by the repos' orphan checks (e.g. no vendors/{uid} doc for
+      // this app) — ex.message is already a clear, user-facing sentence.
+      emit(
+        state.copyWith(
+          loading: false,
+          status: LoginStatus.failure,
+          failure: KorraFailure(
+            code: 'profile_missing',
+            title: 'Check role selected',
+            message: ex.message,
           ),
-        );
-      } else if (msg.contains('vendor')) {
-        emit(
-          state.copyWith(
-            loading: false,
-            status: LoginStatus.failure,
-            failure: const KorraFailure(
-              code: 'role_mismatch',
-              title: 'Check role selected',
-              message: 'This account is not registered as a customer.',
-            ),
+        ),
+      );
+    } on Exception catch (_) {
+      emit(
+        state.copyWith(
+          loading: false,
+          status: LoginStatus.failure,
+          failure: const KorraFailure(
+            code: 'unknown',
+            title: 'We couldn’t sign you in',
+            message: 'Please try again in a moment.',
           ),
-        );
-      } else {
-        emit(
-          state.copyWith(
-            loading: false,
-            status: LoginStatus.failure,
-            failure: const KorraFailure(
-              code: 'unknown',
-              title: 'We couldn’t sign you in',
-              message: 'Please try again in a moment.',
-            ),
-          ),
-        );
-      }
+        ),
+      );
     }
   }
 
