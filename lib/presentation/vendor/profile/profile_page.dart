@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,6 +9,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:korra/data/repository/vendors/vendor_repository.dart';
 import 'package:korra/logic/bloc/vendor/profile/profile_state.dart';
 import 'package:korra/presentation/shared/widgets/korra_header.dart';
+import 'package:share_plus/share_plus.dart';
 
 // --- WIDGET IMPORTS (From your snippets) ---
 import '../../../config/routes/app_routes.dart';
@@ -20,6 +22,7 @@ import 'widgets/identity_header_card.dart';
 import 'widgets/section_card.dart';
 import 'widgets/rows.dart';
 import 'widgets/static_info_row.dart';
+import 'widgets/store_qr_sheet.dart';
 // For logout navigation
 
 // --- MODEL ---
@@ -87,19 +90,10 @@ class VendorProfilePage extends StatelessWidget {
                       kycVerified: vendor.ninVerified && vendor.bvnVerified,
                       basicTier: false,
                       onEdit: () {
-                        // Navigate to Edit Profile
-                        // Get.to(() => EditVendorProfileScreen(vendor: vendor));
-                        showAppSnackbar("Edit Profile coming soon!", SnackbarType.info);
+                        Get.toNamed(Routes.vendorEditProfile, arguments: {'vendor': vendor});
                       },
-                      onShare: () {
-                         // Share Logic
-                         showAppSnackbar("Sharing coming soon!", SnackbarType.info);
-                      },
-                      onMyQr: () {
-                        // Navigate to Vendor QR
-                        // Get.to(() => VendorQrScreen(vendor: vendor));
-                        showAppSnackbar("QR Code coming soon!", SnackbarType.info);
-                      },
+                      onShare: () => _shareStore(vendor),
+                      onMyQr: () => _showStoreQr(context, vendor),
                     ),
                 
                     SizedBox(height: 16.h),
@@ -252,14 +246,8 @@ class VendorProfilePage extends StatelessWidget {
                               showAppSnackbar("Biometrics coming soon!", SnackbarType.info);
                             },
                           ),
-                          _divider(),
-                          RowWithChevron(
-                            icon: Icons.lock_outline,
-                            title: 'Change password',
-                            onTap: () {
-                                       Get.toNamed(Routes.vendorChangePassword);
-                                    },
-                          ),
+                          // Change password removed — accounts use Google
+                          // sign-in (David, 5 July 2026)
                           _divider(),
                           RowWithChevron(
                             icon: Icons.description_outlined,
@@ -399,6 +387,37 @@ class VendorProfilePage extends StatelessWidget {
   }
 
   // --- ACTIONS ---
+
+  /// Storefront link built from the store slug (falls back to the uid, which
+  /// the customer storefront also resolves).
+  Future<String> _storeLink() async {
+    String slug = vendorUid;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('vendors').doc(vendorUid).get();
+      final store = doc.data()?['store'] as Map<String, dynamic>? ?? {};
+      final s = (store['slug'] ?? '').toString().trim();
+      if (s.isNotEmpty) slug = s;
+    } catch (e) {
+      debugPrint("Could not resolve store slug: $e");
+    }
+    return "https://korra.com.ng/store/$slug";
+  }
+
+  Future<void> _shareStore(Vendor vendor) async {
+    final link = await _storeLink();
+    await Share.share(
+      "Shop with ${vendor.storeName} on Korra.\n\n"
+      "Reserve today. Complete at your pace.\n\n"
+      "$link",
+      subject: vendor.storeName,
+    );
+  }
+
+  Future<void> _showStoreQr(BuildContext context, Vendor vendor) async {
+    final link = await _storeLink();
+    if (!context.mounted) return;
+    StoreQrSheet.show(context, storeName: vendor.storeName, storeLink: link);
+  }
 
   void _confirmLogout(BuildContext context, ProfileBloc bloc) {
     showDialog(

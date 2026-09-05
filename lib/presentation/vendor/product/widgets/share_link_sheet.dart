@@ -68,7 +68,7 @@ class _ShareLinkSheetState extends State<ShareLinkSheet> {
 
       // 5. Share via System Sheet
       final caption = "🔥 New Drop Alert!\n"
-          "${widget.product.name} — ${widget.product.priceText}\n"
+          "${widget.product.name} - ${widget.product.priceText}\n"
           "Don't wait. Lock this price now on Korra.\n\n"
           "Code: *${widget.product.code}*";
 

@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 
+import '../../../../logic/services/analytics_service.dart';
 import '../../../../data/models/vendor/reservation.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_bloc.dart';
 import '../../../../logic/bloc/vendor/reservation/reservations_event.dart';
@@ -106,7 +107,7 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Reservation Details",
+                            Text("Order Details",
                                 style: GoogleFonts.inter(
                                     fontSize: 18.sp,
                                     fontWeight: FontWeight.w800)),
@@ -160,8 +161,8 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                 SizedBox(height: 12.h),
                                 Text(
                                   isFulfilled
-                                      ? "Item Fulfilled"
-                                      : "Ready to Fulfill",
+                                      ? "Order Delivered"
+                                      : "Ready to Deliver",
                                   style: GoogleFonts.plusJakartaSans(
                                       fontSize: 16.sp,
                                       fontWeight: FontWeight.w700),
@@ -181,6 +182,10 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                       onPressed: isLoading
                                           ? null
                                           : () {
+                                              Analytics.log(
+                                                AnalyticsEvents.merchReservationFulfilled,
+                                                {'reservation_id': d.id},
+                                              );
                                               // ✅ DIRECT BATCH CALL
                                               context.read<ReservationsBloc>().add(ResMarkFulfilled([d.id]));
                                             },
@@ -199,7 +204,7 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                                   color: Colors.white,
                                                   strokeWidth: 2))
                                           : Text(
-                                              "Mark as Fulfilled",
+                                              "Mark as Delivered",
                                               style: GoogleFonts.inter(
                                                 fontSize: 14.sp,
                                                 fontWeight: FontWeight.w700
@@ -288,6 +293,13 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                                 color: Colors.grey.shade400,
                                 letterSpacing: 1.2)),
                         SizedBox(height: 12.h),
+                        if (d.variantLabel != null) ...[
+                          _InfoRow(
+                              label: "Variant",
+                              value: d.variantLabel!,
+                              isBold: true),
+                          SizedBox(height: 8.h),
+                        ],
                         _InfoRow(label: "Product Price", value: d.totalText),
                         SizedBox(height: 8.h),
                         _InfoRow(
@@ -328,12 +340,11 @@ class _VendorReservationDetailSheetState extends State<VendorReservationDetailSh
                           ),
                         ],
                         
-                        // ✅ Show when the vendor physically handed it over
-                        if (isFulfilled && d.finalFulfilledAt != null) ...[ // Ensure model uses finalFulfilledAt
+                        if (isFulfilled && d.finalFulfilledAt != null) ...[
                           SizedBox(height: 8.h),
                           _InfoRow(
-                            label: "Fulfilled On", 
-                            value: DateFormat('MMM d, yyyy - h:mm a').format(d.finalFulfilledAt ?? d.fulfilledAt ?? DateTime.now()), // Use finalFulfilledAt if available, else fallback to now (shouldn't happen)
+                            label: "Delivered On", 
+                            value: DateFormat('MMM d, yyyy - h:mm a').format(d.finalFulfilledAt ?? d.fulfilledAt ?? DateTime.now()),
                           ),
                         ],
 
@@ -370,8 +381,7 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isFulfilled) {
-      return _buildPill(
-          "FULFILLED", const Color(0xFFECFDF3), const Color(0xFF027A48));
+      return _buildPill("DELIVERED", const Color(0xFFECFDF3), const Color(0xFF027A48));
     }
 
     switch (status) {
@@ -380,14 +390,11 @@ class _StatusPill extends StatelessWidget {
       case ReservationStatus.ongoing:
         return _buildPill("ACTIVE", Colors.blue.shade50, Colors.blue);
       case ReservationStatus.readyForPickup: 
-        return _buildPill("READY TO FULFILL", const Color(0xFFFFF7ED),
-            const Color(0xFFB95000));
+        return _buildPill("READY TO DELIVER", const Color(0xFFFFF7ED), const Color(0xFFB95000));
       case ReservationStatus.completed:
-        return _buildPill(
-            "COMPLETED", Colors.grey.shade100, Colors.grey.shade700);
+        return _buildPill("DELIVERED", Colors.grey.shade100, Colors.grey.shade700);
       case ReservationStatus.cancelled:
-        return _buildPill(
-            "CANCELLED", const Color(0xFFFEF3F2), const Color(0xFFB42318));
+        return _buildPill("CANCELLED", const Color(0xFFFEF3F2), const Color(0xFFB42318));
     }
   }
 

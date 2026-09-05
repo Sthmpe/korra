@@ -51,4 +51,7 @@ abstract class Routes {
   static const String customerChangePassword = '/customer/settings/password';
   static const String customerLegal = '/customer/settings/legal';
   static const String customerHelp = '/customer/settings/help';
+  static const String customerStorefront = '/store/:slug';
+  static const String customerDeals = '/customer/deals';
+  static const String customerStoreReviews = '/customer/store-reviews';
 }

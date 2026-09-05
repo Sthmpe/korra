@@ -169,6 +169,18 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
     );
   }
 
+  /// Daily separator labels, matching the customer statements screen:
+  /// Today / Yesterday / full date.
+  String _dayLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(day).inDays;
+    if (diff <= 0) return "Today";
+    if (diff == 1) return "Yesterday";
+    return DateFormat('MMMM d, yyyy').format(date);
+  }
+
   Widget _buildTransactionList() {
     final Stream<List<TransactionModel>> targetStream;
     
@@ -220,12 +232,39 @@ class _VendorSettlementScreenState extends State<VendorSettlementScreen> {
             }
 
             final tx = transactions[index];
-            return Padding(
+
+            // Daily separators, same language as the customer statements:
+            // Today / Yesterday / full date.
+            final label = _dayLabel(tx.createdAt);
+            final showHeader = index == 0 ||
+                _dayLabel(transactions[index - 1].createdAt) != label;
+
+            final tile = Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 6.h),
               child: _VendorTransactionTile(
-                transaction: tx, 
+                transaction: tx,
                 isLiability: _filter == 'Store Credit'
               ),
+            );
+
+            if (!showHeader) return tile;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20.w, index == 0 ? 2.h : 14.h, 20.w, 4.h),
+                  child: Text(
+                    label.toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5.sp,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+                tile,
+              ],
             );
           },
         );

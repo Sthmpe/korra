@@ -16,6 +16,27 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
+// --- 2b. HELPER: Sanitize optional flat variants ---
+// Same contract as add-product-secure: [{label, stock}], unique non-empty
+// labels, non-negative integer stock; null when there are none.
+function sanitizeVariants(raw: unknown): { label: string; stock: number }[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  if (raw.length > 30) throw "Too many variants (max 30).";
+  const seen = new Set<string>();
+  const out: { label: string; stock: number }[] = [];
+  for (const v of raw) {
+    const label = String((v as any)?.label ?? '').trim().slice(0, 40);
+    const stock = Math.floor(Number((v as any)?.stock));
+    if (!label) throw "Variant label cannot be empty.";
+    if (!Number.isFinite(stock) || stock < 0) throw `Invalid stock for variant "${label}".`;
+    const key = label.toLowerCase();
+    if (seen.has(key)) throw `Duplicate variant label: "${label}".`;
+    seen.add(key);
+    out.push({ label, stock });
+  }
+  return out;
+}
+
 // --- 3. MAIN LOGIC ---
 serve(async (req) => {
   // A. CORS Pre-flight
@@ -94,7 +115,12 @@ serve(async (req) => {
 
     // 1. Validate Inputs
     const newPrice = Number(updateData.price);
-    const newStock = Number(updateData.availableStock);
+    // Variants (optional): when present, total stock is the server-side sum.
+    // An empty/absent list means the product has (or reverts to) flat stock.
+    const variants = sanitizeVariants(updateData.variants);
+    const newStock = variants
+      ? variants.reduce((acc, v) => acc + v.stock, 0)
+      : Number(updateData.availableStock);
 
     // 2. RUN TRANSACTION
     const result = await db.runTransaction(async (t) => {
@@ -153,8 +179,13 @@ serve(async (req) => {
       });
 
       // 7. Update Product
+      // availableStock and variants are always set server-side: the computed
+      // sum wins over whatever the client typed, and clearing variants
+      // deletes the field (back to flat stock).
       t.update(productDoc.ref, {
         ...updateData,
+        availableStock: newStock,
+        variants: variants ?? admin.firestore.FieldValue.delete(),
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });

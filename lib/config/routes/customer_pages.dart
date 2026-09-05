@@ -24,6 +24,10 @@ import '../../presentation/customer/profile/limit_upgrade_screen.dart';
 import '../../presentation/customer/profile/my_qr_screen.dart';
 import '../../presentation/customer/profile/my_store_credit_screen.dart';
 import '../../presentation/customer/profile/my_vendors_screen.dart';
+import '../../presentation/customer/store/deals_page.dart';
+import '../../presentation/customer/store/widgets/hot_deals_strip.dart' show StoreDeal;
+import '../../presentation/customer/storefront/store_reviews_screen.dart';
+import '../../presentation/customer/storefront/storefront_screen.dart';
 import '../../presentation/customer/profile/statements_screen.dart';
 import 'app_routes.dart';
 import 'auth_middleware.dart';
@@ -78,6 +82,7 @@ class CustomerPages {
           customerUid: map['customerUid'],
           customer: map['customer'],
           walletBalance: map['walletBalance'],
+          variantLabel: map['variantLabel'] as String?,
           onJumpToHome: () => Get.back(result: 'jump_to_home'),
           onJumpToPlan: () => Get.back(result: 'jump_to_plans'),
         );
@@ -136,6 +141,16 @@ class CustomerPages {
       middlewares: [AuthMiddleware()],
     ),
 
+    // 💳 Pay Plan Input
+    GetPage(
+      name: Routes.customerPayPlan,
+      page: () => guard((args) {
+        final map = args as Map<String, dynamic>;
+        return PayPlanInputScreen(plan: map['plan']);
+      }),
+      middlewares: [AuthMiddleware()],
+    ),
+
     // 📄 Statements
     GetPage(
       name: Routes.customerStatements,
@@ -147,16 +162,6 @@ class CustomerPages {
           uid = (args as Map<String, dynamic>)['uid'];
         }
         return StatementsScreen(customerUid: uid);
-      }),
-      middlewares: [AuthMiddleware()],
-    ),
-
-    // 💳 Pay Plan Input
-    GetPage(
-      name: Routes.customerPayPlan,
-      page: () => guard((args) {
-        final map = args as Map<String, dynamic>;
-        return PayPlanInputScreen(plan: map['plan']);
       }),
       middlewares: [AuthMiddleware()],
     ),
@@ -253,6 +258,40 @@ class CustomerPages {
       name: Routes.customerHelp,
       page: () => const HelpCenterScreen(),
       middlewares: [AuthMiddleware()],
+    ),
+
+    // 🏪 Storefront (Publicly accessible, App Link compliant)
+    GetPage(
+      name: Routes.customerStorefront,
+      page: () {
+        final slug = Get.parameters['slug'] ?? '';
+        // Optional ?product={id} from a website deep link → auto-open it.
+        final productId = Get.parameters['product'];
+        return StorefrontScreen(storeSlug: slug, initialProductId: productId);
+      },
+    ),
+
+    // 🔥 Hot Deals "View all" (named route — anonymous pushes corrupt GetX's
+    // back-gesture bookkeeping and freeze the app on pop)
+    GetPage(
+      name: Routes.customerDeals,
+      page: () {
+        final map = Get.arguments as Map<String, dynamic>? ?? {};
+        final deals = (map['deals'] as List?)?.cast<StoreDeal>() ?? const <StoreDeal>[];
+        return DealsPage(deals: deals);
+      },
+    ),
+
+    // ⭐ Store Ratings & Reviews
+    GetPage(
+      name: Routes.customerStoreReviews,
+      page: () {
+        final map = Get.arguments as Map<String, dynamic>? ?? {};
+        return StoreReviewsScreen(
+          vendorId: (map['vendorId'] ?? '').toString(),
+          storeName: (map['storeName'] ?? 'Store').toString(),
+        );
+      },
     ),
   ];
 }

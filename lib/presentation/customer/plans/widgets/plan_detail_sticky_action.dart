@@ -35,9 +35,10 @@ class PlanDetailStickyAction extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 32.h),
       decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),

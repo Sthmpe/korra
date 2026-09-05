@@ -13,7 +13,6 @@ import '../../../../data/repository/customer/customer_repository.dart';
 // BLOC
 import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_account_stats.dart';
-import '../../../logic/services/share_service.dart';
 import '../../../logic/bloc/customer/profile/profile_bloc.dart';
 import '../../../logic/bloc/customer/profile/profile_event.dart';
 import '../../../logic/bloc/customer/profile/profile_state.dart';
@@ -30,7 +29,7 @@ import 'widgets/level_up_slots_row.dart';
 
 const _brand = Color(0xFFA54600);
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   final String customerUid;
 
   const ProfilePage({
@@ -39,24 +38,59 @@ class ProfilePage extends StatelessWidget {
   });
 
   @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  late final CustomerRepository _customerRepo;
+  // Cached once — creating the stream inside build() resubscribed Firestore
+  // on every rebuild (loading flashes + listener churn).
+  late final Stream<Customer?> _customerStream;
+
+  String get customerUid => widget.customerUid;
+
+  @override
+  void initState() {
+    super.initState();
+    _customerRepo = context.read<CustomerRepository>();
+    _customerStream = _customerRepo.streamCustomer(customerUid);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final customerRepo = context.read<CustomerRepository>();
     return BlocProvider(
       create: (context) => ProfileBloc(
-        customerRepo: customerRepo,
+        customerRepo: _customerRepo,
         net: context.read<NetCubit>(),
         uid: customerUid,
       ),
       child: BlocListener<ProfileBloc, ProfileState>(
+        // Without listenWhen, every later emission still carrying the old
+        // message re-fired Get.snackbar — stacked overlays eventually wedged
+        // input (the "idle on Profile → frozen" bug).
+        listenWhen: (prev, curr) =>
+            prev.message != curr.message || prev.status != curr.status,
         listener: (context, state) {
-          if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
           if (state.status == ProfileStatus.logout) {
+            // offAllNamed clears every route — including the "Signing out…"
+            // loading dialog — so no manual dismissal is needed here.
             Get.offAllNamed(Routes.roleLoginScreen);
+            return;
           }
+          if (state.status == ProfileStatus.failure) {
+            _dismissLoadingDialogIfAny(context);
+            showAppSnackbar(
+                state.errorMessage ??
+                    state.message ??
+                    'Something went wrong. Please try again.',
+                SnackbarType.error);
+            return;
+          }
+          if (state.message != null) showAppSnackbar(state.message!, SnackbarType.info);
         },
         // REAL-TIME DATA STREAM
         child: StreamBuilder<Customer?>(
-          stream: customerRepo.streamCustomer(customerUid),
+          stream: _customerStream,
           builder: (context, snapshot) {
             final bloc = context.read<ProfileBloc>();
 
@@ -95,14 +129,6 @@ class ProfilePage extends StatelessWidget {
                               kycVerified:
                                   customer.isFullyVerified, // 👈 Extension
                               basicTier: true,
-                              onMyQr: () {
-                                Get.toNamed(Routes.customerQr, arguments: customer);
-                              },
-                              onShare: () {
-                                ShareService.shareAppReferral(
-                                  referrerName: customer.firstName,
-                                );
-                              },
                               onEdit: () {
                                 Get.toNamed(
                                   Routes.customerEditProfile,
@@ -134,6 +160,20 @@ class ProfilePage extends StatelessWidget {
                                         Routes.customerBankDetails, 
                                         arguments: {
                                           'customer': customer,
+                                        }
+                                      );
+                                    },
+                                  ),
+                                  _divider(),
+
+                                  RowWithChevron(
+                                    icon: Icons.receipt_long_outlined,
+                                    title: 'Statements & receipts',
+                                    onTap: () {
+                                      Get.toNamed(
+                                        Routes.customerStatements,
+                                        arguments: {
+                                          'uid': customerUid,
                                         }
                                       );
                                     },
@@ -193,20 +233,6 @@ class ProfilePage extends StatelessWidget {
                                     value: false,
                                     onChanged: (_) => showAppSnackbar('Coming soon!', SnackbarType.info)
                                   ),
-                                  _divider(),
-
-                                  RowWithChevron(
-                                    icon: Icons.receipt_long_outlined,
-                                    title: 'Statements & receipts',
-                                    onTap: () {
-                                      Get.toNamed(
-                                        Routes.customerStatements,
-                                        arguments: {
-                                          'uid': customerUid,
-                                        }
-                                      );
-                                    },
-                                  ),
                                 ],
                               ),
                             ),
@@ -254,15 +280,8 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                   _divider(),
 
-                                  RowWithChevron(
-                                    icon: Icons.lock_outline,
-                                    title: 'Change password',
-                                    onTap: () {
-                                      Get.toNamed(Routes.customerChangePassword);
-                                    },
-                                  ),
-                                  _divider(),
-
+                                  // Change password removed — accounts use
+                                  // Google sign-in (David, 5 July 2026).
                                   RowWithChevron(
                                     icon: Icons.description_outlined,
                                     title: 'Legal & Privacy',
@@ -376,21 +395,73 @@ class ProfilePage extends StatelessWidget {
 
    // --- ACTIONS ---
 
+  /// Pops ONLY a dialog sitting above this screen — never the screen itself
+  /// (same guarded pattern as plan_details; blind pops wedge the navigator).
+  void _dismissLoadingDialogIfAny(BuildContext context) {
+    final route = ModalRoute.of(context);
+    final navigator = Navigator.of(context);
+    if (route != null && !route.isCurrent && navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
+  void _showLogoutLoading(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 28.w, vertical: 22.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20.r),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 26.w,
+                  height: 26.w,
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2.5, color: _brand),
+                ),
+                SizedBox(height: 14.h),
+                Text(
+                  'Signing out…',
+                  style: GoogleFonts.inter(
+                    fontSize: 13.5.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF101828),
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _confirmLogout(BuildContext context, ProfileBloc bloc) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Log out', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         content: Text('Are you sure you want to log out?', style: GoogleFonts.inter()),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () {
-              // Perform logout via Auth Bloc or Repository
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
+              // Loading stays up until the bloc reports logout (route reset
+              // clears it) or failure (listener pops it + shows the error).
+              _showLogoutLoading(context);
               bloc.add(LogoutRequested());
             },
             child: const Text("Log out", style: TextStyle(color: Colors.red)),

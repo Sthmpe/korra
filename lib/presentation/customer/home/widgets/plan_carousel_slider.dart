@@ -27,7 +27,9 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
   int _current = 0; 
 
   static const double _viewport = 0.75; // Slightly wider for better focus
-  static const double _aspect = 4 / 3; 
+  // Wider aspect = shorter image, so wallet + code field + this carousel
+  // all fit one home screen (David, 10 July 2026).
+  static const double _aspect = 16 / 9;
 
   @override
   Widget build(BuildContext context) {
@@ -80,12 +82,9 @@ class _PlanCarouselSliderState extends State<PlanCarouselSlider> {
             itemBuilder: (context, i, realIndex) {
               final p = widget.plans[i];
               
-              final String dueText = "Next milestone ${p.nextDueDate.day}/${p.nextDueDate.month}"; 
+              final String dueText = "Next milestone ${p.nextDueDate.day}/${p.nextDueDate.month}";
 
-              debugPrint("Rendering Plan Card: ${p.title}, Due: $dueText");
-              debugPrint("  Amount Paid: ${p.amountPaid}, Remaining: ${p.amountRemaining}");
-              
-              
+
               return Padding(
                 padding: EdgeInsets.only(
                   left: i == 0 ? 16.w : 8.w,

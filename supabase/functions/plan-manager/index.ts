@@ -192,7 +192,8 @@ serve(async (req) => {
 
         const {
             action, customerUid, productId, planData, secureToken,
-            planId, planIds, amount, pin, vendorUid, reason, category, adminPassword
+            planId, planIds, amount, pin, vendorUid, reason, category, adminPassword,
+            variantLabel
         } = await req.json();
 
         // =======================================================================
@@ -228,7 +229,22 @@ serve(async (req) => {
             const productData = productDoc.data();
                 if (productData.availableStock < 1) throw "Out of Stock";
 
-            
+            // VARIANTS: a plan reserves exactly ONE unit of ONE variant. When
+            // the product has variants the customer must have chosen one, and
+            // it must have stock; the choice is sealed inside the JWT below so
+            // CREATE can trust it without trusting the client.
+            let sealedVariant: string | null = null;
+            const previewVariants = Array.isArray(productData.variants) ? productData.variants : [];
+            if (previewVariants.length > 0) {
+                const requested = (typeof variantLabel === 'string' ? variantLabel.trim() : '');
+                if (!requested) throw "Please choose an option (size/variant) for this product.";
+                const match = previewVariants.find((v: any) => String(v?.label ?? '') === requested);
+                if (!match) throw "That option is no longer available.";
+                if (Math.floor(Number(match.stock ?? 0)) < 1) throw "That option is out of stock.";
+                sealedVariant = requested;
+            }
+
+
             const dbPrice = Number(productData.price);
             if (!dbPrice || isNaN(dbPrice)) throw "System Error: Product price is missing in database.";
 
@@ -244,7 +260,8 @@ serve(async (req) => {
             const jwt = await new jose.SignJWT({
                 min_principal: minPrincipal,
                 product_id: productId,
-                uid: customerUid
+                uid: customerUid,
+                variant_label: sealedVariant
             })
                 .setProtectedHeader({ alg: 'HS256' })
                 .setIssuedAt()
@@ -286,7 +303,20 @@ serve(async (req) => {
                 if (!productDoc.exists) throw "Product not found";
                 const product = productDoc.data();
                 if (product.availableStock < 1) throw "Out of Stock";
-                
+
+                // VARIANTS: the chosen variant comes from the VERIFIED token
+                // (sealed at PREVIEW), never the client body. Re-check its
+                // stock now inside the transaction.
+                const tokenVariant = (typeof payload.variant_label === 'string' && payload.variant_label.trim() !== '')
+                    ? payload.variant_label.trim() : null;
+                const createVariants = Array.isArray(product.variants) ? product.variants : [];
+                if (createVariants.length > 0) {
+                    if (!tokenVariant) throw "Session expired. Please refresh.";
+                    const vMatch = createVariants.find((v: any) => String(v?.label ?? '') === tokenVariant);
+                    if (!vMatch) throw "That option is no longer available.";
+                    if (Math.floor(Number(vMatch.stock ?? 0)) < 1) throw "That option just sold out.";
+                }
+
                 const vendorId = product.vendorId;
 
                 const complianceRef = db.collection('vendor_compliance').doc(vendorId);
@@ -565,6 +595,10 @@ serve(async (req) => {
                 // 1. Create Plan
                 t.set(newPlanRef, {
                     ...planData,
+                    // One plan = one unit of one variant; stamped from the
+                    // verified token so cancel/expiry can restore that exact
+                    // variant's stock later.
+                    ...(tokenVariant ? { variantLabel: tokenVariant } : {}),
                     id: planId,
                     productId: productId,
                     vendorId: vendorId,
@@ -824,7 +858,20 @@ serve(async (req) => {
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
+                // Stock: variant products deduct the chosen variant and keep
+                // availableStock as the recomputed sum; flat products keep the
+                // original blind decrement.
+                if (createVariants.length > 0 && tokenVariant) {
+                    const newVariants = createVariants.map((v: any) => {
+                        const lbl = String(v?.label ?? '');
+                        const stk = Math.floor(Number(v?.stock ?? 0));
+                        return { label: lbl, stock: lbl === tokenVariant ? Math.max(0, stk - 1) : stk };
+                    });
+                    const newTotal = newVariants.reduce((acc: number, v: any) => acc + v.stock, 0);
+                    t.update(productRef, { variants: newVariants, availableStock: newTotal });
+                } else {
+                    t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(-1) });
+                }
 
                 // 7. CREATE ACTIVITY FEED
                 const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();
@@ -1769,7 +1816,14 @@ serve(async (req) => {
 
                 // Pre-fetch User Stats
                 const { statsRef } = await getUserAndStats(customerUid);
-                
+
+                // Pre-fetch the product when a variant must be restored
+                // (reads are only allowed in this phase of the transaction).
+                let productSnapForRestore: any = null;
+                if (plan.productId && plan.variantLabel) {
+                    productSnapForRestore = await t.get(db.collection("products").doc(plan.productId));
+                }
+
                 // Pre-fetch Promo Ledger (if applicable)
                 const promoBonus = plan.promoApplied || 0;
                 let promoLedgerSnapshot = null;
@@ -1926,12 +1980,28 @@ serve(async (req) => {
                     lastUpdated: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // Release Stock
+                // Release Stock: restore the exact variant the plan reserved;
+                // if the variant (or the product's variants) no longer exists,
+                // fall back to the classic total-only +1.
                 if (plan.productId) {
                     const productRef = db.collection("products").doc(plan.productId);
-                    t.update(productRef, { 
-                        availableStock: admin.firestore.FieldValue.increment(1) 
-                    });
+                    const restoreVariants = (plan.variantLabel && productSnapForRestore?.exists &&
+                        Array.isArray(productSnapForRestore.data()?.variants))
+                        ? productSnapForRestore.data().variants : [];
+                    const hasLabel = restoreVariants.some((v: any) => String(v?.label ?? '') === plan.variantLabel);
+                    if (hasLabel) {
+                        const newVariants = restoreVariants.map((v: any) => {
+                            const lbl = String(v?.label ?? '');
+                            const stk = Math.floor(Number(v?.stock ?? 0));
+                            return { label: lbl, stock: lbl === plan.variantLabel ? stk + 1 : stk };
+                        });
+                        const newTotal = newVariants.reduce((acc: number, v: any) => acc + v.stock, 0);
+                        t.update(productRef, { variants: newVariants, availableStock: newTotal });
+                    } else {
+                        t.update(productRef, {
+                            availableStock: admin.firestore.FieldValue.increment(1)
+                        });
+                    }
                 }
 
                 // 7. Activity Feed for Vendor

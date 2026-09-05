@@ -22,7 +22,6 @@ class PlanCard extends StatelessWidget {
   });
 
   static const _brand = Color(0xFFA54600);
-  static const _stroke = Color(0xFFEAE6E2);
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +52,12 @@ class PlanCard extends StatelessWidget {
       margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: _stroke.withOpacity(0.35)),
+        borderRadius: BorderRadius.circular(20.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -204,7 +202,6 @@ class PlanCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.orange.shade50,
                             borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(color: Colors.orange.shade100),
                           ),
                           child: Text(
                             "Waiting for Vendor",
@@ -237,16 +234,17 @@ class PlanCard extends StatelessWidget {
                       flex: 2,
                       child: SizedBox(
                         height: 44.h,
-                        child: OutlinedButton(
+                        child: FilledButton(
                           onPressed: onView,
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: _stroke.withOpacity(0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFF2F4F7),
                             foregroundColor: const Color(0xFF344054),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                           ),
                           child: Text(
                             'View',
-                            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
@@ -312,9 +310,8 @@ class PlanCard extends StatelessWidget {
     return Container(
       width: 24.w, height: 24.w,
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(6.r),
-        border: Border.all(color: const Color(0xFFEAECF0)),
+        color: const Color(0xFFFFF2EB), // brand-tinted, no border line
+        borderRadius: BorderRadius.circular(8.r),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -328,9 +325,8 @@ class PlanCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
       decoration: BoxDecoration(
-        color: filled ? color.withOpacity(.10) : Colors.white,
-        border: Border.all(color: filled ? Colors.transparent : color),
-        borderRadius: BorderRadius.circular(6.r),
+        color: color.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,

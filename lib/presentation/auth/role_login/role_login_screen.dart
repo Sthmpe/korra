@@ -16,7 +16,7 @@ import '../../../config/constants/image_string.dart';
 import '../../../flavors/app_config.dart';
 import '../../shared/widgets/korra_failure_sheet.dart';
 import 'widgets/login_header.dart';
-// import 'widgets/login_header.dart'; // Keep your header import
+import 'widgets/email_login_section.dart';
 
 class RoleLoginScreen extends StatelessWidget {
   const RoleLoginScreen({super.key});
@@ -140,6 +140,11 @@ class RoleLoginScreen extends StatelessWidget {
                     ),
 
                     Gaps.h20,
+
+                    // Secondary email/password LOGIN (no email signup path —
+                    // accounts are created with Google only). Kept visible so
+                    // Play reviewers can use standard demo credentials.
+                    const EmailLoginSection(),
                   ],
                 ),
               ),

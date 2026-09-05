@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/firebase_options_dev.dart' as dev;
 import 'config/firebase_options_prod.dart' as prod;
 import '../../logic/services/auth_service.dart';
+import '../../logic/services/crash_service.dart';
 import '../../logic/services/notification_service.dart';
 
 Future<void> bootstrap({required bool isLive}) async {
@@ -29,10 +30,15 @@ Future<void> bootstrap({required bool isLive}) async {
 
   // 2. Initialize Firebase with the correct Options
   await Firebase.initializeApp(
-    options: isLive 
-        ? prod.DefaultFirebaseOptions.currentPlatform 
+    options: isLive
+        ? prod.DefaultFirebaseOptions.currentPlatform
         : dev.DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 2b. Crash analytics: framework errors, uncaught platform errors, every
+  // bloc (global observer) and every repository failure (KorraException
+  // records itself). No-op on web builds.
+  await KorraCrash.init();
 
   // 3. Load Environment Variables 
   // You can even have two .env files if you prefer: .env.prod and .env.dev

@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:equatable/equatable.dart';
+
+import '../../../../data/models/product_model.dart';
 import 'vendor_products_state.dart';
 
 abstract class VendorProductsEvent extends Equatable {
@@ -96,6 +98,12 @@ class VendorProductsAdd extends VendorProductsEvent {
   final int duration;
   final int noticePeriod;
   final int extensionPeriod;
+  final bool allowReservation;
+  final bool isFeatured;
+
+  /// Optional flat variants (label + per-variant stock). Empty = classic
+  /// single-stock product. When non-empty, [stock] is the computed sum.
+  final List<ProductVariant> variants;
 
   const VendorProductsAdd({
     required this.name,
@@ -112,13 +120,16 @@ class VendorProductsAdd extends VendorProductsEvent {
     required this.duration,
     required this.noticePeriod,
     required this.extensionPeriod,
+    required this.allowReservation,
+    this.isFeatured = false,
+    this.variants = const [],
   });
 
   @override
   List<Object?> get props => [
         name, description, price, stock, category, images,
         termsAccepted, modelType, cancellationPolicy, extensionsEnabled,
-        directDownPayment, duration, noticePeriod, extensionPeriod
+        directDownPayment, duration, noticePeriod, extensionPeriod, allowReservation, isFeatured, variants
       ];
 }
 
@@ -135,6 +146,20 @@ class VendorProductsEdit extends VendorProductsEvent {
   final List<dynamic> newImages; 
 
   final ProductStatus status;
+  final bool allowReservation;
+  final ProductModelType modelType;
+  final String cancellationPolicy;
+  final bool extensionsEnabled;
+  final double? directDownPayment;
+  final int duration;
+  final int noticePeriod;
+  final int extensionPeriod;
+  final bool isFeatured;
+
+  /// Optional flat variants. Empty list = product has no variants (also how
+  /// a merchant REMOVES variants on edit); when non-empty, [stock] is the
+  /// computed sum of variant stocks.
+  final List<ProductVariant> variants;
 
   const VendorProductsEdit({
     required this.productCode,
@@ -146,8 +171,22 @@ class VendorProductsEdit extends VendorProductsEvent {
     required this.existingImageUrls,
     required this.newImages, // ✅ Now accepts dynamic list
     required this.status,
+    required this.allowReservation,
+    required this.modelType,
+    required this.cancellationPolicy,
+    required this.extensionsEnabled,
+    this.directDownPayment,
+    required this.duration,
+    required this.noticePeriod,
+    required this.extensionPeriod,
+    this.isFeatured = false,
+    this.variants = const [],
   });
-  
+
   @override
-  List<Object?> get props => [productCode, name, newImages, existingImageUrls];
+  List<Object?> get props => [
+    productCode, name, newImages, existingImageUrls, status, allowReservation,
+    modelType, cancellationPolicy, extensionsEnabled, directDownPayment,
+    duration, noticePeriod, extensionPeriod, isFeatured, variants
+  ];
 }

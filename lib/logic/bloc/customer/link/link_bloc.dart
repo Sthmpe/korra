@@ -70,6 +70,17 @@ class LinkBloc extends Bloc<LinkEvent, LinkState> {
         return;
       }
 
+      // Outright-only products can't start a plan — the UI redirects the
+      // customer to the merchant's storefront instead of create-plan.
+      if ((productFetch.data['allowReservation'] ?? true) == false) {
+        emit(state.copyWith(
+          status: LinkStatus.outrightOnly,
+          message: "This product is sold outright only",
+          productFetch: productFetch,
+        ));
+        return;
+      }
+
       emit(state.copyWith(
         status: LinkStatus.loaded,
         message: "Product fetched",

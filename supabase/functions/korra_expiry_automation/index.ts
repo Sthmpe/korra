@@ -230,6 +230,13 @@ serve(async (req) => {
             const promoBonus = currentPlan.promoApplied || 0;
             const refundAmount = to2DP_Floor(currentPlan.amountPaid - promoBonus); 
 
+            // Pre-fetch the product when the plan reserved a specific
+            // variant, so its stock can be restored (reads-first phase).
+            let productSnapForRestore: any = null;
+            if (currentPlan.productId && currentPlan.variantLabel) {
+                productSnapForRestore = await t.get(db.collection("products").doc(currentPlan.productId));
+            }
+
             // 🚨 PRE-FETCH THE PROMO LEDGER HERE!
             let promoSnap = null;
             if (promoBonus > 0) {
@@ -311,7 +318,23 @@ serve(async (req) => {
 
             if (currentPlan.productId) {
                 const productRef = db.collection("products").doc(currentPlan.productId);
-                t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(1) });
+                // Restore the exact variant this plan reserved; total-only +1
+                // when the product has no variants (or the label vanished).
+                const restoreVariants = (currentPlan.variantLabel && productSnapForRestore?.exists &&
+                    Array.isArray(productSnapForRestore.data()?.variants))
+                    ? productSnapForRestore.data().variants : [];
+                const hasLabel = restoreVariants.some((v: any) => String(v?.label ?? '') === currentPlan.variantLabel);
+                if (hasLabel) {
+                    const newVariants = restoreVariants.map((v: any) => {
+                        const lbl = String(v?.label ?? '');
+                        const stk = Math.floor(Number(v?.stock ?? 0));
+                        return { label: lbl, stock: lbl === currentPlan.variantLabel ? stk + 1 : stk };
+                    });
+                    const newTotal = newVariants.reduce((acc: number, v: any) => acc + v.stock, 0);
+                    t.update(productRef, { variants: newVariants, availableStock: newTotal });
+                } else {
+                    t.update(productRef, { availableStock: admin.firestore.FieldValue.increment(1) });
+                }
             }
 
             const activityRef = db.collection('vendors').doc(vendorId).collection('activity_feed').doc();

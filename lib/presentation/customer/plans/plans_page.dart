@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:korra/data/repository/customer/plans_repository.dart';
 
+import '../../../config/constants/colors.dart';
 import '../../../config/routes/app_routes.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../data/models/customer/plans.dart';
@@ -13,10 +14,14 @@ import '../../../logic/bloc/customer/link/link_bloc.dart';
 import '../../../logic/bloc/customer/link/link_event.dart';
 import '../../../logic/bloc/customer/link/link_state.dart';
 import '../../../logic/bloc/customer/plans/plan_action_cubit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/outright_only_sheet.dart';
 import 'dart:async';
 import 'widgets/new_plan_sheet.dart';
 import 'widgets/plan_card.dart';
+import 'widgets/plan_card_grid.dart';
 import 'widgets/plan_search_delegate.dart';
 import 'widgets/plans_filter_sheet.dart';
 import 'widgets/segmented_tabs.dart';
@@ -44,12 +49,21 @@ class PlansPage extends StatefulWidget {
 
 class _PlansPageState extends State<PlansPage> {
   late final CustomerRepository _repo;
+
+  // Owned by the state (NOT a BlocProvider created inside build): the FAB and
+  // the bottom sheet need this bloc from contexts that sit ABOVE any provider
+  // created in build — reading it there threw ProviderNotFoundException.
+  late final LinkBloc _linkBloc;
   // Filters State
   PlansTab _currentTab = PlansTab.active;
   SortBy _sortBy = SortBy.recent;
   bool _autopayOnly = false;
   bool _overdueOnly = false;
   bool _highValueOnly = false;
+
+  // Grid is the default view; the toggle choice sticks across sessions.
+  bool _gridView = true;
+  static const _gridPrefKey = 'plans_grid_view';
 
   // 1. 👇 Add a single stream variable here
   int _currentLimit = 15;
@@ -68,12 +82,29 @@ class _PlansPageState extends State<PlansPage> {
   void initState() {
     super.initState();
     _repo = context.read<CustomerRepository>();
+    _linkBloc = LinkBloc(
+      customerRepo: _repo,
+      customerUid: widget.customerUid,
+    );
     _customerSub = _repo.streamCustomer(widget.customerUid).listen((customer) {
       _latestCustomer = customer;
     });
     _loadPlansStream();
-    
+
     _scrollController.addListener(_onScroll);
+
+    SharedPreferences.getInstance().then((prefs) {
+      final saved = prefs.getBool(_gridPrefKey);
+      if (saved != null && saved != _gridView && mounted) {
+        setState(() => _gridView = saved);
+      }
+    });
+  }
+
+  void _toggleView() {
+    setState(() => _gridView = !_gridView);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_gridPrefKey, _gridView));
   }
 
   void _onScroll() {
@@ -117,19 +148,24 @@ class _PlansPageState extends State<PlansPage> {
   void dispose() {
     _customerSub?.cancel();
     _scrollController.dispose();
+    _linkBloc.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => LinkBloc(
-        customerRepo: _repo,
-        customerUid: widget.customerUid,
-      ),
-      child: BlocListener<LinkBloc, LinkState>(
+    return BlocListener<LinkBloc, LinkState>(
+        bloc: _linkBloc,
         listenWhen: (p, c) => p.status != c.status,
         listener: (context, state) async {
+          if (state.status == LinkStatus.outrightOnly) {
+            final fetch = state.productFetch;
+            if (fetch != null && fetch.id.isNotEmpty) {
+              OutrightOnlySheet.show(context,
+                  productId: fetch.id, data: fetch.data);
+            }
+            return;
+          }
           if (state.status == LinkStatus.loaded) {
             // 1. Get the product from the LinkBloc state
             final product =
@@ -160,10 +196,20 @@ class _PlansPageState extends State<PlansPage> {
           }
         },
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: KorraColors.surface,
           appBar: KorraHeader(
             title: 'Plans',
             trailingActions: [
+              // Grid / List toggle (grid is the default)
+              IconButton(
+                onPressed: _toggleView,
+                icon: Icon(
+                  _gridView ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
+                  color: const Color(0xFF1B1B1B),
+                ),
+                iconSize: 22.sp,
+                tooltip: _gridView ? 'List view' : 'Grid view',
+              ),
               // Search Icon
               IconButton(
                 onPressed: () {
@@ -233,7 +279,7 @@ class _PlansPageState extends State<PlansPage> {
             ],
           ),
 
-          floatingActionButton: FloatingActionButton(
+          floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -242,21 +288,30 @@ class _PlansPageState extends State<PlansPage> {
                 isScrollControlled:
                     true, // <--- ⚠️ THIS IS THE CRITICAL FIX
                 builder: (_) => BlocProvider.value(
-                  value: context.read<LinkBloc>(),
+                  value: _linkBloc,
                   child: NewPlanSheet(
                     onSubmit: (v) {
                       FocusManager.instance.primaryFocus?.unfocus();
-                      context.read<LinkBloc>().add(LinkSubmitted(v));
+                      _linkBloc.add(LinkSubmitted(v));
                     },
                   ),
                 ),
               );
             },
             backgroundColor: _brand,
+            elevation: 2,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16.r),
+              borderRadius: BorderRadius.circular(18.r),
             ),
-            child: const Icon(Icons.add, color: Colors.white),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: Text(
+              'New Plan',
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
           ),
 
           // THE CORE: Real-Time Data Stream
@@ -306,6 +361,37 @@ class _PlansPageState extends State<PlansPage> {
                         ),
                       ),
                     )
+                  else if (_gridView)
+                    // 2-column grid (default view)
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12.h,
+                          crossAxisSpacing: 12.w,
+                          mainAxisExtent: 252.h,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final plan = visiblePlans[index];
+                            return PlanCardGrid(
+                              plan: plan,
+                              onPayNow: () => Get.toNamed(
+                                Routes.customerPayPlan,
+                                arguments: {'plan': plan},
+                              ),
+                              onView: () => Get.toNamed(
+                                Routes.customerPlanDetails,
+                                preventDuplicates: true,
+                                arguments: {'plan': plan},
+                              ),
+                            );
+                          },
+                          childCount: visiblePlans.length,
+                        ),
+                      ),
+                    )
                   else
                     // The Real List
                     SliverList.builder(
@@ -346,7 +432,6 @@ class _PlansPageState extends State<PlansPage> {
             },
           ),
         ),
-      ),
     );
   }
 

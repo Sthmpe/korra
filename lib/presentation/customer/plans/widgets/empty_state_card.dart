@@ -20,9 +20,15 @@ class EmptyStateCard extends StatelessWidget {
         width: double.infinity,
         padding: EdgeInsets.symmetric(vertical: 40.h, horizontal: 24.w),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFAFA), // Very subtle grey background
+          color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: const Color(0xFFF0F0F0).withOpacity(0.35)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -30,21 +36,14 @@ class EmptyStateCard extends StatelessWidget {
             // 1. Visual Anchor (The Icon)
             Container(
               padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: Colors.white,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFF2EB), // brand-tinted bubble
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
               ),
               child: Icon(
                 icon ?? Icons.assignment_outlined, // Default icon
                 size: 32.sp,
-                color: Colors.grey.shade400,
+                color: const Color(0xFFA54600),
               ),
             ),
             SizedBox(height: 16.h),

@@ -130,20 +130,47 @@ extension VendorAuth on VendorRepository {
       debugPrint('Vendor signed in successfully: ${credential.user!.uid}');
       final String vendorUid = credential.user!.uid;
 
+      // THE ORPHAN CHECK (Safety Net) — mirrors CustomerAuth.signInCustomer.
+      // Same account can hold a customers/{uid} AND vendors/{uid} profile
+      // (already true via Google sign-in); this just makes email/password
+      // login require the profile for the app you're actually logging into.
+      try {
+        final doc = await firestore.collection('vendors').doc(vendorUid).get();
+        if (!doc.exists) {
+          throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
+        }
+      } catch (e) {
+        debugPrint('Vendor login verification failed: $e');
+        await auth.signOut();
+
+        if (e is FirebaseException && e.code == 'not-found') {
+          throw KorraException(
+            'This account is not registered as a merchant. Please use the Korra app instead.',
+            technicalDetails: 'Vendor profile document missing',
+          );
+        }
+        throw KorraException(
+          'Unable to verify account profile. Please check your connection.',
+          technicalDetails: e.toString(),
+        );
+      }
+
       // 🛡️ ISOLATE FCM LOGIC: Don't let a missing web worker kill the login!
       try {
         final String? newToken = await FirebaseMessaging.instance.getToken();
 
         if (newToken != null) {
-          await updateFcmToken(vendorUid, newToken); 
+          await updateFcmToken(vendorUid, newToken);
         }
       } catch (fcmError) {
         debugPrint('⚠️ FCM Token fetch failed: $fcmError');
       }
 
-      return credential.user!.uid;
+      return vendorUid;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
+    } on KorraException {
+      rethrow;
     } catch (e) {
       throw KorraException(
         'Login failed. Please check your connection and try again.',

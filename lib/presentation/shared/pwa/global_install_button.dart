@@ -44,8 +44,8 @@ class _GlobalInstallButtonState extends State<GlobalInstallButton>
   bool get _isMerchant => widget.variant == KorraAppVariant.merchant;
   String get _title => _isMerchant ? 'Install Korra Business' : 'Install Korra';
   String get _subtitle => _isMerchant
-      ? 'Manage installments from your home screen'
-      : 'Pay in parts, right from your home screen';
+    ? 'Run your store and offer installments, right from your home screen'
+    : 'Shop and pay in parts, right from your home screen';
   Color get _bgColor =>
       _isMerchant ? const Color(0xFF0D0D0D) : const Color(0xFFA54600);
   Color get _subtitleColor => _isMerchant

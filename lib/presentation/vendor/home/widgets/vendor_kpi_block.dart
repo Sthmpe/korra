@@ -5,39 +5,41 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 class VendorKpiBlock extends StatelessWidget {
-  final String newCount, ongoingCount, readyCount, completedCount;
-  final VoidCallback? onTapNew, onTapOngoing, onTapReady, onTapCompleted;
+  // Ready = reservations + outright combined (both are fully paid, awaiting
+  // handover). The other three split the two order types apart.
+  final String readyCount, newOrdersCount, ongoingCount, newReservationsCount;
+  final VoidCallback? onTapReady, onTapNewOrders, onTapOngoing, onTapNewReservations;
 
   const VendorKpiBlock({
     super.key,
-    required this.newCount,
+    required this.readyCount,
+    required this.newOrdersCount,
     required this.ongoingCount,
-    required this.readyCount,     // ✅ Swapped Cancelled for Ready
-    required this.completedCount,
-    required this.onTapNew,
+    required this.newReservationsCount,
+    required this.onTapReady,
+    required this.onTapNewOrders,
     required this.onTapOngoing,
-    required this.onTapReady,     // ✅
-    required this.onTapCompleted,
+    required this.onTapNewReservations,
   });
 
   factory VendorKpiBlock.empty() {
     return const VendorKpiBlock(
-      newCount: "0", ongoingCount: "0", readyCount: "0", completedCount: "0",
-      onTapNew: null, onTapOngoing: null, onTapReady: null, onTapCompleted: null,
+      readyCount: "0", newOrdersCount: "0", ongoingCount: "0", newReservationsCount: "0",
+      onTapReady: null, onTapNewOrders: null, onTapOngoing: null, onTapNewReservations: null,
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Column(
         children: [
-          // Row 1: Ready (High Priority) & New
+          // Row 1: Ready to Deliver (reservations + outright) & New Orders (outright)
           Row(
             children: [
               _buildBigTile(
-                label: 'Ready to Pickup',
+                label: 'Ready to Deliver',
                 value: readyCount,
                 color: const Color(0xFF027A48), // Success Green
                 bg: const Color(0xFFECFDF5),
@@ -47,17 +49,17 @@ class VendorKpiBlock extends StatelessWidget {
               SizedBox(width: 12.w),
               _buildBigTile(
                 label: 'New Orders',
-                value: newCount,
+                value: newOrdersCount,
                 color: const Color(0xFFA54600), // Brand
-                bg: const Color(0xFFFFF7ED),    
-                icon: Iconsax.flash_1,
-                onTap: onTapNew,
+                bg: const Color(0xFFFFF7ED),
+                icon: Iconsax.shopping_cart,
+                onTap: onTapNewOrders,
               ),
             ],
           ),
           SizedBox(height: 12.h),
-          
-          // Row 2: Ongoing & Completed (History)
+
+          // Row 2: Ongoing (reservations) & New Reservations (reservations)
           Row(
             children: [
               _buildBigTile(
@@ -70,12 +72,12 @@ class VendorKpiBlock extends StatelessWidget {
               ),
               SizedBox(width: 12.w),
               _buildBigTile(
-                label: 'History',
-                value: completedCount,
-                color: const Color(0xFF475467), // Grey
-                bg: const Color(0xFFF2F4F7),
-                icon: Iconsax.clock,
-                onTap: onTapCompleted,
+                label: 'New Reservations',
+                value: newReservationsCount,
+                color: const Color(0xFF7F56D9), // Purple
+                bg: const Color(0xFFF4F3FF),
+                icon: Iconsax.flash_1,
+                onTap: onTapNewReservations,
               ),
             ],
           ),

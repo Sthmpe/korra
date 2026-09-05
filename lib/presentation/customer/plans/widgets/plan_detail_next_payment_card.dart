@@ -76,7 +76,7 @@ class PlanDetailNextPaymentCard extends StatelessWidget {
 
     Color bgColor = Colors.white;
     Color iconColor = _brand;
-    Color iconBg = const Color(0xFFF9FAFB);
+    Color iconBg = KorraColors.brandLight;
     String labelText = "Next Scheduled Payment";
     String subText = "Suggested Date ${DateFormat('MMM dd').format(displayDate)}";
 
@@ -95,7 +95,14 @@ class PlanDetailNextPaymentCard extends StatelessWidget {
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [

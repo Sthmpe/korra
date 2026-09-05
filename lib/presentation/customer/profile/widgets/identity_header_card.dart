@@ -12,8 +12,6 @@ class IdentityHeaderCard extends StatelessWidget {
   final bool kycVerified;
   final bool basicTier;
   final VoidCallback? onEdit;
-  final VoidCallback? onMyQr;
-  final VoidCallback? onShare;
 
   const IdentityHeaderCard({
     super.key,
@@ -23,8 +21,6 @@ class IdentityHeaderCard extends StatelessWidget {
     required this.phone,
     required this.kycVerified,
     required this.basicTier,
-    this.onMyQr,
-    this.onShare,
     this.onEdit,
   });
 
@@ -133,17 +129,12 @@ class IdentityHeaderCard extends StatelessWidget {
 
             const Divider(height: 1, color: Color(0xFFF2F4F7)),
 
-            // 3. ACTION GRID
+            // 3. ACTION — Edit only (QR & Share removed per David, 5 July 2026)
             Padding(
               padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActionButton(Icons.edit_outlined, "Edit Profile", onTap: onEdit),
-                  _verticalDivider(),
-                  _buildActionButton(Icons.qr_code_2, "My QR", onTap: onMyQr), // Feature Placeholder
-                  _verticalDivider(),
-                  _buildActionButton(Icons.share_outlined, "Share", onTap: onShare), // Feature Placeholder
                 ],
               ),
             )
@@ -151,10 +142,6 @@ class IdentityHeaderCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Widget _verticalDivider() {
-    return Container(height: 24.h, width: 1, color: const Color(0xFFEAECF0));
   }
 
   Widget _buildActionButton(IconData icon, String label, {VoidCallback? onTap}) {

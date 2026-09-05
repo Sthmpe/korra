@@ -9,6 +9,8 @@ import '../../../../config/constants/colors.dart';
 import '../../../../data/models/customer/plans.dart';
 import '../../../shared/widgets/show_app_snackbar.dart';
 
+/// Plan facts (ID, cadence, dates) as a floating white card — rows separated
+/// by spacing only, no divider or border lines.
 class PlanDetailInfoGrid extends StatelessWidget {
   final Plan plan;
 
@@ -17,7 +19,6 @@ class PlanDetailInfoGrid extends StatelessWidget {
     required this.plan,
   });
 
-  static const _stroke = Color(0xFFF2F4F7);
   static const _brand = KorraColors.brand;
 
   @override
@@ -25,13 +26,30 @@ class PlanDetailInfoGrid extends StatelessWidget {
     final bool isCompleted = plan.status == 'completed';
 
     return Container(
+      padding: EdgeInsets.fromLTRB(18.r, 16.r, 18.r, 6.r),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: _stroke.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            "Plan Information",
+            style: GoogleFonts.inter(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w800,
+              color: KorraColors.textDark,
+            ),
+          ),
+          SizedBox(height: 6.h),
           _infoRow("Plan ID", plan.id.substring(0, 8), isCopyable: true),
           _infoRow("Cadence", plan.cadenceType?.capitalizeFirst ?? "Flexible"),
           _infoRow(
@@ -42,34 +60,24 @@ class PlanDetailInfoGrid extends StatelessWidget {
             _infoRow(
               "Completed On",
               DateFormat('MMM dd, yyyy').format(plan.completedAt ?? plan.updatedAt),
-              isLast: true,
             ),
         ],
       ),
     );
   }
 
-  Widget _infoRow(
-    String label,
-    String value, {
-    bool isCopyable = false,
-    bool isLast = false,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : Border(bottom: BorderSide(color: _stroke.withOpacity(0.5))),
-      ),
+  Widget _infoRow(String label, String value, {bool isCopyable = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 10.h),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: GoogleFonts.inter(
-              fontSize: 13.sp,
-              color: const Color(0xFF667085),
+              fontSize: 12.5.sp,
+              fontWeight: FontWeight.w500,
+              color: KorraColors.textMuted,
             ),
           ),
           GestureDetector(
@@ -84,8 +92,9 @@ class PlanDetailInfoGrid extends StatelessWidget {
                 Text(
                   value,
                   style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5.sp,
+                    fontWeight: FontWeight.w700,
+                    color: KorraColors.textDark,
                   ),
                 ),
                 if (isCopyable) ...[

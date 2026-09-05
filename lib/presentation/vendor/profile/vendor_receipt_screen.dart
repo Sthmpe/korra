@@ -187,6 +187,10 @@ class _VendorReceiptScreenState extends State<VendorReceiptScreen> {
                           SizedBox(height: 8.h),
                           // Normal View
                           _detailRow("Type", _formatType(widget.transaction.type)),
+                          if (widget.transaction.webPurchase) ...[
+                            SizedBox(height: 8.h),
+                            _detailRow("Channel", "Web Store"),
+                          ],
                         ],
                       ),
                     ),

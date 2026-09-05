@@ -29,10 +29,12 @@ import '../../../logic/services/notification_service.dart'; // Import Service
 
 // WIDGETS
 import '../../shared/widgets/korra_header.dart';
+import '../../shared/widgets/outright_only_sheet.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/show_app_snackbar.dart';
 import 'widgets/activity_timeline.dart';
 import 'widgets/customer_wallet_card.dart';
+import 'widgets/featured_products_strip.dart';
 import 'widgets/link_input.dart';
 import 'widgets/plan_carousel_slider.dart';
 import 'widgets/shimmer_loading.dart';
@@ -101,6 +103,14 @@ class _HomePageState extends State<HomePage> {
               BlocListener<LinkBloc, LinkState>(
                 listenWhen: (p, c) => p.status != c.status,
                 listener: (context, state) async {
+                  if (state.status == LinkStatus.outrightOnly) {
+                    final fetch = state.productFetch;
+                    if (fetch != null && fetch.id.isNotEmpty) {
+                      OutrightOnlySheet.show(context,
+                          productId: fetch.id, data: fetch.data);
+                    }
+                    return;
+                  }
                   if (state.status == LinkStatus.loaded) {
                     final product = state.productFetch ?? ProductFetchResult.empty();
                     
@@ -146,9 +156,9 @@ class _HomePageState extends State<HomePage> {
                         }
                       );
 
-                      // 🦘 JUMP LOGIC
+                      // 🦘 JUMP LOGIC (Plans tab is index 2 now — Stores moved to 1)
                       if (result == 'jump_to_plans') {
-                        widget.onJumpTo(1); 
+                        widget.onJumpTo(2);
                       }
                     },
                     icon: Stack(
@@ -214,44 +224,15 @@ class _HomePageState extends State<HomePage> {
                             },
                           ),
 
-                          // B. ACTIVE PLANS (Filtered Stream)
-                          StreamBuilder<List<Plan>>(
-                            stream: _plansStream,
-                            builder: (context, planSnap) {
-                              // Loading
-                              if (planSnap.connectionState == ConnectionState.waiting) {
-                                return Column(children: [
-                                   SectionHeader(title: 'Your reserve plans', actionText: '', topPadding: 10),
-                                   const PlanCarouselLoading(),
-                                ]);
-                              }
-                              
-                              final allPlans = planSnap.data ?? [];
-                              // Filter out Completed/Cancelled for Home view
-                              final activePlans = allPlans.where((p) => !p.isCompleted && !p.isCancelled).toList();
-
-                              return Column(
-                                children: [
-                                  SectionHeader(
-                                    title: 'Your reserve plans',
-                                    actionText: activePlans.isEmpty ? null : 'View all',
-                                    onAction: activePlans.isEmpty ? null : () => widget.onJumpTo(1),
-                                    topPadding: 10,
-                                  ),
-                                  SizedBox(height: 8.h),
-                                  
-                                  activePlans.isEmpty 
-                                    ? _buildEmptyPlanState()
-                                    : PlanCarouselSlider(
-                                        plans: activePlans.take(5).toList(),
-                                      ),
-                                ],
-                              );
-                            },
+                          // B. START NEW PLAN — the app's primary action sits
+                          // right under the wallet (David, 10 July 2026).
+                          SectionHeader(
+                            title: 'Start a new plan',
+                            subtitle: 'Paste a product code from any merchant',
+                            icon: Iconsax.add_circle,
+                            topPadding: 10,
+                            actionText: '',
                           ),
-
-                          // C. START NEW PLAN
-                          SectionHeader(title: 'Start a new plan', topPadding: 24, actionText: ''),
                           LinkInput(
                             onSubmit: (v) {
                               FocusManager.instance.primaryFocus?.unfocus();
@@ -261,70 +242,62 @@ class _HomePageState extends State<HomePage> {
                               context.read<LinkBloc>().add(LinkSubmitted(v));
                             },
                           ),
-                          
+
                           SizedBox(height: 4.h),
+                          _buildLinkStatus(),
 
-                          // Link Loading State
-                          BlocBuilder<LinkBloc, LinkState>(
-                            builder: (context, state) {
-                              final showLoader = state.status == LinkStatus.validating || state.status == LinkStatus.loadingProduct;
-
-                              if (state.status == LinkStatus.empty) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text('Please enter a link to proceed', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
+                          // C. ACTIVE PLANS (Filtered Stream)
+                          StreamBuilder<List<Plan>>(
+                            stream: _plansStream,
+                            builder: (context, planSnap) {
+                              // Loading
+                              if (planSnap.connectionState == ConnectionState.waiting) {
+                                return Column(children: [
+                                   SectionHeader(
+                                     title: 'Your reserve plans',
+                                     subtitle: 'Track and pay your instalments',
+                                     icon: Iconsax.receipt_2,
+                                     actionText: '',
+                                   ),
+                                   const PlanCarouselLoading(),
+                                ]);
                               }
 
-                              if (state.status == LinkStatus.invalid) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text('The link you provided is invalid', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
-                              }
-                              
-                              if (state.status == LinkStatus.failed) {
-                                return Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(width: 16.w, height: 16.w, child: Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),),
-                                      SizedBox(width: 8.w),
-                                      Expanded(child: Text(state.message ?? 'Error occurred', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, color: KorraColors.textMuted))),
-                                    ],
-                                  ),
-                                );
-                              }
+                              final allPlans = planSnap.data ?? [];
+                              // Filter out Completed/Cancelled for Home view
+                              final activePlans = allPlans.where((p) => !p.isCompleted && !p.isCancelled).toList();
 
-                              if (!showLoader) return const SizedBox.shrink();
-                              
-                              return Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 20.w),
-                                child: Row(
-                                  children: [
-                                    SizedBox(width: 16.w, height: 16.w, child: const CircularProgressIndicator(strokeWidth: 2, color: KorraColors.brand)),
-                                    SizedBox(width: 8.w),
-                                    Expanded(child: Text(state.message ?? 'Processing...', style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13.sp, fontStyle: FontStyle.italic, color: KorraColors.textMuted))),
-                                  ],
-                                ),
+                              return Column(
+                                children: [
+                                  SectionHeader(
+                                    title: 'Your reserve plans',
+                                    subtitle: 'Track and pay your instalments',
+                                    icon: Iconsax.receipt_2,
+                                    actionText: activePlans.isEmpty ? null : 'View all',
+                                    onAction: activePlans.isEmpty ? null : () => widget.onJumpTo(2),
+                                  ),
+                                  SizedBox(height: 8.h),
+
+                                  activePlans.isEmpty
+                                    ? _buildEmptyPlanState()
+                                    : PlanCarouselSlider(
+                                        plans: activePlans.take(5).toList(),
+                                      ),
+                                ],
                               );
                             },
                           ),
 
+                          // D. FEATURED PRODUCTS (random picks across stores)
+                          const FeaturedProductsStrip(),
+
                           // E. RECENT ACTIVITY
-                          SectionHeader(title: 'Recent Activity', actionText: ''),
+                          SectionHeader(
+                            title: 'Recent Activity',
+                            subtitle: 'Your latest payments and updates',
+                            icon: Iconsax.activity,
+                            actionText: '',
+                          ),
                           StreamBuilder<List<ActivityItem>>(
                             stream: _activityStream,
                             builder: (context, feedSnap) {
@@ -396,28 +369,102 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Inline feedback under the paste-link field (validation / loading / errors).
+  Widget _buildLinkStatus() {
+    return BlocBuilder<LinkBloc, LinkState>(
+      builder: (context, state) {
+        final showLoader = state.status == LinkStatus.validating ||
+            state.status == LinkStatus.loadingProduct;
+
+        String? errorText;
+        if (state.status == LinkStatus.empty) {
+          errorText = 'Please enter a link to proceed';
+        } else if (state.status == LinkStatus.invalid) {
+          errorText = 'The link you provided is invalid';
+        } else if (state.status == LinkStatus.failed) {
+          errorText = state.message ?? 'Error occurred';
+        }
+
+        if (errorText != null) {
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20.w),
+            child: Row(
+              children: [
+                Icon(Iconsax.warning_2, size: 16.sp, color: Colors.red),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Text(
+                    errorText,
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13.sp,
+                        color: KorraColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!showLoader) return const SizedBox.shrink();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 6.h, 20.w, 0),
+          child: Row(
+            children: [
+              SizedBox(
+                  width: 16.w,
+                  height: 16.w,
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2, color: KorraColors.brand)),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  state.message ?? 'Processing...',
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13.sp,
+                      fontStyle: FontStyle.italic,
+                      color: KorraColors.textMuted),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildEmptyPlanState() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       child: Container(
         width: double.infinity,
         padding: EdgeInsets.symmetric(vertical: 32.h, horizontal: 24.w),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFAFA),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(color: Color(0xFFF0F0F0).withOpacity(0.05)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Column(
           children: [
             Container(
               padding: EdgeInsets.all(12.r),
-              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
-              child: Icon(Icons.receipt_long_rounded, size: 24.sp, color: Colors.grey.shade400),
+              decoration: const BoxDecoration(
+                  color: KorraColors.brandLight, shape: BoxShape.circle),
+              child: Icon(Icons.receipt_long_rounded,
+                  size: 24.sp, color: KorraColors.brand),
             ),
             SizedBox(height: 12.h),
-            Text('No active plans yet', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1B1B1B))),
+            Text('No active plans yet', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1B1B1B))),
             SizedBox(height: 4.h),
-            Text('Paste a link below to start reserving.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4)),
+            Text('Paste a product code above to start reserving.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.grey.shade500, height: 1.4)),
           ],
         ),
       ),

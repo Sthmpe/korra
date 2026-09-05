@@ -15,6 +15,7 @@ import '../../../../data/repository/customer/customer_repository.dart';
 import '../../../../config/constants/colors.dart';
 import '../../../../config/constants/sizes.dart';
 import '../../../../config/routes/app_routes.dart';
+import '../../../shared/widgets/outright_only_sheet.dart';
 
 class ClipboardScannerHelper {
   static final RegExp _productRegex = RegExp(r'^K-[A-Z0-9]{4}-[A-Z0-9]{7}$', caseSensitive: false);
@@ -57,6 +58,15 @@ class ClipboardScannerHelper {
       // 6. Fetch the product details to confirm it exists and show rich info
       final productResult = await repo.getProduct(upperCode);
       if (productResult == null) return;
+
+      // Outright-only products can't start a plan — hand off to the
+      // merchant's storefront instead of the plan-creation prompt.
+      if (OutrightOnlySheet.isOutrightOnly(productResult.data)) {
+        if (!context.mounted) return;
+        OutrightOnlySheet.show(context,
+            productId: productResult.id, data: productResult.data);
+        return;
+      }
 
       final product = Product.fromMap(productResult.data, productResult.id);
 

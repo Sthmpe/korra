@@ -45,9 +45,13 @@ class NetCubit extends Cubit<NetState> {
     _connSub = Connectivity()
         .onConnectivityChanged
         .listen((_) {
-          // OS says something changed. Run a quick probe, but don't spam.
-          // This brief “checking” lets UI show a tiny banner (non-blocking).
-          emit(NetState.checking);
+          // OS says something changed. Probe silently while online — emitting
+          // "checking" here rebuilt the whole app shell (the offline gate wraps
+          // the navigator) on every connectivity blip. Only surface the
+          // reconnecting banner when we were actually offline.
+          if (state != NetState.online) {
+            emit(NetState.checking);
+          }
           _probeAndMaybeTransition();
         });
   }

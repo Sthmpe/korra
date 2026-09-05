@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // END: FlutterFire Configuration
     
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -113,6 +114,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 

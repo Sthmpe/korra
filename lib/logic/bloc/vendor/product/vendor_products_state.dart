@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../data/models/product_model.dart' show ProductVariant;
+
 enum ProductModelType { strict, direct }
 enum ProductStatus { approved, pending, rejected, outOfStock }
 enum ProductFilter { all, approved, pending, outOfStock, rejected }
@@ -29,6 +31,12 @@ class ProductItem extends Equatable {
   final String totalMaxTime;
   final bool extensionsEnabled;
   final double? directDownPayment;
+  final bool allowReservation;            // Whether installments are allowed (default to true)
+  final bool isFeatured;
+
+  /// Optional flat variants (label + per-variant stock). Empty = classic
+  /// single-stock product; [stock] is always the total either way.
+  final List<ProductVariant> variants;
 
   const ProductItem({
     required this.id,
@@ -49,9 +57,16 @@ class ProductItem extends Equatable {
     this.totalMaxTime = "17 Days",
     this.extensionsEnabled = false,
     this.directDownPayment,
+    this.allowReservation = true,
+    this.isFeatured = false,
+    this.variants = const [],
   });
 
-  bool get shareable => status == ProductStatus.approved && stock > 0;
+  // Outright-only products (no reservation) are never shared as links:
+  // the link flow starts an installment plan, so those products are only
+  // discoverable inside the merchant's store (David, 10 July 2026).
+  bool get shareable =>
+      status == ProductStatus.approved && stock > 0 && allowReservation;
 
   // ✅ THIS IS THE MISSING PIECE
   // It maps Firestore Data (Map) -> ProductItem (Class)
@@ -111,6 +126,13 @@ class ProductItem extends Equatable {
       totalMaxTime: json['totalMaxTime'] ?? '17 Days',
       extensionsEnabled: json['extensionsEnabled'] ?? false,
       directDownPayment: (json['directDownPayment'] as num?)?.toDouble(),
+      allowReservation: json['allowReservation'] ?? true,
+      isFeatured: json['isFeatured'] ?? false,
+      variants: (json['variants'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ProductVariant.fromMap)
+              .toList() ??
+          const [],
     );
   }
 
@@ -118,7 +140,7 @@ class ProductItem extends Equatable {
   List<Object?> get props => [
     id, name, price, priceText, stock, status, imageUrl, code, 
     description, category, createdAt, modelType, cancellationPolicy, 
-    baseDuration, noticePeriod, totalMaxTime, extensionsEnabled, directDownPayment
+    baseDuration, noticePeriod, totalMaxTime, extensionsEnabled, directDownPayment, allowReservation, isFeatured
   ];
 }
 

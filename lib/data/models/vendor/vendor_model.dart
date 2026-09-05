@@ -14,6 +14,7 @@ class Vendor {
   // --- Store ---
   final String logoUrl;
   final String storeName;
+  final String description;
   final Presence presence;
   final List<String> categories;
 
@@ -59,6 +60,7 @@ class Vendor {
     required this.legalName,
     required this.logoUrl,
     required this.storeName,
+    this.description = '',
     required this.presence,
     required this.categories,
     required this.address,
@@ -112,7 +114,7 @@ class Vendor {
       bvn: '',
       ninVerified: false,
       bvnVerified: false,
-      
+      status: status,
       storeName: s.storeName.trim(),
       presence: s.presence,
       categories: List<String>.from(s.categories),
@@ -131,7 +133,6 @@ class Vendor {
       twitter: s.twitter.trim(),
       otherLink: s.otherLink.trim(),
 
-      status: status,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -150,6 +151,7 @@ class Vendor {
       legalName: legalName,
       logoUrl: logoUrl,
       storeName: storeName,
+      description: description,
       presence: presence,
       categories: categories,
       address: address,
@@ -200,8 +202,9 @@ class Vendor {
 
       // Store
       // FIX: Added '?? ""' to logoUrl to prevent crash if missing
-      logoUrl: store['logoUrl']?.toString() ?? '', 
+      logoUrl: store['logoUrl']?.toString() ?? '',
       storeName: store['storeName']?.toString() ?? '',
+      description: store['description']?.toString() ?? '',
       presence: Presence.values.firstWhere(
         (e) => e.name == (store['presence'] ?? 'online'),
         orElse: () => Presence.online,
@@ -272,12 +275,13 @@ class Vendor {
         'cac': cac.isEmpty ? null : cac,
         'legalName': legalName.isEmpty ? null : legalName,
       }),
-      'store': {
+      'store': omitNulls({
         'logoUrl': logoUrl,
         'storeName': storeName,
+        'description': description.isEmpty ? null : description,
         'presence': presence.name,
         'categories': categories,
-      },
+      }),
       'location': omitNulls({
         'address': address.isEmpty ? null : address,
         'city': city,
@@ -300,7 +304,7 @@ class Vendor {
         'bvnVerified': bvnVerified,
       }),
       
-      // Inject Socials
+       // Inject Socials
       'socials': socialsMap.isEmpty ? null : socialsMap,
 
       'status': status,

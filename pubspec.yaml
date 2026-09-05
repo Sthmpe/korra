@@ -1,12 +1,13 @@
 name: korra
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+11
+version: 1.0.0+13
 
 environment:
   sdk: ^3.8.1
 
 dependencies:
+  app_links: ^6.3.2
   auto_size_text: ^3.0.0
   cached_network_image: ^3.4.1
   carousel_slider: ^5.1.1
@@ -20,6 +21,7 @@ dependencies:
   firebase_analytics: ^12.4.3
   firebase_auth: ^6.0.1
   firebase_core: ^4.1.1
+  firebase_crashlytics: ^5.0.2
   firebase_messaging: ^16.0.4
   flutter:
     sdk: flutter
@@ -30,6 +32,7 @@ dependencies:
   flutter_local_notifications: ^19.5.0
   flutter_material_design_icons: ^3.1.0+7447
   flutter_screenutil: ^5.9.3
+  flutter_staggered_grid_view: ^0.7.0
   font_awesome_flutter: ^11.0.0
   get: ^4.7.2
   google_fonts: ^6.3.0

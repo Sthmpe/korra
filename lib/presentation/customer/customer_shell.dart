@@ -7,6 +7,8 @@ import '../../logic/bloc/bottom_nav/bottom_nav_bloc.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_event.dart';
 import '../../logic/bloc/bottom_nav/bottom_nav_state.dart';
 import 'home/home_page.dart';
+import 'storefront/widgets/cart_service.dart';
+import 'store/store_page.dart';
 import 'plans/plans_page.dart';
 import 'profile/profile_page.dart';
 import '../shared/widgets/korra_bottom_nav.dart';
@@ -34,8 +36,10 @@ class _CustomerShellBody extends StatefulWidget {
 }
 
 class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBindingObserver {
+  // Stores sits before Plans (David, 10 July 2026) — shopping first.
   final customerPageIcons = const [
     NavSpec('Home', Icons.home_outlined, Icons.home_rounded),
+    NavSpec('Stores', Icons.storefront_outlined, Icons.storefront_rounded),
     NavSpec('Plans', Icons.receipt_long_outlined, Icons.receipt_long_rounded),
     NavSpec('Profile', Icons.person_outline, Icons.person_rounded),
   ];
@@ -44,6 +48,9 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Restore saved carts (and purge >1 week old ones) so the Stores tab
+    // signal badge can nudge unfinished checkouts.
+    CartService.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkClipboard();
     });
@@ -81,8 +88,9 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
             final navBloc = context.read<BottomNavBloc>();
       
             final pages = [
-              HomePage(customerUid: widget.uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),  ),
-              PlansPage(customerUid: widget.uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(1)),),
+              HomePage(customerUid: widget.uid, onJumpTo: (v) => navBloc.add(BottomNavChanged(v)), onJumpToPlan: () => navBloc.add(BottomNavChanged(2)),  ),
+              StorePage(customerUid: widget.uid),
+              PlansPage(customerUid: widget.uid, onJumpToHome: () => navBloc.add(BottomNavChanged(0)), onJumpToPlan: () => navBloc.add(BottomNavChanged(2)),),
               ProfilePage(customerUid: widget.uid),
             ];
       
@@ -98,13 +106,18 @@ class _CustomerShellBodyState extends State<_CustomerShellBody> with WidgetsBind
                   ],
                 ),
               ),
-              bottomNavigationBar: KorraBottomNav(
-                currentIndex: state.index,
-                pageIcons: customerPageIcons,
-                onTap: (i) {
+              bottomNavigationBar: ValueListenableBuilder(
+                valueListenable: CartService.instance.cartsNotifier,
+                builder: (context, carts, _) => KorraBottomNav(
+                  currentIndex: state.index,
+                  pageIcons: customerPageIcons,
+                  // Animated signal on the Stores tab while any cart is unfinished
+                  signalBadges: carts.isNotEmpty ? const {1} : const {},
+                  onTap: (i) {
                     FocusManager.instance.primaryFocus?.unfocus();
                     navBloc.add(BottomNavChanged(i));
-                },
+                  },
+                ),
               ),
             );
           },

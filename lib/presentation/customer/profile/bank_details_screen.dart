@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../data/models/customer/customer_model.dart';
 import '../../../logic/bloc/customer/kyc/customer_kyc_bloc.dart';
+import '../../../logic/services/balance_visibility.dart';
 //import '../../../logic/bloc/customer/wallet/customer_wallet_cubit.dart';
 //import '../../shared/components/custom_bottom_sheet.dart';
 //import '../../shared/components/custom_button.dart';
@@ -290,15 +291,48 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. CURRENT BALANCE HEADER
+            // 1. CURRENT BALANCE HEADER — visibility is shared with the home
+            // wallet card's eye toggle (hide there → hidden here, vice versa).
             Text(
               "CURRENT BALANCE",
               style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 1.0),
             ),
             SizedBox(height: 8.h),
-            Text(
-              widget.customer.formattedBalance,
-              style: GoogleFonts.inter(fontSize: 32.sp, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -1.0),
+            ValueListenableBuilder<bool>(
+              valueListenable: BalanceVisibility.visible,
+              builder: (context, isVisible, _) {
+                return Row(
+                  children: [
+                    // Plain left-aligned Text — AnimatedSwitcher centered the
+                    // amount inside the full-width slot, which looked wrong.
+                    Expanded(
+                      child: Text(
+                        isVisible ? widget.customer.formattedBalance : '₦ ••••',
+                        style: GoogleFonts.inter(
+                          fontSize: 32.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF101828),
+                          letterSpacing: isVisible ? -1.0 : 4.0,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: BalanceVisibility.toggle,
+                      child: Container(
+                        padding: EdgeInsets.all(8.r),
+                        color: Colors.transparent, // generous hit target
+                        child: Icon(
+                          isVisible
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: Colors.grey.shade500,
+                          size: 22.sp,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
 
             SizedBox(height: 32.h),

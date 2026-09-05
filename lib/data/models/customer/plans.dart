@@ -77,6 +77,11 @@ class Plan {
   final DateTime? fulfilledAt; // Null until picked up
   final DateTime? completedAt; // When payment finished
 
+  /// Variant this plan reserved ("XL / Red"); stamped server-side by
+  /// plan-manager CREATE from the verified token. Null for products
+  /// without variants (and all pre-variant plans).
+  final String? variantLabel;
+
   const Plan({
     required this.id,
     required this.productId,
@@ -120,6 +125,7 @@ class Plan {
     this.pickupCode,
     this.fulfilledAt,
     this.completedAt,
+    this.variantLabel,
   });
 
   // =========================================================
@@ -433,6 +439,7 @@ class Plan {
       pickupCode: map['pickupCode'],
       fulfilledAt: parseNullableDate(map['fulfilledAt']),
       completedAt: parseNullableDate(map['completedAt']),
+      variantLabel: map['variantLabel'] as String?,
     );
   }
 }

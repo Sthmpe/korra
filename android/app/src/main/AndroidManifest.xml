@@ -24,11 +24,13 @@
         android:requiresSmallestWidthDp="320"
         android:largestWidthLimitDp="599" />
 
+    <!-- Predictive back OFF: GetX 4.x mishandles WindowOnBackDispatcher
+         gesture pops (_userGesturesInProgress assertion → frozen navigator) -->
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
-        android:enableOnBackInvokedCallback="true">
+        android:enableOnBackInvokedCallback="false">
         
         <activity
             android:name=".MainActivity"

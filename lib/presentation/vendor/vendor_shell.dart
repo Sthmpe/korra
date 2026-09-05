@@ -20,9 +20,9 @@ class VendorShell extends StatelessWidget {
 
   final vendorsPageIcons = const [
     NavSpec('Home', Icons.home_outlined, Icons.home_rounded),
-    NavSpec('Products', Icons.inventory_2_outlined, Icons.inventory_2_rounded),
+    NavSpec('Store', Icons.storefront_outlined, Icons.storefront_rounded),
     NavSpec(
-      'Reservations',
+      'Orders',
       Icons.receipt_long_outlined,
       Icons.receipt_long_rounded,
     ),

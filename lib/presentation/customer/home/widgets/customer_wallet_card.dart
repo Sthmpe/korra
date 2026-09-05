@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../config/constants/colors.dart';
+import '../../../../logic/services/balance_visibility.dart';
 
 class CustomerWalletCard extends StatefulWidget {
   final String balanceText;
@@ -22,7 +23,25 @@ class CustomerWalletCard extends StatefulWidget {
 }
 
 class _CustomerWalletCardState extends State<CustomerWalletCard> {
-  bool _isBalanceVisible = true;
+  // Shared app-wide state: hiding here also hides the Bank Details balance.
+  bool get _isBalanceVisible => BalanceVisibility.visible.value;
+
+  @override
+  void initState() {
+    super.initState();
+    BalanceVisibility.ensureLoaded();
+    BalanceVisibility.visible.addListener(_onVisibilityChanged);
+  }
+
+  @override
+  void dispose() {
+    BalanceVisibility.visible.removeListener(_onVisibilityChanged);
+    super.dispose();
+  }
+
+  void _onVisibilityChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,11 +122,7 @@ class _CustomerWalletCardState extends State<CustomerWalletCard> {
 
                       // The Visibility Toggle
                       GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isBalanceVisible = !_isBalanceVisible;
-                          });
-                        },
+                        onTap: BalanceVisibility.toggle,
                         child: Container(
                           padding: EdgeInsets.all(6.r),
                           color: Colors.transparent, // Hit target area

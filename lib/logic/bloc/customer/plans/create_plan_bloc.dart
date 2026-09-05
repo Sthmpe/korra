@@ -30,6 +30,7 @@ class CreatePlanBloc extends Bloc<CreatePlanEvent, CreatePlanState> {
           customerUid: event.customerUid,
           productPrice: event.productPrice,
           productId: event.productId,
+          variantLabel: event.variantLabel,
         );
 
         int duration = 14;
