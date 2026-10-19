@@ -9,7 +9,13 @@ const corsHeaders = {
 };
 
 const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
-const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY') || "your-production-secret-key-123";
+const HMAC_SECRET = Deno.env.get('DP_SECRET_KEY');
+
+// Refuse to sign or verify plan tokens without a configured secret.
+function getSecretKey(): Uint8Array {
+    if (!HMAC_SECRET) throw new Error("Server misconfigured: DP_SECRET_KEY is not set.");
+    return new TextEncoder().encode(HMAC_SECRET);
+}
 
 if (admin.apps.length === 0) {
     admin.initializeApp({
@@ -210,8 +216,6 @@ serve(async (req) => {
             }
         }
 
-        const secretKey = new TextEncoder().encode(HMAC_SECRET);
-
         // =======================================================================
         // 🔍 ACTION: PREVIEW
         // =======================================================================
@@ -260,7 +264,7 @@ serve(async (req) => {
                 .setProtectedHeader({ alg: 'HS256' })
                 .setIssuedAt()
                 .setExpirationTime('15m')
-                .sign(secretKey);
+                .sign(getSecretKey());
 
             return new Response(JSON.stringify({
                 status: "SUCCESS",
@@ -275,6 +279,7 @@ serve(async (req) => {
        if (action === 'CREATE') {
             if (!secureToken) throw "Security token missing.";
 
+            const secretKey = getSecretKey();
             let payload;
             try {
                 const result = await jose.jwtVerify(secureToken, secretKey);

@@ -85,3 +85,8 @@ migrate_working_dir/
 /Korra_merchant_product_list.jpg
 /korra_customer_products_details.jpg
 /korra_merchan_storeview.jpg
+
+# Internal planning and workflow notes
+/REFACTOR_RULES.md
+/git_workflow_guide.md
+/MONNIFY_MIGRATION.md
