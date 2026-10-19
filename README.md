@@ -1,8 +1,8 @@
 # Korra
 
-**A two-sided buy-now-pay-later marketplace for Nigerian commerce, built in Flutter and backed by a custom underwriting engine.**
+**A two-sided reserve-and-pay-in-instalments marketplace for Nigerian commerce, built in Flutter and backed by a server-side risk engine.**
 
-Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down payment, and settle the balance in instalments. Merchants list products, receive reservations, fulfil orders, and get paid on a T+1 settlement cycle. Both sides ship from a single Flutter codebase as two separately-branded apps.
+Korra lets shoppers reserve an item from a merchant, pay a minimum down payment, settle the balance in instalments, and collect the item once it is fully paid. Korra is not a loan or credit provider: no one advances the unpaid balance, and merchants are paid only for what customers have actually paid. Merchants list products, receive reservations, fulfil orders, and get paid on a T+1 settlement cycle. Both sides ship from a single Flutter codebase as two separately-branded apps.
 
 > *Reserve now, pay in parts, own with ease.*
 
@@ -42,9 +42,10 @@ Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down pa
 **The core loop**
 
 1. A merchant lists a product and receives a shareable product code (`K-XXXX-XXXXXXX`) and storefront link.
-2. A customer opens the link via deep link, QR code, or the in-app marketplace, and the risk engine computes a minimum down payment for that specific customer and item.
-3. The customer pays the down payment, a plan is created, and the merchant sees the reservation instantly.
-4. The customer pays instalments on schedule, the merchant is settled T+1, and the item is delivered.
+2. A customer opens the link via deep link, QR code, or the in-app marketplace, and the risk engine checks the customer's reservation slots and stock and computes the minimum down payment for that item.
+3. The customer pays the down payment, a plan is created, the item is reserved from stock, and the merchant sees the reservation instantly.
+4. The customer pays instalments on schedule, and the merchant is settled T+1 on each payment received.
+5. Once the plan is fully paid, the customer receives a pickup PIN and collects the item from the merchant. If a plan is cancelled, what the customer has paid becomes store balance with that merchant.
 
 **Customer app.** Marketplace discovery, storefront browsing, KYC (BVN and NIN), instalment plan creation and tracking, in-app payments, dedicated virtual accounts, payment receipts, and push notifications.
 
@@ -56,9 +57,9 @@ Korra lets shoppers reserve an item from a merchant, pay a risk-adjusted down pa
 
 These are the parts of the codebase I would point at in a technical interview.
 
-### Custom risk and underwriting engine
+### Server-side risk engine
 
-[`lib/logic/korra_risk_engine/`](lib/logic/korra_risk_engine/) is the commercial core of the product. Given a product price, a customer's available credit limit, and their repayment history, it computes a randomised down-payment percentage banded by price tier, calculates the funding gap, and applies hard-stop decline rules when exposure is unfavourable. The client mirrors a server-side implementation deployed as an edge function, which is the sole source of truth: it issues a signed `secureToken` that the checkout flow must present, so a tampered client cannot mint its own terms.
+The reservation rules run in the [`plan-manager`](supabase/functions/plan-manager/) edge function, which is the sole source of truth for plan terms. Before checkout it enforces a reservation-slot cap by customer tier, checks product and variant stock, and computes the minimum down payment (the merchant's fixed amount, or a percentage of the price). It then issues a short-lived, HMAC-signed `secureToken` sealing those terms to the customer, product, and variant. Plan creation must present that token and re-validates the deposit, wallet balance, store balance, and promotions inside a Firestore transaction, so a tampered client cannot mint its own terms.
 
 ### Dual-flavour single codebase
 
@@ -70,7 +71,7 @@ Strict separation between presentation, logic (BLoC and Cubit), repository, and 
 
 ### 40 serverless edge functions
 
-[`supabase/functions/`](supabase/functions/) contains 40 deployable edge functions plus shared server utilities. Money-related, trust-sensitive, and privileged operations run server-side in TypeScript rather than in the client. These operations include payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN and NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, credit limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
+[`supabase/functions/`](supabase/functions/) contains 40 deployable edge functions plus shared server utilities. Money-related, trust-sensitive, and privileged operations run server-side in TypeScript rather than in the client. These operations include payment webhooks and reconciliation, settlement processing, virtual account provisioning, BVN and NIN identity verification, bank account validation, OTP-authorised transfers, product mutations, reservation limit recalculation, overdue processing, and scheduled automation for expiry, reminders, and re-engagement.
 
 ### Financial correctness under retry
 
@@ -108,7 +109,7 @@ Offline fallbacks with cached data and connectivity monitoring, Crashlytics-inst
 └────────────────┘   └──────────────────┘   └────────────────┘
 ```
 
-**Trust boundary.** The client renders and requests, it never authorises. Credit terms, product mutations, payouts, and settlements are all computed and signed server-side, with Firestore security rules as the second line of defence.
+**Trust boundary.** The client renders and requests, it never authorises. Plan terms, product mutations, payouts, and settlements are all computed and signed server-side, with Firestore security rules as the second line of defence.
 
 ---
 
@@ -147,7 +148,7 @@ lib/
 │   ├── cubit/                  # Lightweight state holders
 │   ├── core/net/               # Connectivity monitoring
 │   ├── services/               # Analytics, notifications, deep links, updates
-│   └── korra_risk_engine/      # Underwriting logic, mirrors the edge function
+│   └── korra_risk_engine/      # Early client-side risk model (live rules run in plan-manager)
 └── presentation/
     ├── auth/                   # Login, signup, verification
     ├── customer/               # Marketplace, storefronts, plans, KYC, profile
@@ -177,6 +178,8 @@ flutter run -t lib/main_customer.dart
 # 4. Run the merchant app
 flutter run -t lib/main_vendor.dart
 ```
+
+**Firebase configuration.** `lib/config/firebase_options_prod.dart` and `android/app/google-services.json` are not in the repo, and the app will not compile without the former. Generate Firebase config for your own project with `flutterfire configure`, writing `lib/config/firebase_options_dev.dart`, `lib/config/firebase_options_prod.dart`, `android/app/google-services-dev.json`, and `android/app/google-services-prod.json`. The Android build copies the matching JSON to `google-services.json` automatically.
 
 **Release builds**
 
