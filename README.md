@@ -75,7 +75,7 @@ Strict separation between presentation, logic (BLoC and Cubit), repository, and 
 
 ### Financial correctness under retry
 
-Payment and notification pipelines are written to be idempotent. Reconciliation is keyed off provider references, and fan-out events such as store visits and campaign opens are deduplicated with per-day marker documents written via transactional `create()`, so a retried webhook or a relaunched app cannot inflate counts or double-credit a wallet.
+Payment webhooks reconcile against provider references so a retried delivery is a no-op. Wallet top-ups are written to a ledger document keyed by the provider's payment reference inside a Firestore transaction, so a duplicate is detected and skipped. Payout events are matched by their disbursement reference and skipped once already marked successful or failed. Fan-out events such as store visits and campaign opens are deduplicated with per-day marker documents written via atomic `create()`, which fails if the marker already exists, so a relaunched app cannot inflate counts.
 
 ### Production-hardened client
 
@@ -206,6 +206,6 @@ Local `.env` files are excluded from Git. They should contain only client-safe c
 
 ## Notes
 
-This repository contains the working source for a live product. Sensitive server credentials, local environment files, Firebase client configuration, service-account credentials, and payment provider secret keys are excluded. The project will not run without your own Firebase, Supabase, and client-safe environment configuration.
+This repository contains the working source for a live product. Sensitive server credentials, local environment files, service-account credentials, and payment provider secret keys are excluded. Firebase client configuration is partly committed: `lib/config/firebase_options_dev.dart`, `android/app/google-services-dev.json`, `android/app/google-services-prod.json`, and `firebase.json` are in the repo, while `lib/config/firebase_options_prod.dart`, `android/app/google-services.json`, the iOS `GoogleService-Info.plist`, and `.firebaserc` are not. The project will not run without your own Firebase, Supabase, and client-safe environment configuration.
 
 **Author:** David ([olaniteolanight@gmail.com](mailto:olaniteolanight@gmail.com))
